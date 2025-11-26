@@ -1,9 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const showHidden = searchParams.get('showHidden') === 'true'
+
     const inventory = await prisma.inventoryLevel.findMany({
+      where: {
+        product: showHidden ? undefined : { isHidden: false },
+      },
       include: {
         product: {
           include: {

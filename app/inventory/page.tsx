@@ -276,10 +276,14 @@ export default function InventoryPage() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3">
-                          <p className="font-semibold text-white truncate">{item.title}</p>
+                          <p className="font-semibold text-white font-mono">{item.masterSku}</p>
                           {getStatusBadge(item.status)}
                         </div>
-                        <p className="text-sm text-slate-400 font-mono mt-0.5">{item.masterSku}</p>
+                        <p className="text-sm text-slate-400 mt-0.5 truncate">
+                          {item.asin && <span className="font-mono">{item.asin}</span>}
+                          {item.asin && item.title && <span className="mx-2">•</span>}
+                          {item.title}
+                        </p>
                       </div>
 
                       <div className="flex items-center gap-6 text-right">

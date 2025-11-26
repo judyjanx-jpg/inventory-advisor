@@ -156,7 +156,7 @@ export async function POST() {
       return await syncViaInventoryAPI(client, credentials, channel)
     }
 
-    // Step 4: Get catalog data for parent/child relationships
+    // Step 4: Get catalog data for parent/child relationships using Catalog Items API 2022-04-01
     const asins = [...new Set(
       reportData
         .map(r => r['asin1'] || r['asin'])
@@ -166,37 +166,95 @@ export async function POST() {
     console.log(`\n📚 Fetching catalog data for ${asins.length} ASINs...`)
     
     const catalogData: Record<string, any> = {}
-    const asinBatches = chunkArray(asins, 20)
+    const parentAsins = new Set<string>()
+    const asinToParent: Record<string, string> = {}
     
-    for (let i = 0; i < Math.min(asinBatches.length, 50); i++) { // Limit catalog lookups
-      const batch = asinBatches[i]
+    let processed = 0
+    let successCount = 0
+    let relationshipsFound = 0
+    
+    // Use getCatalogItem with version 2022-04-01 to get relationships
+    for (const asin of asins) {
       try {
         const response = await client.callAPI({
-          operation: 'searchCatalogItems',
+          operation: 'getCatalogItem',
           endpoint: 'catalogItems',
+          path: { asin },
           query: {
             marketplaceIds: [credentials.marketplaceId],
-            identifiers: batch.join(','),
-            identifiersType: 'ASIN',
             includedData: ['attributes', 'relationships', 'summaries'],
-            pageSize: 20,
           },
+          options: {
+            version: '2022-04-01'  // THIS IS THE KEY - specify the API version!
+          }
         })
 
-        const items = response?.items || []
-        for (const item of items) {
-          if (item.asin) {
-            catalogData[item.asin] = item
+        if (response) {
+          catalogData[asin] = response
+          successCount++
+          
+          // Log first 5 successful responses with relationship details
+          if (successCount <= 5) {
+            console.log(`  ✅ Got data for ${asin}`)
+            console.log(`     Keys: ${Object.keys(response).join(', ')}`)
+            
+            // Debug log the relationships structure
+            const relationships = response.relationships || []
+            if (relationships.length > 0) {
+              console.log(`     Relationships count: ${relationships.length}`)
+              console.log(`     First relationship:`, JSON.stringify(relationships[0]).substring(0, 500))
+            } else {
+              console.log(`     No relationships array (or empty)`)
+            }
+          }
+          
+          // Parse relationships - Amazon 2022-04-01 format:
+          // relationships: [ { marketplaceId: "...", relationships: [...] } ]
+          const relationshipsWrapper = response.relationships || []
+          
+          for (const wrapper of relationshipsWrapper) {
+            // The wrapper has marketplaceId and relationships array
+            const rels = wrapper.relationships || []
+            
+            for (const rel of rels) {
+              // Each rel has: type, parentAsins?, childAsins?, variationTheme?
+              if (rel.type === 'VARIATION') {
+                if (rel.parentAsins && rel.parentAsins.length > 0) {
+                  const parentAsin = rel.parentAsins[0]
+                  parentAsins.add(parentAsin)
+                  asinToParent[asin] = parentAsin
+                  relationshipsFound++
+                  
+                  if (relationshipsFound <= 10) {
+                    console.log(`  🔗 Found parent: ${asin} -> ${parentAsin} (${rel.variationTheme?.name || 'variation'})`)
+                  }
+                }
+                if (rel.childAsins && rel.childAsins.length > 0) {
+                  parentAsins.add(asin)  // This item IS a parent
+                }
+              }
+            }
           }
         }
 
+        processed++
+        if (processed % 100 === 0) {
+          console.log(`  Processed ${processed}/${asins.length} ASINs (${successCount} successful)...`)
+        }
+
+        // Rate limit
         await new Promise(resolve => setTimeout(resolve, 200))
-      } catch (err) {
-        // Continue on catalog errors
+      } catch (err: any) {
+        if (processed < 3) {
+          console.log(`  ❌ Error for ${asin}: ${err.code || err.message}`)
+        }
+        processed++
       }
     }
 
-    console.log(`✓ Got catalog data for ${Object.keys(catalogData).length} ASINs`)
+    console.log(`\n✓ Got catalog data for ${successCount}/${asins.length} ASINs`)
+    console.log(`  Found ${parentAsins.size} unique parent ASINs`)
+    console.log(`  Found ${Object.keys(asinToParent).length} child->parent relationships`)
 
     // Step 5: Create/update products
     console.log('\n💾 Saving products to database...')
@@ -228,18 +286,9 @@ export async function POST() {
       const attributes = catalog?.attributes || {}
       const relationships = catalog?.relationships || []
 
-      // Check for parent relationship
-      let parentAsin: string | null = null
-      let isParent = false
-      
-      for (const rel of relationships) {
-        if (rel.type === 'VARIATION' && rel.parentAsins?.[0]) {
-          parentAsin = rel.parentAsins[0]
-        }
-        if (rel.type === 'VARIATION_PARENT' || rel.childAsins?.length) {
-          isParent = true
-        }
-      }
+      // Check for parent relationship using the pre-built asinToParent map
+      let parentAsin: string | null = asinToParent[asin] || null
+      let isParent = parentAsins.has(asin)
 
       // Get variation attributes
       let variationType: string | null = null
@@ -369,36 +418,113 @@ export async function POST() {
       }
     }
 
-    // Step 6: Link children to parents
-    console.log(`\n🔗 Linking ${parentChildRelationships.length} variations to parents...`)
+    // Step 6: Link children to parents using Amazon's relationship data
+    console.log(`\n🔗 Linking ${parentChildRelationships.length} variations to parents (from Amazon data)...`)
     let relationshipsLinked = 0
+    let virtualParentsCreated = 0
 
+    // Group children by parent ASIN
+    const childrenByParent: Record<string, typeof parentChildRelationships> = {}
     for (const rel of parentChildRelationships) {
-      const parentProduct = await prisma.product.findFirst({
-        where: { asin: rel.parentAsin },
+      if (!childrenByParent[rel.parentAsin]) {
+        childrenByParent[rel.parentAsin] = []
+      }
+      childrenByParent[rel.parentAsin].push(rel)
+    }
+
+    console.log(`  Found ${Object.keys(childrenByParent).length} unique parent ASINs from Amazon`)
+
+    for (const [parentAsin, children] of Object.entries(childrenByParent)) {
+      // Try to find existing parent product by ASIN
+      let parentProduct = await prisma.product.findFirst({
+        where: { asin: parentAsin },
       })
 
+      if (parentProduct) {
+        console.log(`  Found existing product with parent ASIN ${parentAsin}: ${parentProduct.sku}`)
+      }
+
+      // If no parent product exists, create a virtual one
+      if (!parentProduct && children.length > 0) {
+        const firstChild = await prisma.product.findUnique({
+          where: { sku: children[0].childSku },
+        })
+        
+        if (firstChild) {
+          // Create virtual parent SKU based on parent ASIN
+          const parentSku = `PARENT-${parentAsin}`
+          const catalog = catalogData[parentAsin]
+          const catalogTitle = catalog?.summaries?.[0]?.itemName
+          
+          try {
+            console.log(`  Creating virtual parent: ${parentSku} for ASIN ${parentAsin}...`)
+            parentProduct = await prisma.product.create({
+              data: {
+                sku: parentSku,
+                title: catalogTitle || firstChild.title?.replace(/\s*-?\s*(Small|Medium|Large|XL|XXL|\d+["']?|\d+\s*(inch|in|cm)).*$/i, '') || `Parent of ${firstChild.sku}`,
+                asin: parentAsin,
+                brand: firstChild.brand || 'KISPER',
+                category: firstChild.category,
+                cost: 0,
+                price: 0,
+                status: 'active',
+                isParent: true,
+                inventoryLevels: {
+                  create: {
+                    fbaAvailable: 0,
+                    warehouseAvailable: 0,
+                  },
+                },
+                salesVelocity: {
+                  create: {
+                    velocity7d: 0,
+                    velocity30d: 0,
+                    velocity90d: 0,
+                  },
+                },
+              },
+            })
+            virtualParentsCreated++
+            console.log(`  ✓ Created virtual parent: ${parentSku} for ${children.length} children`)
+          } catch (err: any) {
+            console.log(`  ⚠️ Failed to create parent ${parentSku}: ${err.message || err.code}`)
+            // Parent might already exist from a previous sync
+            parentProduct = await prisma.product.findFirst({
+              where: { asin: parentAsin },
+            })
+            if (parentProduct) {
+              console.log(`  Found existing parent: ${parentProduct.sku}`)
+            }
+          }
+        }
+      }
+
+      // Link all children to this parent
       if (parentProduct) {
         await prisma.product.update({
           where: { sku: parentProduct.sku },
           data: { isParent: true },
         })
 
-        await prisma.product.update({
-          where: { sku: rel.childSku },
-          data: { 
-            parentSku: parentProduct.sku,
-            variationType: rel.variationType,
-            variationValue: rel.variationValue,
-          },
-        })
-        relationshipsLinked++
+        for (const child of children) {
+          await prisma.product.update({
+            where: { sku: child.childSku },
+            data: { 
+              parentSku: parentProduct.sku,
+              variationType: child.variationType,
+              variationValue: child.variationValue,
+            },
+          })
+          relationshipsLinked++
+        }
       }
     }
 
+    console.log(`  ✓ Created ${virtualParentsCreated} parent groups, linked ${relationshipsLinked} variations`)
+
     await updateSyncStatus('success')
 
-    const message = `Synced ${reportData.length} products: ${created} created, ${updated} updated, ${mappingsCreated} mappings, ${relationshipsLinked} variations linked`
+    const message = `Synced ${reportData.length} products: ${created} created, ${updated} updated, ${virtualParentsCreated} parent groups, ${relationshipsLinked} variations linked`
     console.log(`\n✅ ${message}`)
 
     return NextResponse.json({
@@ -407,6 +533,7 @@ export async function POST() {
       created,
       updated,
       mappingsCreated,
+      virtualParentsCreated,
       relationshipsLinked,
       total: reportData.length,
     })

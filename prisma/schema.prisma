@@ -16,9 +16,11 @@ datasource db {
 model Product {
   sku            String   @id // Master SKU - primary key
   title          String
+  displayName    String?  @map("display_name") // Custom name for display (e.g., rename ugly parent SKUs)
   description    String?  @db.Text
   brand          String   @default("KISPER")
   category       String?
+  isHidden       Boolean  @default(false) @map("is_hidden") // Hide from all reports/views
   
   // Parent/Child Relationship (for variations)
   parentSku      String?  @map("parent_sku")
