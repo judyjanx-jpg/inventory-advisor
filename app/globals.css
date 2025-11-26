@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --border: #334155;
+  --input: #1e293b;
+  --ring: #0ea5e9;
+  --primary: #0ea5e9;
+  --primary-foreground: #ffffff;
+  --secondary: #334155;
+  --secondary-foreground: #f8fafc;
+  --accent: #06b6d4;
+  --accent-foreground: #ffffff;
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --success: #10b981;
+  --warning: #f59e0b;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Focus ring styles */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+/* Gradient text utility */
+.gradient-text {
+  background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Status badge styles */
+.status-active {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.status-info {
+  background: rgba(14, 165, 233, 0.1);
+  color: #0ea5e9;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}

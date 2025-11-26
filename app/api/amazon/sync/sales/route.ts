@@ -1,0 +1,536 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { createSpApiClient, getAmazonCredentials, updateSyncStatus, marketplaceToChannel } from '@/lib/amazon-sp-api'
+
+// NOTE: This sync is READ-ONLY. We never push data to Amazon.
+
+async function waitForReport(client: any, reportId: string, maxWaitMinutes = 180): Promise<string | null> {
+  const maxAttempts = maxWaitMinutes * 2 // Check every 30 seconds (less aggressive polling)
+  let attempts = 0
+
+  while (attempts < maxAttempts) {
+    attempts++
+    
+    const reportResponse = await client.callAPI({
+      operation: 'getReport',
+      endpoint: 'reports',
+      path: { reportId },
+    })
+
+    const status = reportResponse?.processingStatus
+    const minutesElapsed = Math.floor(attempts * 0.5) // 30 seconds per attempt
+    console.log(`    Report status: ${status} (${minutesElapsed}/${maxWaitMinutes} minutes)`)
+
+    if (status === 'DONE') {
+      return reportResponse?.reportDocumentId || null
+    }
+
+    if (status === 'CANCELLED' || status === 'FATAL') {
+      throw new Error(`Report failed with status: ${status}`)
+    }
+
+    // Wait 30 seconds before next check (less aggressive polling for long reports)
+    await new Promise(resolve => setTimeout(resolve, 30000))
+  }
+
+  throw new Error(`Report timed out after ${maxWaitMinutes} minutes`)
+}
+
+async function downloadReport(client: any, documentId: string): Promise<string> {
+  const docResponse = await client.callAPI({
+    operation: 'getReportDocument',
+    endpoint: 'reports',
+    path: { reportDocumentId: documentId },
+  })
+
+  const url = docResponse?.url
+  if (!url) {
+    throw new Error('No download URL in report document')
+  }
+
+  // Download the report content
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to download report: ${response.status}`)
+  }
+
+  return await response.text()
+}
+
+function parseOrdersReport(reportContent: string): Array<{
+  orderId: string
+  sku: string
+  purchaseDate: string
+  quantity: number
+  itemPrice: number
+}> {
+  const lines = reportContent.split('\n')
+  if (lines.length < 2) return []
+
+  // Parse header to find column indices
+  const header = lines[0].split('\t')
+  const orderIdIdx = header.findIndex(h => h.toLowerCase().includes('order-id') || h.toLowerCase() === 'amazon-order-id')
+  const skuIdx = header.findIndex(h => h.toLowerCase() === 'sku' || h.toLowerCase() === 'seller-sku')
+  const dateIdx = header.findIndex(h => h.toLowerCase().includes('purchase-date') || h.toLowerCase().includes('order-date'))
+  const qtyIdx = header.findIndex(h => h.toLowerCase().includes('quantity') || h.toLowerCase() === 'quantity-shipped')
+  const priceIdx = header.findIndex(h => h.toLowerCase().includes('item-price') || h.toLowerCase() === 'item-price')
+
+  console.log(`  Report columns: orderId=${orderIdIdx}, sku=${skuIdx}, date=${dateIdx}, qty=${qtyIdx}, price=${priceIdx}`)
+
+  const items: Array<{
+    orderId: string
+    sku: string
+    purchaseDate: string
+    quantity: number
+    itemPrice: number
+  }> = []
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const cols = line.split('\t')
+    
+    const orderId = orderIdIdx >= 0 ? cols[orderIdIdx]?.trim() : ''
+    const sku = skuIdx >= 0 ? cols[skuIdx]?.trim() : ''
+    const dateRaw = dateIdx >= 0 ? cols[dateIdx]?.trim() : ''
+    const qty = qtyIdx >= 0 ? parseInt(cols[qtyIdx]) || 0 : 1
+    const price = priceIdx >= 0 ? parseFloat(cols[priceIdx]) || 0 : 0
+
+    if (!orderId || !sku || !dateRaw) continue
+
+    // Parse date (could be various formats)
+    let purchaseDate = ''
+    if (dateRaw.includes('T')) {
+      purchaseDate = dateRaw.split('T')[0]
+    } else if (dateRaw.includes('-')) {
+      purchaseDate = dateRaw.split(' ')[0]
+    } else {
+      // Try to parse as date string
+      const parsed = new Date(dateRaw)
+      if (!isNaN(parsed.getTime())) {
+        purchaseDate = parsed.toISOString().split('T')[0]
+      }
+    }
+
+    if (!purchaseDate) continue
+
+    items.push({ orderId, sku, purchaseDate, quantity: qty, itemPrice: price })
+  }
+
+  return items
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const daysBack = parseInt(searchParams.get('days') || '730') // Default 2 years (730 days)
+    
+    const credentials = await getAmazonCredentials()
+    if (!credentials) {
+      return NextResponse.json(
+        { error: 'Amazon credentials not configured' },
+        { status: 400 }
+      )
+    }
+
+    await updateSyncStatus('running')
+
+    const client = await createSpApiClient()
+    if (!client) {
+      throw new Error('Failed to create SP-API client')
+    }
+
+    const channel = marketplaceToChannel(credentials.marketplaceId)
+    
+    console.log('=== Starting Sales History Sync (READ-ONLY) ===')
+    console.log('Seller ID:', credentials.sellerId)
+    console.log('Marketplace:', credentials.marketplaceId)
+    console.log('Days to fetch:', daysBack)
+    
+    // Calculate date range
+    const endDate = new Date()
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - daysBack)
+    
+    console.log(`\n📅 Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`)
+    
+    // Use Reports API for bulk data - much faster than Orders API for large volumes
+    console.log('\n📋 Requesting order report from Amazon...')
+    console.log('   (Large reports can take 30-60+ minutes to generate)')
+    console.log('   Will wait up to 3 hours for report to complete...')
+
+    let reportItems: Array<{
+      orderId: string
+      sku: string
+      purchaseDate: string
+      quantity: number
+      itemPrice: number
+    }> = []
+
+    // Try different report types
+    const reportTypes = [
+      'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE',
+      'GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL',
+      'GET_FLAT_FILE_ORDERS_DATA_BY_ORDER_DATE',
+    ]
+
+    let reportSuccess = false
+
+    for (const reportType of reportTypes) {
+      if (reportSuccess) break
+
+      console.log(`\n  Trying report type: ${reportType}`)
+
+      try {
+        // Request the report
+        const createResponse = await client.callAPI({
+          operation: 'createReport',
+          endpoint: 'reports',
+          body: {
+            reportType,
+            marketplaceIds: [credentials.marketplaceId],
+            dataStartTime: startDate.toISOString(),
+            dataEndTime: endDate.toISOString(),
+          },
+        })
+
+        const reportId = createResponse?.reportId
+        if (!reportId) {
+          console.log(`    Failed to create report - no reportId returned`)
+          continue
+        }
+
+        console.log(`    Report ID: ${reportId}`)
+        console.log(`    Waiting for report to complete...`)
+
+        // Wait for report to complete (up to 3 hours for large reports)
+        const documentId = await waitForReport(client, reportId, 180)
+        if (!documentId) {
+          console.log(`    Report completed but no document ID`)
+          continue
+        }
+
+        console.log(`    Report ready! Document ID: ${documentId}`)
+        console.log(`    Downloading report...`)
+
+        // Download and parse the report
+        const reportContent = await downloadReport(client, documentId)
+        const lines = reportContent.split('\n').length
+        console.log(`    Downloaded ${lines} lines`)
+
+        // Parse the report
+        reportItems = parseOrdersReport(reportContent)
+        console.log(`    Parsed ${reportItems.length} order items`)
+
+        if (reportItems.length > 0) {
+          reportSuccess = true
+        }
+
+      } catch (reportError: any) {
+        console.log(`    Report type ${reportType} failed:`, reportError.message?.substring(0, 100))
+        
+        if (reportError.message?.includes('forbidden') || reportError.message?.includes('Access')) {
+          console.log(`    Access denied for this report type`)
+        }
+      }
+    }
+
+    if (!reportSuccess || reportItems.length === 0) {
+      // Fallback to Orders API with limited scope
+      console.log('\n⚠️ Reports API failed. Falling back to Orders API (limited to recent orders)...')
+      
+      // Only fetch last 90 days via Orders API to be practical
+      const fallbackStartDate = new Date()
+      fallbackStartDate.setDate(fallbackStartDate.getDate() - 90)
+      
+      const fallbackEndDate = new Date()
+      fallbackEndDate.setMinutes(fallbackEndDate.getMinutes() - 3)
+
+      let nextToken: string | undefined = undefined
+      let pageCount = 0
+      const maxPages = 50 // ~5000 orders max via fallback
+
+      do {
+        pageCount++
+        console.log(`  Fetching orders page ${pageCount}...`)
+
+        const ordersResponse = await client.callAPI({
+          operation: 'getOrders',
+          endpoint: 'orders',
+          query: {
+            MarketplaceIds: credentials.marketplaceId,
+            CreatedAfter: fallbackStartDate.toISOString(),
+            CreatedBefore: fallbackEndDate.toISOString(),
+            OrderStatuses: 'Shipped,Unshipped,PartiallyShipped',
+            MaxResultsPerPage: 100,
+            ...(nextToken ? { NextToken: nextToken } : {}),
+          },
+        })
+
+        const orders = ordersResponse?.Orders || []
+        nextToken = ordersResponse?.NextToken
+
+        console.log(`    Got ${orders.length} orders`)
+
+        for (const order of orders) {
+          const orderId = order.AmazonOrderId
+          if (!orderId) continue
+
+          const purchaseDate = order.PurchaseDate?.split('T')[0]
+          if (!purchaseDate) continue
+
+          try {
+            const itemsResponse = await client.callAPI({
+              operation: 'getOrderItems',
+              endpoint: 'orders',
+              path: { orderId },
+            })
+
+            const items = itemsResponse?.OrderItems || []
+
+            for (const item of items) {
+              const sku = item.SellerSKU
+              if (!sku) continue
+
+              reportItems.push({
+                orderId,
+                sku,
+                purchaseDate,
+                quantity: item.QuantityOrdered || 0,
+                itemPrice: parseFloat(item.ItemPrice?.Amount || '0') || 0,
+              })
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 100))
+          } catch (itemError: any) {
+            // Continue
+          }
+        }
+
+        if (nextToken) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+
+      } while (nextToken && pageCount < maxPages)
+    }
+
+    // Aggregate by SKU and date
+    console.log('\n📊 Aggregating sales data...')
+    
+    const salesBySkuDate: Record<string, {
+      sku: string
+      date: string
+      unitsSold: number
+      revenue: number
+      orderIds: Set<string>
+    }> = {}
+
+    const uniqueSkus = new Set<string>()
+    const uniqueOrders = new Set<string>()
+
+    for (const item of reportItems) {
+      const key = `${item.sku}|${item.purchaseDate}`
+      
+      if (!salesBySkuDate[key]) {
+        salesBySkuDate[key] = {
+          sku: item.sku,
+          date: item.purchaseDate,
+          unitsSold: 0,
+          revenue: 0,
+          orderIds: new Set(),
+        }
+      }
+
+      salesBySkuDate[key].unitsSold += item.quantity
+      salesBySkuDate[key].revenue += item.itemPrice
+      salesBySkuDate[key].orderIds.add(item.orderId)
+      
+      uniqueSkus.add(item.sku)
+      uniqueOrders.add(item.orderId)
+    }
+
+    console.log(`  ${uniqueOrders.size} unique orders`)
+    console.log(`  ${uniqueSkus.size} unique SKUs`)
+    console.log(`  ${Object.keys(salesBySkuDate).length} SKU-date combinations`)
+
+    // Get existing products for matching
+    const existingProducts = await prisma.product.findMany({
+      select: { sku: true },
+    })
+    const existingSkuSet = new Set(existingProducts.map(p => p.sku))
+
+    // Store in DailyProfit table
+    console.log('\n💾 Saving sales data to database...')
+    
+    let created = 0
+    let updated = 0
+    let skippedNoProduct = 0
+
+    const entries = Object.values(salesBySkuDate)
+    
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]
+      
+      // Check if product exists
+      if (!existingSkuSet.has(entry.sku)) {
+        skippedNoProduct++
+        continue
+      }
+
+      try {
+        const existing = await prisma.dailyProfit.findUnique({
+          where: {
+            date_masterSku: {
+              date: new Date(entry.date),
+              masterSku: entry.sku,
+            },
+          },
+        })
+
+        await prisma.dailyProfit.upsert({
+          where: {
+            date_masterSku: {
+              date: new Date(entry.date),
+              masterSku: entry.sku,
+            },
+          },
+          update: {
+            unitsSold: entry.unitsSold,
+            revenue: entry.revenue,
+            updatedAt: new Date(),
+          },
+          create: {
+            date: new Date(entry.date),
+            masterSku: entry.sku,
+            unitsSold: entry.unitsSold,
+            revenue: entry.revenue,
+            amazonFees: 0,
+            cogs: 0,
+            ppcSpend: 0,
+            refunds: 0,
+            promoDiscounts: 0,
+            grossProfit: 0,
+            netProfit: 0,
+            profitMargin: 0,
+            roi: 0,
+          },
+        })
+        
+        if (existing) {
+          updated++
+        } else {
+          created++
+        }
+      } catch (err: any) {
+        // Log but continue
+        if (i < 5) {
+          console.log(`  Error saving ${entry.sku} ${entry.date}:`, err.message?.substring(0, 50))
+        }
+      }
+
+      if ((i + 1) % 1000 === 0) {
+        console.log(`  Progress: ${i + 1}/${entries.length}`)
+      }
+    }
+
+    console.log(`  Skipped ${skippedNoProduct} entries (product not in catalog)`)
+
+    // Update sales velocity for each product
+    console.log('\n📈 Calculating sales velocity...')
+    
+    const now = new Date()
+    const thirtyDaysAgo = new Date(now)
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const sevenDaysAgo = new Date(now)
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const ninetyDaysAgo = new Date(now)
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+
+    // Get 7-day velocity
+    const velocity7dData = await prisma.dailyProfit.groupBy({
+      by: ['masterSku'],
+      _sum: { unitsSold: true },
+      where: { date: { gte: sevenDaysAgo } },
+    })
+
+    // Get 30-day velocity
+    const velocity30dData = await prisma.dailyProfit.groupBy({
+      by: ['masterSku'],
+      _sum: { unitsSold: true },
+      where: { date: { gte: thirtyDaysAgo } },
+    })
+
+    // Get 90-day velocity
+    const velocity90dData = await prisma.dailyProfit.groupBy({
+      by: ['masterSku'],
+      _sum: { unitsSold: true },
+      where: { date: { gte: ninetyDaysAgo } },
+    })
+
+    // Create maps for quick lookup
+    const velocity7dMap = new Map(velocity7dData.map(v => [v.masterSku, v._sum.unitsSold || 0]))
+    const velocity30dMap = new Map(velocity30dData.map(v => [v.masterSku, v._sum.unitsSold || 0]))
+    const velocity90dMap = new Map(velocity90dData.map(v => [v.masterSku, v._sum.unitsSold || 0]))
+
+    let velocityUpdated = 0
+    for (const sku of existingSkuSet) {
+      const v7d = velocity7dMap.get(sku) || 0
+      const v30d = velocity30dMap.get(sku) || 0
+      const v90d = velocity90dMap.get(sku) || 0
+
+      // Only update if we have sales data
+      if (v7d > 0 || v30d > 0 || v90d > 0) {
+        try {
+          await prisma.salesVelocity.upsert({
+            where: { masterSku: sku },
+            update: {
+              velocity7d: v7d / 7,
+              velocity30d: v30d / 30,
+              velocity90d: v90d / 90,
+              lastCalculated: now,
+            },
+            create: {
+              masterSku: sku,
+              velocity7d: v7d / 7,
+              velocity30d: v30d / 30,
+              velocity90d: v90d / 90,
+              lastCalculated: now,
+            },
+          })
+          velocityUpdated++
+        } catch (err) {
+          // Skip if product doesn't exist
+        }
+      }
+    }
+
+    console.log(`  Updated velocity for ${velocityUpdated} products`)
+
+    await updateSyncStatus('success')
+
+    const message = `Synced ${uniqueOrders.size.toLocaleString()} orders with ${reportItems.length.toLocaleString()} items. ${created} new + ${updated} updated records. Velocity updated for ${velocityUpdated} products.`
+    console.log(`\n✅ ${message}`)
+
+    return NextResponse.json({
+      success: true,
+      message,
+      stats: {
+        ordersProcessed: uniqueOrders.size,
+        orderItems: reportItems.length,
+        skusFound: uniqueSkus.size,
+        recordsSaved: created + updated,
+        velocityUpdated,
+      },
+    })
+
+  } catch (error: any) {
+    console.error('Sales sync error:', error)
+    await updateSyncStatus('failed', error.message)
+    
+    return NextResponse.json(
+      { error: error.message || 'Failed to sync sales history' },
+      { status: 500 }
+    )
+  }
+}

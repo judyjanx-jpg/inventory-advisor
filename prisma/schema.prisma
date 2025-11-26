@@ -1,0 +1,1547 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 1. PRODUCTS (The Foundation)
+// ============================================
+model Product {
+  sku         String  @id // Master SKU - primary key
+  title       String
+  displayName String? @map("display_name") // Custom name for display (e.g., rename ugly parent SKUs)
+  description String? @db.Text
+  brand       String  @default("KISPER")
+  category    String?
+  isHidden    Boolean @default(false) @map("is_hidden") // Hide from all reports/views
+
+  // Parent/Child Relationship (for variations)
+  parentSku      String?   @map("parent_sku")
+  parent         Product?  @relation("ProductVariations", fields: [parentSku], references: [sku])
+  variations     Product[] @relation("ProductVariations")
+  isParent       Boolean   @default(false) @map("is_parent")
+  variationType  String?   @map("variation_type") // e.g., "Size", "Color"
+  variationValue String?   @map("variation_value") // e.g., "Large", "Blue"
+
+  // Amazon Identifiers
+  asin  String?
+  fnsku String?
+  upc   String?
+
+  // Financials
+  cost     Decimal  @db.Decimal(10, 2)
+  price    Decimal  @db.Decimal(10, 2)
+  mapPrice Decimal? @map("map_price") @db.Decimal(10, 2)
+  msrp     Decimal? @db.Decimal(10, 2)
+
+  // Supplier Link
+  supplierId  Int?      @map("supplier_id")
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  supplierSku String?   @map("supplier_sku")
+
+  // Physical (needed for FBA fees)
+  weightOz Decimal? @map("weight_oz") @db.Decimal(8, 2)
+  lengthIn Decimal? @map("length_in") @db.Decimal(8, 2)
+  widthIn  Decimal? @map("width_in") @db.Decimal(8, 2)
+  heightIn Decimal? @map("height_in") @db.Decimal(8, 2)
+
+  // Prep Requirements
+  prepType         String? @default("none") @map("prep_type") // none, poly_bag, bubble_wrap, sticker
+  labelingRequired Boolean @default(false) @map("labeling_required")
+  unitsPerCase     Int?    @map("units_per_case")
+
+  // FBA Shipment Settings
+  transparencyEnabled Boolean @default(false) @map("transparency_enabled")
+  warehouseLocation   String? @map("warehouse_location") // Bin/Rack location for picking
+
+  // Status
+  status     String    @default("active") // active, discontinued, seasonal, liquidate
+  launchDate DateTime? @map("launch_date")
+
+  // Notes
+  notes String? @db.Text
+
+  // Relations
+  skuMappings        SkuMapping[]
+  inventoryLevels    InventoryLevel[]
+  warehouseInventory WarehouseInventory[]
+  orderItems         OrderItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  fbaShipmentItems   FbaShipmentItem[] @relation("FbaShipmentItemProduct")
+  shipmentItems      ShipmentItem[]    @relation("ShipmentItemProduct")
+  salesVelocity      SalesVelocity?
+  demandForecasts    DemandForecast[]
+  dailyProfits       DailyProfit[]
+  returns            Return[]
+  feeEstimates       FeeEstimate?
+  bundleComponents   BundleComponent[]    @relation("ComponentProduct")
+  bundleProducts     Bundle[]             @relation("BundleProduct")
+  forecasts          Forecast[]           @relation("ForecastProduct")
+  modelWeights       ModelWeight?         @relation("ModelWeightProduct")
+  skuAnalytics       SkuAnalytics?        @relation("SkuAnalyticsProduct")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
+// ============================================
+// 1.5 SKU MAPPING (Channel Variants)
+// ============================================
+model SkuMapping {
+  id        Int     @id @default(autoincrement())
+  masterSku String  @map("master_sku")
+  product   Product @relation(fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  channel          String // amazon_us, amazon_uk, amazon_ca, walmart, shopify, ebay, supplier
+  channelSku       String  @map("channel_sku")
+  channelProductId String? @map("channel_product_id") // ASIN, Walmart ID, etc.
+  channelFnsku     String? @map("channel_fnsku")
+
+  // Channel-specific pricing
+  channelPrice    Decimal? @map("channel_price") @db.Decimal(10, 2)
+  channelCurrency String?  @default("USD") @map("channel_currency")
+
+  // Channel-specific inventory
+  tracksInventory Boolean @default(true) @map("tracks_inventory")
+
+  // Status
+  isActive Boolean @default(true) @map("is_active")
+
+  // Relations
+  channelInventory ChannelInventory[]
+  salesHistory     SalesHistory[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([masterSku, channel])
+  @@map("sku_mappings")
+}
+
+// ============================================
+// 2. SUPPLIERS
+// ============================================
+model Supplier {
+  id          Int     @id @default(autoincrement())
+  name        String
+  contactName String? @map("contact_name")
+  email       String?
+  phone       String?
+  website     String?
+  address     String? @db.Text
+  country     String?
+
+  // Terms
+  leadTimeDays         Int?     @map("lead_time_days") // Stated lead time (what supplier promises)
+  paymentTerms         String?  @map("payment_terms")
+  minimumOrderValue    Decimal? @map("minimum_order_value") @db.Decimal(10, 2)
+  minimumOrderQuantity Int?     @map("minimum_order_quantity")
+
+  // Banking
+  paymentMethod  String? @map("payment_method")
+  paymentDetails String? @map("payment_details") @db.Text // Encrypted
+
+  // Performance Tracking
+  avgActualLeadTime Decimal? @map("avg_actual_lead_time") @db.Decimal(5, 2)
+  qualityRating     Decimal? @map("quality_rating") @db.Decimal(3, 2)
+  onTimeRate        Decimal? @map("on_time_rate") @db.Decimal(5, 2)
+
+  // Status
+  status String  @default("active")
+  notes  String? @db.Text
+
+  // Relations
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+  backorders     Backorder[]
+  performance    SupplierPerformance?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("suppliers")
+}
+
+// ============================================
+// 2.5 WAREHOUSES
+// ============================================
+model Warehouse {
+  id           Int     @id @default(autoincrement())
+  name         String
+  code         String  @unique // Short code like "WH1", "MAIN", etc.
+  address      String? @db.Text
+  city         String?
+  state        String?
+  country      String? @default("US")
+  zipCode      String? @map("zip_code")
+  contactName  String? @map("contact_name")
+  contactEmail String? @map("contact_email")
+  contactPhone String? @map("contact_phone")
+
+  // Status
+  isActive  Boolean @default(true) @map("is_active")
+  isDefault Boolean @default(false) @map("is_default") // Default warehouse for new inventory
+
+  // Relations
+  inventory WarehouseInventory[]
+  shipmentsFrom Shipment[] @relation("ShipmentFrom")
+  shipmentsTo   Shipment[] @relation("ShipmentTo")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("warehouses")
+}
+
+model WarehouseInventory {
+  id          Int       @id @default(autoincrement())
+  warehouseId Int       @map("warehouse_id")
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  masterSku   String    @map("master_sku")
+  product     Product   @relation(fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  available Int @default(0)
+  reserved  Int @default(0)
+
+  lastSynced DateTime? @map("last_synced")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([warehouseId, masterSku])
+  @@map("warehouse_inventory")
+}
+
+// ============================================
+// 2.6 LOCATIONS (Unified warehouse + FBA locations)
+// ============================================
+model Location {
+  id           Int     @id @default(autoincrement())
+  name         String
+  type         String  // 'warehouse', 'fba'
+  countryCode  String? @map("country_code")
+  marketplaceId String? @map("marketplace_id") // Amazon marketplace ID for FBA locations
+  
+  // Address (for FBA locations, this is Amazon's address)
+  addressLine1 String? @map("address_line1")
+  addressLine2 String? @map("address_line2")
+  city         String?
+  state        String?
+  postalCode   String? @map("postal_code")
+  
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("locations")
+}
+
+// ============================================
+// 3. INVENTORY LEVELS
+// ============================================
+model InventoryLevel {
+  id        Int     @id @default(autoincrement())
+  masterSku String  @map("master_sku")
+  product   Product @relation(fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  // Amazon FBA
+  fbaAvailable        Int @default(0) @map("fba_available")
+  fbaInboundWorking   Int @default(0) @map("fba_inbound_working")
+  fbaInboundShipped   Int @default(0) @map("fba_inbound_shipped")
+  fbaInboundReceiving Int @default(0) @map("fba_inbound_receiving")
+  fbaReserved         Int @default(0) @map("fba_reserved")
+  fbaUnfulfillable    Int @default(0) @map("fba_unfulfillable")
+
+  // Warehouse (aggregated total - sum of all warehouses)
+  warehouseAvailable Int @default(0) @map("warehouse_available")
+  warehouseReserved  Int @default(0) @map("warehouse_reserved")
+
+  // Amazon Limits
+  restockLimit       Int?     @map("restock_limit")
+  currentUtilization Decimal? @map("current_utilization") @db.Decimal(5, 2)
+
+  // Sync
+  fbaLastSync       DateTime? @map("fba_last_sync")
+  warehouseLastSync DateTime? @map("warehouse_last_sync")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([masterSku])
+  @@map("inventory_levels")
+}
+
+// ============================================
+// 3.5 CHANNEL INVENTORY (Per-Channel Tracking)
+// ============================================
+model ChannelInventory {
+  id         Int        @id @default(autoincrement())
+  masterSku  String     @map("master_sku")
+  channel    String // amazon_us, amazon_uk, etc.
+  channelSku String     @map("channel_sku")
+  skuMapping SkuMapping @relation(fields: [masterSku, channel], references: [masterSku, channel])
+
+  // Inventory at this channel's FBA
+  fbaAvailable        Int @default(0) @map("fba_available")
+  fbaInboundWorking   Int @default(0) @map("fba_inbound_working")
+  fbaInboundShipped   Int @default(0) @map("fba_inbound_shipped")
+  fbaInboundReceiving Int @default(0) @map("fba_inbound_receiving")
+  fbaReserved         Int @default(0) @map("fba_reserved")
+  fbaUnfulfillable    Int @default(0) @map("fba_unfulfillable")
+
+  // This channel's limits
+  restockLimit     Int? @map("restock_limit")
+  restockLimitUsed Int? @default(0) @map("restock_limit_used")
+
+  // This channel's velocity
+  velocity7d  Decimal? @map("velocity_7d") @db.Decimal(10, 2)
+  velocity30d Decimal? @map("velocity_30d") @db.Decimal(10, 2)
+  velocity90d Decimal? @map("velocity_90d") @db.Decimal(10, 2)
+
+  // This channel's forecast
+  daysOfStock  Decimal?  @map("days_of_stock") @db.Decimal(10, 2)
+  stockoutDate DateTime? @map("stockout_date")
+
+  // Seasonality specific to this channel
+  seasonalityFactor Decimal? @default(1.0) @map("seasonality_factor") @db.Decimal(5, 2)
+
+  lastSynced DateTime? @map("last_synced")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([masterSku, channel])
+  @@map("channel_inventory")
+}
+
+// ============================================
+// 4. ORDERS & SALES
+// ============================================
+model Order {
+  id           String    @id // Amazon order ID
+  purchaseDate DateTime  @map("purchase_date")
+  shipDate     DateTime? @map("ship_date")
+
+  // Customer (limited data Amazon gives)
+  shipCity    String? @map("ship_city")
+  shipState   String? @map("ship_state")
+  shipCountry String? @map("ship_country")
+
+  // Status
+  status             String // pending, shipped, delivered, cancelled, returned
+  fulfillmentChannel String? @map("fulfillment_channel") // FBA or FBM
+
+  // Relations
+  orderItems OrderItem[]
+  returns    Return[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id      Int    @id @default(autoincrement())
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  masterSku String  @map("master_sku")
+  product   Product @relation(fields: [masterSku], references: [sku])
+
+  quantity      Int
+  itemPrice     Decimal  @map("item_price") @db.Decimal(10, 2)
+  itemTax       Decimal? @default(0) @map("item_tax") @db.Decimal(10, 2)
+  shippingPrice Decimal? @default(0) @map("shipping_price") @db.Decimal(10, 2)
+  shippingTax   Decimal? @default(0) @map("shipping_tax") @db.Decimal(10, 2)
+
+  // For profit calculation
+  amazonFees Decimal? @default(0) @map("amazon_fees") @db.Decimal(10, 2)
+
+  // Promo
+  promoDiscount Decimal? @default(0) @map("promo_discount") @db.Decimal(10, 2)
+  promoIds      String?  @map("promo_ids")
+
+  // Relations
+  amazonFeesDetail AmazonFee?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("order_items")
+}
+
+// ============================================
+// 5. AMAZON FEES
+// ============================================
+model AmazonFee {
+  id          Int       @id @default(autoincrement())
+  orderItemId Int       @unique @map("order_item_id")
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  // Fee Breakdown
+  referralFee        Decimal  @default(0) @map("referral_fee") @db.Decimal(10, 2)
+  fbaFulfillmentFee  Decimal  @default(0) @map("fba_fulfillment_fee") @db.Decimal(10, 2)
+  fbaWeightHandling  Decimal? @default(0) @map("fba_weight_handling") @db.Decimal(10, 2)
+  variableClosingFee Decimal? @default(0) @map("variable_closing_fee") @db.Decimal(10, 2)
+
+  // Storage (monthly, allocated per unit)
+  monthlyStorageFee  Decimal? @default(0) @map("monthly_storage_fee") @db.Decimal(10, 2)
+  longTermStorageFee Decimal? @default(0) @map("long_term_storage_fee") @db.Decimal(10, 2)
+
+  // Other
+  removalFee          Decimal? @default(0) @map("removal_fee") @db.Decimal(10, 2)
+  disposalFee         Decimal? @default(0) @map("disposal_fee") @db.Decimal(10, 2)
+  returnProcessingFee Decimal? @default(0) @map("return_processing_fee") @db.Decimal(10, 2)
+
+  // Total
+  totalFees Decimal @map("total_fees") @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("amazon_fees")
+}
+
+model FeeEstimate {
+  id        Int     @id @default(autoincrement())
+  masterSku String  @unique @map("master_sku")
+  product   Product @relation(fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  estimatedReferralFee       Decimal? @map("estimated_referral_fee") @db.Decimal(10, 2)
+  estimatedFbaFee            Decimal? @map("estimated_fba_fee") @db.Decimal(10, 2)
+  estimatedStorageFeeMonthly Decimal? @map("estimated_storage_fee_monthly") @db.Decimal(10, 2)
+
+  lastUpdated DateTime @default(now()) @map("last_updated")
+
+  @@map("fee_estimates")
+}
+
+// ============================================
+// 6. RETURNS
+// ============================================
+model Return {
+  id       Int    @id @default(autoincrement())
+  returnId String @unique @map("return_id")
+  orderId  String @map("order_id")
+  order    Order  @relation(fields: [orderId], references: [id])
+
+  masterSku String  @map("master_sku")
+  product   Product @relation(fields: [masterSku], references: [sku])
+
+  // Timing
+  returnDate DateTime @map("return_date")
+
+  // Details
+  quantity         Int
+  reason           String?
+  customerComments String? @map("customer_comments") @db.Text
+
+  // What happened to the item
+  disposition String // sellable, damaged, customer_damaged, defective
+
+  // Financial
+  refundAmount      Decimal  @map("refund_amount") @db.Decimal(10, 2)
+  returnShippingFee Decimal? @default(0) @map("return_shipping_fee") @db.Decimal(10, 2)
+  restockingFee     Decimal? @default(0) @map("restocking_fee") @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("returns")
+}
+
+// ============================================
+// 7. PURCHASE ORDERS
+// ============================================
+model PurchaseOrder {
+  id         Int      @id @default(autoincrement())
+  poNumber   String   @unique @map("po_number")
+  supplierId Int      @map("supplier_id")
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  // Status
+  status String // draft, sent, confirmed, shipped, partial, received, cancelled
+
+  // Dates
+  createdDate         DateTime  @default(now()) @map("created_date")
+  sentDate            DateTime? @map("sent_date")
+  confirmedDate       DateTime? @map("confirmed_date")
+  expectedShipDate    DateTime? @map("expected_ship_date")
+  expectedArrivalDate DateTime? @map("expected_arrival_date")
+  actualShipDate      DateTime? @map("actual_ship_date")
+  actualArrivalDate   DateTime? @map("actual_arrival_date")
+
+  // Shipping
+  carrier        String?
+  trackingNumber String? @map("tracking_number")
+
+  // Financials
+  subtotal     Decimal  @default(0) @db.Decimal(10, 2)
+  shippingCost Decimal? @default(0) @map("shipping_cost") @db.Decimal(10, 2)
+  tax          Decimal? @default(0) @db.Decimal(10, 2)
+  total        Decimal  @default(0) @db.Decimal(10, 2)
+
+  // Payment
+  paymentStatus    String    @default("unpaid") @map("payment_status") // unpaid, partial, paid
+  paymentDate      DateTime? @map("payment_date")
+  paymentMethod    String?   @map("payment_method")
+  paymentReference String?   @map("payment_reference")
+
+  notes String? @db.Text
+
+  // Relations
+  items PurchaseOrderItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id            Int           @id @default(autoincrement())
+  poId          Int           @map("po_id")
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  masterSku String  @map("master_sku")
+  product   Product @relation(fields: [masterSku], references: [sku])
+
+  quantityOrdered Int     @map("quantity_ordered")
+  unitCost        Decimal @map("unit_cost") @db.Decimal(10, 2)
+  lineTotal       Decimal @map("line_total") @db.Decimal(10, 2)
+
+  quantityReceived Int @default(0) @map("quantity_received")
+  quantityDamaged  Int @default(0) @map("quantity_damaged")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("purchase_order_items")
+}
+
+// ============================================
+// 7.5 BACKORDERS
+// ============================================
+model Backorder {
+  id Int @id @default(autoincrement())
+
+  // Reference to original PO
+  poId       Int      @map("po_id")
+  poNumber   String   @map("po_number")
+  supplierId Int      @map("supplier_id")
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  // Item details
+  masterSku String  @map("master_sku")
+  quantity  Int
+  unitCost  Decimal @map("unit_cost") @db.Decimal(10, 2)
+
+  // Status
+  status String @default("pending") // pending, received, cancelled
+
+  // Dates
+  createdDate  DateTime  @default(now()) @map("created_date")
+  expectedDate DateTime? @map("expected_date")
+  receivedDate DateTime? @map("received_date")
+
+  // Quantities
+  quantityReceived Int @default(0) @map("quantity_received")
+  quantityDamaged  Int @default(0) @map("quantity_damaged")
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("backorders")
+}
+
+// ============================================
+// 8. FBA SHIPMENTS (Enhanced per spec)
+// ============================================
+model Shipment {
+  id        Int      @id @default(autoincrement())
+  internalId String? @unique @map("internal_id") // Internal ID like "SHP-2025-001"
+
+  // Locations
+  fromLocationId Int? @map("from_location_id")
+  fromLocation   Warehouse? @relation("ShipmentFrom", fields: [fromLocationId], references: [id])
+  toLocationId   Int? @map("to_location_id")
+  toLocation     Warehouse? @relation("ShipmentTo", fields: [toLocationId], references: [id])
+
+  // Status
+  status String @default("draft") // draft, ready, submitted, shipped, in_transit, receiving, received
+
+  // Optimal Placement
+  optimalPlacementEnabled Boolean @default(true) @map("optimal_placement_enabled")
+
+  // Amazon Integration
+  amazonShipmentId    String? @map("amazon_shipment_id")
+  amazonInboundPlanId String? @map("amazon_inbound_plan_id")
+  destinationFc       String? @map("destination_fc")
+  destinationName     String? @map("destination_name")
+
+  // Dates
+  submittedAt DateTime? @map("submitted_at")
+  shippedAt   DateTime? @map("shipped_at")
+  receivedAt  DateTime? @map("received_at")
+
+  // Shipping
+  carrier        String?
+  trackingNumber String? @map("tracking_number")
+
+  // Relations
+  items ShipmentItem[]
+  boxes ShipmentBox[]
+  transparencyCodes ShipmentTransparencyCode[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id         Int      @id @default(autoincrement())
+  shipmentId Int      @map("shipment_id")
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  masterSku String  @map("master_sku")
+  product   Product @relation("ShipmentItemProduct", fields: [masterSku], references: [sku])
+  fnsku     String?
+  productName String? @map("product_name")
+
+  requestedQty Int @map("requested_qty")
+  adjustedQty  Int @map("adjusted_qty")
+
+  // Picking
+  pickStatus String @default("pending") @map("pick_status") // pending, picked, skipped
+  pickedAt   DateTime? @map("picked_at")
+  pickedBy   String? @map("picked_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("shipment_items")
+}
+
+model ShipmentBox {
+  id         Int      @id @default(autoincrement())
+  shipmentId Int      @map("shipment_id")
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  boxNumber Int @map("box_number")
+
+  // Dimensions
+  lengthInches Decimal? @map("length_inches") @db.Decimal(6, 2)
+  widthInches  Decimal? @map("width_inches") @db.Decimal(6, 2)
+  heightInches Decimal? @map("height_inches") @db.Decimal(6, 2)
+  weightLbs    Decimal? @map("weight_lbs") @db.Decimal(6, 2)
+
+  // Amazon
+  amazonBoxId String? @map("amazon_box_id")
+
+  // Relations
+  items ShipmentBoxItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("shipment_boxes")
+}
+
+model ShipmentBoxItem {
+  id             Int          @id @default(autoincrement())
+  shipmentBoxId  Int          @map("shipment_box_id")
+  shipmentBox    ShipmentBox  @relation(fields: [shipmentBoxId], references: [id], onDelete: Cascade)
+
+  masterSku String @map("master_sku")
+  quantity  Int
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("shipment_box_items")
+}
+
+model ShipmentTransparencyCode {
+  id             Int      @id @default(autoincrement())
+  shipmentId     Int      @map("shipment_id")
+  shipment       Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  masterSku          String   @map("master_sku")
+  transparencyCode   String   @unique @map("transparency_code")
+  
+  requestedAt DateTime? @map("requested_at")
+  printedAt   DateTime? @map("printed_at")
+  used        Boolean  @default(false)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("shipment_transparency_codes")
+}
+
+// Legacy FBA Shipment models (keep for backward compatibility)
+model FbaShipment {
+  id         Int     @id @default(autoincrement())
+  shipmentId String  @unique @map("shipment_id") // Amazon's shipment ID
+  internalId String? @map("internal_id")
+
+  // Status
+  status String // draft, working, shipped, in_transit, delivered, checked_in, receiving, closed, cancelled
+
+  // Destination
+  destinationFc   String? @map("destination_fc")
+  destinationName String? @map("destination_name")
+  channel         String? // amazon_us, amazon_uk, amazon_ca
+
+  // Dates
+  createdDate      DateTime  @default(now()) @map("created_date")
+  shipDate         DateTime? @map("ship_date")
+  estimatedArrival DateTime? @map("estimated_arrival")
+  checkedInDate    DateTime? @map("checked_in_date")
+  closedDate       DateTime? @map("closed_date")
+
+  // Shipping
+  carrier         String?
+  trackingNumbers String? @map("tracking_numbers") @db.Text // JSON array
+
+  // Boxes
+  numBoxes    Int?     @default(0) @map("num_boxes")
+  totalUnits  Int      @default(0) @map("total_units")
+  totalWeight Decimal? @map("total_weight") @db.Decimal(10, 2)
+
+  // Reconciliation
+  unitsShipped        Int     @default(0) @map("units_shipped")
+  unitsReceived       Int     @default(0) @map("units_received")
+  unitsDiscrepancy    Int     @default(0) @map("units_discrepancy")
+  reimbursementStatus String? @map("reimbursement_status")
+
+  // Relations
+  items FbaShipmentItem[]
+  boxes FbaShipmentBox[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("fba_shipments")
+}
+
+model FbaShipmentItem {
+  id         Int         @id @default(autoincrement())
+  shipmentId Int         @map("shipment_id")
+  shipment   FbaShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  masterSku  String  @map("master_sku")
+  channelSku String? @map("channel_sku")
+  product    Product @relation("FbaShipmentItemProduct", fields: [masterSku], references: [sku])
+
+  quantityShipped     Int @map("quantity_shipped")
+  quantityReceived    Int @default(0) @map("quantity_received")
+  quantityDiscrepancy Int @default(0) @map("quantity_discrepancy")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("fba_shipment_items")
+}
+
+model FbaShipmentBox {
+  id         Int         @id @default(autoincrement())
+  shipmentId Int         @map("shipment_id")
+  shipment   FbaShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  boxNumber  Int      @map("box_number")
+  weightLbs  Decimal? @map("weight_lbs") @db.Decimal(8, 2)
+  dimensions String? // LxWxH
+  items      String?  @db.Text // JSONB of what's in this box
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("fba_shipment_boxes")
+}
+
+// ============================================
+// 9. PROFIT TRACKING
+// ============================================
+model DailyProfit {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @db.Date
+  masterSku String   @map("master_sku")
+  product   Product  @relation(fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  // Sales
+  unitsSold Int     @default(0) @map("units_sold")
+  revenue   Decimal @default(0) @db.Decimal(10, 2)
+
+  // Costs
+  amazonFees     Decimal @default(0) @map("amazon_fees") @db.Decimal(10, 2)
+  cogs           Decimal @default(0) @db.Decimal(10, 2) // units_sold * product.cost
+  ppcSpend       Decimal @default(0) @map("ppc_spend") @db.Decimal(10, 2)
+  refunds        Decimal @default(0) @db.Decimal(10, 2)
+  promoDiscounts Decimal @default(0) @map("promo_discounts") @db.Decimal(10, 2)
+
+  // Result
+  grossProfit  Decimal @default(0) @map("gross_profit") @db.Decimal(10, 2)
+  netProfit    Decimal @default(0) @map("net_profit") @db.Decimal(10, 2)
+  profitMargin Decimal @default(0) @map("profit_margin") @db.Decimal(5, 2)
+  roi          Decimal @default(0) @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([date, masterSku])
+  @@map("daily_profit")
+}
+
+model DailySummary {
+  id   Int      @id @default(autoincrement())
+  date DateTime @unique @db.Date
+
+  totalRevenue Decimal @default(0) @map("total_revenue") @db.Decimal(12, 2)
+  totalFees    Decimal @default(0) @map("total_fees") @db.Decimal(12, 2)
+  totalCogs    Decimal @default(0) @map("total_cogs") @db.Decimal(12, 2)
+  totalPpc     Decimal @default(0) @map("total_ppc") @db.Decimal(12, 2)
+  totalRefunds Decimal @default(0) @map("total_refunds") @db.Decimal(12, 2)
+  totalProfit  Decimal @default(0) @map("total_profit") @db.Decimal(12, 2)
+
+  unitsSold   Int @default(0) @map("units_sold")
+  ordersCount Int @default(0) @map("orders_count")
+
+  // Comparison
+  profitVsYesterday Decimal? @map("profit_vs_yesterday") @db.Decimal(12, 2)
+  profitVsLastWeek  Decimal? @map("profit_vs_last_week") @db.Decimal(12, 2)
+  profitVsLastMonth Decimal? @map("profit_vs_last_month") @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("daily_summary")
+}
+
+// ============================================
+// 10. FORECASTING & VELOCITY
+// ============================================
+model SalesVelocity {
+  id        Int     @id @default(autoincrement())
+  masterSku String  @unique @map("master_sku")
+  product   Product @relation(fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  // Velocity at different timeframes
+  velocity7d  Decimal @default(0) @map("velocity_7d") @db.Decimal(10, 2)
+  velocity30d Decimal @default(0) @map("velocity_30d") @db.Decimal(10, 2)
+  velocity90d Decimal @default(0) @map("velocity_90d") @db.Decimal(10, 2)
+
+  // Trend
+  trend        String? // rising, stable, declining
+  trendPercent Decimal? @map("trend_percent") @db.Decimal(5, 2)
+
+  // Stockout Impact
+  daysOutOfStock30d  Int @default(0) @map("days_out_of_stock_30d")
+  estimatedLostSales Int @default(0) @map("estimated_lost_sales")
+
+  lastCalculated DateTime @default(now()) @map("last_calculated")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sales_velocity")
+}
+
+model DemandForecast {
+  id        Int     @id @default(autoincrement())
+  masterSku String  @map("master_sku")
+  product   Product @relation(fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  channel    String? // amazon_us, amazon_uk, etc.
+  channelSku String? @map("channel_sku")
+
+  forecastDate DateTime @map("forecast_date")
+
+  // Predictions
+  predictedUnits Decimal @map("predicted_units") @db.Decimal(10, 2)
+  confidence     Decimal @db.Decimal(5, 2) // 0-1
+
+  // Factors applied
+  seasonalityFactor Decimal? @default(1.0) @map("seasonality_factor") @db.Decimal(5, 2)
+  trendFactor       Decimal? @default(1.0) @map("trend_factor") @db.Decimal(5, 2)
+  promoFactor       Decimal? @default(1.0) @map("promo_factor") @db.Decimal(5, 2)
+
+  // Result
+  recommendedStock Int @map("recommended_stock")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("demand_forecast")
+}
+
+// ============================================
+// FORECASTING SYSTEM TABLES
+// ============================================
+
+// Daily forecasts per SKU per location (FBA vs Warehouse)
+model Forecast {
+  id        Int     @id @default(autoincrement())
+  masterSku String  @map("master_sku")
+  product   Product @relation("ForecastProduct", fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  location     String // 'fba', 'warehouse', 'total'
+  forecastDate DateTime @map("forecast_date") @db.Date
+
+  // Base forecast (units per day)
+  baseForecast Decimal @map("base_forecast") @db.Decimal(10, 2)
+
+  // Model predictions (ensemble of multiple models)
+  prophetForecast              Decimal? @map("prophet_forecast") @db.Decimal(10, 2)
+  lstmForecast                 Decimal? @map("lstm_forecast") @db.Decimal(10, 2)
+  exponentialSmoothingForecast Decimal? @map("exponential_smoothing_forecast") @db.Decimal(10, 2)
+
+  // Final ensemble forecast
+  finalForecast Decimal @map("final_forecast") @db.Decimal(10, 2)
+  confidence    Decimal @db.Decimal(5, 2) // 0-1, confidence level
+
+  // Applied factors
+  seasonalityMultiplier Decimal? @default(1.0) @map("seasonality_multiplier") @db.Decimal(5, 2)
+  dealMultiplier        Decimal? @default(1.0) @map("deal_multiplier") @db.Decimal(5, 2)
+  spikeMultiplier       Decimal? @default(1.0) @map("spike_multiplier") @db.Decimal(5, 2)
+
+  // Safety stock calculation
+  safetyStock Int @default(0) @map("safety_stock")
+
+  // Recommended inventory level
+  recommendedInventory Int @map("recommended_inventory")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([masterSku, location, forecastDate])
+  @@index([masterSku, forecastDate])
+  @@map("forecasts")
+}
+
+// Track forecast accuracy for learning
+model ForecastAccuracy {
+  id           Int      @id @default(autoincrement())
+  masterSku    String   @map("master_sku")
+  forecastDate DateTime @map("forecast_date") @db.Date
+  location     String // 'fba', 'warehouse', 'total'
+
+  // What was predicted
+  predictedUnits Decimal @map("predicted_units") @db.Decimal(10, 2)
+  modelUsed      String? @map("model_used") // 'prophet', 'lstm', 'exponential_smoothing', 'ensemble'
+
+  // What actually happened
+  actualUnits Decimal @map("actual_units") @db.Decimal(10, 2)
+
+  // Accuracy metrics
+  absoluteError   Decimal @map("absolute_error") @db.Decimal(10, 2)
+  percentageError Decimal @map("percentage_error") @db.Decimal(5, 2) // MAPE
+  squaredError    Decimal @map("squared_error") @db.Decimal(10, 2)
+
+  // Was it within confidence interval?
+  withinConfidence Boolean @default(false) @map("within_confidence")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([masterSku, location, forecastDate, modelUsed])
+  @@index([masterSku, forecastDate])
+  @@map("forecast_accuracy")
+}
+
+// Configurable seasonal events
+model SeasonalEvent {
+  id        Int    @id @default(autoincrement())
+  name      String // "Valentine's Day", "Black Friday", etc.
+  eventType String @map("event_type") // 'micro_peak', 'major_peak', 'custom'
+
+  // Date range (can be recurring yearly)
+  startMonth Int @map("start_month") // 1-12
+  startDay   Int @map("start_day") // 1-31
+  endMonth   Int @map("end_month")
+  endDay     Int @map("end_day")
+
+  // Multiplier (how much sales increase)
+  baseMultiplier Decimal @default(1.0) @map("base_multiplier") @db.Decimal(5, 2)
+
+  // Per-SKU overrides (stored as JSON)
+  skuMultipliers String? @map("sku_multipliers") @db.Text // JSON: { "SKU1": 3.5, "SKU2": 2.0 }
+
+  // Auto-learned multiplier (updated based on historical performance)
+  learnedMultiplier Decimal? @map("learned_multiplier") @db.Decimal(5, 2)
+
+  // Status
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("seasonal_events")
+}
+
+// Supplier performance tracking (actual lead times)
+model SupplierPerformance {
+  id         Int      @id @default(autoincrement())
+  supplierId Int      @map("supplier_id")
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  // Lead time tracking
+  statedLeadTimeDays    Int     @map("stated_lead_time_days") // What supplier promises
+  avgActualLeadTimeDays Decimal @map("avg_actual_lead_time_days") @db.Decimal(5, 2)
+  worstCaseLeadTimeDays Decimal @map("worst_case_lead_time_days") @db.Decimal(5, 2) // 95th percentile
+
+  // Reliability metrics
+  onTimeRate       Decimal @map("on_time_rate") @db.Decimal(5, 2) // 0-1
+  leadTimeVariance Decimal @map("lead_time_variance") @db.Decimal(5, 2)
+  reliabilityScore Decimal @map("reliability_score") @db.Decimal(5, 2) // 0-1
+
+  // Sample size
+  poCount Int @default(0) @map("po_count") // Number of POs used for calculation
+
+  // Last calculated
+  lastCalculated DateTime @default(now()) @map("last_calculated")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([supplierId])
+  @@map("supplier_performance")
+}
+
+// Model weights per SKU (which model performs best)
+model ModelWeight {
+  id        Int     @id @default(autoincrement())
+  masterSku String  @map("master_sku")
+  product   Product @relation("ModelWeightProduct", fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  // Model weights (should sum to ~1.0)
+  prophetWeight              Decimal @default(0.33) @map("prophet_weight") @db.Decimal(5, 2)
+  lstmWeight                 Decimal @default(0.33) @map("lstm_weight") @db.Decimal(5, 2)
+  exponentialSmoothingWeight Decimal @default(0.34) @map("exponential_smoothing_weight") @db.Decimal(5, 2)
+
+  // Model performance (MAPE)
+  prophetMape              Decimal? @map("prophet_mape") @db.Decimal(5, 2)
+  lstmMape                 Decimal? @map("lstm_mape") @db.Decimal(5, 2)
+  exponentialSmoothingMape Decimal? @map("exponential_smoothing_mape") @db.Decimal(5, 2)
+
+  // Overall accuracy
+  overallMape Decimal? @map("overall_mape") @db.Decimal(5, 2)
+
+  // Last updated
+  lastUpdated DateTime @default(now()) @map("last_updated")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([masterSku])
+  @@map("model_weights")
+}
+
+// Inventory alerts with context
+model InventoryAlert {
+  id        Int     @id @default(autoincrement())
+  masterSku String? @map("master_sku")
+
+  alertType String @map("alert_type") // 'stockout_risk', 'excess_inventory', 'seasonal_prep', 'forecast_accuracy_low'
+  severity  String // 'critical', 'high', 'medium', 'low'
+
+  title   String
+  message String  @db.Text
+  context String? @db.Text // JSON with details
+
+  // Actionable recommendations
+  recommendedAction   String?   @map("recommended_action") @db.Text
+  recommendedQuantity Int?      @map("recommended_quantity")
+  recommendedDate     DateTime? @map("recommended_date")
+
+  // Status
+  isRead     Boolean   @default(false) @map("is_read")
+  isResolved Boolean   @default(false) @map("is_resolved")
+  resolvedAt DateTime? @map("resolved_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  readAt    DateTime? @map("read_at")
+
+  @@index([masterSku, isResolved])
+  @@index([severity, isResolved])
+  @@map("inventory_alerts")
+}
+
+// SKU analytics (velocity trends, spike detection, growth status)
+model SkuAnalytics {
+  id        Int     @id @default(autoincrement())
+  masterSku String  @unique @map("master_sku")
+  product   Product @relation("SkuAnalyticsProduct", fields: [masterSku], references: [sku], onDelete: Cascade)
+
+  // Velocity trends
+  velocity7d    Decimal @default(0) @map("velocity_7d") @db.Decimal(10, 2)
+  velocity30d   Decimal @default(0) @map("velocity_30d") @db.Decimal(10, 2)
+  velocity90d   Decimal @default(0) @map("velocity_90d") @db.Decimal(10, 2)
+  velocityTrend String? @map("velocity_trend") // 'rising', 'stable', 'declining'
+
+  // Spike detection
+  isSpiking       Boolean   @default(false) @map("is_spiking")
+  spikeStartDate  DateTime? @map("spike_start_date")
+  spikeCause      String?   @map("spike_cause") // 'deal', 'ads', 'listing_change', 'organic'
+  spikeMultiplier Decimal?  @map("spike_multiplier") @db.Decimal(5, 2)
+
+  // Growth status
+  growthStatus    String?  @map("growth_status") // 'ready_for_growth', 'maintenance_mode', 'stock_risk'
+  daysOfInventory Decimal? @map("days_of_inventory") @db.Decimal(10, 2)
+
+  // New item tracking
+  isNewItem       Boolean @default(false) @map("is_new_item")
+  analogSku       String? @map("analog_sku") // Similar SKU used for forecasting
+  daysSinceLaunch Int?    @map("days_since_launch")
+
+  // Watch status
+  watchStatus String? @default("normal") @map("watch_status") // 'normal', 'high_watch', 'critical'
+
+  lastCalculated DateTime @default(now()) @map("last_calculated")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sku_analytics")
+}
+
+model SalesHistory {
+  id         Int        @id @default(autoincrement())
+  masterSku  String     @map("master_sku")
+  channel    String // amazon_us, amazon_uk, etc.
+  channelSku String     @map("channel_sku")
+  skuMapping SkuMapping @relation(fields: [masterSku, channel], references: [masterSku, channel])
+
+  date DateTime @db.Date
+
+  unitsSold  Int     @default(0) @map("units_sold")
+  revenue    Decimal @default(0) @db.Decimal(10, 2)
+  revenueUsd Decimal @default(0) @map("revenue_usd") @db.Decimal(10, 2)
+
+  fees    Decimal @default(0) @db.Decimal(10, 2)
+  feesUsd Decimal @default(0) @map("fees_usd") @db.Decimal(10, 2)
+
+  currency String @default("USD")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([masterSku, channel, date])
+  @@map("sales_history")
+}
+
+// ============================================
+// 11. ALERTS & NOTIFICATIONS
+// ============================================
+model AlertConfig {
+  id        Int    @id @default(autoincrement())
+  alertType String @map("alert_type") // low_stock, stockout, hijacker, etc.
+
+  enabled   Boolean @default(true)
+  threshold String? @db.Text // JSONB with alert-specific settings
+
+  notifyVia String? @map("notify_via") // in_app, email, sms
+  frequency String? @default("instant") // instant, daily_digest
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([alertType])
+  @@map("alert_configs")
+}
+
+model Alert {
+  id        Int    @id @default(autoincrement())
+  alertType String @map("alert_type")
+  severity  String // info, warning, critical
+
+  masterSku String? @map("master_sku")
+
+  title   String
+  message String  @db.Text
+  data    String? @db.Text // JSONB with details
+
+  isRead         Boolean @default(false) @map("is_read")
+  isResolved     Boolean @default(false) @map("is_resolved")
+  resolvedAction String? @map("resolved_action") @db.Text
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  readAt     DateTime? @map("read_at")
+  resolvedAt DateTime? @map("resolved_at")
+
+  @@map("alerts")
+}
+
+// ============================================
+// 12. BUSINESS PROFILE
+// ============================================
+model BusinessProfile {
+  id Int @id @default(autoincrement())
+
+  // Business Info
+  businessName    String  @map("business_name")
+  businessType    String  @map("business_type") // amazon_fba, multichannel
+  productCategory String? @map("product_category") // jewelry
+
+  // Amazon Info
+  sellerId    String? @map("seller_id")
+  marketplace String? // US, CA, UK, etc.
+
+  // Inventory Strategy
+  targetFbaDays   Int @default(45) @map("target_fba_days")
+  targetTotalDays Int @default(180) @map("target_total_days")
+  safetyStockDays Int @default(14) @map("safety_stock_days")
+
+  // Seasonality
+  peakMonths     String?  @map("peak_months") @db.Text // JSON array [11, 12]
+  peakMultiplier Decimal? @default(2.0) @map("peak_multiplier") @db.Decimal(5, 2)
+  slowMonths     String?  @map("slow_months") @db.Text // JSON array [1, 2]
+  slowMultiplier Decimal? @default(0.5) @map("slow_multiplier") @db.Decimal(5, 2)
+
+  // Thresholds
+  minProfitMargin Decimal? @map("min_profit_margin") @db.Decimal(5, 2)
+  minRoi          Decimal? @map("min_roi") @db.Decimal(5, 2)
+  maxDaysOfStock  Int?     @map("max_days_of_stock")
+
+  // Communication
+  alertStyle String @default("balanced") @map("alert_style") // gentle, balanced, direct
+
+  // Timezone & Currency
+  timezone     String @default("America/New_York")
+  currency     String @default("USD")
+  dateFormat   String @default("MM/DD/YYYY") @map("date_format")
+  numberFormat String @default("en-US") @map("number_format")
+
+  // Setup
+  interviewCompleted   Boolean   @default(false) @map("interview_completed")
+  interviewCompletedAt DateTime? @map("interview_completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("business_profile")
+}
+
+// ============================================
+// 13. API CONNECTIONS
+// ============================================
+model ApiConnection {
+  id       Int    @id @default(autoincrement())
+  platform String // amazon, linnworks, shopify
+
+  isConnected Boolean @default(false) @map("is_connected")
+  isPrimary   Boolean @default(false) @map("is_primary")
+
+  // What it provides
+  provides String? @db.Text // JSON array ['fba_inventory', 'orders', 'fees']
+
+  // Credentials (encrypted!)
+  credentials String? @db.Text // JSONB, encrypted
+
+  // Sync
+  syncEnabled          Boolean   @default(true) @map("sync_enabled")
+  syncFrequencyMinutes Int       @default(60) @map("sync_frequency_minutes")
+  lastSyncAt           DateTime? @map("last_sync_at")
+  lastSyncStatus       String?   @map("last_sync_status")
+  lastSyncError        String?   @map("last_sync_error") @db.Text
+
+  // Health
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  lastSuccessfulSync  DateTime? @map("last_successful_sync")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([platform])
+  @@map("api_connections")
+}
+
+// ============================================
+// 14. WORKFLOWS
+// ============================================
+model Workflow {
+  id          Int     @id @default(autoincrement())
+  workflowId  String  @unique @map("workflow_id")
+  name        String
+  description String? @db.Text
+
+  // Definition
+  nodes       String? @db.Text // JSONB array of steps
+  connections String? @db.Text // How steps connect
+
+  // Trigger
+  triggerType   String  @map("trigger_type") // manual, scheduled, event
+  triggerConfig String? @map("trigger_config") @db.Text
+
+  // Status
+  isActive Boolean @default(true) @map("is_active")
+  isSystem Boolean @default(false) @map("is_system") // Built-in vs user-created
+
+  // Relations
+  runs WorkflowRun[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("workflows")
+}
+
+model WorkflowRun {
+  id         Int      @id @default(autoincrement())
+  workflowId String   @map("workflow_id")
+  workflow   Workflow @relation(fields: [workflowId], references: [workflowId], onDelete: Cascade)
+
+  status      String // running, paused, completed, failed
+  currentNode String? @map("current_node")
+
+  context String? @db.Text // Data being passed through
+
+  startedAt   DateTime  @default(now()) @map("started_at")
+  pausedAt    DateTime? @map("paused_at")
+  completedAt DateTime? @map("completed_at")
+
+  // If waiting
+  waitingFor  String? @map("waiting_for") // approval, user_input
+  waitingData String? @map("waiting_data") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("workflow_runs")
+}
+
+// ============================================
+// 15. MODULES
+// ============================================
+model Module {
+  id          Int     @id @default(autoincrement())
+  moduleId    String  @unique @map("module_id")
+  name        String
+  description String? @db.Text
+  type        String // widget, tool, automation, report
+
+  // Definition
+  config String? @db.Text // Module settings
+  code   String? @db.Text // Generated code
+
+  // UI
+  icon              String?
+  dashboardPosition String? @map("dashboard_position") @db.Text
+  menuPosition      String? @map("menu_position")
+
+  status    String @default("active") // active, disabled
+  createdBy String @default("user") @map("created_by") // advisor, user
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("modules")
+}
+
+// ============================================
+// 16. USER & ROLES
+// ============================================
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String
+  role  String // owner, manager, staff, va, accountant
+
+  // Permissions
+  permissions String? @db.Text // JSONB or link to role_permissions
+
+  // Preferences
+  timezone                String  @default("America/New_York")
+  dateFormat              String  @default("MM/DD/YYYY") @map("date_format")
+  notificationPreferences String? @map("notification_preferences") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model AuditLog {
+  id     Int  @id @default(autoincrement())
+  userId Int? @map("user_id")
+
+  action     String // created_po, edited_product, etc.
+  entityType String  @map("entity_type") // product, po, shipment
+  entityId   String? @map("entity_id")
+
+  beforeData String? @map("before_data") @db.Text
+  afterData  String? @map("after_data") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  ipAddress String?  @map("ip_address")
+
+  @@map("audit_log")
+}
+
+// ============================================
+// 17. APPROVAL SYSTEM
+// ============================================
+model PendingAction {
+  id Int @id @default(autoincrement())
+
+  // What action
+  actionType String  @map("action_type") // create_po, update_product, install_module
+  actionData String? @map("action_data") @db.Text // JSONB with full details
+
+  // Preview
+  previewText String  @map("preview_text") @db.Text
+  previewData String? @map("preview_data") @db.Text // JSONB for UI
+
+  // Impact analysis
+  impactSummary   String? @map("impact_summary") @db.Text
+  affectedRecords String? @map("affected_records") @db.Text
+
+  // Status
+  status String @default("pending") // pending, approved, rejected, expired
+
+  // Approval
+  createdAt       DateTime  @default(now()) @map("created_at")
+  expiresAt       DateTime? @map("expires_at")
+  approvedAt      DateTime? @map("approved_at")
+  approvedBy      Int?      @map("approved_by")
+  rejectionReason String?   @map("rejection_reason") @db.Text
+
+  // Execution
+  executedAt      DateTime? @map("executed_at")
+  executionResult String?   @map("execution_result") @db.Text
+  executionError  String?   @map("execution_error") @db.Text
+
+  @@map("pending_actions")
+}
+
+model ActionHistory {
+  id Int @id @default(autoincrement())
+
+  actionType  String  @map("action_type")
+  actionData  String? @map("action_data") @db.Text
+  previewText String  @map("preview_text") @db.Text
+
+  approvedBy Int?     @map("approved_by")
+  approvedAt DateTime @map("approved_at")
+
+  result     String // success, failed, partial
+  resultData String? @map("result_data") @db.Text
+
+  // For undo capability
+  canUndo  Boolean   @default(false) @map("can_undo")
+  undoData String?   @map("undo_data") @db.Text
+  undoneAt DateTime? @map("undone_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("action_history")
+}
+
+// ============================================
+// 18. ADDITIONAL SYSTEMS
+// ============================================
+model Marketplace {
+  id            Int    @id @default(autoincrement())
+  marketplaceId String @unique @map("marketplace_id") // ATVPDKIKX0DER (US), etc.
+  name          String // "Amazon US", "Amazon CA"
+  countryCode   String @map("country_code") // US, CA, UK, DE
+
+  currency String // USD, CAD, GBP, EUR
+  timezone String // America/New_York, Europe/London
+
+  // Amazon credentials for this marketplace
+  isConnected Boolean @default(false) @map("is_connected")
+  credentials String? @db.Text // Encrypted
+
+  // Settings
+  isActive           Boolean @default(true) @map("is_active")
+  primaryMarketplace Boolean @default(false) @map("primary_marketplace")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("marketplaces")
+}
+
+model CurrencyRate {
+  id           Int     @id @default(autoincrement())
+  fromCurrency String  @map("from_currency")
+  toCurrency   String  @map("to_currency")
+  rate         Decimal @db.Decimal(10, 4)
+
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([fromCurrency, toCurrency])
+  @@map("currency_rates")
+}
+
+model InventoryAdjustment {
+  id        Int    @id @default(autoincrement())
+  masterSku String @map("master_sku")
+  location  String // 'warehouse', 'fba'
+
+  // Adjustment
+  adjustmentType String @map("adjustment_type") // damage, shrinkage, audit, correction, found, other
+  quantityChange Int    @map("quantity_change") // Can be negative or positive
+
+  // Before/After
+  quantityBefore Int @map("quantity_before")
+  quantityAfter  Int @map("quantity_after")
+
+  // Details
+  reason    String  @db.Text
+  reference String? // PO number, audit ID, etc.
+
+  // Tracking
+  adjustedBy Int?     @map("adjusted_by")
+  adjustedAt DateTime @default(now()) @map("adjusted_at")
+
+  // Approval
+  requiresApproval Boolean   @default(false) @map("requires_approval")
+  approvedBy       Int?      @map("approved_by")
+  approvedAt       DateTime? @map("approved_at")
+
+  @@map("inventory_adjustments")
+}
+
+model Bundle {
+  id              Int     @id @default(autoincrement())
+  bundleProductId String  @unique @map("bundle_product_id")
+  bundleProduct   Product @relation("BundleProduct", fields: [bundleProductId], references: [sku], onDelete: Cascade)
+
+  isActive               Boolean @default(true) @map("is_active")
+  autoCalculateInventory Boolean @default(true) @map("auto_calculate_inventory")
+
+  components BundleComponent[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("bundles")
+}
+
+model BundleComponent {
+  id              Int    @id @default(autoincrement())
+  bundleProductId String @map("bundle_product_id")
+  bundle          Bundle @relation(fields: [bundleProductId], references: [bundleProductId], onDelete: Cascade)
+
+  componentProductId String  @map("component_product_id")
+  componentProduct   Product @relation("ComponentProduct", fields: [componentProductId], references: [sku], onDelete: Cascade)
+
+  quantity Int // How many of this component per bundle
+
+  @@unique([bundleProductId, componentProductId])
+  @@map("bundle_components")
+}
