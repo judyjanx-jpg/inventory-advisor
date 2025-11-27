@@ -575,14 +575,19 @@ export async function POST() {
       
       console.log(`  Total inventory items: ${allInventory.length}`)
       
-      // Update products with FNSKUs
+      // Log sample item to see structure
+      if (allInventory.length > 0) {
+        const sample = allInventory[0]
+        console.log(`  Sample item: SKU=${sample.sellerSku}, FNSKU=${sample.fnSku}`)
+      }
+      
+      // Update products with FNSKUs - always overwrite
       for (const item of allInventory) {
         if (item.sellerSku && item.fnSku) {
           try {
             const result = await prisma.product.updateMany({
               where: { 
                 sku: item.sellerSku,
-                fnsku: null // Only update if FNSKU is missing
               },
               data: { fnsku: item.fnSku },
             })
