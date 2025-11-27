@@ -396,35 +396,35 @@ export default function BoxCreation({
 
               {/* Box Dimensions Row */}
               <tr className="border-t border-slate-700">
-                <td colSpan={2 + boxes.length} className="py-4 px-4">
+                <td className="py-4 px-4 text-sm font-medium text-slate-300 text-right align-top" colSpan={2}>
+                  Box dimensions (in):
+                </td>
+                <td colSpan={boxes.length} className="py-4 px-4">
                   {dimensions.map((dim) => (
                     <div key={dim.id} className="flex items-center gap-4 mb-3">
-                      <span className="text-sm text-slate-300 w-36">
-                        Box dimensions (in):
-                      </span>
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
                           value={dim.length}
                           onChange={(e) => updateDimension(dim.id, 'length', parseFloat(e.target.value) || 0)}
-                          className="w-16 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                          className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
                         />
                         <span className="text-slate-500">×</span>
                         <input
                           type="number"
                           value={dim.width}
                           onChange={(e) => updateDimension(dim.id, 'width', parseFloat(e.target.value) || 0)}
-                          className="w-16 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                          className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
                         />
                         <span className="text-slate-500">×</span>
                         <input
                           type="number"
                           value={dim.height}
                           onChange={(e) => updateDimension(dim.id, 'height', parseFloat(e.target.value) || 0)}
-                          className="w-16 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                          className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
                         />
                       </div>
-                      <div className="flex items-center gap-3 ml-4">
+                      <div className="flex items-center gap-3">
                         {boxes.map(box => (
                           <label key={box.boxNumber} className="flex items-center gap-1 text-xs text-slate-400">
                             <input
@@ -440,7 +440,7 @@ export default function BoxCreation({
                       {dimensions.length > 1 && (
                         <button
                           onClick={() => removeDimensionGroup(dim.id)}
-                          className="text-red-400 hover:text-red-300 ml-2"
+                          className="text-red-400 hover:text-red-300"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
