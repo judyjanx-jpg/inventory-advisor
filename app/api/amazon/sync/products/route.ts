@@ -535,11 +535,74 @@ export async function POST() {
 
     console.log(`  ✓ Created ${virtualParentsCreated} parent groups, linked ${relationshipsLinked} variations`)
 
+    // Step 7: Fetch FNSKUs from FBA Inventory API (this is the most reliable source)
+    console.log('\n📦 Fetching FNSKUs from FBA Inventory API...')
+    let fnskuUpdated = 0
+    
+    try {
+      let nextToken: string | undefined = undefined
+      let allInventory: any[] = []
+      let pageCount = 0
+      
+      do {
+        const query: any = {
+          granularityType: 'Marketplace',
+          granularityId: credentials.marketplaceId,
+          marketplaceIds: [credentials.marketplaceId],
+          details: true,
+        }
+        if (nextToken) query.nextToken = nextToken
+        
+        const response = await client.callAPI({
+          operation: 'getInventorySummaries',
+          endpoint: 'fbaInventory',
+          query,
+        })
+        
+        const summaries = response?.payload?.inventorySummaries || response?.inventorySummaries || []
+        allInventory = [...allInventory, ...summaries]
+        nextToken = response?.payload?.pagination?.nextToken || response?.pagination?.nextToken
+        pageCount++
+        
+        if (pageCount % 5 === 0) {
+          console.log(`  Fetched ${allInventory.length} inventory items...`)
+        }
+        
+        if (nextToken) {
+          await new Promise(resolve => setTimeout(resolve, 200))
+        }
+      } while (nextToken && pageCount < 100)
+      
+      console.log(`  Total inventory items: ${allInventory.length}`)
+      
+      // Update products with FNSKUs
+      for (const item of allInventory) {
+        if (item.sellerSku && item.fnSku) {
+          try {
+            const result = await prisma.product.updateMany({
+              where: { 
+                sku: item.sellerSku,
+                fnsku: null // Only update if FNSKU is missing
+              },
+              data: { fnsku: item.fnSku },
+            })
+            if (result.count > 0) fnskuUpdated++
+          } catch (e) {
+            // Ignore errors
+          }
+        }
+      }
+      
+      console.log(`  ✓ Updated ${fnskuUpdated} products with FNSKUs`)
+    } catch (fbaError: any) {
+      console.log(`  ⚠️ FBA Inventory API failed: ${fbaError.message}`)
+    }
+
     await updateSyncStatus('success')
 
-    console.log(`\n📊 FNSKU Stats: ${fnskuCount}/${reportData.length} products have FNSKUs`)
+    console.log(`\n📊 FNSKU Stats: ${fnskuCount} from report + ${fnskuUpdated} from FBA API`)
 
-    const message = `Synced ${reportData.length} products: ${created} created, ${updated} updated, ${virtualParentsCreated} parent groups, ${relationshipsLinked} variations linked, ${fnskuCount} FNSKUs`
+    const message = `Synced ${reportData.length} products: ${created} created, ${updated} updated, ${virtualParentsCreated} parent groups, ${relationshipsLinked} variations linked, ${fnskuUpdated} FNSKUs updated`
     console.log(`\n✅ ${message}`)
 
     return NextResponse.json({
