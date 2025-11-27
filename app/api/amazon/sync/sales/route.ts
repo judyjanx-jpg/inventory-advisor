@@ -4,8 +4,9 @@ import { createSpApiClient, getAmazonCredentials, updateSyncStatus, marketplaceT
 
 // NOTE: This sync is READ-ONLY. We never push data to Amazon.
 
-async function waitForReport(client: any, reportId: string, maxWaitMinutes = 180): Promise<string | null> {
-  const maxAttempts = maxWaitMinutes * 2 // Check every 30 seconds (less aggressive polling)
+async function waitForReport(client: any, reportId: string, maxWaitMinutes = 600): Promise<string | null> {
+  // 600 minutes = 10 hours for very large reports
+  const maxAttempts = maxWaitMinutes * 2 // Check every 30 seconds
   let attempts = 0
 
   while (attempts < maxAttempts) {
@@ -57,33 +58,60 @@ async function downloadReport(client: any, documentId: string): Promise<string> 
   return await response.text()
 }
 
-function parseOrdersReport(reportContent: string): Array<{
+interface OrderReportItem {
   orderId: string
   sku: string
   purchaseDate: string
+  purchaseDateTime: string
   quantity: number
   itemPrice: number
-}> {
+  itemTax: number
+  shippingPrice: number
+  shippingTax: number
+  status: string
+  fulfillmentChannel: string
+  shipCity: string
+  shipState: string
+  shipCountry: string
+  promoDiscount: number
+  asin: string
+}
+
+function parseOrdersReport(reportContent: string): OrderReportItem[] {
   const lines = reportContent.split('\n')
   if (lines.length < 2) return []
 
   // Parse header to find column indices
-  const header = lines[0].split('\t')
-  const orderIdIdx = header.findIndex(h => h.toLowerCase().includes('order-id') || h.toLowerCase() === 'amazon-order-id')
-  const skuIdx = header.findIndex(h => h.toLowerCase() === 'sku' || h.toLowerCase() === 'seller-sku')
-  const dateIdx = header.findIndex(h => h.toLowerCase().includes('purchase-date') || h.toLowerCase().includes('order-date'))
-  const qtyIdx = header.findIndex(h => h.toLowerCase().includes('quantity') || h.toLowerCase() === 'quantity-shipped')
-  const priceIdx = header.findIndex(h => h.toLowerCase().includes('item-price') || h.toLowerCase() === 'item-price')
+  const header = lines[0].split('\t').map(h => h.toLowerCase().trim())
+  
+  const findCol = (patterns: string[]) => {
+    for (const p of patterns) {
+      const idx = header.findIndex(h => h === p || h.includes(p))
+      if (idx >= 0) return idx
+    }
+    return -1
+  }
 
-  console.log(`  Report columns: orderId=${orderIdIdx}, sku=${skuIdx}, date=${dateIdx}, qty=${qtyIdx}, price=${priceIdx}`)
+  const orderIdIdx = findCol(['amazon-order-id', 'order-id'])
+  const skuIdx = findCol(['sku', 'seller-sku'])
+  const asinIdx = findCol(['asin'])
+  const dateIdx = findCol(['purchase-date', 'order-date'])
+  const qtyIdx = findCol(['quantity-purchased', 'quantity-shipped', 'quantity'])
+  const priceIdx = findCol(['item-price', 'product-sales'])
+  const taxIdx = findCol(['item-tax', 'tax'])
+  const shipPriceIdx = findCol(['shipping-price', 'shipping-credits'])
+  const shipTaxIdx = findCol(['shipping-tax'])
+  const statusIdx = findCol(['order-status', 'status'])
+  const channelIdx = findCol(['fulfillment-channel', 'sales-channel'])
+  const cityIdx = findCol(['ship-city', 'recipient-city'])
+  const stateIdx = findCol(['ship-state', 'recipient-state'])
+  const countryIdx = findCol(['ship-country', 'recipient-country'])
+  const promoIdx = findCol(['item-promotion-discount', 'promotion-discount'])
 
-  const items: Array<{
-    orderId: string
-    sku: string
-    purchaseDate: string
-    quantity: number
-    itemPrice: number
-  }> = []
+  console.log(`  Report has ${lines.length - 1} data rows`)
+  console.log(`  Key columns: orderId=${orderIdIdx}, sku=${skuIdx}, date=${dateIdx}, qty=${qtyIdx}, price=${priceIdx}`)
+
+  const items: OrderReportItem[] = []
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
@@ -96,26 +124,42 @@ function parseOrdersReport(reportContent: string): Array<{
     const dateRaw = dateIdx >= 0 ? cols[dateIdx]?.trim() : ''
     const qty = qtyIdx >= 0 ? parseInt(cols[qtyIdx]) || 0 : 1
     const price = priceIdx >= 0 ? parseFloat(cols[priceIdx]) || 0 : 0
+    const tax = taxIdx >= 0 ? parseFloat(cols[taxIdx]) || 0 : 0
+    const shipPrice = shipPriceIdx >= 0 ? parseFloat(cols[shipPriceIdx]) || 0 : 0
+    const shipTax = shipTaxIdx >= 0 ? parseFloat(cols[shipTaxIdx]) || 0 : 0
+    const status = statusIdx >= 0 ? cols[statusIdx]?.trim() || 'shipped' : 'shipped'
+    const channel = channelIdx >= 0 ? cols[channelIdx]?.trim() : ''
+    const city = cityIdx >= 0 ? cols[cityIdx]?.trim() : ''
+    const state = stateIdx >= 0 ? cols[stateIdx]?.trim() : ''
+    const country = countryIdx >= 0 ? cols[countryIdx]?.trim() : ''
+    const promo = promoIdx >= 0 ? parseFloat(cols[promoIdx]) || 0 : 0
+    const asin = asinIdx >= 0 ? cols[asinIdx]?.trim() : ''
 
     if (!orderId || !sku || !dateRaw) continue
 
     // Parse date (could be various formats)
     let purchaseDate = ''
+    let purchaseDateTime = dateRaw
     if (dateRaw.includes('T')) {
       purchaseDate = dateRaw.split('T')[0]
     } else if (dateRaw.includes('-')) {
       purchaseDate = dateRaw.split(' ')[0]
     } else {
-      // Try to parse as date string
       const parsed = new Date(dateRaw)
       if (!isNaN(parsed.getTime())) {
         purchaseDate = parsed.toISOString().split('T')[0]
+        purchaseDateTime = parsed.toISOString()
       }
     }
 
     if (!purchaseDate) continue
 
-    items.push({ orderId, sku, purchaseDate, quantity: qty, itemPrice: price })
+    items.push({ 
+      orderId, sku, purchaseDate, purchaseDateTime, quantity: qty, 
+      itemPrice: price, itemTax: tax, shippingPrice: shipPrice, shippingTax: shipTax,
+      status, fulfillmentChannel: channel, shipCity: city, shipState: state, shipCountry: country,
+      promoDiscount: Math.abs(promo), asin
+    })
   }
 
   return items
@@ -157,8 +201,8 @@ export async function POST(request: NextRequest) {
     
     // Use Reports API for bulk data - much faster than Orders API for large volumes
     console.log('\n📋 Requesting order report from Amazon...')
-    console.log('   (Large reports can take 30-60+ minutes to generate)')
-    console.log('   Will wait up to 3 hours for report to complete...')
+    console.log('   (Large reports with 2 years of data can take 1-4+ hours to generate)')
+    console.log('   Will wait up to 10 hours for report to complete...')
 
     let reportItems: Array<{
       orderId: string
@@ -204,8 +248,8 @@ export async function POST(request: NextRequest) {
         console.log(`    Report ID: ${reportId}`)
         console.log(`    Waiting for report to complete...`)
 
-        // Wait for report to complete (up to 3 hours for large reports)
-        const documentId = await waitForReport(client, reportId, 180)
+        // Wait for report to complete (up to 10 hours for very large reports)
+        const documentId = await waitForReport(client, reportId, 600)
         if (!documentId) {
           console.log(`    Report completed but no document ID`)
           continue
@@ -328,6 +372,18 @@ export async function POST(request: NextRequest) {
 
     const uniqueSkus = new Set<string>()
     const uniqueOrders = new Set<string>()
+    
+    // Group items by order for saving order-level data
+    const orderMap: Record<string, {
+      orderId: string
+      purchaseDateTime: string
+      status: string
+      fulfillmentChannel: string
+      shipCity: string
+      shipState: string
+      shipCountry: string
+      items: OrderReportItem[]
+    }> = {}
 
     for (const item of reportItems) {
       const key = `${item.sku}|${item.purchaseDate}`
@@ -348,6 +404,21 @@ export async function POST(request: NextRequest) {
       
       uniqueSkus.add(item.sku)
       uniqueOrders.add(item.orderId)
+      
+      // Group by order
+      if (!orderMap[item.orderId]) {
+        orderMap[item.orderId] = {
+          orderId: item.orderId,
+          purchaseDateTime: item.purchaseDateTime,
+          status: item.status,
+          fulfillmentChannel: item.fulfillmentChannel,
+          shipCity: item.shipCity,
+          shipState: item.shipState,
+          shipCountry: item.shipCountry,
+          items: []
+        }
+      }
+      orderMap[item.orderId].items.push(item)
     }
 
     console.log(`  ${uniqueOrders.size} unique orders`)
@@ -360,8 +431,100 @@ export async function POST(request: NextRequest) {
     })
     const existingSkuSet = new Set(existingProducts.map(p => p.sku))
 
+    // Save individual orders and order items
+    console.log('\n💾 Saving order data to database...')
+    
+    let ordersCreated = 0
+    let ordersUpdated = 0
+    let orderItemsCreated = 0
+    
+    const orderEntries = Object.values(orderMap)
+    for (let i = 0; i < orderEntries.length; i++) {
+      const order = orderEntries[i]
+      
+      try {
+        // Parse the date
+        let purchaseDate: Date
+        try {
+          purchaseDate = new Date(order.purchaseDateTime)
+          if (isNaN(purchaseDate.getTime())) {
+            purchaseDate = new Date()
+          }
+        } catch {
+          purchaseDate = new Date()
+        }
+
+        // Upsert the order
+        const existingOrder = await prisma.order.findUnique({
+          where: { id: order.orderId },
+        })
+        
+        await prisma.order.upsert({
+          where: { id: order.orderId },
+          update: {
+            status: order.status || 'shipped',
+            fulfillmentChannel: order.fulfillmentChannel || null,
+            shipCity: order.shipCity || null,
+            shipState: order.shipState || null,
+            shipCountry: order.shipCountry || null,
+          },
+          create: {
+            id: order.orderId,
+            purchaseDate: purchaseDate,
+            status: order.status || 'shipped',
+            fulfillmentChannel: order.fulfillmentChannel || null,
+            shipCity: order.shipCity || null,
+            shipState: order.shipState || null,
+            shipCountry: order.shipCountry || null,
+          },
+        })
+        
+        if (existingOrder) {
+          ordersUpdated++
+        } else {
+          ordersCreated++
+          
+          // Only create order items for new orders
+          for (const item of order.items) {
+            // Skip if product doesn't exist
+            if (!existingSkuSet.has(item.sku)) continue
+            
+            try {
+              await prisma.orderItem.create({
+                data: {
+                  orderId: order.orderId,
+                  masterSku: item.sku,
+                  quantity: item.quantity,
+                  itemPrice: item.itemPrice,
+                  itemTax: item.itemTax,
+                  shippingPrice: item.shippingPrice,
+                  shippingTax: item.shippingTax,
+                  promoDiscount: item.promoDiscount,
+                },
+              })
+              orderItemsCreated++
+            } catch (itemErr) {
+              // Skip duplicates or foreign key errors
+            }
+          }
+        }
+      } catch (err: any) {
+        // Skip errors and continue
+        if (i < 5) {
+          console.log(`  Order ${order.orderId} error: ${err.message?.substring(0, 50)}`)
+        }
+      }
+      
+      if ((i + 1) % 5000 === 0) {
+        console.log(`  Orders progress: ${i + 1}/${orderEntries.length}`)
+      }
+    }
+    
+    console.log(`  Orders: ${ordersCreated} created, ${ordersUpdated} updated`)
+    console.log(`  Order items: ${orderItemsCreated} created`)
+
     // Store in DailyProfit table
-    console.log('\n💾 Saving sales data to database...')
+    console.log('\n📈 Saving aggregated sales data...')
     
     let created = 0
     let updated = 0
@@ -509,7 +672,7 @@ export async function POST(request: NextRequest) {
 
     await updateSyncStatus('success')
 
-    const message = `Synced ${uniqueOrders.size.toLocaleString()} orders with ${reportItems.length.toLocaleString()} items. ${created} new + ${updated} updated records. Velocity updated for ${velocityUpdated} products.`
+    const message = `Synced ${uniqueOrders.size.toLocaleString()} orders with ${reportItems.length.toLocaleString()} line items. Orders: ${ordersCreated} new, ${ordersUpdated} existing. Order items: ${orderItemsCreated}. Daily sales: ${created} new, ${updated} updated. Velocity updated for ${velocityUpdated} products.`
     console.log(`\n✅ ${message}`)
 
     return NextResponse.json({
@@ -519,7 +682,11 @@ export async function POST(request: NextRequest) {
         ordersProcessed: uniqueOrders.size,
         orderItems: reportItems.length,
         skusFound: uniqueSkus.size,
-        recordsSaved: created + updated,
+        ordersCreated,
+        ordersUpdated,
+        orderItemsCreated,
+        dailySalesCreated: created,
+        dailySalesUpdated: updated,
         velocityUpdated,
       },
     })
