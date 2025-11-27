@@ -57,6 +57,7 @@ interface Product {
   isHidden?: boolean
   asin?: string
   fnsku?: string
+  upc?: string
   brand: string
   category?: string
   cost: number
@@ -68,6 +69,9 @@ interface Product {
   variationValue?: string
   supplierId?: number
   supplierSku?: string
+  labelType?: string // fnsku_only, fnsku_tp, tp_only
+  transparencyEnabled?: boolean
+  warehouseLocation?: string
   createdAt?: string
   supplier?: { id: number; name: string }
   inventoryLevels?: {
@@ -151,6 +155,9 @@ export default function ProductsPage() {
     price: '',
     supplierId: '',
     supplierSku: '',
+    upc: '',
+    labelType: 'fnsku_only',
+    warehouseLocation: '',
   })
   const [savingSettings, setSavingSettings] = useState(false)
 
@@ -339,6 +346,9 @@ export default function ProductsPage() {
       price: product.price?.toString() || '',
       supplierId: product.supplierId?.toString() || '',
       supplierSku: product.supplierSku || '',
+      upc: product.upc || '',
+      labelType: product.labelType || 'fnsku_only',
+      warehouseLocation: product.warehouseLocation || '',
     })
     setShowProductSettings(true)
   }
@@ -357,6 +367,9 @@ export default function ProductsPage() {
           price: settingsForm.price ? parseFloat(settingsForm.price) : 0,
           supplierId: settingsForm.supplierId ? parseInt(settingsForm.supplierId) : null,
           supplierSku: settingsForm.supplierSku || null,
+          upc: settingsForm.upc || null,
+          labelType: settingsForm.labelType || 'fnsku_only',
+          warehouseLocation: settingsForm.warehouseLocation || null,
         }),
       })
       
@@ -1136,6 +1149,59 @@ export default function ProductsPage() {
               placeholder="Enter supplier's SKU for this product"
               className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
             />
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-slate-700 my-2" />
+
+          {/* Amazon & Labeling */}
+          <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Amazon & Labeling</h4>
+
+          {/* UPC */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              UPC (GTIN)
+            </label>
+            <input
+              type="text"
+              value={settingsForm.upc}
+              onChange={(e) => setSettingsForm({ ...settingsForm, upc: e.target.value })}
+              placeholder="12-14 digit UPC/EAN code"
+              maxLength={14}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
+            />
+            <p className="text-xs text-slate-500 mt-1">Required for Transparency codes</p>
+          </div>
+
+          {/* Label Type */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Label Type
+            </label>
+            <select
+              value={settingsForm.labelType}
+              onChange={(e) => setSettingsForm({ ...settingsForm, labelType: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+            >
+              <option value="fnsku_only">FNSKU Only</option>
+              <option value="fnsku_tp">FNSKU + Transparency</option>
+              <option value="tp_only">Transparency Only (product has FNSKU)</option>
+            </select>
+          </div>
+
+          {/* Warehouse Location */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Warehouse Location
+            </label>
+            <input
+              type="text"
+              value={settingsForm.warehouseLocation}
+              onChange={(e) => setSettingsForm({ ...settingsForm, warehouseLocation: e.target.value })}
+              placeholder="e.g., A-12-3, Bin 45"
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            />
+            <p className="text-xs text-slate-500 mt-1">For pick labels during FBA shipments</p>
           </div>
         </div>
 

@@ -46,7 +46,7 @@ export default function TransparencySettingsPage() {
     }
   }
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent, skipVerify = false) => {
     e.preventDefault()
     setSaving(true)
     setMessage(null)
@@ -55,13 +55,17 @@ export default function TransparencySettingsPage() {
       const res = await fetch('/api/settings/transparency', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, skipVerify }),
       })
 
       const data = await res.json()
 
       if (res.ok) {
-        setMessage({ type: 'success', text: data.message })
+        if (data.warning) {
+          setMessage({ type: 'error', text: data.message })
+        } else {
+          setMessage({ type: 'success', text: data.message })
+        }
         fetchSettings()
         setFormData(prev => ({ ...prev, clientSecret: '' }))
       } else {
@@ -213,9 +217,17 @@ export default function TransparencySettingsPage() {
                 </div>
               )}
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-wrap gap-3 pt-2">
                 <Button type="submit" disabled={saving || (!formData.clientId)}>
                   {saving ? 'Saving...' : 'Save & Verify'}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  disabled={saving || (!formData.clientId || !formData.clientSecret)}
+                  onClick={(e) => handleSave(e as any, true)}
+                >
+                  Save Without Verifying
                 </Button>
                 {settings.configured && (
                   <Button type="button" variant="outline" onClick={handleDelete}>

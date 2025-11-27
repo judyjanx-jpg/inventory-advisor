@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sku, displayName, isHidden, cost, price, supplierId, supplierSku } = body
+    const { sku, displayName, isHidden, cost, price, supplierId, supplierSku, upc, labelType, warehouseLocation } = body
     
     if (!sku) {
       return NextResponse.json(
@@ -133,6 +133,15 @@ export async function PUT(request: NextRequest) {
     }
     if (supplierSku !== undefined) {
       updateData.supplierSku = supplierSku || null
+    }
+    if (upc !== undefined) {
+      updateData.upc = upc || null
+    }
+    if (labelType !== undefined) {
+      updateData.labelType = labelType || 'fnsku_only'
+    }
+    if (warehouseLocation !== undefined) {
+      updateData.warehouseLocation = warehouseLocation || null
     }
 
     const product = await prisma.product.update({

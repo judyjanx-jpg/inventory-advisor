@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { testTransparencyCredentials } from '@/lib/transparency-api'
 
 /**
  * GET /api/settings/transparency
@@ -43,7 +44,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { clientId, clientSecret } = body
+    const { clientId, clientSecret, skipVerify } = body
 
     if (!clientId || !clientSecret) {
       return NextResponse.json(
@@ -52,41 +53,24 @@ export async function POST(request: Request) {
       )
     }
 
-    // Test the credentials by trying to get an access token
-    try {
-      const response = await fetch('https://api.amazon.com/auth/o2/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: clientId,
-          client_secret: clientSecret,
-          scope: 'transparency:codes:read transparency:codes:request',
-        }).toString(),
-      })
+    let verificationResult = { success: true, error: undefined as string | undefined }
 
-      if (!response.ok) {
-        const error = await response.text()
-        console.error('Transparency auth test failed:', error)
-        return NextResponse.json(
-          { error: 'Invalid credentials - authentication failed' },
-          { status: 400 }
-        )
+    // Test the credentials using Amazon Cognito endpoint
+    if (!skipVerify) {
+      verificationResult = await testTransparencyCredentials(clientId, clientSecret)
+      
+      if (!verificationResult.success) {
+        console.error('Transparency auth test failed:', verificationResult.error)
+        // Still save but mark as pending verification
       }
-    } catch (authError) {
-      console.error('Transparency auth test error:', authError)
-      return NextResponse.json(
-        { error: 'Could not verify credentials' },
-        { status: 400 }
-      )
     }
 
     // Save or update credentials
     const existing = await prisma.apiConnection.findFirst({
       where: { name: 'transparency' }
     })
+
+    const status = verificationResult.success ? 'active' : 'pending'
 
     if (existing) {
       await prisma.apiConnection.update({
@@ -96,7 +80,7 @@ export async function POST(request: Request) {
             clientId,
             clientSecret,
           },
-          status: 'active',
+          status,
           updatedAt: new Date(),
         },
       })
@@ -105,7 +89,7 @@ export async function POST(request: Request) {
         data: {
           name: 'transparency',
           type: 'transparency',
-          status: 'active',
+          status,
           credentials: {
             clientId,
             clientSecret,
@@ -114,10 +98,18 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Transparency API credentials saved and verified',
-    })
+    if (verificationResult.success) {
+      return NextResponse.json({
+        success: true,
+        message: 'Transparency API credentials saved and verified',
+      })
+    } else {
+      return NextResponse.json({
+        success: true,
+        warning: true,
+        message: `Credentials saved but verification failed: ${verificationResult.error}. You may still be able to use the API.`,
+      })
+    }
   } catch (error) {
     console.error('Error saving transparency settings:', error)
     return NextResponse.json(
