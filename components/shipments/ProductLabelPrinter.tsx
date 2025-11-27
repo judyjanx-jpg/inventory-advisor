@@ -122,6 +122,17 @@ export default function ProductLabelPrinter({
     const labelType = getLabelType(item)
     const quantity = labelCounts[item.masterSku] || item.adjustedQty
     
+    // Warn if no FNSKU for FNSKU-type labels
+    if ((labelType === 'fnsku_only' || labelType === 'fnsku_tp') && !item.fnsku) {
+      const proceed = confirm(
+        `Warning: No FNSKU found for ${item.masterSku}.\n\n` +
+        `The label will show the SKU instead. For accurate FBA labels, ` +
+        `please sync FNSKUs from Amazon or enter them in product settings.\n\n` +
+        `Continue anyway?`
+      )
+      if (!proceed) return
+    }
+    
     let transparencyCodes: string[] = []
     
     // Get transparency codes if needed
@@ -309,6 +320,9 @@ export default function ProductLabelPrinter({
               >
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-white">{item.masterSku}</div>
+                  <div className="text-xs text-slate-500 font-mono">
+                    FNSKU: {item.fnsku || <span className="text-amber-400">Not set</span>}
+                  </div>
                   <div className="text-sm text-slate-400 truncate">{item.productName}</div>
                 </div>
                 

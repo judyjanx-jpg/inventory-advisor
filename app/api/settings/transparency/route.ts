@@ -46,6 +46,8 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { clientId, clientSecret, skipVerify } = body
 
+    console.log('Saving Transparency credentials, skipVerify:', skipVerify)
+
     if (!clientId || !clientSecret) {
       return NextResponse.json(
         { error: 'Client ID and Client Secret are required' },
@@ -54,54 +56,70 @@ export async function POST(request: Request) {
     }
 
     let verificationResult = { success: true, error: undefined as string | undefined }
+    let status = 'active'
 
-    // Test the credentials using Amazon Cognito endpoint
+    // Test the credentials using Amazon Cognito endpoint (only if not skipping)
     if (!skipVerify) {
-      verificationResult = await testTransparencyCredentials(clientId, clientSecret)
-      
-      if (!verificationResult.success) {
-        console.error('Transparency auth test failed:', verificationResult.error)
-        // Still save but mark as pending verification
+      try {
+        verificationResult = await testTransparencyCredentials(clientId, clientSecret)
+        if (!verificationResult.success) {
+          console.log('Transparency auth test failed:', verificationResult.error)
+          status = 'pending'
+        }
+      } catch (verifyError: any) {
+        console.error('Transparency verification error:', verifyError)
+        verificationResult = { success: false, error: verifyError.message }
+        status = 'pending'
       }
     }
 
-    // Save or update credentials
-    const existing = await prisma.apiConnection.findFirst({
-      where: { name: 'transparency' }
-    })
-
-    const status = verificationResult.success ? 'active' : 'pending'
-
-    if (existing) {
-      await prisma.apiConnection.update({
-        where: { id: existing.id },
-        data: {
-          credentials: {
-            clientId,
-            clientSecret,
-          },
-          status,
-          updatedAt: new Date(),
-        },
+    // Save or update credentials regardless of verification result
+    try {
+      const existing = await prisma.apiConnection.findFirst({
+        where: { name: 'transparency' }
       })
-    } else {
-      await prisma.apiConnection.create({
-        data: {
-          name: 'transparency',
-          type: 'transparency',
-          status,
-          credentials: {
-            clientId,
-            clientSecret,
+
+      if (existing) {
+        await prisma.apiConnection.update({
+          where: { id: existing.id },
+          data: {
+            credentials: {
+              clientId,
+              clientSecret,
+            },
+            status,
+            updatedAt: new Date(),
           },
-        },
-      })
+        })
+        console.log('Updated existing Transparency credentials')
+      } else {
+        await prisma.apiConnection.create({
+          data: {
+            name: 'transparency',
+            type: 'transparency',
+            status,
+            credentials: {
+              clientId,
+              clientSecret,
+            },
+          },
+        })
+        console.log('Created new Transparency credentials')
+      }
+    } catch (dbError: any) {
+      console.error('Database error saving credentials:', dbError)
+      return NextResponse.json(
+        { error: `Failed to save to database: ${dbError.message}` },
+        { status: 500 }
+      )
     }
 
-    if (verificationResult.success) {
+    if (verificationResult.success || skipVerify) {
       return NextResponse.json({
         success: true,
-        message: 'Transparency API credentials saved and verified',
+        message: skipVerify 
+          ? 'Transparency API credentials saved (verification skipped)'
+          : 'Transparency API credentials saved and verified',
       })
     } else {
       return NextResponse.json({
@@ -110,10 +128,10 @@ export async function POST(request: Request) {
         message: `Credentials saved but verification failed: ${verificationResult.error}. You may still be able to use the API.`,
       })
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving transparency settings:', error)
     return NextResponse.json(
-      { error: 'Failed to save settings' },
+      { error: `Failed to save settings: ${error.message}` },
       { status: 500 }
     )
   }

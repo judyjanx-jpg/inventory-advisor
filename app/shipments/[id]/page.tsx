@@ -104,12 +104,15 @@ export default function ShipmentDetailPage() {
           items: shipmentData.items.map((item: any) => ({
             id: item.id,
             masterSku: item.masterSku,
-            fnsku: item.fnsku || item.product?.fnsku,
+            fnsku: item.fnsku || item.product?.fnsku || null,
             productName: item.productName || item.product?.title,
             requestedQty: item.requestedQty,
             adjustedQty: item.adjustedQty,
             pickStatus: item.pickStatus || 'pending',
             pickedAt: item.pickedAt,
+            warehouseLocation: item.product?.warehouseLocation || null,
+            labelType: item.product?.labelType || 'fnsku_only',
+            transparencyEnabled: item.product?.transparencyEnabled || false,
           })),
           boxes: (shipmentData.boxes || []).map((box: any) => ({
             id: box.id,
