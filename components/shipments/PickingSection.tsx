@@ -59,12 +59,12 @@ export default function PickingSection({
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          @page { size: 4in 2in; margin: 0; }
+          @page { size: 4in 6in; margin: 0; }
           body { font-family: Arial, sans-serif; }
           .label {
             width: 4in;
-            height: 2in;
-            padding: 0.15in;
+            height: 6in;
+            padding: 0.25in;
             page-break-after: always;
             border: 1px dashed #ccc;
             display: flex;
@@ -75,46 +75,60 @@ export default function PickingSection({
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 0.1in;
+            margin-bottom: 0.2in;
           }
           .sku {
-            font-size: 18pt;
+            font-size: 28pt;
             font-weight: bold;
           }
           .qty-box {
-            border: 2px solid #000;
-            padding: 0.05in 0.15in;
-            font-size: 24pt;
+            border: 3px solid #000;
+            padding: 0.15in 0.3in;
+            font-size: 48pt;
             font-weight: bold;
           }
           .barcode-container {
             text-align: center;
-            margin: 0.05in 0;
+            margin: 0.3in 0;
           }
           .barcode-container svg {
             max-width: 100%;
-            height: 50px;
+            height: 80px;
           }
           .product-name {
-            font-size: 10pt;
-            line-height: 1.2;
+            font-size: 16pt;
+            line-height: 1.3;
             flex: 1;
             overflow: hidden;
+            text-align: center;
+            margin: 0.2in 0;
+          }
+          .location-section {
+            text-align: center;
+            margin: 0.3in 0;
+            padding: 0.2in;
+            border: 2px dashed #666;
+            background: #f5f5f5;
+          }
+          .location-label {
+            font-size: 12pt;
+            color: #666;
+          }
+          .location {
+            font-weight: bold;
+            font-size: 32pt;
           }
           .footer {
             display: flex;
             justify-content: space-between;
-            font-size: 9pt;
-            border-top: 1px solid #ccc;
-            padding-top: 0.05in;
-            margin-top: 0.05in;
-          }
-          .location {
-            font-weight: bold;
-            font-size: 14pt;
+            font-size: 12pt;
+            border-top: 2px solid #000;
+            padding-top: 0.15in;
+            margin-top: 0.15in;
           }
           @media print {
             .label { border: none; }
+            .location-section { background: #f5f5f5; -webkit-print-color-adjust: exact; }
           }
         </style>
       </head>
@@ -129,9 +143,13 @@ export default function PickingSection({
               <svg id="barcode-${i}"></svg>
             </div>
             <div class="product-name">${item.productName}</div>
+            <div class="location-section">
+              <div class="location-label">PICK FROM</div>
+              <div class="location">${item.warehouseLocation || '—'}</div>
+            </div>
             <div class="footer">
-              <div class="location">📍 ${item.warehouseLocation || 'No location'}</div>
               <div>${shipmentInternalId}</div>
+              <div>Pick Label</div>
             </div>
           </div>
         `).join('')}
@@ -428,7 +446,7 @@ export default function PickingSection({
                     Print a label for each SKU to place in picking bins
                   </p>
                   <Button variant="outline" size="sm" onClick={printPickLabels}>
-                    Print Labels (4x2")
+                    Print Labels (4x6")
                   </Button>
                 </div>
 
