@@ -139,10 +139,16 @@ export default function ShipmentDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           boxes: shipment.boxes,
+          items: shipment.items.map(item => ({
+            id: item.id,
+            adjustedQty: item.adjustedQty,
+            requestedQty: item.requestedQty,
+          })),
         }),
       })
       if (res.ok) {
         await fetchShipment()
+        alert('Shipment saved!')
       } else {
         const data = await res.json()
         alert(`Error: ${data.error}`)
@@ -173,6 +179,27 @@ export default function ShipmentDetailPage() {
     } catch (error) {
       console.error('Error marking picking complete:', error)
     }
+  }
+
+  const updateItemQty = (itemId: number, newQty: number) => {
+    if (!shipment) return
+    setShipment({
+      ...shipment,
+      items: shipment.items.map(item => 
+        item.id === itemId 
+          ? { ...item, adjustedQty: newQty, requestedQty: newQty }
+          : item
+      ),
+    })
+  }
+
+  const removeItem = (itemId: number) => {
+    if (!shipment) return
+    if (!confirm('Remove this item from the shipment?')) return
+    setShipment({
+      ...shipment,
+      items: shipment.items.filter(item => item.id !== itemId),
+    })
   }
 
   const markAsShipped = async () => {
@@ -464,13 +491,20 @@ export default function ShipmentDetailPage() {
         <div ref={itemsRef}>
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between cursor-pointer"
-                onClick={() => setExpandedSections(s => ({ ...s, items: !s.items }))}>
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between">
+                <div 
+                  className="flex items-center gap-2 cursor-pointer flex-1"
+                  onClick={() => setExpandedSections(s => ({ ...s, items: !s.items }))}
+                >
                   <Package className="w-5 h-5 text-cyan-400" />
                   <CardTitle>Items ({shipment.items.length} SKUs, {totalUnits} units)</CardTitle>
+                  {expandedSections.items ? <ChevronUp className="ml-2" /> : <ChevronDown className="ml-2" />}
                 </div>
-                {expandedSections.items ? <ChevronUp /> : <ChevronDown />}
+                {!isShipped && shipment.status === 'draft' && (
+                  <span className="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">
+                    Click qty to edit
+                  </span>
+                )}
               </div>
             </CardHeader>
             {expandedSections.items && (
@@ -484,6 +518,9 @@ export default function ShipmentDetailPage() {
                         <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">FNSKU</th>
                         <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Qty</th>
                         <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Pick Status</th>
+                        {!isShipped && shipment.status === 'draft' && (
+                          <th className="text-left py-3 px-4 text-sm font-medium text-slate-400"></th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -492,7 +529,19 @@ export default function ShipmentDetailPage() {
                           <td className="py-3 px-4 text-white font-mono">{item.masterSku}</td>
                           <td className="py-3 px-4 text-slate-300">{item.productName}</td>
                           <td className="py-3 px-4 text-slate-400">{item.fnsku || '—'}</td>
-                          <td className="py-3 px-4 text-white font-bold">{item.adjustedQty}</td>
+                          <td className="py-3 px-4">
+                            {!isShipped && shipment.status === 'draft' ? (
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.adjustedQty}
+                                onChange={(e) => updateItemQty(item.id, parseInt(e.target.value) || 0)}
+                                className="w-20 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-white text-sm font-bold"
+                              />
+                            ) : (
+                              <span className="text-white font-bold">{item.adjustedQty}</span>
+                            )}
+                          </td>
                           <td className="py-3 px-4">
                             <span className={`px-2 py-1 rounded text-xs ${
                               item.pickStatus === 'picked' 
@@ -502,6 +551,16 @@ export default function ShipmentDetailPage() {
                               {item.pickStatus === 'picked' ? '✓ Picked' : 'Pending'}
                             </span>
                           </td>
+                          {!isShipped && shipment.status === 'draft' && (
+                            <td className="py-3 px-4">
+                              <button
+                                onClick={() => removeItem(item.id)}
+                                className="text-red-400 hover:text-red-300"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

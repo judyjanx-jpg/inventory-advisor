@@ -116,18 +116,49 @@ export async function PUT(
     if (receivedAt !== undefined)
       updateData.receivedAt = receivedAt ? new Date(receivedAt) : null
 
-    // Update items pick status if provided
+    // Update items if provided
     if (items && Array.isArray(items)) {
       for (const item of items) {
-        if (item.id && item.pickStatus) {
-          await prisma.shipmentItem.update({
-            where: { id: item.id },
-            data: {
-              pickStatus: item.pickStatus,
-              pickedAt: item.pickStatus === 'picked' ? new Date() : null,
-            },
-          })
+        if (item.id) {
+          const updateItemData: any = {}
+          
+          // Update pick status
+          if (item.pickStatus !== undefined) {
+            updateItemData.pickStatus = item.pickStatus
+            updateItemData.pickedAt = item.pickStatus === 'picked' ? new Date() : null
+          }
+          
+          // Update quantities
+          if (item.adjustedQty !== undefined) {
+            updateItemData.adjustedQty = item.adjustedQty
+          }
+          if (item.requestedQty !== undefined) {
+            updateItemData.requestedQty = item.requestedQty
+          }
+          
+          if (Object.keys(updateItemData).length > 0) {
+            await prisma.shipmentItem.update({
+              where: { id: item.id },
+              data: updateItemData,
+            })
+          }
         }
+      }
+      
+      // Handle deleted items (items in DB but not in request)
+      const existingItems = await prisma.shipmentItem.findMany({
+        where: { shipmentId: id },
+        select: { id: true },
+      })
+      const requestItemIds = items.map((i: any) => i.id).filter(Boolean)
+      const deletedItemIds = existingItems
+        .map(i => i.id)
+        .filter(id => !requestItemIds.includes(id))
+      
+      if (deletedItemIds.length > 0) {
+        await prisma.shipmentItem.deleteMany({
+          where: { id: { in: deletedItemIds } },
+        })
       }
     }
 
