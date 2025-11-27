@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
-import { Package, Plus, Trash2, Save, X } from 'lucide-react'
+import { Package, Plus, Trash2, Save, X, Upload, FileSpreadsheet, ArrowRight } from 'lucide-react'
 
 interface Warehouse {
   id: number
@@ -41,8 +41,12 @@ export default function NewShipmentPage() {
   const [optimalPlacementEnabled, setOptimalPlacementEnabled] = useState(true)
   const [items, setItems] = useState<ShipmentItem[]>([])
   const [showAddProduct, setShowAddProduct] = useState(false)
+  const [showBulkInput, setShowBulkInput] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [bulkError, setBulkError] = useState('')
   const [productSearch, setProductSearch] = useState('')
   const [searchResults, setSearchResults] = useState<Product[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchWarehouses()
@@ -161,6 +165,129 @@ export default function NewShipmentPage() {
     return Math.ceil(requestedQty / 5) * 5
   }
 
+  // Parse bulk text input like "MJBC116x10, MJBC118x20" or "MJBC116 x 10, MJBC118 x 20"
+  const parseBulkText = async (text: string) => {
+    setBulkError('')
+    const entries = text.split(/[,\n]/).map(s => s.trim()).filter(s => s)
+    const parsed: { sku: string; qty: number }[] = []
+    const errors: string[] = []
+
+    for (const entry of entries) {
+      // Match patterns like: MJBC116x10, MJBC116 x 10, MJBC116X10, MJBC116 X 10
+      const match = entry.match(/^([A-Za-z0-9\-_]+)\s*[xX]\s*(\d+)$/)
+      if (match) {
+        parsed.push({ sku: match[1].toUpperCase(), qty: parseInt(match[2]) })
+      } else {
+        errors.push(`Invalid format: "${entry}" (use SKUxQTY format)`)
+      }
+    }
+
+    if (errors.length > 0) {
+      setBulkError(errors.join('\n'))
+      return
+    }
+
+    if (parsed.length === 0) {
+      setBulkError('No valid entries found')
+      return
+    }
+
+    // Fetch all products to match SKUs
+    try {
+      const res = await fetch('/api/products?flat=true&showHidden=false')
+      const products = await res.json()
+      
+      const newItems: ShipmentItem[] = []
+      const notFound: string[] = []
+
+      for (const { sku, qty } of parsed) {
+        // Skip if already in items
+        if (items.some(item => item.sku === sku)) continue
+
+        const product = products.find((p: any) => p.sku.toUpperCase() === sku)
+        if (product) {
+          newItems.push({
+            sku: product.sku,
+            productName: product.title,
+            fnsku: product.fnsku,
+            requestedQty: qty,
+            adjustedQty: optimalPlacementEnabled ? Math.ceil(qty / 5) * 5 : qty,
+            availableQty: 0, // Will be fetched if needed
+            product,
+          })
+        } else {
+          notFound.push(sku)
+        }
+      }
+
+      if (notFound.length > 0) {
+        setBulkError(`SKUs not found: ${notFound.join(', ')}`)
+      }
+
+      if (newItems.length > 0) {
+        setItems([...items, ...newItems])
+        setBulkText('')
+        if (notFound.length === 0) {
+          setShowBulkInput(false)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error)
+      setBulkError('Failed to fetch products')
+    }
+  }
+
+  // Handle Excel file upload
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setBulkError('')
+    
+    try {
+      const text = await file.text()
+      const lines = text.split('\n').filter(line => line.trim())
+      
+      // Check if it's CSV or TSV
+      const delimiter = text.includes('\t') ? '\t' : ','
+      const rows = lines.map(line => line.split(delimiter).map(cell => cell.trim().replace(/^["']|["']$/g, '')))
+      
+      // Find SKU and QTY columns
+      const header = rows[0].map(h => h.toUpperCase())
+      let skuCol = header.findIndex(h => h === 'SKU' || h === 'SELLER SKU' || h === 'SELLER-SKU')
+      let qtyCol = header.findIndex(h => h === 'QTY' || h === 'QUANTITY' || h === 'UNITS')
+
+      // If no header found, assume column 0 = SKU, column 1 = QTY
+      if (skuCol === -1) skuCol = 0
+      if (qtyCol === -1) qtyCol = 1
+
+      const dataRows = rows.slice(1) // Skip header
+      const entries: string[] = []
+
+      for (const row of dataRows) {
+        const sku = row[skuCol]?.trim()
+        const qty = parseInt(row[qtyCol]) || 0
+        if (sku && qty > 0) {
+          entries.push(`${sku}x${qty}`)
+        }
+      }
+
+      if (entries.length > 0) {
+        await parseBulkText(entries.join(', '))
+      } else {
+        setBulkError('No valid SKU/QTY data found in file')
+      }
+    } catch (error) {
+      console.error('Error reading file:', error)
+      setBulkError('Failed to read file. Please use CSV or Excel format.')
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   useEffect(() => {
     if (optimalPlacementEnabled) {
       setItems(items.map(item => ({
@@ -186,14 +313,10 @@ export default function NewShipmentPage() {
       return
     }
 
-    // Validate quantities
+    // Validate quantities (only check that qty > 0)
     for (const item of items) {
       if (item.requestedQty <= 0) {
         alert(`Please enter a quantity for ${item.productName}`)
-        return
-      }
-      if (item.adjustedQty > (item.availableQty || 0)) {
-        alert(`${item.productName}: Adjusted quantity (${item.adjustedQty}) exceeds available (${item.availableQty || 0})`)
         return
       }
     }
@@ -248,9 +371,9 @@ export default function NewShipmentPage() {
               <X className="w-4 h-4 mr-2" />
               Cancel
             </Button>
-            <Button onClick={saveShipment} disabled={loading}>
-              <Save className="w-4 h-4 mr-2" />
-              {loading ? 'Saving...' : 'Save Draft'}
+            <Button onClick={saveShipment} disabled={loading || items.length === 0}>
+              <ArrowRight className="w-4 h-4 mr-2" />
+              {loading ? 'Saving...' : 'Save & Continue'}
             </Button>
           </div>
         </div>
@@ -316,18 +439,87 @@ export default function NewShipmentPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Items</CardTitle>
-              <Button onClick={() => setShowAddProduct(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Product
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowBulkInput(!showBulkInput)}>
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Bulk Entry
+                </Button>
+                <Button onClick={() => setShowAddProduct(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Product
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
+            {/* Bulk Input Panel */}
+            {showBulkInput && (
+              <div className="mb-6 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <h3 className="text-sm font-medium text-slate-300 mb-3">Bulk Add Items</h3>
+                
+                {/* Text Input */}
+                <div className="mb-4">
+                  <label className="block text-xs text-slate-400 mb-1">
+                    Enter SKUs with quantities (e.g., MJBC116x10, MJBC118x20)
+                  </label>
+                  <textarea
+                    value={bulkText}
+                    onChange={(e) => setBulkText(e.target.value)}
+                    placeholder="MJBC116x10, MJBC118x20, MJBC120x15..."
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm h-20 font-mono"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <Button size="sm" onClick={() => parseBulkText(bulkText)} disabled={!bulkText.trim()}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Items
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="flex items-center gap-4 my-4">
+                  <div className="flex-1 border-t border-slate-700"></div>
+                  <span className="text-xs text-slate-500">OR</span>
+                  <div className="flex-1 border-t border-slate-700"></div>
+                </div>
+
+                {/* Excel Upload */}
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">
+                    Upload Excel/CSV file with SKU and QTY columns
+                  </label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,.tsv"
+                    onChange={handleExcelUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload File
+                  </Button>
+                  <span className="text-xs text-slate-500 ml-2">CSV, Excel, or TSV</span>
+                </div>
+
+                {/* Error Display */}
+                {bulkError && (
+                  <div className="mt-3 p-2 bg-red-900/30 border border-red-500/30 rounded text-red-400 text-sm whitespace-pre-wrap">
+                    {bulkError}
+                  </div>
+                )}
+              </div>
+            )}
+
             {items.length === 0 ? (
               <div className="text-center py-8 text-slate-400">
                 <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 <p>No items added yet</p>
-                <p className="text-sm mt-1">Click "Add Product" to get started</p>
+                <p className="text-sm mt-1">Click "Add Product" or "Bulk Entry" to get started</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
