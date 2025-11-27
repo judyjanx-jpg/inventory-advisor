@@ -583,6 +583,29 @@ export default function NewShipmentPage() {
           </CardContent>
         </Card>
 
+        {/* Spacer for sticky footer */}
+        <div className="h-24"></div>
+
+        {/* Sticky Footer Action Bar */}
+        {items.length > 0 && (
+          <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900 via-slate-900 to-slate-900/95 border-t border-slate-700 p-4 z-30">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <div className="text-slate-300">
+                <span className="font-bold text-white">{totalSkus}</span> SKUs · <span className="font-bold text-white">{totalUnits}</span> units
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => router.back()}>
+                  Cancel
+                </Button>
+                <Button onClick={saveShipment} disabled={loading}>
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  {loading ? 'Saving...' : 'Save & Continue'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Add Product Modal */}
         {showAddProduct && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

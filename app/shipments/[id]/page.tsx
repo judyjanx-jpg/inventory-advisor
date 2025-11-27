@@ -600,7 +600,36 @@ export default function ShipmentDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Spacer for sticky footer */}
+        <div className="h-24"></div>
       </div>
+
+      {/* Sticky Footer Action Bar */}
+      {!isShipped && (
+        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900 via-slate-900 to-slate-900/95 border-t border-slate-700 p-4 z-30">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="text-slate-300">
+              <span className="font-bold text-white">{shipment.items.length}</span> SKUs · 
+              <span className="font-bold text-white ml-1">{totalUnits}</span> units · 
+              <span className="font-bold text-white ml-1">{shipment.boxes.length}</span> boxes
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => router.push('/fba-shipments')}>
+                Back to List
+              </Button>
+              <Button variant="outline" onClick={saveShipment} disabled={saving}>
+                <Save className="w-4 h-4 mr-2" />
+                {saving ? 'Saving...' : 'Save'}
+              </Button>
+              <Button onClick={markAsShipped}>
+                <Truck className="w-4 h-4 mr-2" />
+                Mark as Shipped
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </MainLayout>
   )
 }
