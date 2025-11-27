@@ -13,7 +13,19 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
 }
 
 export function formatDate(date: Date | string, timezone: string = 'America/New_York'): string {
-  const dateObj = typeof date === 'string' ? new Date(date) : date
+  let dateObj: Date
+  if (typeof date === 'string') {
+    dateObj = new Date(date)
+  } else {
+    dateObj = date
+  }
+  
+  // Check if date is valid
+  if (isNaN(dateObj.getTime())) {
+    console.warn('Invalid date passed to formatDate:', date)
+    return 'Invalid Date'
+  }
+  
   return new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     dateStyle: 'medium',

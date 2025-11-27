@@ -15,7 +15,7 @@ export default function FbaShipmentsPage() {
             <h1 className="text-3xl font-bold text-white">FBA Shipments</h1>
             <p className="text-slate-400 mt-1">Manage shipments to Amazon fulfillment centers</p>
           </div>
-          <Button>
+          <Button onClick={() => window.location.href = '/shipments/new'}>
             <Plus className="w-4 h-4 mr-2" />
             Create Shipment
           </Button>
@@ -84,7 +84,7 @@ export default function FbaShipmentsPage() {
               <Truck className="w-16 h-16 text-slate-600 mx-auto mb-4" />
               <p className="text-lg text-slate-400">No FBA shipments yet</p>
               <p className="text-sm text-slate-500 mt-1">Create a shipment to send inventory to Amazon FBA</p>
-              <Button className="mt-4">
+              <Button className="mt-4" onClick={() => window.location.href = '/shipments/new'}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create Shipment
               </Button>

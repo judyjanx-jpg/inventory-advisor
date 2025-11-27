@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Package,
   Warehouse,
+  Building2,
   ShoppingCart,
   FileText,
   Truck,
@@ -16,12 +17,15 @@ import {
   Settings,
   MessageSquare,
   Sparkles,
+  LineChart,
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Products', href: '/products', icon: Package },
   { name: 'Inventory', href: '/inventory', icon: Warehouse },
+  { name: 'Forecasting', href: '/forecasting', icon: LineChart },
+  { name: 'Warehouses', href: '/warehouses', icon: Building2 },
   { name: 'Orders', href: '/orders', icon: ShoppingCart },
   { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText },
   { name: 'FBA Shipments', href: '/fba-shipments', icon: Truck },

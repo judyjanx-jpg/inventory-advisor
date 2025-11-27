@@ -17,7 +17,8 @@ import {
   Filter,
   ChevronDown,
   ChevronRight,
-  Globe
+  Globe,
+  Building2
 } from 'lucide-react'
 
 interface ChannelInventory {
@@ -27,6 +28,14 @@ interface ChannelInventory {
   velocity7d?: number
   velocity30d?: number
   daysOfStock?: number
+}
+
+interface WarehouseInventory {
+  warehouseId: number
+  warehouseName: string
+  warehouseCode: string
+  available: number
+  reserved: number
 }
 
 interface ProductInventory {
@@ -40,6 +49,7 @@ interface ProductInventory {
   velocity30d: number
   daysOfStock: number
   channelInventory?: ChannelInventory[]
+  warehouseInventory?: WarehouseInventory[]
   status: 'healthy' | 'low' | 'critical' | 'overstocked'
 }
 
@@ -58,6 +68,7 @@ export default function InventoryPage() {
   const [inventory, setInventory] = useState<ProductInventory[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [recalculatingVelocity, setRecalculatingVelocity] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [expandedSku, setExpandedSku] = useState<string | null>(null)
@@ -69,21 +80,86 @@ export default function InventoryPage() {
   const fetchInventory = async () => {
     try {
       const res = await fetch('/api/inventory')
+      if (!res.ok) {
+        console.error('API error:', res.status, res.statusText)
+        const errorData = await res.json().catch(() => ({}))
+        console.error('Error data:', errorData)
+        setInventory([])
+        return
+      }
+      
       const data = await res.json()
+      console.log('Inventory API response:', data.length, 'items')
+      
+      // Log first few items to debug
+      if (data.length > 0) {
+        const sample = data[0]
+        console.log('Sample inventory item:', {
+          masterSku: sample.masterSku,
+          fbaAvailable: sample.fbaAvailable,
+          fbaInboundWorking: sample.fbaInboundWorking,
+          fbaInboundShipped: sample.fbaInboundShipped,
+          fbaInboundReceiving: sample.fbaInboundReceiving,
+          warehouseAvailable: sample.warehouseAvailable,
+          productTitle: sample.product?.title,
+        })
+        
+        // Check for items with inventory > 0
+        const itemsWithInventory = data.filter((item: any) => 
+          (item.fbaAvailable || 0) > 0 || 
+          (item.fbaInboundWorking || 0) > 0 || 
+          (item.warehouseAvailable || 0) > 0
+        )
+        console.log(`Items with inventory > 0: ${itemsWithInventory.length} out of ${data.length}`)
+        if (itemsWithInventory.length > 0) {
+          console.log('First item with inventory:', itemsWithInventory[0])
+        }
+      }
       
       // Transform the data
-      const transformed = (Array.isArray(data) ? data : []).map((item: any) => {
-        const fbaAvailable = item.fbaAvailable || 0
-        const fbaInbound = (item.fbaInboundWorking || 0) + (item.fbaInboundShipped || 0) + (item.fbaInboundReceiving || 0)
-        const warehouseAvailable = item.warehouseAvailable || 0
+      const transformed = (Array.isArray(data) ? data : []).map((item: any, index: number) => {
+        const fbaAvailable = Number(item.fbaAvailable) || 0
+        const fbaInboundWorking = Number(item.fbaInboundWorking) || 0
+        const fbaInboundShipped = Number(item.fbaInboundShipped) || 0
+        const fbaInboundReceiving = Number(item.fbaInboundReceiving) || 0
+        const fbaInbound = fbaInboundWorking + fbaInboundShipped + fbaInboundReceiving
+        const warehouseAvailable = Number(item.warehouseAvailable) || 0
         const totalStock = fbaAvailable + fbaInbound + warehouseAvailable
-        const velocity30d = item.product?.salesVelocity?.velocity30d || 0
-        const daysOfStock = velocity30d > 0 ? Math.floor(totalStock / velocity30d) : 999
+        
+        // Get velocity - check multiple possible locations
+        // Use velocity30d if available, otherwise fall back to velocity90d
+        const salesVelocity = item.product?.salesVelocity
+        let velocity30d = 0
+        if (salesVelocity) {
+          velocity30d = Number(salesVelocity.velocity30d || salesVelocity.velocity_30d || 0)
+          // If 30d is 0 but 90d has data, use 90d as fallback (divide by 3 to approximate daily rate)
+          if (velocity30d === 0 && salesVelocity.velocity90d) {
+            const velocity90d = Number(salesVelocity.velocity90d || 0)
+            if (velocity90d > 0) {
+              // Use 90d velocity as estimate (it's already per-day, so use it directly)
+              velocity30d = velocity90d
+            }
+          }
+        }
+        
+        // Debug first few items - show full structure
+        if (index < 5) {
+          console.log(`[Frontend] ${item.masterSku}:`, {
+            hasProduct: !!item.product,
+            hasSalesVelocity: !!salesVelocity,
+            salesVelocityType: typeof salesVelocity,
+            salesVelocityValue: salesVelocity,
+            velocity30d,
+            fullItem: item,
+          })
+        }
+        const daysOfStock = velocity30d > 0 ? Math.floor(totalStock / velocity30d) : (totalStock > 0 ? 999 : 0)
 
         let status: 'healthy' | 'low' | 'critical' | 'overstocked' = 'healthy'
-        if (daysOfStock < 14) status = 'critical'
+        if (totalStock === 0) status = 'critical' // No stock is critical
+        else if (daysOfStock < 14) status = 'critical'
         else if (daysOfStock < 30) status = 'low'
-        else if (daysOfStock > 180) status = 'overstocked'
+        else if (daysOfStock > 180 && velocity30d > 0) status = 'overstocked'
 
         return {
           masterSku: item.masterSku,
@@ -102,6 +178,13 @@ export default function InventoryPage() {
             fbaAvailable: mapping.channelInventory?.[0]?.fbaAvailable || 0,
             velocity30d: mapping.channelInventory?.[0]?.velocity30d || 0,
           })) || [],
+          warehouseInventory: item.product?.warehouseInventory?.map((wh: any) => ({
+            warehouseId: wh.warehouse.id,
+            warehouseName: wh.warehouse.name,
+            warehouseCode: wh.warehouse.code,
+            available: wh.available || 0,
+            reserved: wh.reserved || 0,
+          })) || [],
         }
       })
       
@@ -116,12 +199,53 @@ export default function InventoryPage() {
   const syncInventory = async () => {
     setSyncing(true)
     try {
-      await fetch('/api/amazon/sync/inventory', { method: 'POST' })
+      const res = await fetch('/api/amazon/sync/inventory', { method: 'POST' })
+      const data = await res.json()
+      
+      if (!res.ok) {
+        alert(`Sync failed: ${data.error || 'Unknown error'}`)
+        console.error('Sync error:', data)
+      } else {
+        console.log('Sync result:', data)
+        if (data.updatedSkus && data.updatedSkus.length > 0) {
+          console.log('SKUs that were updated:', data.updatedSkus)
+        }
+        if (data.updated === 0 && data.skipped > 0) {
+          alert(`Sync completed but no products were updated. ${data.skipped} SKUs were skipped (product not found in database). Make sure your product SKUs match your Amazon SKUs.`)
+        } else {
+          alert(`Sync completed: ${data.updated} products updated, ${data.skipped} skipped`)
+        }
+      }
+      
       await fetchInventory()
     } catch (error) {
       console.error('Error syncing:', error)
+      alert('Error syncing inventory. Check console for details.')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const recalculateVelocity = async () => {
+    setRecalculatingVelocity(true)
+    try {
+      const res = await fetch('/api/velocity/recalculate', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        const message = `${data.message}\n\nDailyProfit records: ${data.dailyProfitRecords?.total || 0} total, ${data.dailyProfitRecords?.last30Days || 0} in last 30 days\nProducts with velocity > 0: ${data.updated - (data.zeroVelocity || 0)}`
+        alert(message)
+        // Force a full page refresh to ensure data is reloaded
+        await fetchInventory()
+        // Also try a hard refresh
+        window.location.reload()
+      } else {
+        alert(`Failed: ${data.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error recalculating velocity:', error)
+      alert(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setRecalculatingVelocity(false)
     }
   }
 
@@ -169,14 +293,20 @@ export default function InventoryPage() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Inventory</h1>
-            <p className="text-slate-400 mt-1">Multi-channel inventory tracking and forecasting</p>
-          </div>
-          <Button onClick={syncInventory} loading={syncing}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-            Sync Amazon
-          </Button>
+              <div>
+                <h1 className="text-3xl font-bold text-white">Inventory</h1>
+                <p className="text-slate-400 mt-1">Multi-channel inventory tracking and forecasting</p>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={recalculateVelocity} loading={recalculatingVelocity}>
+                  <TrendingUp className={`w-4 h-4 mr-2 ${recalculatingVelocity ? 'animate-spin' : ''}`} />
+                  Recalculate Velocity
+                </Button>
+                <Button onClick={syncInventory} loading={syncing}>
+                  <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                  Sync Amazon
+                </Button>
+              </div>
         </div>
 
         {/* Stats */}
@@ -282,7 +412,9 @@ export default function InventoryPage() {
                         <p className="text-sm text-slate-400 mt-0.5 truncate">
                           {item.asin && <span className="font-mono">{item.asin}</span>}
                           {item.asin && item.title && <span className="mx-2">•</span>}
-                          {item.title}
+                          <span className="truncate block" title={item.title}>
+                            {item.title && item.title.length > 80 ? `${item.title.substring(0, 80)}...` : item.title}
+                          </span>
                         </p>
                       </div>
 
@@ -298,6 +430,11 @@ export default function InventoryPage() {
                         <div>
                           <p className="text-xs text-slate-500">Warehouse</p>
                           <p className="text-lg font-semibold text-blue-400">{item.warehouseAvailable}</p>
+                          {item.warehouseInventory && item.warehouseInventory.length > 0 && (
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {item.warehouseInventory.length} location{item.warehouseInventory.length !== 1 ? 's' : ''}
+                            </p>
+                          )}
                         </div>
                         <div className="border-l border-slate-700 pl-6">
                           <p className="text-xs text-slate-500">Velocity</p>
@@ -317,35 +454,70 @@ export default function InventoryPage() {
                     </div>
 
                     {/* Expanded Channel Breakdown */}
-                    {expandedSku === item.masterSku && item.channelInventory && item.channelInventory.length > 0 && (
+                    {expandedSku === item.masterSku && (
                       <div className="px-6 py-4 bg-slate-900/30 border-t border-slate-700/50">
-                        <div className="ml-8">
-                          <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-4">
-                            <Globe className="w-4 h-4" />
-                            Channel Breakdown
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {item.channelInventory.map((channel, idx) => (
-                              <div 
-                                key={idx}
-                                className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <span className="text-xl">{CHANNEL_FLAGS[channel.channel] || '🔗'}</span>
-                                  <div>
-                                    <p className="text-sm font-medium text-white">
-                                      {channel.channel.replace('amazon_', 'Amazon ').toUpperCase()}
-                                    </p>
-                                    <p className="text-xs text-slate-400 font-mono">{channel.channelSku}</p>
+                        <div className="ml-8 space-y-6">
+                          {item.channelInventory && item.channelInventory.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-4">
+                                <Globe className="w-4 h-4" />
+                                Channel Breakdown
+                              </h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {item.channelInventory.map((channel, idx) => (
+                                  <div 
+                                    key={idx}
+                                    className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-xl">{CHANNEL_FLAGS[channel.channel] || '🔗'}</span>
+                                      <div>
+                                        <p className="text-sm font-medium text-white">
+                                          {channel.channel.replace('amazon_', 'Amazon ').toUpperCase()}
+                                        </p>
+                                        <p className="text-xs text-slate-400 font-mono">{channel.channelSku}</p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="font-semibold text-white">{channel.fbaAvailable}</p>
+                                      <p className="text-xs text-slate-400">{Number(channel.velocity30d || 0).toFixed(1)}/day</p>
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="text-right">
-                                  <p className="font-semibold text-white">{channel.fbaAvailable}</p>
-                                  <p className="text-xs text-slate-400">{Number(channel.velocity30d || 0).toFixed(1)}/day</p>
-                                </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          )}
+
+                          {item.warehouseInventory && item.warehouseInventory.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-4">
+                                <Warehouse className="w-4 h-4" />
+                                Warehouse Breakdown
+                              </h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {item.warehouseInventory.map((wh, idx) => (
+                                  <div 
+                                    key={idx}
+                                    className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Building2 className="w-5 h-5 text-blue-400" />
+                                      <div>
+                                        <p className="text-sm font-medium text-white">{wh.warehouseName}</p>
+                                        <p className="text-xs text-slate-400 font-mono">{wh.warehouseCode}</p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="font-semibold text-white">{wh.available}</p>
+                                      {wh.reserved > 0 && (
+                                        <p className="text-xs text-slate-400">Reserved: {wh.reserved}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           {/* Reorder Recommendation */}
                           <div className="mt-4 p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
