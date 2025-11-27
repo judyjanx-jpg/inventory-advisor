@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Printer, Smartphone, Check, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Edit3, Package, RotateCcw } from 'lucide-react'
+import { Printer, Smartphone, Check, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Edit3, RotateCcw, ArrowRight } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 
@@ -39,6 +39,11 @@ export default function PickingSection({
   const [scanResult, setScanResult] = useState<'correct' | 'wrong' | null>(null)
   const [editingQty, setEditingQty] = useState<number | null>(null)
   const [newQty, setNewQty] = useState<number>(0)
+  
+  // Interactive pick - confirmation state
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [confirmedQty, setConfirmedQty] = useState(0)
+  const [confirmedItem, setConfirmedItem] = useState<ShipmentItem | null>(null)
   
   // Interactive pick adjustments
   const [showAdjustModal, setShowAdjustModal] = useState(false)
@@ -90,11 +95,20 @@ export default function PickingSection({
             font-size: 28pt;
             font-weight: bold;
           }
+          .qty-section {
+            text-align: right;
+          }
           .qty-box {
             border: 3px solid #000;
             padding: 0.15in 0.3in;
             font-size: 48pt;
             font-weight: bold;
+            display: inline-block;
+          }
+          .qty-per-box {
+            font-size: 14pt;
+            color: #666;
+            margin-top: 0.1in;
           }
           .barcode-container {
             text-align: center;
@@ -142,26 +156,34 @@ export default function PickingSection({
         </style>
       </head>
       <body>
-        ${items.map((item, i) => `
+        ${items.map((item, i) => {
+          const qtyPerBox = Math.ceil(item.adjustedQty / 5)
+          const hasLocation = item.warehouseLocation && item.warehouseLocation.trim() !== ''
+          return `
           <div class="label">
             <div class="header">
               <div class="sku">${item.masterSku}</div>
-              <div class="qty-box">${item.adjustedQty}</div>
+              <div class="qty-section">
+                <div class="qty-box">${item.adjustedQty}</div>
+                <div class="qty-per-box">${qtyPerBox}/box</div>
+              </div>
             </div>
             <div class="barcode-container">
               <svg id="barcode-${i}"></svg>
             </div>
             <div class="product-name">${item.productName}</div>
+            ${hasLocation ? `
             <div class="location-section">
               <div class="location-label">PICK FROM</div>
-              <div class="location">${item.warehouseLocation || '—'}</div>
+              <div class="location">${item.warehouseLocation}</div>
             </div>
+            ` : ''}
             <div class="footer">
               <div>${shipmentInternalId}</div>
               <div>Pick Label</div>
             </div>
           </div>
-        `).join('')}
+        `}).join('')}
         <script>
           ${items.map((item, i) => `
             JsBarcode("#barcode-${i}", "${item.masterSku}", {
@@ -192,29 +214,17 @@ export default function PickingSection({
     if (!currentItem) return
 
     if (scannedValue === currentItem.masterSku.toUpperCase()) {
-      // Correct scan
+      // Correct scan - show confirmation screen
       setScanResult('correct')
       playSound('success')
+      setConfirmedItem(currentItem)
+      setConfirmedQty(currentItem.adjustedQty)
       
-      // Mark as picked
-      const updatedItems = items.map(item => 
-        item.id === currentItem.id 
-          ? { ...item, pickStatus: 'picked' }
-          : item
-      )
-      onItemsChange(updatedItems)
-      
-      // Move to next after delay
+      // Show confirmation after brief flash
       setTimeout(() => {
-        setScanResult(null)
+        setShowConfirmation(true)
         setScanInput('')
-        if (currentPickIndex < pendingItems.length - 1) {
-          setCurrentPickIndex(prev => prev + 1)
-        } else {
-          // All done
-          setShowInteractivePick(false)
-        }
-      }, 1000)
+      }, 500)
     } else {
       // Wrong scan
       setScanResult('wrong')
@@ -251,6 +261,32 @@ export default function PickingSection({
     }
   }
 
+  // Proceed to next item after confirmation
+  const proceedToNext = () => {
+    if (!confirmedItem) return
+    
+    // Update qty if changed and mark as picked
+    const updatedItems = items.map(item => 
+      item.id === confirmedItem.id 
+        ? { ...item, adjustedQty: confirmedQty, pickStatus: 'picked' }
+        : item
+    )
+    onItemsChange(updatedItems)
+    
+    // Reset confirmation state
+    setShowConfirmation(false)
+    setConfirmedItem(null)
+    setScanResult(null)
+    
+    // Move to next
+    if (currentPickIndex < pendingItems.length - 1) {
+      setCurrentPickIndex(prev => prev + 1)
+    } else {
+      // All done
+      setShowInteractivePick(false)
+    }
+  }
+
   const skipItem = () => {
     const currentItem = pendingItems[currentPickIndex]
     if (!currentItem) return
@@ -261,6 +297,11 @@ export default function PickingSection({
         : item
     )
     onItemsChange(updatedItems)
+    
+    // Reset any confirmation state
+    setShowConfirmation(false)
+    setConfirmedItem(null)
+    setScanResult(null)
     
     if (currentPickIndex < pendingItems.length - 1) {
       setCurrentPickIndex(prev => prev + 1)
@@ -273,18 +314,11 @@ export default function PickingSection({
     const currentItem = pendingItems[currentPickIndex]
     if (!currentItem) return
     
-    const updatedItems = items.map(item => 
-      item.id === currentItem.id 
-        ? { ...item, pickStatus: 'picked' }
-        : item
-    )
-    onItemsChange(updatedItems)
-    
-    if (currentPickIndex < pendingItems.length - 1) {
-      setCurrentPickIndex(prev => prev + 1)
-    } else {
-      setShowInteractivePick(false)
-    }
+    // Show confirmation screen
+    setScanResult('correct')
+    setConfirmedItem(currentItem)
+    setConfirmedQty(currentItem.adjustedQty)
+    setShowConfirmation(true)
   }
 
   // Open adjust modal for current item
@@ -390,6 +424,86 @@ export default function PickingSection({
       )
     }
 
+    const hasLocation = currentItem.warehouseLocation && currentItem.warehouseLocation.trim() !== ''
+    const qtyPerBox = Math.ceil(currentItem.adjustedQty / 5)
+
+    // Confirmation screen after successful scan
+    if (showConfirmation && confirmedItem) {
+      return (
+        <div className="fixed inset-0 bg-emerald-900 z-50 flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-emerald-700">
+            <h1 className="text-xl font-bold text-white">✓ Scanned</h1>
+            <button 
+              onClick={() => {
+                setShowConfirmation(false)
+                setConfirmedItem(null)
+                setScanResult(null)
+                setShowInteractivePick(false)
+              }}
+              className="text-emerald-300 hover:text-white text-2xl"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Confirmed Item */}
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div className="text-7xl font-bold text-white mb-8">
+              {confirmedItem.masterSku}
+            </div>
+            
+            {/* Qty with edit option */}
+            <div className="mb-8">
+              <div className="text-sm text-emerald-300 mb-2">QUANTITY</div>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setConfirmedQty(Math.max(0, confirmedQty - 1))}
+                  className="w-16 h-16 text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-white"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  value={confirmedQty}
+                  onChange={(e) => setConfirmedQty(parseInt(e.target.value) || 0)}
+                  className="w-32 h-20 text-5xl font-bold text-center bg-emerald-800 border-2 border-emerald-600 rounded-lg text-white"
+                />
+                <button
+                  onClick={() => setConfirmedQty(confirmedQty + 1)}
+                  className="w-16 h-16 text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-white"
+                >
+                  +
+                </button>
+              </div>
+              <div className="text-lg text-emerald-300 mt-2">
+                {Math.ceil(confirmedQty / 5)}/box
+              </div>
+            </div>
+          </div>
+
+          {/* Next Button */}
+          <div className="p-6 bg-emerald-800 border-t border-emerald-700">
+            <div className="max-w-md mx-auto flex gap-4">
+              <Button 
+                variant="outline" 
+                onClick={skipItem}
+                className="flex-1 border-emerald-600 text-emerald-300 hover:bg-emerald-700"
+              >
+                Skip
+              </Button>
+              <Button 
+                onClick={proceedToNext}
+                className="flex-1 bg-white text-emerald-900 hover:bg-emerald-100 text-xl py-4"
+              >
+                Next <ArrowRight className="w-6 h-6 ml-2" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className={`fixed inset-0 z-50 flex flex-col ${
         scanResult === 'correct' ? 'bg-emerald-900' : 
@@ -398,7 +512,7 @@ export default function PickingSection({
       } transition-colors duration-300`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <h1 className="text-xl font-bold text-white">Interactive Pick Mode</h1>
+          <h1 className="text-xl font-bold text-white">Interactive Pick</h1>
           <button 
             onClick={() => setShowInteractivePick(false)}
             className="text-slate-400 hover:text-white text-2xl"
@@ -423,12 +537,7 @@ export default function PickingSection({
 
         {/* Current Item */}
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-          {scanResult === 'correct' ? (
-            <div className="animate-pulse">
-              <CheckCircle className="w-32 h-32 text-emerald-400 mx-auto mb-4" />
-              <h2 className="text-4xl font-bold text-white">CORRECT</h2>
-            </div>
-          ) : scanResult === 'wrong' ? (
+          {scanResult === 'wrong' ? (
             <div className="animate-pulse">
               <AlertCircle className="w-32 h-32 text-red-400 mx-auto mb-4" />
               <h2 className="text-4xl font-bold text-white">WRONG ITEM</h2>
@@ -436,27 +545,20 @@ export default function PickingSection({
             </div>
           ) : (
             <>
-              <div className="text-6xl font-bold text-white mb-4">
+              <div className="text-7xl font-bold text-white mb-6">
                 {currentItem.masterSku}
               </div>
-              <div className="text-2xl text-slate-300 mb-6 max-w-md">
-                {currentItem.productName}
-              </div>
-              <div className="text-8xl font-bold text-cyan-400 mb-6">
+              <div className="text-6xl font-bold text-cyan-400 mb-4">
                 {currentItem.adjustedQty}
               </div>
-              <div className="text-xl text-slate-400 mb-4">
-                📍 {currentItem.warehouseLocation || 'No location set'}
+              <div className="text-xl text-slate-400 mb-2">
+                {Math.ceil(currentItem.adjustedQty / 5)}/box
               </div>
-              
-              {/* Adjust Button */}
-              <button
-                onClick={openAdjustModal}
-                className="text-amber-400 hover:text-amber-300 flex items-center gap-2 mb-4"
-              >
-                <Edit3 className="w-5 h-5" />
-                Adjust Quantity
-              </button>
+              {hasLocation && (
+                <div className="text-lg text-slate-400">
+                  📍 {currentItem.warehouseLocation}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -658,6 +760,9 @@ export default function PickingSection({
                     size="sm" 
                     onClick={() => {
                       setCurrentPickIndex(0)
+                      setShowConfirmation(false)
+                      setConfirmedItem(null)
+                      setScanResult(null)
                       setShowInteractivePick(true)
                     }}
                   >
@@ -672,79 +777,84 @@ export default function PickingSection({
                   Items to Pick ({pendingItems.length} remaining)
                 </h3>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {items.map(item => (
-                    <div 
-                      key={item.id}
-                      className={`flex items-center gap-4 p-3 rounded-lg ${
-                        item.pickStatus === 'picked' ? 'bg-emerald-900/20 border border-emerald-500/30' :
-                        item.pickStatus === 'skipped' ? 'bg-amber-900/20 border border-amber-500/30' :
-                        'bg-slate-800/50 border border-slate-700'
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-white">{item.masterSku}</div>
-                        <div className="text-sm text-slate-400 truncate">{item.productName}</div>
-                      </div>
-                      <div className="text-sm text-slate-400">
-                        📍 {item.warehouseLocation || '—'}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {editingQty === item.id ? (
-                          <>
-                            <input
-                              type="number"
-                              min="0"
-                              value={newQty}
-                              onChange={(e) => setNewQty(parseInt(e.target.value) || 0)}
-                              className="w-16 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm"
-                              autoFocus
-                            />
-                            <Button size="sm" onClick={() => adjustItemQty(item.id)}>
-                              <Check className="w-3 h-3" />
-                            </Button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setEditingQty(item.id)
-                              setNewQty(item.adjustedQty)
-                            }}
-                            className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-white font-bold"
-                            title="Click to adjust qty"
-                          >
-                            {item.adjustedQty}
-                          </button>
+                  {items.map(item => {
+                    const hasLocation = item.warehouseLocation && item.warehouseLocation.trim() !== ''
+                    return (
+                      <div 
+                        key={item.id}
+                        className={`flex items-center gap-4 p-3 rounded-lg ${
+                          item.pickStatus === 'picked' ? 'bg-emerald-900/20 border border-emerald-500/30' :
+                          item.pickStatus === 'skipped' ? 'bg-amber-900/20 border border-amber-500/30' :
+                          'bg-slate-800/50 border border-slate-700'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-white">{item.masterSku}</div>
+                          <div className="text-sm text-slate-400 truncate">{item.productName}</div>
+                        </div>
+                        {hasLocation && (
+                          <div className="text-sm text-slate-400">
+                            📍 {item.warehouseLocation}
+                          </div>
                         )}
-                      </div>
-                      <div className="w-24 text-right flex items-center justify-end gap-2">
-                        {item.pickStatus === 'picked' && (
-                          <>
-                            <span className="text-emerald-400 text-sm">✓ Picked</span>
+                        <div className="flex items-center gap-2">
+                          {editingQty === item.id ? (
+                            <>
+                              <input
+                                type="number"
+                                min="0"
+                                value={newQty}
+                                onChange={(e) => setNewQty(parseInt(e.target.value) || 0)}
+                                className="w-16 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm"
+                                autoFocus
+                              />
+                              <Button size="sm" onClick={() => adjustItemQty(item.id)}>
+                                <Check className="w-3 h-3" />
+                              </Button>
+                            </>
+                          ) : (
                             <button
-                              onClick={() => resetToPending(item.id)}
-                              className="text-slate-400 hover:text-white"
-                              title="Reset to pending"
+                              onClick={() => {
+                                setEditingQty(item.id)
+                                setNewQty(item.adjustedQty)
+                              }}
+                              className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-white font-bold"
+                              title="Click to adjust qty"
                             >
-                              <RotateCcw className="w-3 h-3" />
+                              {item.adjustedQty}
                             </button>
-                          </>
-                        )}
-                        {item.pickStatus === 'skipped' && (
-                          <>
-                            <button
-                              onClick={() => markSkippedAsPicked(item.id)}
-                              className="text-amber-400 hover:text-amber-300 text-sm"
-                            >
-                              Mark Picked
-                            </button>
-                          </>
-                        )}
-                        {(!item.pickStatus || item.pickStatus === 'pending') && (
-                          <span className="text-slate-500 text-sm">Pending</span>
-                        )}
+                          )}
+                        </div>
+                        <div className="w-24 text-right flex items-center justify-end gap-2">
+                          {item.pickStatus === 'picked' && (
+                            <>
+                              <span className="text-emerald-400 text-sm">✓ Picked</span>
+                              <button
+                                onClick={() => resetToPending(item.id)}
+                                className="text-slate-400 hover:text-white"
+                                title="Reset to pending"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                              </button>
+                            </>
+                          )}
+                          {item.pickStatus === 'skipped' && (
+                            <>
+                              <button
+                                onClick={() => markSkippedAsPicked(item.id)}
+                                className="text-amber-400 hover:text-amber-300 text-sm"
+                              >
+                                Mark Picked
+                              </button>
+                            </>
+                          )}
+                          {(!item.pickStatus || item.pickStatus === 'pending') && (
+                            <span className="text-slate-500 text-sm">Pending</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
 
