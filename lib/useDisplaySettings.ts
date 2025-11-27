@@ -70,3 +70,4 @@ export function getDisplaySettings(): DisplaySettings {
   return DEFAULT_SETTINGS
 }
 
+
