@@ -23,6 +23,14 @@ const SETTINGS_SECTIONS = [
     status: 'Configure',
   },
   {
+    id: 'display',
+    name: 'Display Options',
+    description: 'Customize how products and data are shown',
+    icon: '🖥️',
+    href: '/settings/display',
+    status: 'Configure',
+  },
+  {
     id: 'notifications',
     name: 'Notifications',
     description: 'Configure alerts and notification preferences',

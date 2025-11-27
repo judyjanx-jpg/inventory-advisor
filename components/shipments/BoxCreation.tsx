@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Package, Plus, Trash2, Info } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
+import { useDisplaySettings, formatTitle } from '@/lib/useDisplaySettings'
 
 interface ShipmentItem {
   sku: string
@@ -45,6 +46,7 @@ export default function BoxCreation({
   boxes,
   onBoxesChange,
 }: BoxCreationProps) {
+  const displaySettings = useDisplaySettings()
   const [numBoxes, setNumBoxes] = useState(5)
   const [dimensions, setDimensions] = useState<BoxDimension[]>([
     { id: 1, length: 18, width: 14, height: 8, applyToBoxes: [1, 2, 3, 4, 5] }
@@ -309,8 +311,12 @@ export default function BoxCreation({
                 return (
                   <tr key={item.sku} className="border-b border-slate-800">
                     <td className="py-3 px-4">
-                      <div className="text-white font-medium text-sm">{item.productName}</div>
-                      <div className="text-slate-500 text-xs mt-0.5">SKU: {item.sku}</div>
+                      <div className="text-white font-medium text-sm">{item.sku}</div>
+                      {formatTitle(item.productName, displaySettings) && (
+                        <div className="text-slate-500 text-xs mt-0.5">
+                          {formatTitle(item.productName, displaySettings)}
+                        </div>
+                      )}
                     </td>
                     <td className={`py-3 px-4 text-center font-medium ${
                       isComplete ? 'text-emerald-400' : isOver ? 'text-red-400' : 'text-slate-400'
