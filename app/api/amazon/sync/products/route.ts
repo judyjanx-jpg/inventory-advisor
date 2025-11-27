@@ -548,8 +548,8 @@ export async function POST() {
         const query: any = {
           granularityType: 'Marketplace',
           granularityId: credentials.marketplaceId,
-          marketplaceIds: [credentials.marketplaceId],
-          details: true,
+          marketplaceIds: credentials.marketplaceId, // String not array
+          details: 'true',
         }
         if (nextToken) query.nextToken = nextToken
         
@@ -559,17 +559,27 @@ export async function POST() {
           query,
         })
         
-        const summaries = response?.payload?.inventorySummaries || response?.inventorySummaries || []
-        allInventory = [...allInventory, ...summaries]
-        nextToken = response?.payload?.pagination?.nextToken || response?.pagination?.nextToken
-        pageCount++
-        
-        if (pageCount % 5 === 0) {
-          console.log(`  Fetched ${allInventory.length} inventory items...`)
+        // Debug: log first response structure
+        if (pageCount === 0) {
+          console.log(`  First response keys: ${Object.keys(response || {}).join(', ')}`)
+          if (response?.payload) console.log(`  Payload keys: ${Object.keys(response.payload).join(', ')}`)
+          if (response?.pagination) console.log(`  Has pagination at root`)
+          if (response?.payload?.pagination) console.log(`  Has pagination in payload`)
         }
         
+        const summaries = response?.payload?.inventorySummaries || response?.inventorySummaries || []
+        allInventory = [...allInventory, ...summaries]
+        
+        // Try multiple places for nextToken
+        nextToken = response?.payload?.pagination?.nextToken || 
+                   response?.pagination?.nextToken ||
+                   response?.nextToken
+        
+        pageCount++
+        console.log(`  Page ${pageCount}: got ${summaries.length} items (total: ${allInventory.length})${nextToken ? ', has more...' : ', done'}`)
+        
         if (nextToken) {
-          await new Promise(resolve => setTimeout(resolve, 200))
+          await new Promise(resolve => setTimeout(resolve, 300))
         }
       } while (nextToken && pageCount < 100)
       
