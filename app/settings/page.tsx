@@ -23,6 +23,14 @@ const SETTINGS_SECTIONS = [
     status: 'Configure',
   },
   {
+    id: 'transparency',
+    name: 'Transparency API',
+    description: 'Amazon Transparency codes for product labels',
+    icon: '🔐',
+    href: '/settings/transparency',
+    status: 'Configure',
+  },
+  {
     id: 'display',
     name: 'Display Options',
     description: 'Customize how products and data are shown',

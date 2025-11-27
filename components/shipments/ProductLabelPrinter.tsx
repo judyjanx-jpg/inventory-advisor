@@ -81,24 +81,41 @@ export default function ProductLabelPrinter({
     }
   }
 
-  // Request Transparency codes from Amazon (simulated for now)
+  // Request Transparency codes from Amazon API
   const requestTransparencyCodes = async (sku: string, quantity: number): Promise<string[]> => {
-    // In production, this would call Amazon Transparency API
-    // For now, generate placeholder codes
     setLoadingTp(sku)
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    const codes: string[] = []
-    for (let i = 0; i < quantity; i++) {
-      codes.push(`TP${Date.now()}${i.toString().padStart(4, '0')}`)
+    try {
+      const res = await fetch(`/api/transparency/codes?sku=${encodeURIComponent(sku)}&quantity=${quantity}`)
+      const data = await res.json()
+      
+      if (!res.ok) {
+        console.error('Error getting transparency codes:', data.error)
+        // Fall back to placeholder codes if API fails
+        const placeholderCodes: string[] = []
+        for (let i = 0; i < quantity; i++) {
+          placeholderCodes.push(`TP${Date.now()}${i.toString().padStart(4, '0')}`)
+        }
+        setTpCodes(prev => ({ ...prev, [sku]: placeholderCodes }))
+        setLoadingTp(null)
+        return placeholderCodes
+      }
+      
+      const codes = data.codes || []
+      setTpCodes(prev => ({ ...prev, [sku]: codes }))
+      setLoadingTp(null)
+      return codes
+    } catch (error) {
+      console.error('Error fetching transparency codes:', error)
+      // Fall back to placeholder codes
+      const placeholderCodes: string[] = []
+      for (let i = 0; i < quantity; i++) {
+        placeholderCodes.push(`TP${Date.now()}${i.toString().padStart(4, '0')}`)
+      }
+      setTpCodes(prev => ({ ...prev, [sku]: placeholderCodes }))
+      setLoadingTp(null)
+      return placeholderCodes
     }
-    
-    setTpCodes(prev => ({ ...prev, [sku]: codes }))
-    setLoadingTp(null)
-    
-    return codes
   }
 
   const printLabels = async (item: ShipmentItem) => {
