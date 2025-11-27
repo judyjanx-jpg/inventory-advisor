@@ -86,10 +86,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       fromLocationId,
-      toLocationId,
+      destination, // FBA destination like 'fba_us', 'fba_ca', 'fba_uk'
       optimalPlacementEnabled = true,
       items = [],
     } = body
+
+    // Map destination to destinationFc and destinationName
+    const destinationMap: Record<string, { fc: string; name: string }> = {
+      'fba_us': { fc: 'US', name: 'Amazon FBA US' },
+      'fba_ca': { fc: 'CA', name: 'Amazon FBA Canada' },
+      'fba_uk': { fc: 'UK', name: 'Amazon FBA UK' },
+    }
+    const destInfo = destinationMap[destination] || { fc: 'US', name: 'Amazon FBA US' }
 
     // Generate internal ID
     const year = new Date().getFullYear()
@@ -107,7 +115,8 @@ export async function POST(request: NextRequest) {
       data: {
         internalId,
         fromLocationId,
-        toLocationId,
+        destinationFc: destInfo.fc,
+        destinationName: destInfo.name,
         optimalPlacementEnabled,
         status: 'draft',
         items: {
@@ -122,7 +131,6 @@ export async function POST(request: NextRequest) {
       },
       include: {
         fromLocation: true,
-        toLocation: true,
         items: {
           include: {
             product: {

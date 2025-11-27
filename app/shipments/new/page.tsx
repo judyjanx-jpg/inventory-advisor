@@ -37,7 +37,7 @@ export default function NewShipmentPage() {
   const [loading, setLoading] = useState(false)
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [fromLocationId, setFromLocationId] = useState<number | null>(null)
-  const [toLocationId, setToLocationId] = useState<number | null>(null)
+  const [destination, setDestination] = useState<string>('') // FBA destination like 'fba_us'
   const [optimalPlacementEnabled, setOptimalPlacementEnabled] = useState(true)
   const [items, setItems] = useState<ShipmentItem[]>([])
   const [showAddProduct, setShowAddProduct] = useState(false)
@@ -171,8 +171,13 @@ export default function NewShipmentPage() {
   }, [optimalPlacementEnabled])
 
   const saveShipment = async () => {
-    if (!fromLocationId || !toLocationId) {
-      alert('Please select both from and to locations')
+    if (!fromLocationId) {
+      alert('Please select a from location')
+      return
+    }
+
+    if (!destination) {
+      alert('Please select an FBA destination')
       return
     }
 
@@ -200,7 +205,7 @@ export default function NewShipmentPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fromLocationId,
-          toLocationId,
+          destination, // FBA destination like 'fba_us', 'fba_ca', 'fba_uk'
           optimalPlacementEnabled,
           items: items.map(item => ({
             sku: item.sku,
@@ -280,8 +285,8 @@ export default function NewShipmentPage() {
                 </label>
                 <select
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                  value={toLocationId || ''}
-                  onChange={(e) => setToLocationId(parseInt(e.target.value) || null)}
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
                 >
                   <option value="">Select FBA location...</option>
                   <option value="fba_us">FBA US</option>
