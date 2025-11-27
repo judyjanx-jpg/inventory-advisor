@@ -13,6 +13,7 @@ interface ReportRow {
   'fulfillment-channel': string
   'status': string
   'fnsku': string
+  'fulfillment-channel-sku': string  // Alternative FNSKU column name
   'product-id-type': string
   [key: string]: string
 }
@@ -269,16 +270,28 @@ export async function POST() {
       variationValue?: string
     }> = []
 
+    // Log first row to see what columns are available
+    if (reportData.length > 0) {
+      console.log('\n📋 Sample row columns:', Object.keys(reportData[0]).join(', '))
+      const sampleRow = reportData[0]
+      console.log('  Sample FNSKU value:', sampleRow['fnsku'] || sampleRow['fulfillment-channel-sku'] || 'NOT FOUND')
+    }
+
+    let fnskuCount = 0
+
     for (const row of reportData) {
       const sku = row['seller-sku'] || row['sku']
       if (!sku) continue
 
       const asin = row['asin1'] || row['asin'] || ''
-      const fnsku = row['fnsku'] || ''
+      // Check multiple possible FNSKU column names
+      const fnsku = row['fnsku'] || row['fulfillment-channel-sku'] || row['afn-sku'] || ''
       const title = row['item-name'] || row['product-name'] || sku
       const price = parseFloat(row['price'] || '0') || 0
       const quantity = parseInt(row['quantity'] || '0') || 0
       const status = row['status']?.toLowerCase().includes('active') ? 'active' : 'active'
+      
+      if (fnsku) fnskuCount++
 
       // Get catalog data for this ASIN
       const catalog = asin ? catalogData[asin] : null
@@ -524,7 +537,9 @@ export async function POST() {
 
     await updateSyncStatus('success')
 
-    const message = `Synced ${reportData.length} products: ${created} created, ${updated} updated, ${virtualParentsCreated} parent groups, ${relationshipsLinked} variations linked`
+    console.log(`\n📊 FNSKU Stats: ${fnskuCount}/${reportData.length} products have FNSKUs`)
+
+    const message = `Synced ${reportData.length} products: ${created} created, ${updated} updated, ${virtualParentsCreated} parent groups, ${relationshipsLinked} variations linked, ${fnskuCount} FNSKUs`
     console.log(`\n✅ ${message}`)
 
     return NextResponse.json({
@@ -645,6 +660,17 @@ async function syncViaInventoryAPI(client: any, credentials: any, channel: strin
         continue
       }
     } else {
+      // Update product with FNSKU if we have one and it's missing
+      if (fnsku && !product.fnsku) {
+        await prisma.product.update({
+          where: { sku },
+          data: { 
+            fnsku,
+            asin: asin || product.asin,
+          },
+        })
+      }
+
       await prisma.inventoryLevel.upsert({
         where: { masterSku: sku },
         update: {
