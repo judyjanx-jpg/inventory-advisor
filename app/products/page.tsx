@@ -155,6 +155,7 @@ export default function ProductsPage() {
     price: '',
     supplierId: '',
     supplierSku: '',
+    fnsku: '',
     upc: '',
     labelType: 'fnsku_only',
     warehouseLocation: '',
@@ -346,6 +347,7 @@ export default function ProductsPage() {
       price: product.price?.toString() || '',
       supplierId: product.supplierId?.toString() || '',
       supplierSku: product.supplierSku || '',
+      fnsku: product.fnsku || '',
       upc: product.upc || '',
       labelType: product.labelType || 'fnsku_only',
       warehouseLocation: product.warehouseLocation || '',
@@ -367,6 +369,7 @@ export default function ProductsPage() {
           price: settingsForm.price ? parseFloat(settingsForm.price) : 0,
           supplierId: settingsForm.supplierId ? parseInt(settingsForm.supplierId) : null,
           supplierSku: settingsForm.supplierSku || null,
+          fnsku: settingsForm.fnsku || null,
           upc: settingsForm.upc || null,
           labelType: settingsForm.labelType || 'fnsku_only',
           warehouseLocation: settingsForm.warehouseLocation || null,
@@ -1156,6 +1159,21 @@ export default function ProductsPage() {
 
           {/* Amazon & Labeling */}
           <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Amazon & Labeling</h4>
+
+          {/* FNSKU */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              FNSKU
+            </label>
+            <input
+              type="text"
+              value={settingsForm.fnsku}
+              onChange={(e) => setSettingsForm({ ...settingsForm, fnsku: e.target.value })}
+              placeholder="e.g., X001ABC123"
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
+            />
+            <p className="text-xs text-slate-500 mt-1">Amazon Fulfillment Network SKU - used on FBA labels</p>
+          </div>
 
           {/* UPC */}
           <div>
