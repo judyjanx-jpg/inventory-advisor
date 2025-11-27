@@ -7,7 +7,8 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import Button from '@/components/ui/Button'
 import ShipmentSummaryBar, { ShipmentStage } from '@/components/shipments/ShipmentSummaryBar'
 import BoxCreation from '@/components/shipments/BoxCreation'
-import LabelPrinter from '@/components/shipments/LabelPrinter'
+import PickingSection from '@/components/shipments/PickingSection'
+import ProductLabelPrinter from '@/components/shipments/ProductLabelPrinter'
 import { 
   Package, 
   Plus, 
@@ -32,6 +33,9 @@ interface ShipmentItem {
   adjustedQty: number
   pickStatus: string
   pickedAt: string | null
+  warehouseLocation?: string | null
+  labelType?: string
+  transparencyEnabled?: boolean
 }
 
 interface Box {
@@ -574,45 +578,28 @@ export default function ShipmentDetailPage() {
 
         {/* Picking Section */}
         <div ref={pickingRef}>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between cursor-pointer"
-                onClick={() => setExpandedSections(s => ({ ...s, picking: !s.picking }))}>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-cyan-400" />
-                  <CardTitle>Picking</CardTitle>
-                </div>
-                {expandedSections.picking ? <ChevronUp /> : <ChevronDown />}
-              </div>
-            </CardHeader>
-            {expandedSections.picking && (
-              <CardContent>
-                {shipment.items.every(i => i.pickStatus === 'picked') ? (
-                  <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-4 text-center">
-                    <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                    <p className="text-emerald-400 font-medium">All items picked!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex gap-4">
-                      <Button onClick={generatePackingListPDF}>
-                        <Printer className="w-4 h-4 mr-2" />
-                        Print Packing List
-                      </Button>
-                      <Button variant="outline" onClick={markPickingComplete}>
-                        <Check className="w-4 h-4 mr-2" />
-                        Mark All Picked
-                      </Button>
-                    </div>
-                    <p className="text-sm text-slate-400">
-                      Use the packing list to pick items from your warehouse, then mark as picked.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            )}
-          </Card>
+          <PickingSection
+            shipmentId={String(shipment.id)}
+            shipmentInternalId={shipment.internalId || `SHP-${shipment.id}`}
+            items={shipment.items}
+            onItemsChange={(items) => setShipment({ ...shipment, items })}
+            onPickComplete={() => {}}
+          />
         </div>
+
+        {/* Product Labels Section */}
+        <ProductLabelPrinter
+          shipmentId={String(shipment.id)}
+          shipmentInternalId={shipment.internalId || `SHP-${shipment.id}`}
+          items={shipment.items.map(i => ({
+            masterSku: i.masterSku,
+            fnsku: i.fnsku,
+            productName: i.productName,
+            adjustedQty: i.adjustedQty,
+            labelType: i.labelType,
+            transparencyEnabled: i.transparencyEnabled,
+          }))}
+        />
 
         {/* Box Creation Section */}
         <div ref={boxesRef}>
@@ -627,20 +614,6 @@ export default function ShipmentDetailPage() {
             autoSplitEnabled={shipment.optimalPlacementEnabled}
           />
         </div>
-
-        {/* Labels Section */}
-        <LabelPrinter
-          shipmentId={String(shipment.id)}
-          shipmentInternalId={shipment.internalId || `SHP-${shipment.id}`}
-          destinationFc={shipment.destinationFc || 'US'}
-          items={shipment.items.map(i => ({
-            masterSku: i.masterSku,
-            fnsku: i.fnsku,
-            productName: i.productName,
-            adjustedQty: i.adjustedQty,
-          }))}
-          boxes={shipment.boxes}
-        />
 
         {/* Shipped Status */}
         {isShipped && (

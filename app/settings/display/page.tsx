@@ -4,13 +4,16 @@ import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
-import { Monitor, Save, Check } from 'lucide-react'
+import { Monitor, Save, Check, Tag } from 'lucide-react'
 
 type TitleDisplayMode = 'full' | 'short' | 'none'
 
 interface DisplaySettings {
   titleDisplay: TitleDisplayMode
   shortTitleLength: number
+  // Label settings
+  fnskuLabelSize: string // e.g., "3x1"
+  tpOnlyLabelSize: string // e.g., "1x1"
 }
 
 const TITLE_OPTIONS: { value: TitleDisplayMode; label: string; description: string }[] = [
@@ -23,6 +26,8 @@ export default function DisplaySettingsPage() {
   const [settings, setSettings] = useState<DisplaySettings>({
     titleDisplay: 'short',
     shortTitleLength: 30,
+    fnskuLabelSize: '3x1',
+    tpOnlyLabelSize: '1x1',
   })
   const [saved, setSaved] = useState(false)
 
@@ -130,6 +135,90 @@ export default function DisplaySettingsPage() {
                     (title hidden)
                   </div>
                 )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Label Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Tag className="w-5 h-5" />
+              Label Sizes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <p className="text-sm text-slate-400">
+              Configure default label sizes for printing
+            </p>
+
+            {/* FNSKU / FNSKU+TP Label Size */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                FNSKU & FNSKU+Transparency Labels
+              </label>
+              <div className="flex gap-2">
+                {['2x1', '3x1', '4x2'].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => setSettings({ ...settings, fnskuLabelSize: size })}
+                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                      settings.fnskuLabelSize === size
+                        ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
+                        : 'border-slate-700 text-slate-300 hover:border-slate-600'
+                    }`}
+                  >
+                    {size}"
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Used for FNSKU-only and FNSKU+Transparency combo labels
+              </p>
+            </div>
+
+            {/* TP Only Label Size */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Transparency-Only Labels
+              </label>
+              <div className="flex gap-2">
+                {['1x1', '1.5x1.5', '2x2'].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => setSettings({ ...settings, tpOnlyLabelSize: size })}
+                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                      settings.tpOnlyLabelSize === size
+                        ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
+                        : 'border-slate-700 text-slate-300 hover:border-slate-600'
+                    }`}
+                  >
+                    {size}"
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Used for products that already have FNSKU on packaging
+              </p>
+            </div>
+
+            {/* Label Type Info */}
+            <div className="pt-4 border-t border-slate-700">
+              <p className="text-sm font-medium text-slate-300 mb-3">Label Types (set per product)</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="w-24 text-slate-400">FNSKU+TP:</span>
+                  <span className="text-white">Barcode + Transparency QR code (combo label)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-24 text-slate-400">FNSKU:</span>
+                  <span className="text-white">Barcode only (no transparency)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-24 text-slate-400">TP Only:</span>
+                  <span className="text-white">Transparency QR only (product already has FNSKU)</span>
+                </div>
               </div>
             </div>
           </CardContent>

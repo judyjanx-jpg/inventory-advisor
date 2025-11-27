@@ -60,6 +60,7 @@ model Product {
   // FBA Shipment Settings
   transparencyEnabled Boolean @default(false) @map("transparency_enabled")
   warehouseLocation   String? @map("warehouse_location") // Bin/Rack location for picking
+  labelType           String  @default("fnsku_only") @map("label_type") // fnsku_tp, fnsku_only, tp_only
 
   // Status
   status     String    @default("active") // active, discontinued, seasonal, liquidate
