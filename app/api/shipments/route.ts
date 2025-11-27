@@ -99,6 +99,15 @@ export async function POST(request: NextRequest) {
     }
     const destInfo = destinationMap[destination] || { fc: 'US', name: 'Amazon FBA US' }
 
+    // Check if shipment model exists in Prisma client
+    if (!prisma.shipment) {
+      console.error('Prisma client missing Shipment model. Please run: npx prisma generate')
+      return NextResponse.json(
+        { error: 'Database model not available. Please restart the server after running: npx prisma generate' },
+        { status: 500 }
+      )
+    }
+
     // Generate internal ID
     const year = new Date().getFullYear()
     const count = await prisma.shipment.count({

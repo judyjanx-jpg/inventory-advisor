@@ -1,0 +1,18 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- QR code pattern at top (checkerboard/pixelated) -->
+  <rect x="0" y="0" width="2" height="2" fill="#000"/>
+  <rect x="2" y="0" width="2" height="2" fill="#fff"/>
+  <rect x="4" y="0" width="2" height="2" fill="#000"/>
+  <rect x="6" y="0" width="4" height="2" fill="#000"/>
+  <rect x="0" y="2" width="2" height="2" fill="#000"/>
+  <rect x="2" y="2" width="2" height="2" fill="#fff"/>
+  <rect x="4" y="2" width="2" height="2" fill="#000"/>
+  <rect x="6" y="2" width="2" height="2" fill="#000"/>
+  <rect x="8" y="2" width="2" height="2" fill="#000"/>
+  <!-- Label shape at bottom with curled corner -->
+  <rect x="0" y="6" width="16" height="10" fill="#000"/>
+  <!-- Curled corner (peeled effect) -->
+  <path d="M 12 16 Q 14 14 16 16 L 16 16 L 14 16 Z" fill="#fff"/>
+  <path d="M 14 14 L 16 14 L 16 16 L 14 16 Z" fill="#fff"/>
+</svg>
+

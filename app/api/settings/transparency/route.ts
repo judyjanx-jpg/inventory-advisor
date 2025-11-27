@@ -9,7 +9,7 @@ import { testTransparencyCredentials } from '@/lib/transparency-api'
 export async function GET() {
   try {
     const connection = await prisma.apiConnection.findFirst({
-      where: { name: 'transparency' }
+      where: { platform: 'transparency' }
     })
 
     if (!connection) {
@@ -19,13 +19,13 @@ export async function GET() {
       })
     }
 
-    const creds = connection.credentials as any
+    const creds = connection.credentials ? JSON.parse(connection.credentials) : null
 
     return NextResponse.json({
       configured: true,
       clientId: creds?.clientId || null,
       hasSecret: !!creds?.clientSecret,
-      status: connection.status,
+      isConnected: connection.isConnected,
       lastSyncAt: connection.lastSyncAt,
     })
   } catch (error) {
@@ -44,7 +44,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { clientId, clientSecret, skipVerify } = body
+    const { clientId, clientSecret, awsAccessKeyId, awsSecretAccessKey, awsRegion, skipVerify } = body
 
     console.log('Saving Transparency credentials, skipVerify:', skipVerify)
 
@@ -56,7 +56,6 @@ export async function POST(request: Request) {
     }
 
     let verificationResult = { success: true, error: undefined as string | undefined }
-    let status = 'active'
 
     // Test the credentials using Amazon Cognito endpoint (only if not skipping)
     if (!skipVerify) {
@@ -64,44 +63,48 @@ export async function POST(request: Request) {
         verificationResult = await testTransparencyCredentials(clientId, clientSecret)
         if (!verificationResult.success) {
           console.log('Transparency auth test failed:', verificationResult.error)
-          status = 'pending'
         }
       } catch (verifyError: any) {
         console.error('Transparency verification error:', verifyError)
         verificationResult = { success: false, error: verifyError.message }
-        status = 'pending'
       }
     }
 
     // Save or update credentials regardless of verification result
     try {
       const existing = await prisma.apiConnection.findFirst({
-        where: { name: 'transparency' }
+        where: { platform: 'transparency' }
+      })
+
+      const credentialsJson = JSON.stringify({
+        clientId,
+        clientSecret,
+        ...(awsAccessKeyId && awsSecretAccessKey ? {
+          awsAccessKeyId,
+          awsSecretAccessKey,
+          awsRegion: awsRegion || 'us-east-1',
+        } : {}),
       })
 
       if (existing) {
         await prisma.apiConnection.update({
           where: { id: existing.id },
           data: {
-            credentials: {
-              clientId,
-              clientSecret,
-            },
-            status,
-            updatedAt: new Date(),
+            credentials: credentialsJson,
+            isConnected: verificationResult.success,
+            lastSyncStatus: verificationResult.success ? 'success' : 'error',
+            lastSyncError: verificationResult.error || null,
           },
         })
         console.log('Updated existing Transparency credentials')
       } else {
         await prisma.apiConnection.create({
           data: {
-            name: 'transparency',
-            type: 'transparency',
-            status,
-            credentials: {
-              clientId,
-              clientSecret,
-            },
+            platform: 'transparency',
+            credentials: credentialsJson,
+            isConnected: verificationResult.success,
+            lastSyncStatus: verificationResult.success ? 'success' : 'error',
+            lastSyncError: verificationResult.error || null,
           },
         })
         console.log('Created new Transparency credentials')
@@ -144,7 +147,7 @@ export async function POST(request: Request) {
 export async function DELETE() {
   try {
     await prisma.apiConnection.deleteMany({
-      where: { name: 'transparency' }
+      where: { platform: 'transparency' }
     })
 
     return NextResponse.json({

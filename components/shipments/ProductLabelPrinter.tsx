@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Printer, Tag, X, AlertCircle, Check, Loader2 } from 'lucide-react'
+import { Printer, Tag, X, AlertCircle, Check, Loader2, Download } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
+import QRCode from 'qrcode'
+import jsPDF from 'jspdf'
 
 interface ShipmentItem {
   masterSku: string
@@ -12,6 +14,7 @@ interface ShipmentItem {
   adjustedQty: number
   labelType?: string // fnsku_tp, fnsku_only, tp_only
   transparencyEnabled?: boolean
+  brandLogo?: string // Optional URL or base64 of brand logo
 }
 
 interface ProductLabelPrinterProps {
@@ -86,35 +89,57 @@ export default function ProductLabelPrinter({
     setLoadingTp(sku)
     
     try {
-      const res = await fetch(`/api/transparency/codes?sku=${encodeURIComponent(sku)}&quantity=${quantity}`)
+      const res = await fetch(`/api/transparency/codes?sku=${encodeURIComponent(sku)}&quantity=${quantity}&shipmentId=${shipmentId}`)
       const data = await res.json()
       
       if (!res.ok) {
         console.error('Error getting transparency codes:', data.error)
-        // Fall back to placeholder codes if API fails
-        const placeholderCodes: string[] = []
-        for (let i = 0; i < quantity; i++) {
-          placeholderCodes.push(`TP${Date.now()}${i.toString().padStart(4, '0')}`)
-        }
-        setTpCodes(prev => ({ ...prev, [sku]: placeholderCodes }))
+        alert(`Failed to get Transparency codes: ${data.error}\n\nMake sure:\n1. Product has a valid UPC\n2. Transparency API credentials are configured\n3. Product is enrolled in Transparency program`)
         setLoadingTp(null)
-        return placeholderCodes
+        return []
       }
       
       const codes = data.codes || []
-      setTpCodes(prev => ({ ...prev, [sku]: codes }))
-      setLoadingTp(null)
-      return codes
-    } catch (error) {
-      console.error('Error fetching transparency codes:', error)
-      // Fall back to placeholder codes
-      const placeholderCodes: string[] = []
-      for (let i = 0; i < quantity; i++) {
-        placeholderCodes.push(`TP${Date.now()}${i.toString().padStart(4, '0')}`)
+      if (codes.length === 0) {
+        alert(`No Transparency codes received. Make sure the product is enrolled in Amazon Transparency and has a valid UPC.`)
+        setLoadingTp(null)
+        return []
       }
-      setTpCodes(prev => ({ ...prev, [sku]: placeholderCodes }))
+      
+      // Filter out any codes that look like UPCs (8-14 digits only, no other characters)
+      const validCodes = codes.filter((code: string) => {
+        const codeStr = String(code).trim()
+        const isOnlyDigits = /^\d+$/.test(codeStr)
+        const isUPCLength = codeStr.length >= 8 && codeStr.length <= 14
+        const looksLikeUPC = isOnlyDigits && isUPCLength
+        
+        if (looksLikeUPC) {
+          console.warn(`Filtered out potential UPC code: "${codeStr}" (length: ${codeStr.length})`)
+          return false
+        }
+        
+        if (codeStr.length < 15) {
+          console.warn(`Filtered out suspiciously short code: "${codeStr}" (length: ${codeStr.length})`)
+          return false
+        }
+        
+        return true
+      })
+      
+      if (validCodes.length === 0) {
+        alert(`No valid Transparency codes received (all codes were filtered as UPCs). Please check the API response.`)
+        setLoadingTp(null)
+        return []
+      }
+      
+      setTpCodes(prev => ({ ...prev, [sku]: validCodes }))
       setLoadingTp(null)
-      return placeholderCodes
+      return validCodes
+    } catch (error: any) {
+      console.error('Error fetching transparency codes:', error)
+      alert(`Error requesting Transparency codes: ${error.message || 'Unknown error'}`)
+      setLoadingTp(null)
+      return []
     }
   }
 
@@ -135,19 +160,30 @@ export default function ProductLabelPrinter({
     
     let transparencyCodes: string[] = []
     
-    // Get transparency codes if needed
+    // ALWAYS request fresh codes - don't use cached codes
     if (labelType === 'fnsku_tp' || labelType === 'tp_only') {
-      if (tpCodes[item.masterSku] && tpCodes[item.masterSku].length >= quantity) {
-        transparencyCodes = tpCodes[item.masterSku].slice(0, quantity)
-      } else {
-        transparencyCodes = await requestTransparencyCodes(item.masterSku, quantity)
+      console.log(`[Label Print] Requesting fresh Transparency codes for ${item.masterSku}, quantity: ${quantity}`)
+      
+      // Clear any existing codes for this SKU
+      setTpCodes(prev => {
+        const updated = { ...prev }
+        delete updated[item.masterSku]
+        return updated
+      })
+      
+      // Request fresh codes
+      transparencyCodes = await requestTransparencyCodes(item.masterSku, quantity)
+      
+      if (transparencyCodes.length < quantity) {
+        alert(`Warning: Only received ${transparencyCodes.length} Transparency codes but need ${quantity}. Some labels may be missing QR codes.`)
       }
-    }
-
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) {
-      alert('Please allow popups to print labels')
-      return
+      
+      // Pad with empty strings if needed
+      while (transparencyCodes.length < quantity) {
+        transparencyCodes.push('')
+      }
+      
+      console.log(`[Label Print] Received ${transparencyCodes.length} codes for ${item.masterSku}. First code: "${transparencyCodes[0]?.substring(0, 20)}..."`)
     }
 
     const labelSize = labelType === 'tp_only' 
@@ -156,13 +192,24 @@ export default function ProductLabelPrinter({
 
     const [width, height] = labelSize.split('x').map(s => parseFloat(s))
 
-    const html = generateLabelHTML(item, labelType, quantity, transparencyCodes, width, height)
+    const html = await generateLabelHTML(item, labelType, quantity, transparencyCodes, width, height)
     
-    printWindow.document.write(html)
-    printWindow.document.close()
+    // Generate and auto-download PDF
+    await generatePDF(html, item, labelType, quantity, width, height)
   }
 
-  const generateLabelHTML = (
+  /**
+   * Generate label HTML that matches the reference image:
+   * - Blue/gray header on LEFT with Transparency icon
+   * - QR code with vertical code text beside it
+   * - Dashed divider line
+   * - Brand logo on RIGHT (if available)
+   * - CODE128 barcode
+   * - FNSKU text
+   * - Product name
+   * - "NEW" condition
+   */
+  const generateLabelHTML = async (
     item: ShipmentItem, 
     labelType: LabelType, 
     quantity: number,
@@ -173,117 +220,457 @@ export default function ProductLabelPrinter({
     const isCombo = labelType === 'fnsku_tp'
     const isFnskuOnly = labelType === 'fnsku_only'
     const isTpOnly = labelType === 'tp_only'
+    
+    // Calculate dimensions in pixels (96 DPI for screen)
+    const widthPx = widthIn * 96
+    const heightPx = heightIn * 96
+    
+    // For 3x1 combo label: TP section ~38%, FNSKU section ~62%
+    const tpSectionWidth = isCombo ? Math.floor(widthPx * 0.38) : widthPx
+    const fnskuSectionWidth = isCombo ? widthPx - tpSectionWidth : widthPx
+    
+    // Generate QR codes as base64 data URLs
+    const qrCodeImages: string[] = []
+    if (isTpOnly || isCombo) {
+      const qrOptions = {
+        width: 180, // Higher resolution
+        margin: 1,
+        errorCorrectionLevel: 'M' as const,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        },
+        type: 'image/png' as const
+      }
+      
+      for (let i = 0; i < quantity; i++) {
+        const code = tpCodes[i]
+        
+        if (!code || String(code).trim() === '') {
+          console.warn(`Missing Transparency code at index ${i} - skipping QR code generation`)
+          qrCodeImages.push('')
+          continue
+        }
+        
+        const codeStr = String(code).trim()
+        
+        // Validate it's a real Transparency code
+        const isOnlyDigits = /^\d+$/.test(codeStr)
+        const isUPCLength = codeStr.length >= 8 && codeStr.length <= 14
+        if (isOnlyDigits && isUPCLength) {
+          console.error(`ERROR: Code at index ${i} is a UPC, not a Transparency code: "${codeStr}"`)
+          qrCodeImages.push('')
+          continue
+        }
+        
+        if (codeStr.length < 15) {
+          console.warn(`Suspicious code at index ${i}: "${codeStr}" - too short (length: ${codeStr.length})`)
+          qrCodeImages.push('')
+          continue
+        }
+        
+        try {
+          const dataUrl = await QRCode.toDataURL(codeStr, qrOptions)
+          qrCodeImages.push(dataUrl)
+        } catch (error) {
+          console.error(`Error generating QR code ${i}:`, error)
+          qrCodeImages.push('')
+        }
+      }
+    }
 
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <title>Labels - ${item.masterSku}</title>
+        <meta name="viewport" content="width=${widthPx}px, height=${heightPx}px">
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           @page { 
-            size: ${widthIn}in ${heightIn}in; 
-            margin: 0; 
+            size: ${widthIn}in ${heightIn}in;
+            margin: 0;
           }
-          body { font-family: Arial, sans-serif; }
+          @media print {
+            @page { size: ${widthIn}in ${heightIn}in; margin: 0; }
+            html, body { margin: 0; padding: 0; }
+            .label { page-break-after: always; page-break-inside: avoid; }
+          }
+          html, body { 
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          
           .label {
             width: ${widthIn}in;
             height: ${heightIn}in;
-            padding: 0.05in;
-            page-break-after: always;
             display: flex;
-            ${isCombo ? 'flex-direction: row; justify-content: space-between;' : 'flex-direction: column; align-items: center; justify-content: center;'}
+            flex-direction: row;
             overflow: hidden;
+            background: #fff;
+            page-break-after: always;
+            page-break-inside: avoid;
+            border: 1px solid #ddd;
           }
-          .label:last-child { page-break-after: auto; }
-          .fnsku-section {
-            ${isCombo ? 'flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;' : ''}
+          .label:last-child { 
+            page-break-after: auto; 
           }
+          
+          /* ========== TRANSPARENCY SECTION (LEFT) ========== */
           .tp-section {
-            ${isCombo ? 'width: 0.9in; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 1px dashed #ccc; padding-left: 0.05in;' : ''}
+            width: ${isCombo ? '35%' : '100%'};
+            height: 100%;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            padding: 0.05in 0.04in;
+            position: relative;
+            border-right: 1px dashed #999;
           }
-          .barcode svg {
-            max-width: 100%;
-            height: ${isTpOnly ? '0.4in' : '0.5in'};
+          
+          .tp-header {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            margin-bottom: 0.03in;
           }
-          .qr-code {
-            width: ${isTpOnly ? '0.7in' : '0.8in'};
-            height: ${isTpOnly ? '0.7in' : '0.8in'};
+          
+          .tp-icon {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
           }
-          .fnsku-text {
-            font-size: ${isTpOnly ? '6pt' : '8pt'};
-            margin-top: 2px;
-          }
-          .product-name {
+          
+          .tp-header-text {
             font-size: 6pt;
+            font-weight: 500;
+            color: #000;
+            line-height: 1.15;
+          }
+          
+          .qr-container {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 1px;
+            flex: 1;
+            position: relative;
+          }
+          
+          .qr-code {
+            width: 0.55in;
+            height: 0.55in;
+            background: #fff;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 0.02in;
+          }
+          
+          .qr-code img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            image-rendering: crisp-edges;
+          }
+          
+          .tp-code-vertical {
+            font-size: 6pt;
+            font-weight: normal;
+            color: #000;
+            letter-spacing: 0.3px;
+            transform: rotate(90deg);
+            transform-origin: left top;
+            white-space: nowrap;
+            position: absolute;
+            left: 0.58in;
+            top: 0.28in;
+          }
+          
+          /* ========== FNSKU SECTION (RIGHT) ========== */
+          .fnsku-section {
+            width: ${isCombo ? '65%' : '100%'};
+            height: 100%;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 0.03in 0.05in 0.02in 0.05in;
+          }
+          
+          .brand-logo {
+            height: 0.16in;
+            max-width: 90%;
+            object-fit: contain;
+            margin-bottom: 0.01in;
+          }
+          
+          .barcode-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin: 0;
+          }
+          
+          .barcode-container svg {
+            max-width: 100%;
+            height: 0.28in;
+            display: block;
+          }
+          
+          .fnsku-text {
+            font-size: 9pt;
+            font-weight: bold;
+            color: #000;
+            margin-top: 0.01in;
+            letter-spacing: 0.3px;
+          }
+          
+          .product-name {
+            font-size: 5pt;
+            color: #333;
             text-align: center;
             max-width: 100%;
+            line-height: 1.15;
+            margin-top: 0.005in;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            margin-top: 2px;
           }
+          
           .condition {
-            font-size: 7pt;
-            font-weight: bold;
-          }
-          .tp-label {
             font-size: 6pt;
-            margin-bottom: 2px;
+            font-weight: bold;
+            color: #000;
+            margin-top: 0.005in;
+          }
+          
+          /* ========== TP ONLY LABEL (1x1) ========== */
+          .tp-only-label {
+            width: ${widthIn}in;
+            height: ${heightIn}in;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            padding: 0.05in;
+          }
+          
+          .tp-only-label .tp-header {
+            margin-bottom: 0.03in;
+          }
+          
+          .tp-only-label .qr-code {
+            width: 0.7in;
+            height: 0.7in;
           }
         </style>
       </head>
       <body>
         ${Array.from({ length: quantity }, (_, i) => {
           const tpCode = tpCodes[i] || ''
-          return `
-            <div class="label">
-              ${isFnskuOnly || isCombo ? `
+          const qrImage = qrCodeImages[i] || ''
+          
+          if (isTpOnly) {
+            return `
+              <div class="label tp-only-label">
+                <div class="tp-header">
+                  <svg class="tp-icon" viewBox="0 0 24 24" fill="none">
+                    <rect width="24" height="24" rx="4" fill="#1a73e8"/>
+                    <path d="M6 12h12M12 6v12" stroke="#fff" stroke-width="2"/>
+                  </svg>
+                  <span class="tp-header-text">Scan with the<br/>Transparency app</span>
+                </div>
+                ${qrImage ? `<div class="qr-code"><img src="${qrImage}" alt="QR Code" /></div>` : '<div class="qr-code"></div>'}
+              </div>
+            `
+          }
+          
+          if (isCombo) {
+            return `
+              <div class="label">
+                <div class="tp-section">
+                  <div class="tp-header">
+                    <svg class="tp-icon" viewBox="0 0 24 24" fill="none">
+                      <rect width="24" height="24" rx="4" fill="#1a73e8"/>
+                      <path d="M7 7h4v4H7zM13 7h4v4h-4zM7 13h4v4H7zM13 13h4v4h-4z" fill="#fff"/>
+                    </svg>
+                    <span class="tp-header-text">Scan with the<br/>Transparency app</span>
+                  </div>
+                  <div class="qr-container">
+                    ${qrImage ? `<div class="qr-code"><img src="${qrImage}" alt="QR Code" /></div>` : '<div class="qr-code"></div>'}
+                    <div class="tp-code-vertical">${item.masterSku}</div>
+                  </div>
+                </div>
                 <div class="fnsku-section">
-                  <div class="barcode"><svg id="barcode-${i}"></svg></div>
+                  ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
+                  <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                   <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                  <div class="product-name">${item.productName.slice(0, 30)}${item.productName.length > 30 ? '...' : ''}</div>
+                  <div class="product-name">${item.productName.length > 30 ? item.productName.substring(0, 30) + '...' : item.productName}</div>
                   <div class="condition">New</div>
                 </div>
-              ` : ''}
-              ${isTpOnly || isCombo ? `
-                <div class="tp-section">
-                  <div class="tp-label">Transparency</div>
-                  <canvas id="qr-${i}" class="qr-code"></canvas>
-                  <div class="fnsku-text" style="font-size: 5pt;">${tpCode.slice(-8)}</div>
-                </div>
-              ` : ''}
+              </div>
+            `
+          }
+          
+          // FNSKU only
+          return `
+            <div class="label">
+              <div class="fnsku-section" style="width: 100%;">
+                ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
+                <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
+                <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
+                <div class="product-name">${item.productName}</div>
+                <div class="condition">New</div>
+              </div>
             </div>
           `
         }).join('')}
         <script>
-          ${(isFnskuOnly || isCombo) ? Array.from({ length: quantity }, (_, i) => `
-            JsBarcode("#barcode-${i}", "${item.fnsku || item.masterSku}", {
+          ${(isFnskuOnly || isCombo) ? Array.from({ length: quantity }, (_, i) => {
+            const barcodeValue = item.fnsku || item.masterSku
+            return `
+            JsBarcode("#barcode-${i}", "${barcodeValue}", {
               format: "CODE128",
               width: 1.5,
-              height: 35,
+              height: 29,
               displayValue: false,
-              margin: 0
+              margin: 0,
+              background: "#ffffff",
+              lineColor: "#000000",
+              fontSize: 0,
+              textMargin: 0,
+              valid: function(valid) {
+                if (!valid) {
+                  console.error("Invalid barcode data for CODE128: ${barcodeValue}");
+                }
+              }
             });
-          `).join('') : ''}
+          `
+          }).join('') : ''}
           
-          ${(isTpOnly || isCombo) ? `
-            window.onload = async function() {
-              ${Array.from({ length: quantity }, (_, i) => `
-                await QRCode.toCanvas(document.getElementById('qr-${i}'), '${tpCodes[i] || ''}', {
-                  width: ${isTpOnly ? 60 : 70},
-                  margin: 0
-                });
-              `).join('')}
-              window.print();
-            };
-          ` : `
-            window.onload = function() { window.print(); };
-          `}
+          window.dispatchEvent(new Event('jsbarcode-rendered'));
         </script>
       </body>
       </html>
     `
+  }
+
+  const generatePDF = async (
+    html: string,
+    item: ShipmentItem,
+    labelType: LabelType,
+    quantity: number,
+    widthIn: number,
+    heightIn: number
+  ) => {
+    // Create a temporary iframe to render the HTML
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'absolute'
+    iframe.style.left = '-9999px'
+    iframe.style.width = `${widthIn * 96}px`
+    iframe.style.height = `${heightIn * 96}px`
+    document.body.appendChild(iframe)
+    
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!iframeDoc) {
+      alert('Failed to create PDF - browser security restrictions')
+      document.body.removeChild(iframe)
+      return
+    }
+    
+    iframeDoc.open()
+    iframeDoc.write(html)
+    iframeDoc.close()
+    
+    // Wait for content to load
+    await new Promise<void>(resolve => {
+      let loadedCount = 0
+      const totalToLoad = iframeDoc.images.length + (labelType === 'fnsku_only' || labelType === 'fnsku_tp' ? quantity : 0)
+      
+      const checkComplete = () => {
+        loadedCount++
+        if (loadedCount >= totalToLoad) {
+          resolve()
+        }
+      }
+      
+      Array.from(iframeDoc.images).forEach(img => {
+        if (img.complete) {
+          checkComplete()
+        } else {
+          img.onload = checkComplete
+          img.onerror = checkComplete
+        }
+      })
+      
+      if (labelType === 'fnsku_only' || labelType === 'fnsku_tp') {
+        iframe.contentWindow?.addEventListener('jsbarcode-rendered', checkComplete)
+      }
+      
+      setTimeout(() => resolve(), 3000)
+    })
+    
+    // Create PDF with correct page size
+    // IMPORTANT: For jsPDF, when width > height, use 'landscape' orientation
+    const widthMm = widthIn * 25.4
+    const heightMm = heightIn * 25.4
+    const isLandscape = widthIn > heightIn
+    
+    // For jsPDF with custom format, always pass [smaller, larger] and use orientation
+    const smallerDim = Math.min(widthMm, heightMm)
+    const largerDim = Math.max(widthMm, heightMm)
+    
+    const pdf = new jsPDF({
+      orientation: isLandscape ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: [smallerDim, largerDim],
+      compress: true,
+    })
+    
+    // Generate each label as a separate page
+    for (let i = 0; i < quantity; i++) {
+      if (i > 0) {
+        pdf.addPage([smallerDim, largerDim], isLandscape ? 'landscape' : 'portrait')
+      }
+      
+      const labelElement = iframeDoc.querySelectorAll('.label')[i] as HTMLElement
+      if (!labelElement) {
+        console.warn(`Label ${i} not found`)
+        continue
+      }
+      
+      const { default: html2canvas } = await import('html2canvas')
+      const canvas = await html2canvas(labelElement, {
+        width: widthIn * 96,
+        height: heightIn * 96,
+        scale: 3, // Higher scale for better quality
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        window: iframe.contentWindow || undefined,
+      } as any)
+      
+      const imgData = canvas.toDataURL('image/png', 1.0)
+      pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'FAST')
+    }
+    
+    // Clean up
+    document.body.removeChild(iframe)
+    
+    // Auto-download PDF
+    const fileName = `Labels-${item.masterSku}-${new Date().getTime()}.pdf`
+    pdf.save(fileName)
   }
 
   // Group items by label type
@@ -406,4 +793,3 @@ export default function ProductLabelPrinter({
     </Card>
   )
 }
-
