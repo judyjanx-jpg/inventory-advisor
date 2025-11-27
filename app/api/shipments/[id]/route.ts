@@ -91,6 +91,8 @@ export async function PUT(
       submittedAt,
       shippedAt,
       receivedAt,
+      items,
+      boxes,
     } = body
 
     const updateData: any = {}
@@ -113,6 +115,63 @@ export async function PUT(
       updateData.shippedAt = shippedAt ? new Date(shippedAt) : null
     if (receivedAt !== undefined)
       updateData.receivedAt = receivedAt ? new Date(receivedAt) : null
+
+    // Update items pick status if provided
+    if (items && Array.isArray(items)) {
+      for (const item of items) {
+        if (item.id && item.pickStatus) {
+          await prisma.shipmentItem.update({
+            where: { id: item.id },
+            data: {
+              pickStatus: item.pickStatus,
+              pickedAt: item.pickStatus === 'picked' ? new Date() : null,
+            },
+          })
+        }
+      }
+    }
+
+    // Update boxes if provided
+    if (boxes && Array.isArray(boxes)) {
+      // Delete existing boxes and recreate
+      await prisma.shipmentBoxItem.deleteMany({
+        where: {
+          shipmentBox: { shipmentId: id },
+        },
+      })
+      await prisma.shipmentBox.deleteMany({
+        where: { shipmentId: id },
+      })
+
+      // Create new boxes
+      for (const box of boxes) {
+        const createdBox = await prisma.shipmentBox.create({
+          data: {
+            shipmentId: id,
+            boxNumber: box.boxNumber,
+            lengthInches: box.lengthInches || null,
+            widthInches: box.widthInches || null,
+            heightInches: box.heightInches || null,
+            weightLbs: box.weightLbs || null,
+          },
+        })
+
+        // Create box items
+        if (box.items && Array.isArray(box.items)) {
+          for (const item of box.items) {
+            if (item.quantity > 0) {
+              await prisma.shipmentBoxItem.create({
+                data: {
+                  shipmentBoxId: createdBox.id,
+                  masterSku: item.sku,
+                  quantity: item.quantity,
+                },
+              })
+            }
+          }
+        }
+      }
+    }
 
     const shipment = await prisma.shipment.update({
       where: { id },
@@ -139,7 +198,7 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json({ shipment })
+    return NextResponse.json(shipment)
   } catch (error: any) {
     console.error('Error updating shipment:', error)
     return NextResponse.json(

@@ -55,8 +55,15 @@ export async function GET(request: NextRequest) {
       prisma.shipment.count({ where }),
     ])
 
+    // Transform shipments to include total counts
+    const transformedShipments = shipments.map(shipment => ({
+      ...shipment,
+      totalItems: shipment.items.length,
+      totalUnits: shipment.items.reduce((sum, item) => sum + item.adjustedQty, 0),
+    }))
+
     return NextResponse.json({
-      shipments,
+      shipments: transformedShipments,
       total,
       limit,
       offset,
