@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, Plus, Trash2, Wand2 } from 'lucide-react'
+import { Package, Plus, Trash2, Info } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 
@@ -26,6 +26,14 @@ interface Box {
   weightLbs?: number
 }
 
+interface BoxDimension {
+  id: number
+  length: number
+  width: number
+  height: number
+  applyToBoxes: number[] // box numbers this dimension applies to
+}
+
 interface BoxCreationProps {
   shipmentItems: ShipmentItem[]
   boxes: Box[]
@@ -37,20 +45,21 @@ export default function BoxCreation({
   boxes,
   onBoxesChange,
 }: BoxCreationProps) {
-  const [showDimensions, setShowDimensions] = useState(false)
-  const [bulkDimensions, setBulkDimensions] = useState({
-    length: 18,
-    width: 14,
-    height: 8,
-    weight: 25,
-    applyToBoxes: [] as number[],
-  })
+  const [numBoxes, setNumBoxes] = useState(5)
+  const [dimensions, setDimensions] = useState<BoxDimension[]>([
+    { id: 1, length: 18, width: 14, height: 8, applyToBoxes: [1, 2, 3, 4, 5] }
+  ])
 
-  // Auto-split to 5 boxes
-  const autoSplitToBoxes = (numBoxes: number = 5) => {
+  // Initialize boxes if empty
+  useEffect(() => {
+    if (boxes.length === 0) {
+      initializeBoxes(numBoxes)
+    }
+  }, [])
+
+  const initializeBoxes = (count: number) => {
     const newBoxes: Box[] = []
-
-    for (let i = 0; i < numBoxes; i++) {
+    for (let i = 0; i < count; i++) {
       newBoxes.push({
         id: Date.now() + i,
         boxNumber: i + 1,
@@ -61,51 +70,50 @@ export default function BoxCreation({
         weightLbs: undefined,
       })
     }
-
-    // Distribute items evenly across boxes
-    for (const item of shipmentItems) {
-      const baseQty = Math.floor(item.adjustedQty / numBoxes)
-      const remainder = item.adjustedQty % numBoxes
-
-      for (let i = 0; i < numBoxes; i++) {
-        const boxQty = baseQty + (i < remainder ? 1 : 0)
-        if (boxQty > 0) {
-          newBoxes[i].items.push({
-            sku: item.sku,
-            quantity: boxQty,
-          })
-        }
-      }
-    }
-
     onBoxesChange(newBoxes)
   }
 
-  // Add a new empty box
+  // Add a new box
   const addBox = () => {
+    const newBoxNumber = boxes.length + 1
     const newBox: Box = {
       id: Date.now(),
-      boxNumber: boxes.length + 1,
+      boxNumber: newBoxNumber,
       items: [],
-      lengthInches: 18,
-      widthInches: 14,
-      heightInches: 8,
+      lengthInches: dimensions[0]?.length || 18,
+      widthInches: dimensions[0]?.width || 14,
+      heightInches: dimensions[0]?.height || 8,
     }
     onBoxesChange([...boxes, newBox])
+    setNumBoxes(newBoxNumber)
+    
+    // Add new box to first dimension group
+    if (dimensions.length === 1) {
+      setDimensions([{
+        ...dimensions[0],
+        applyToBoxes: [...dimensions[0].applyToBoxes, newBoxNumber]
+      }])
+    }
   }
 
-  // Remove a box
-  const removeBox = (boxId: number) => {
-    const newBoxes = boxes
-      .filter(b => b.id !== boxId)
-      .map((b, i) => ({ ...b, boxNumber: i + 1 }))
+  // Remove last box
+  const removeBox = () => {
+    if (boxes.length <= 1) return
+    const newBoxes = boxes.slice(0, -1)
     onBoxesChange(newBoxes)
+    setNumBoxes(newBoxes.length)
+    
+    // Update dimensions to remove reference to deleted box
+    setDimensions(dimensions.map(d => ({
+      ...d,
+      applyToBoxes: d.applyToBoxes.filter(b => b <= newBoxes.length)
+    })))
   }
 
   // Update box item quantity
-  const updateBoxItemQty = (boxId: number, sku: string, quantity: number) => {
+  const updateBoxItemQty = (boxNumber: number, sku: string, quantity: number) => {
     const newBoxes = boxes.map(box => {
-      if (box.id === boxId) {
+      if (box.boxNumber === boxNumber) {
         const existingItem = box.items.find(i => i.sku === sku)
         if (existingItem) {
           if (quantity <= 0) {
@@ -124,41 +132,102 @@ export default function BoxCreation({
     onBoxesChange(newBoxes)
   }
 
-  // Update box dimensions
-  const updateBoxDimensions = (
-    boxId: number,
-    field: 'lengthInches' | 'widthInches' | 'heightInches' | 'weightLbs',
-    value: number
-  ) => {
+  // Update box weight
+  const updateBoxWeight = (boxNumber: number, weight: number) => {
     const newBoxes = boxes.map(box => {
-      if (box.id === boxId) {
-        return { ...box, [field]: value }
+      if (box.boxNumber === boxNumber) {
+        return { ...box, weightLbs: weight || undefined }
       }
       return box
     })
     onBoxesChange(newBoxes)
   }
 
-  // Apply bulk dimensions
-  const applyBulkDimensions = () => {
-    const boxesToUpdate = bulkDimensions.applyToBoxes.length > 0
-      ? bulkDimensions.applyToBoxes
-      : boxes.map(b => b.id)
-
-    const newBoxes = boxes.map(box => {
-      if (boxesToUpdate.includes(box.id)) {
-        return {
-          ...box,
-          lengthInches: bulkDimensions.length,
-          widthInches: bulkDimensions.width,
-          heightInches: bulkDimensions.height,
-          weightLbs: bulkDimensions.weight,
-        }
+  // Update dimension and apply to boxes
+  const updateDimension = (dimId: number, field: 'length' | 'width' | 'height', value: number) => {
+    const newDimensions = dimensions.map(d => {
+      if (d.id === dimId) {
+        return { ...d, [field]: value }
       }
-      return box
+      return d
     })
-    onBoxesChange(newBoxes)
-    setShowDimensions(false)
+    setDimensions(newDimensions)
+
+    // Apply to boxes
+    const dim = newDimensions.find(d => d.id === dimId)
+    if (dim) {
+      const newBoxes = boxes.map(box => {
+        if (dim.applyToBoxes.includes(box.boxNumber)) {
+          return {
+            ...box,
+            lengthInches: dim.length,
+            widthInches: dim.width,
+            heightInches: dim.height,
+          }
+        }
+        return box
+      })
+      onBoxesChange(newBoxes)
+    }
+  }
+
+  // Add another dimension group
+  const addDimensionGroup = () => {
+    const unassignedBoxes = boxes
+      .map(b => b.boxNumber)
+      .filter(bn => !dimensions.some(d => d.applyToBoxes.includes(bn)))
+    
+    setDimensions([
+      ...dimensions,
+      {
+        id: Date.now(),
+        length: 18,
+        width: 14,
+        height: 8,
+        applyToBoxes: unassignedBoxes.length > 0 ? unassignedBoxes : [],
+      }
+    ])
+  }
+
+  // Toggle box assignment to dimension group
+  const toggleBoxDimension = (dimId: number, boxNumber: number) => {
+    setDimensions(dimensions.map(d => {
+      if (d.id === dimId) {
+        const hasBox = d.applyToBoxes.includes(boxNumber)
+        const newApplyTo = hasBox
+          ? d.applyToBoxes.filter(b => b !== boxNumber)
+          : [...d.applyToBoxes, boxNumber]
+        return { ...d, applyToBoxes: newApplyTo }
+      }
+      // Remove from other groups
+      return {
+        ...d,
+        applyToBoxes: d.applyToBoxes.filter(b => b !== boxNumber)
+      }
+    }))
+
+    // Apply dimension to box
+    const dim = dimensions.find(d => d.id === dimId)
+    if (dim && !dim.applyToBoxes.includes(boxNumber)) {
+      const newBoxes = boxes.map(box => {
+        if (box.boxNumber === boxNumber) {
+          return {
+            ...box,
+            lengthInches: dim.length,
+            widthInches: dim.width,
+            heightInches: dim.height,
+          }
+        }
+        return box
+      })
+      onBoxesChange(newBoxes)
+    }
+  }
+
+  // Remove dimension group
+  const removeDimensionGroup = (dimId: number) => {
+    if (dimensions.length <= 1) return
+    setDimensions(dimensions.filter(d => d.id !== dimId))
   }
 
   // Calculate totals
@@ -181,36 +250,9 @@ export default function BoxCreation({
   }
 
   const skuTotals = getSkuTotals()
-  const allAssigned = Object.values(skuTotals).every(t => t.assigned === t.needed)
-  const allBoxesHaveDimensions = boxes.every(b => 
-    b.lengthInches && b.widthInches && b.heightInches && b.weightLbs
-  )
-
-  // Validation
-  const getValidationErrors = () => {
-    const errors: string[] = []
-    
-    for (const [sku, totals] of Object.entries(skuTotals)) {
-      if (totals.assigned < totals.needed) {
-        errors.push(`${sku}: ${totals.assigned} assigned, need ${totals.needed - totals.assigned} more`)
-      } else if (totals.assigned > totals.needed) {
-        errors.push(`${sku}: ${totals.assigned} assigned, ${totals.assigned - totals.needed} over`)
-      }
-    }
-
-    for (const box of boxes) {
-      if (!box.weightLbs) {
-        errors.push(`Box ${box.boxNumber}: Missing weight`)
-      }
-      if (box.weightLbs && box.weightLbs > 50) {
-        errors.push(`Box ${box.boxNumber}: Weight exceeds 50 lb limit`)
-      }
-    }
-
-    return errors
-  }
-
-  const validationErrors = getValidationErrors()
+  const totalAssigned = Object.values(skuTotals).reduce((sum, t) => sum + t.assigned, 0)
+  const totalNeeded = Object.values(skuTotals).reduce((sum, t) => sum + t.needed, 0)
+  const totalWeight = boxes.reduce((sum, b) => sum + (b.weightLbs || 0), 0)
 
   return (
     <Card>
@@ -220,323 +262,209 @@ export default function BoxCreation({
             <Package className="w-5 h-5" />
             Box Contents
           </CardTitle>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => autoSplitToBoxes(5)}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={removeBox}
+              disabled={boxes.length <= 1}
+              className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded"
             >
-              <Wand2 className="w-4 h-4 mr-2" />
-              Auto-Split to 5 Boxes
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
+              −
+            </button>
+            <span className="text-white font-medium">{boxes.length} boxes</span>
+            <button
               onClick={addBox}
+              className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Box
-            </Button>
+              +
+            </button>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {boxes.length === 0 ? (
-          <div className="text-center py-8 text-slate-400">
-            <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>No boxes created yet</p>
-            <p className="text-sm mt-1">Click "Auto-Split to 5 Boxes" or "Add Box" to get started</p>
-          </div>
-        ) : (
-          <>
-            {/* Quantity Grid */}
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">SKU</th>
-                    {boxes.map(box => (
-                      <th key={box.id} className="text-center py-3 px-2 text-sm font-medium text-slate-400">
-                        Box {box.boxNumber}
-                      </th>
-                    ))}
-                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-400">Total</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-400">Need</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shipmentItems.map(item => {
-                    const totals = skuTotals[item.sku]
-                    const isMatch = totals.assigned === totals.needed
-                    const isOver = totals.assigned > totals.needed
-                    
-                    return (
-                      <tr key={item.sku} className="border-b border-slate-800">
-                        <td className="py-3 px-4">
-                          <div className="text-white font-medium">{item.sku}</div>
-                          <div className="text-slate-500 text-xs truncate max-w-[150px]">
-                            {item.productName}
-                          </div>
-                        </td>
-                        {boxes.map(box => {
-                          const boxItem = box.items.find(i => i.sku === item.sku)
-                          return (
-                            <td key={box.id} className="py-3 px-2 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                value={boxItem?.quantity || ''}
-                                onChange={(e) => updateBoxItemQty(
-                                  box.id,
-                                  item.sku,
-                                  parseInt(e.target.value) || 0
-                                )}
-                                className="w-16 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-sm text-center"
-                                placeholder="0"
-                              />
-                            </td>
-                          )
-                        })}
-                        <td className={`py-3 px-4 text-center font-medium ${
-                          isMatch ? 'text-emerald-400' : isOver ? 'text-red-400' : 'text-amber-400'
-                        }`}>
-                          {totals.assigned}
-                        </td>
-                        <td className="py-3 px-4 text-center text-slate-400">
-                          {totals.needed}
-                          {isMatch && <span className="ml-1 text-emerald-400">✓</span>}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-800/50">
-                    <td className="py-3 px-4 text-sm font-medium text-slate-400">Box Total</td>
+        {/* SKU Grid */}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400 min-w-[250px]">
+                  SKU details
+                </th>
+                <th className="text-center py-3 px-4 text-sm font-medium text-slate-400 min-w-[100px]">
+                  Units boxed
+                  <Info className="w-3 h-3 inline ml-1 opacity-50" />
+                </th>
+                {boxes.map(box => (
+                  <th key={box.boxNumber} className="text-center py-3 px-2 text-sm font-medium text-slate-400 min-w-[70px]">
+                    Box {box.boxNumber}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {shipmentItems.map(item => {
+                const totals = skuTotals[item.sku]
+                const isComplete = totals.assigned === totals.needed
+                const isOver = totals.assigned > totals.needed
+                
+                return (
+                  <tr key={item.sku} className="border-b border-slate-800">
+                    <td className="py-3 px-4">
+                      <div className="text-white font-medium text-sm">{item.productName}</div>
+                      <div className="text-slate-500 text-xs mt-0.5">SKU: {item.sku}</div>
+                    </td>
+                    <td className={`py-3 px-4 text-center font-medium ${
+                      isComplete ? 'text-emerald-400' : isOver ? 'text-red-400' : 'text-slate-400'
+                    }`}>
+                      {totals.assigned} of {totals.needed}
+                    </td>
                     {boxes.map(box => {
-                      const boxTotal = box.items.reduce((sum, i) => sum + i.quantity, 0)
+                      const boxItem = box.items.find(i => i.sku === item.sku)
                       return (
-                        <td key={box.id} className="py-3 px-2 text-center text-white font-bold">
-                          {boxTotal}
+                        <td key={box.boxNumber} className="py-3 px-2 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={boxItem?.quantity || ''}
+                            onChange={(e) => updateBoxItemQty(
+                              box.boxNumber,
+                              item.sku,
+                              parseInt(e.target.value) || 0
+                            )}
+                            className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                            placeholder=""
+                          />
                         </td>
                       )
                     })}
-                    <td colSpan={2}></td>
                   </tr>
-                </tfoot>
-              </table>
-            </div>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              {/* Summary Row */}
+              <tr className="border-t border-slate-700 bg-slate-800/30">
+                <td className="py-3 px-4 text-sm font-medium text-slate-300">
+                  Total SKUs: {shipmentItems.length}
+                </td>
+                <td className={`py-3 px-4 text-center font-medium ${
+                  totalAssigned === totalNeeded ? 'text-emerald-400' : 'text-amber-400'
+                }`}>
+                  Units boxed: {totalAssigned} of {totalNeeded}
+                </td>
+                <td colSpan={boxes.length} className="py-3 px-4 text-sm text-slate-400">
+                  Enter the box contents above and the box weights and dimensions below
+                  <Info className="w-3 h-3 inline ml-1 opacity-50" />
+                </td>
+              </tr>
 
-            {/* Box Dimensions */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-slate-300">Box Dimensions & Weight</h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowDimensions(!showDimensions)}
-                >
-                  Apply to Multiple
-                </Button>
-              </div>
-
-              {showDimensions && (
-                <div className="bg-slate-800/50 rounded-lg p-4 space-y-4">
-                  <div className="grid grid-cols-4 gap-4">
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">Length (in)</label>
-                      <input
-                        type="number"
-                        value={bulkDimensions.length}
-                        onChange={(e) => setBulkDimensions({
-                          ...bulkDimensions,
-                          length: parseFloat(e.target.value) || 0
-                        })}
-                        className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">Width (in)</label>
-                      <input
-                        type="number"
-                        value={bulkDimensions.width}
-                        onChange={(e) => setBulkDimensions({
-                          ...bulkDimensions,
-                          width: parseFloat(e.target.value) || 0
-                        })}
-                        className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">Height (in)</label>
-                      <input
-                        type="number"
-                        value={bulkDimensions.height}
-                        onChange={(e) => setBulkDimensions({
-                          ...bulkDimensions,
-                          height: parseFloat(e.target.value) || 0
-                        })}
-                        className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">Weight (lbs)</label>
-                      <input
-                        type="number"
-                        value={bulkDimensions.weight}
-                        onChange={(e) => setBulkDimensions({
-                          ...bulkDimensions,
-                          weight: parseFloat(e.target.value) || 0
-                        })}
-                        className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-wrap gap-2">
-                      {boxes.map(box => (
-                        <label key={box.id} className="flex items-center gap-1 text-sm text-slate-300">
-                          <input
-                            type="checkbox"
-                            checked={bulkDimensions.applyToBoxes.includes(box.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setBulkDimensions({
-                                  ...bulkDimensions,
-                                  applyToBoxes: [...bulkDimensions.applyToBoxes, box.id]
-                                })
-                              } else {
-                                setBulkDimensions({
-                                  ...bulkDimensions,
-                                  applyToBoxes: bulkDimensions.applyToBoxes.filter(id => id !== box.id)
-                                })
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500"
-                          />
-                          Box {box.boxNumber}
-                        </label>
-                      ))}
-                    </div>
-                    <Button size="sm" onClick={applyBulkDimensions}>
-                      Apply to Selected
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {boxes.map(box => {
-                  const boxTotal = box.items.reduce((sum, i) => sum + i.quantity, 0)
-                  const isComplete = box.lengthInches && box.widthInches && box.heightInches && box.weightLbs
-                  const isOverweight = (box.weightLbs || 0) > 50
-
-                  return (
-                    <div
-                      key={box.id}
-                      className={`p-4 rounded-lg border ${
-                        isComplete && !isOverweight
-                          ? 'bg-slate-800/30 border-emerald-500/30'
-                          : isOverweight
-                          ? 'bg-red-900/20 border-red-500/30'
-                          : 'bg-slate-800/30 border-slate-700'
+              {/* Box Weight Row */}
+              <tr className="border-t border-slate-700">
+                <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right" colSpan={2}>
+                  Box weight (lb):
+                </td>
+                {boxes.map(box => (
+                  <td key={box.boxNumber} className="py-3 px-2 text-center">
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={box.weightLbs || ''}
+                      onChange={(e) => updateBoxWeight(box.boxNumber, parseFloat(e.target.value) || 0)}
+                      className={`w-14 px-2 py-1.5 border rounded text-sm text-center focus:outline-none ${
+                        box.weightLbs && box.weightLbs > 50
+                          ? 'bg-red-900/50 border-red-500 text-red-300'
+                          : 'bg-slate-800 border-slate-600 text-white focus:border-cyan-500'
                       }`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-medium text-white">Box {box.boxNumber}</h4>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-slate-400">{boxTotal} units</span>
-                          <button
-                            onClick={() => removeBox(box.id)}
-                            className="text-red-400 hover:text-red-300"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-4 gap-2">
-                        <div>
-                          <label className="block text-xs text-slate-500 mb-1">L</label>
-                          <input
-                            type="number"
-                            value={box.lengthInches || ''}
-                            onChange={(e) => updateBoxDimensions(box.id, 'lengthInches', parseFloat(e.target.value) || 0)}
-                            className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm"
-                            placeholder="18"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-slate-500 mb-1">W</label>
-                          <input
-                            type="number"
-                            value={box.widthInches || ''}
-                            onChange={(e) => updateBoxDimensions(box.id, 'widthInches', parseFloat(e.target.value) || 0)}
-                            className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm"
-                            placeholder="14"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-slate-500 mb-1">H</label>
-                          <input
-                            type="number"
-                            value={box.heightInches || ''}
-                            onChange={(e) => updateBoxDimensions(box.id, 'heightInches', parseFloat(e.target.value) || 0)}
-                            className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm"
-                            placeholder="8"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-slate-500 mb-1">lbs</label>
-                          <input
-                            type="number"
-                            value={box.weightLbs || ''}
-                            onChange={(e) => updateBoxDimensions(box.id, 'weightLbs', parseFloat(e.target.value) || 0)}
-                            className={`w-full px-2 py-1 border rounded text-sm ${
-                              isOverweight
-                                ? 'bg-red-900/50 border-red-500 text-red-300'
-                                : 'bg-slate-900 border-slate-700 text-white'
-                            }`}
-                            placeholder="25"
-                          />
-                        </div>
-                      </div>
-                      {isComplete && !isOverweight && (
-                        <div className="mt-2 text-xs text-emerald-400">✓ Complete</div>
-                      )}
-                      {isOverweight && (
-                        <div className="mt-2 text-xs text-red-400">⚠ Exceeds 50 lb limit</div>
-                      )}
-                    </div>
-                  )
-                })}
+                      placeholder=""
+                    />
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {/* Total Weight */}
+        <div className="flex justify-end text-sm">
+          <span className={`${totalWeight > 0 ? 'text-white' : 'text-slate-500'}`}>
+            Total weight: <span className="font-bold">{totalWeight} lb</span>
+            {boxes.some(b => (b.weightLbs || 0) > 50) && (
+              <span className="text-red-400 ml-2">⚠ Some boxes exceed 50 lb limit</span>
+            )}
+          </span>
+        </div>
+
+        {/* Box Dimensions */}
+        <div className="border-t border-slate-700 pt-4">
+          {dimensions.map((dim, index) => (
+            <div key={dim.id} className="flex items-center gap-4 mb-3">
+              <span className="text-sm text-slate-300 w-36">
+                Box dimensions (in):
+              </span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={dim.length}
+                  onChange={(e) => updateDimension(dim.id, 'length', parseFloat(e.target.value) || 0)}
+                  className="w-16 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                />
+                <span className="text-slate-500">×</span>
+                <input
+                  type="number"
+                  value={dim.width}
+                  onChange={(e) => updateDimension(dim.id, 'width', parseFloat(e.target.value) || 0)}
+                  className="w-16 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                />
+                <span className="text-slate-500">×</span>
+                <input
+                  type="number"
+                  value={dim.height}
+                  onChange={(e) => updateDimension(dim.id, 'height', parseFloat(e.target.value) || 0)}
+                  className="w-16 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                />
               </div>
+              <div className="flex items-center gap-3 ml-4">
+                {boxes.map(box => (
+                  <label key={box.boxNumber} className="flex items-center gap-1 text-xs text-slate-400">
+                    <input
+                      type="checkbox"
+                      checked={dim.applyToBoxes.includes(box.boxNumber)}
+                      onChange={() => toggleBoxDimension(dim.id, box.boxNumber)}
+                      className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500"
+                    />
+                    {box.boxNumber}
+                  </label>
+                ))}
+              </div>
+              {dimensions.length > 1 && (
+                <button
+                  onClick={() => removeDimensionGroup(dim.id)}
+                  className="text-red-400 hover:text-red-300 ml-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
+          ))}
+          
+          <button
+            onClick={addDimensionGroup}
+            className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center gap-1 mt-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add another box dimension
+          </button>
+        </div>
 
-            {/* Validation Summary */}
-            {validationErrors.length > 0 && (
-              <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4">
-                <h4 className="font-medium text-amber-400 mb-2">⚠ Validation Issues</h4>
-                <ul className="text-sm text-amber-300 space-y-1">
-                  {validationErrors.map((error, i) => (
-                    <li key={i}>• {error}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Success Summary */}
-            {allAssigned && allBoxesHaveDimensions && validationErrors.length === 0 && (
-              <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-4">
-                <h4 className="font-medium text-emerald-400">✓ All items assigned to boxes</h4>
-                <p className="text-sm text-emerald-300 mt-1">
-                  {boxes.length} boxes ready with complete dimensions and weights
-                </p>
-              </div>
-            )}
-          </>
+        {/* Validation Summary */}
+        {totalAssigned === totalNeeded && boxes.every(b => b.weightLbs) && (
+          <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3 text-center">
+            <span className="text-emerald-400 font-medium">
+              ✓ All {totalNeeded} units assigned to {boxes.length} boxes
+            </span>
+          </div>
         )}
       </CardContent>
     </Card>
   )
 }
-
