@@ -39,18 +39,52 @@ interface BoxCreationProps {
   shipmentItems: ShipmentItem[]
   boxes: Box[]
   onBoxesChange: (boxes: Box[]) => void
+  autoSplitEnabled?: boolean
 }
 
 export default function BoxCreation({
   shipmentItems,
   boxes,
   onBoxesChange,
+  autoSplitEnabled = false,
 }: BoxCreationProps) {
   const displaySettings = useDisplaySettings()
   const [numBoxes, setNumBoxes] = useState(5)
   const [dimensions, setDimensions] = useState<BoxDimension[]>([
     { id: 1, length: 18, width: 14, height: 8, applyToBoxes: [1, 2, 3, 4, 5] }
   ])
+  const [hasAutoSplit, setHasAutoSplit] = useState(false)
+
+  // Auto-split items evenly across boxes
+  const autoSplitItems = (targetBoxes?: Box[]) => {
+    const boxesToUse = targetBoxes || boxes
+    if (boxesToUse.length === 0 || shipmentItems.length === 0) return
+
+    const newBoxes = boxesToUse.map(box => ({
+      ...box,
+      items: [] as BoxItem[],
+    }))
+
+    // Distribute each SKU evenly across boxes
+    for (const item of shipmentItems) {
+      const numBoxes = newBoxes.length
+      const baseQty = Math.floor(item.adjustedQty / numBoxes)
+      const remainder = item.adjustedQty % numBoxes
+
+      for (let i = 0; i < numBoxes; i++) {
+        const boxQty = baseQty + (i < remainder ? 1 : 0)
+        if (boxQty > 0) {
+          newBoxes[i].items.push({
+            sku: item.sku,
+            quantity: boxQty,
+          })
+        }
+      }
+    }
+
+    onBoxesChange(newBoxes)
+    setHasAutoSplit(true)
+  }
 
   // Initialize boxes if empty
   useEffect(() => {
@@ -58,6 +92,17 @@ export default function BoxCreation({
       initializeBoxes(numBoxes)
     }
   }, [])
+
+  // Auto-split on first load if enabled and items exist
+  useEffect(() => {
+    if (autoSplitEnabled && !hasAutoSplit && boxes.length > 0 && shipmentItems.length > 0) {
+      // Check if boxes are empty (no items assigned yet)
+      const boxesEmpty = boxes.every(box => box.items.length === 0)
+      if (boxesEmpty) {
+        autoSplitItems()
+      }
+    }
+  }, [autoSplitEnabled, boxes, shipmentItems, hasAutoSplit])
 
   const initializeBoxes = (count: number) => {
     const newBoxes: Box[] = []
@@ -264,21 +309,29 @@ export default function BoxCreation({
             <Package className="w-5 h-5" />
             Box Contents
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             <button
-              onClick={removeBox}
-              disabled={boxes.length <= 1}
-              className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded"
+              onClick={() => autoSplitItems()}
+              className="px-3 py-1.5 text-sm bg-cyan-600 hover:bg-cyan-500 text-white rounded font-medium"
             >
-              −
+              Auto-Split Evenly
             </button>
-            <span className="text-white font-medium">{boxes.length} boxes</span>
-            <button
-              onClick={addBox}
-              className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded"
-            >
-              +
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={removeBox}
+                disabled={boxes.length <= 1}
+                className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded"
+              >
+                −
+              </button>
+              <span className="text-white font-medium">{boxes.length} boxes</span>
+              <button
+                onClick={addBox}
+                className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded"
+              >
+                +
+              </button>
+            </div>
           </div>
         </div>
       </CardHeader>

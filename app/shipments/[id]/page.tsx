@@ -564,6 +564,7 @@ export default function ShipmentDetailPage() {
             }))}
             boxes={shipment.boxes}
             onBoxesChange={(boxes) => setShipment({ ...shipment, boxes })}
+            autoSplitEnabled={shipment.optimalPlacementEnabled}
           />
         </div>
 
