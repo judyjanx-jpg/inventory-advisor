@@ -118,14 +118,6 @@ export default function PickingSection({
             max-width: 100%;
             height: 80px;
           }
-          .product-name {
-            font-size: 16pt;
-            line-height: 1.3;
-            flex: 1;
-            overflow: hidden;
-            text-align: center;
-            margin: 0.2in 0;
-          }
           .location-section {
             text-align: center;
             margin: 0.3in 0;
@@ -171,7 +163,6 @@ export default function PickingSection({
             <div class="barcode-container">
               <svg id="barcode-${i}"></svg>
             </div>
-            <div class="product-name">${item.productName}</div>
             ${hasLocation ? `
             <div class="location-section">
               <div class="location-label">PICK FROM</div>
@@ -278,13 +269,17 @@ export default function PickingSection({
     setConfirmedItem(null)
     setScanResult(null)
     
-    // Move to next
-    if (currentPickIndex < pendingItems.length - 1) {
-      setCurrentPickIndex(prev => prev + 1)
-    } else {
+    // Check if there are more pending items after this one is picked
+    // Since we marked this item as picked, pendingItems will shrink by 1
+    // The next item will be at the same index (or we're done if this was the last)
+    const remainingPending = pendingItems.length - 1 // after this item is picked
+    if (remainingPending <= 0) {
       // All done
       setShowInteractivePick(false)
     }
+    // Otherwise, keep index at current position - next pending item will be there
+    // Reset index to 0 to be safe in case of any edge cases
+    setCurrentPickIndex(0)
   }
 
   const skipItem = () => {
