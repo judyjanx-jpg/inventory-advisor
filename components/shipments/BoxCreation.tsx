@@ -394,49 +394,11 @@ export default function BoxCreation({
                 </td>
               </tr>
 
-              {/* Box Dimensions Row */}
-              <tr className="border-t border-slate-700">
-                <td className="py-4 px-4 text-sm font-medium text-slate-300 text-right align-top" colSpan={2}>
-                  Box dimensions (in):
-                </td>
-                <td colSpan={boxes.length} className="py-4 px-4">
-                  {dimensions.map((dim) => (
-                    <div key={dim.id} className="flex items-center gap-4 mb-3">
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          value={dim.length}
-                          onChange={(e) => updateDimension(dim.id, 'length', parseFloat(e.target.value) || 0)}
-                          className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
-                        />
-                        <span className="text-slate-500">×</span>
-                        <input
-                          type="number"
-                          value={dim.width}
-                          onChange={(e) => updateDimension(dim.id, 'width', parseFloat(e.target.value) || 0)}
-                          className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
-                        />
-                        <span className="text-slate-500">×</span>
-                        <input
-                          type="number"
-                          value={dim.height}
-                          onChange={(e) => updateDimension(dim.id, 'height', parseFloat(e.target.value) || 0)}
-                          className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
-                        />
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {boxes.map(box => (
-                          <label key={box.boxNumber} className="flex items-center gap-1 text-xs text-slate-400">
-                            <input
-                              type="checkbox"
-                              checked={dim.applyToBoxes.includes(box.boxNumber)}
-                              onChange={() => toggleBoxDimension(dim.id, box.boxNumber)}
-                              className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500"
-                            />
-                            {box.boxNumber}
-                          </label>
-                        ))}
-                      </div>
+              {/* Box Dimensions Rows */}
+              {dimensions.map((dim, dimIndex) => (
+                <tr key={dim.id} className={dimIndex === 0 ? "border-t border-slate-700" : ""}>
+                  <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right align-middle" colSpan={2}>
+                    <div className="flex items-center justify-end gap-2">
                       {dimensions.length > 1 && (
                         <button
                           onClick={() => removeDimensionGroup(dim.id)}
@@ -445,17 +407,54 @@ export default function BoxCreation({
                           <Trash2 className="w-4 h-4" />
                         </button>
                       )}
+                      <span>Box dimensions (in):</span>
+                      <input
+                        type="number"
+                        value={dim.length}
+                        onChange={(e) => updateDimension(dim.id, 'length', parseFloat(e.target.value) || 0)}
+                        className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                      />
+                      <span className="text-slate-500">×</span>
+                      <input
+                        type="number"
+                        value={dim.width}
+                        onChange={(e) => updateDimension(dim.id, 'width', parseFloat(e.target.value) || 0)}
+                        className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                      />
+                      <span className="text-slate-500">×</span>
+                      <input
+                        type="number"
+                        value={dim.height}
+                        onChange={(e) => updateDimension(dim.id, 'height', parseFloat(e.target.value) || 0)}
+                        className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                      />
                     </div>
+                  </td>
+                  {boxes.map(box => (
+                    <td key={box.boxNumber} className="py-3 px-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={dim.applyToBoxes.includes(box.boxNumber)}
+                        onChange={() => toggleBoxDimension(dim.id, box.boxNumber)}
+                        className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-cyan-500 cursor-pointer"
+                      />
+                    </td>
                   ))}
-                  
+                </tr>
+              ))}
+              
+              {/* Add another dimension link */}
+              <tr>
+                <td colSpan={2} className="py-2 px-4 text-right">
                   <button
                     onClick={addDimensionGroup}
-                    className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center gap-1"
+                    className="text-cyan-400 hover:text-cyan-300 text-sm inline-flex items-center gap-1"
                   >
                     <Plus className="w-4 h-4" />
                     Add another box dimension
                   </button>
                 </td>
+                <td colSpan={boxes.length}></td>
               </tr>
             </tfoot>
           </table>
