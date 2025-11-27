@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import Button from '@/components/ui/Button'
 import ShipmentSummaryBar, { ShipmentStage } from '@/components/shipments/ShipmentSummaryBar'
 import BoxCreation from '@/components/shipments/BoxCreation'
+import LabelPrinter from '@/components/shipments/LabelPrinter'
 import { 
   Package, 
   Plus, 
@@ -626,6 +627,20 @@ export default function ShipmentDetailPage() {
             autoSplitEnabled={shipment.optimalPlacementEnabled}
           />
         </div>
+
+        {/* Labels Section */}
+        <LabelPrinter
+          shipmentId={String(shipment.id)}
+          shipmentInternalId={shipment.internalId || `SHP-${shipment.id}`}
+          destinationFc={shipment.destinationFc || 'US'}
+          items={shipment.items.map(i => ({
+            masterSku: i.masterSku,
+            fnsku: i.fnsku,
+            productName: i.productName,
+            adjustedQty: i.adjustedQty,
+          }))}
+          boxes={shipment.boxes}
+        />
 
         {/* Shipped Status */}
         {isShipped && (
