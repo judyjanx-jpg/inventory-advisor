@@ -207,10 +207,50 @@ export default function ShipmentDetailPage() {
     })
   }
 
-  const markAsShipped = async () => {
+  // Handle inventory adjustment when discrepancy found during picking
+  const handleInventoryAdjust = async (sku: string, newQty: number, reason: string) => {
     if (!shipment) return
-    
-    // Validation
+
+    try {
+      // Update warehouse inventory
+      const res = await fetch('/api/inventory/adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku,
+          newQty,
+          reason,
+          warehouseId: shipment.fromLocationId,
+          adjustedBy: 'shipment-pick',
+          shipmentId: shipment.id,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        alert(`Failed to adjust inventory: ${data.error}`)
+        return
+      }
+
+      alert(`Inventory for ${sku} adjusted to ${newQty}. Reason: ${reason}`)
+    } catch (error) {
+      console.error('Error adjusting inventory:', error)
+      alert('Failed to adjust inventory')
+    }
+  }
+
+  // Submit to Amazon (before shipping)
+  const submitToAmazon = async () => {
+    if (!shipment) return
+
+    // Validation - all items must be picked
+    const allPicked = shipment.items.every(i => i.pickStatus === 'picked' || i.pickStatus === 'skipped')
+    if (!allPicked) {
+      alert('Please complete picking before submitting to Amazon')
+      return
+    }
+
+    // Validation - all items must be assigned to boxes
     const allItemsAssigned = shipment.items.every(item => {
       const boxTotal = shipment.boxes.reduce((sum, box) => {
         const boxItem = box.items.find(bi => bi.sku === item.masterSku)
@@ -220,7 +260,7 @@ export default function ShipmentDetailPage() {
     })
 
     if (!allItemsAssigned) {
-      alert('Please assign all items to boxes before shipping')
+      alert('Please assign all items to boxes before submitting')
       return
     }
 
@@ -230,6 +270,41 @@ export default function ShipmentDetailPage() {
 
     if (!allBoxesComplete) {
       alert('Please complete dimensions and weight for all boxes')
+      return
+    }
+
+    if (!confirm('Submit this shipment to Amazon? After submission, you will receive box labels from Amazon.')) {
+      return
+    }
+
+    try {
+      // For now, we just update the status to 'submitted'
+      // In the future, this would call Amazon's API
+      const res = await fetch(`/api/shipments/${shipmentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'submitted' }),
+      })
+
+      if (res.ok) {
+        alert('Shipment submitted to Amazon! You can now mark it as shipped once you receive box labels and ship the boxes.')
+        await fetchShipment()
+      } else {
+        const data = await res.json()
+        alert(`Error: ${data.error}`)
+      }
+    } catch (error) {
+      console.error('Error submitting to Amazon:', error)
+      alert('Failed to submit to Amazon')
+    }
+  }
+
+  const markAsShipped = async () => {
+    if (!shipment) return
+    
+    // Must be submitted first
+    if (shipment.status !== 'submitted') {
+      alert('Please submit the shipment to Amazon first')
       return
     }
 
@@ -398,6 +473,7 @@ export default function ShipmentDetailPage() {
       box.lengthInches && box.widthInches && box.heightInches && box.weightLbs
     )
     const isShipped = ['shipped', 'in_transit', 'receiving', 'received'].includes(shipment.status)
+    const isSubmitted = shipment.status === 'submitted'
 
     const completed: ShipmentStage[] = []
     if (hasItems) completed.push('create')
@@ -406,12 +482,14 @@ export default function ShipmentDetailPage() {
       completed.push('label')
       if (allBoxesComplete) completed.push('box')
     }
+    if (isSubmitted || isShipped) completed.push('submit')
     if (isShipped) completed.push('ship')
 
     let current: ShipmentStage = 'create'
     if (hasItems && !allPicked) current = 'pick'
     else if (allPicked && (!hasBoxes || !allItemsAssigned)) current = 'box'
-    else if (allBoxesComplete && !isShipped) current = 'ship'
+    else if (allBoxesComplete && !isSubmitted && !isShipped) current = 'submit'
+    else if (isSubmitted && !isShipped) current = 'ship'
 
     return { current, completed }
   }
@@ -483,10 +561,17 @@ export default function ShipmentDetailPage() {
                   <Save className="w-4 h-4 mr-2" />
                   {saving ? 'Saving...' : 'Save'}
                 </Button>
-                <Button onClick={markAsShipped}>
-                  <Truck className="w-4 h-4 mr-2" />
-                  Mark as Shipped
-                </Button>
+                {shipment.status === 'draft' ? (
+                  <Button onClick={submitToAmazon}>
+                    <Package className="w-4 h-4 mr-2" />
+                    Submit to Amazon
+                  </Button>
+                ) : shipment.status === 'submitted' ? (
+                  <Button onClick={markAsShipped}>
+                    <Truck className="w-4 h-4 mr-2" />
+                    Mark as Shipped
+                  </Button>
+                ) : null}
               </>
             )}
           </div>
@@ -584,6 +669,7 @@ export default function ShipmentDetailPage() {
             items={shipment.items}
             onItemsChange={(items) => setShipment({ ...shipment, items })}
             onPickComplete={() => {}}
+            onInventoryAdjust={handleInventoryAdjust}
           />
         </div>
 
@@ -661,6 +747,9 @@ export default function ShipmentDetailPage() {
               <span className="font-bold text-white">{shipment.items.length}</span> SKUs · 
               <span className="font-bold text-white ml-1">{totalUnits}</span> units · 
               <span className="font-bold text-white ml-1">{shipment.boxes.length}</span> boxes
+              {shipment.status === 'submitted' && (
+                <span className="ml-3 text-amber-400">📦 Submitted to Amazon</span>
+              )}
             </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => router.push('/fba-shipments')}>
@@ -670,10 +759,17 @@ export default function ShipmentDetailPage() {
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? 'Saving...' : 'Save'}
               </Button>
-              <Button onClick={markAsShipped}>
-                <Truck className="w-4 h-4 mr-2" />
-                Mark as Shipped
-              </Button>
+              {shipment.status === 'draft' ? (
+                <Button onClick={submitToAmazon}>
+                  <Package className="w-4 h-4 mr-2" />
+                  Submit to Amazon
+                </Button>
+              ) : shipment.status === 'submitted' ? (
+                <Button onClick={markAsShipped}>
+                  <Truck className="w-4 h-4 mr-2" />
+                  Mark as Shipped
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>

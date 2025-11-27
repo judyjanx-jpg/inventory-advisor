@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Printer, Smartphone, Check, ChevronDown, ChevronUp, CheckCircle, AlertCircle } from 'lucide-react'
+import { Printer, Smartphone, Check, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Edit3, Package, RotateCcw } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 
@@ -21,6 +21,7 @@ interface PickingSectionProps {
   items: ShipmentItem[]
   onItemsChange: (items: ShipmentItem[]) => void
   onPickComplete: () => void
+  onInventoryAdjust?: (sku: string, newQty: number, reason: string) => Promise<void>
 }
 
 export default function PickingSection({
@@ -29,6 +30,7 @@ export default function PickingSection({
   items,
   onItemsChange,
   onPickComplete,
+  onInventoryAdjust,
 }: PickingSectionProps) {
   const [expanded, setExpanded] = useState(true)
   const [showInteractivePick, setShowInteractivePick] = useState(false)
@@ -37,11 +39,18 @@ export default function PickingSection({
   const [scanResult, setScanResult] = useState<'correct' | 'wrong' | null>(null)
   const [editingQty, setEditingQty] = useState<number | null>(null)
   const [newQty, setNewQty] = useState<number>(0)
+  
+  // Interactive pick adjustments
+  const [showAdjustModal, setShowAdjustModal] = useState(false)
+  const [adjustType, setAdjustType] = useState<'shipment' | 'inventory'>('shipment')
+  const [adjustQty, setAdjustQty] = useState(0)
+  const [adjustReason, setAdjustReason] = useState('')
 
   const allPicked = items.every(i => i.pickStatus === 'picked' || i.pickStatus === 'skipped')
   const pickedCount = items.filter(i => i.pickStatus === 'picked').length
   const skippedCount = items.filter(i => i.pickStatus === 'skipped').length
   const pendingItems = items.filter(i => i.pickStatus === 'pending' || !i.pickStatus)
+  const skippedItems = items.filter(i => i.pickStatus === 'skipped')
 
   // Print Pick Labels - one per SKU
   const printPickLabels = () => {
@@ -218,25 +227,28 @@ export default function PickingSection({
   }
 
   const playSound = (type: 'success' | 'error') => {
-    // Using Web Audio API for simple beeps
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const oscillator = audioContext.createOscillator()
-    const gainNode = audioContext.createGain()
-    
-    oscillator.connect(gainNode)
-    gainNode.connect(audioContext.destination)
-    
-    if (type === 'success') {
-      oscillator.frequency.value = 800
-      oscillator.type = 'sine'
-    } else {
-      oscillator.frequency.value = 200
-      oscillator.type = 'square'
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+      
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+      
+      if (type === 'success') {
+        oscillator.frequency.value = 800
+        oscillator.type = 'sine'
+      } else {
+        oscillator.frequency.value = 200
+        oscillator.type = 'square'
+      }
+      
+      gainNode.gain.value = 0.3
+      oscillator.start()
+      oscillator.stop(audioContext.currentTime + 0.2)
+    } catch (e) {
+      // Audio not supported
     }
-    
-    gainNode.gain.value = 0.3
-    oscillator.start()
-    oscillator.stop(audioContext.currentTime + 0.2)
   }
 
   const skipItem = () => {
@@ -275,7 +287,47 @@ export default function PickingSection({
     }
   }
 
-  const adjustQty = (itemId: number) => {
+  // Open adjust modal for current item
+  const openAdjustModal = () => {
+    const currentItem = pendingItems[currentPickIndex]
+    if (!currentItem) return
+    setAdjustQty(currentItem.adjustedQty)
+    setAdjustReason('')
+    setAdjustType('shipment')
+    setShowAdjustModal(true)
+  }
+
+  // Apply adjustment
+  const applyAdjustment = async () => {
+    const currentItem = pendingItems[currentPickIndex]
+    if (!currentItem) return
+
+    if (adjustType === 'shipment') {
+      // Just adjust the shipment qty
+      const updatedItems = items.map(item => 
+        item.id === currentItem.id 
+          ? { ...item, adjustedQty: adjustQty }
+          : item
+      )
+      onItemsChange(updatedItems)
+    } else {
+      // Adjust warehouse inventory
+      if (onInventoryAdjust) {
+        await onInventoryAdjust(currentItem.masterSku, adjustQty, adjustReason)
+      }
+      // Also update shipment qty to match
+      const updatedItems = items.map(item => 
+        item.id === currentItem.id 
+          ? { ...item, adjustedQty: adjustQty }
+          : item
+      )
+      onItemsChange(updatedItems)
+    }
+
+    setShowAdjustModal(false)
+  }
+
+  const adjustItemQty = (itemId: number) => {
     const updatedItems = items.map(item => 
       item.id === itemId 
         ? { ...item, adjustedQty: newQty }
@@ -291,6 +343,26 @@ export default function PickingSection({
     onPickComplete()
   }
 
+  // Mark a skipped item as picked
+  const markSkippedAsPicked = (itemId: number) => {
+    const updatedItems = items.map(item => 
+      item.id === itemId 
+        ? { ...item, pickStatus: 'picked' }
+        : item
+    )
+    onItemsChange(updatedItems)
+  }
+
+  // Reset item to pending
+  const resetToPending = (itemId: number) => {
+    const updatedItems = items.map(item => 
+      item.id === itemId 
+        ? { ...item, pickStatus: 'pending' }
+        : item
+    )
+    onItemsChange(updatedItems)
+  }
+
   // Interactive Pick Mode (fullscreen)
   if (showInteractivePick) {
     const currentItem = pendingItems[currentPickIndex]
@@ -298,12 +370,18 @@ export default function PickingSection({
     if (!currentItem) {
       return (
         <div className="fixed inset-0 bg-slate-900 z-50 flex items-center justify-center">
-          <div className="text-center">
+          <div className="text-center p-6">
             <CheckCircle className="w-24 h-24 text-emerald-400 mx-auto mb-4" />
             <h1 className="text-3xl font-bold text-white mb-2">Picking Complete!</h1>
             <p className="text-slate-400 mb-6">
               {pickedCount} items picked, {skippedCount} skipped
             </p>
+            {skippedCount > 0 && (
+              <div className="mb-6 p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg">
+                <p className="text-amber-400 mb-2">⚠ {skippedCount} items were skipped</p>
+                <p className="text-slate-400 text-sm">You can mark them as picked from the picking section</p>
+              </div>
+            )}
             <Button onClick={() => setShowInteractivePick(false)}>
               Continue to Labels
             </Button>
@@ -333,7 +411,7 @@ export default function PickingSection({
         <div className="px-4 py-2 bg-slate-800">
           <div className="flex items-center justify-between text-sm text-slate-400 mb-1">
             <span>Item {currentPickIndex + 1} of {pendingItems.length}</span>
-            <span>{pickedCount} picked</span>
+            <span>{pickedCount} picked, {skippedCount} skipped</span>
           </div>
           <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
             <div 
@@ -367,9 +445,18 @@ export default function PickingSection({
               <div className="text-8xl font-bold text-cyan-400 mb-6">
                 {currentItem.adjustedQty}
               </div>
-              <div className="text-xl text-slate-400 mb-8">
+              <div className="text-xl text-slate-400 mb-4">
                 📍 {currentItem.warehouseLocation || 'No location set'}
               </div>
+              
+              {/* Adjust Button */}
+              <button
+                onClick={openAdjustModal}
+                className="text-amber-400 hover:text-amber-300 flex items-center gap-2 mb-4"
+              >
+                <Edit3 className="w-5 h-5" />
+                Adjust Quantity
+              </button>
             </>
           )}
         </div>
@@ -401,6 +488,86 @@ export default function PickingSection({
             </div>
           </div>
         )}
+
+        {/* Adjust Modal */}
+        {showAdjustModal && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-60">
+            <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md mx-4">
+              <h2 className="text-xl font-bold text-white mb-4">Adjust Quantity</h2>
+              
+              <div className="space-y-4">
+                {/* Adjust Type */}
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">What to adjust?</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setAdjustType('shipment')}
+                      className={`flex-1 p-3 rounded-lg border text-left ${
+                        adjustType === 'shipment'
+                          ? 'border-cyan-500 bg-cyan-500/10'
+                          : 'border-slate-600'
+                      }`}
+                    >
+                      <div className="font-medium text-white">Shipment Only</div>
+                      <div className="text-xs text-slate-400">Change qty for this shipment</div>
+                    </button>
+                    <button
+                      onClick={() => setAdjustType('inventory')}
+                      className={`flex-1 p-3 rounded-lg border text-left ${
+                        adjustType === 'inventory'
+                          ? 'border-amber-500 bg-amber-500/10'
+                          : 'border-slate-600'
+                      }`}
+                    >
+                      <div className="font-medium text-white">Warehouse Inventory</div>
+                      <div className="text-xs text-slate-400">Actual stock is different</div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Qty Input */}
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">New Quantity</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={adjustQty}
+                    onChange={(e) => setAdjustQty(parseInt(e.target.value) || 0)}
+                    className="w-full px-4 py-3 text-xl bg-slate-900 border border-slate-600 rounded-lg text-white text-center"
+                  />
+                </div>
+
+                {/* Reason (for inventory adjustments) */}
+                {adjustType === 'inventory' && (
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">Reason for discrepancy</label>
+                    <select
+                      value={adjustReason}
+                      onChange={(e) => setAdjustReason(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white"
+                    >
+                      <option value="">Select reason...</option>
+                      <option value="damaged">Damaged/Defective</option>
+                      <option value="missing">Missing/Lost</option>
+                      <option value="count_error">Count Error</option>
+                      <option value="theft">Theft/Shrinkage</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <Button variant="outline" onClick={() => setShowAdjustModal(false)} className="flex-1">
+                    Cancel
+                  </Button>
+                  <Button onClick={applyAdjustment} className="flex-1">
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -426,12 +593,41 @@ export default function PickingSection({
       {expanded && (
         <CardContent className="space-y-4">
           {allPicked ? (
-            <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-4 text-center">
-              <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-              <p className="text-emerald-400 font-medium">All items picked!</p>
-              <p className="text-sm text-slate-400 mt-1">
-                {pickedCount} picked, {skippedCount} skipped
-              </p>
+            <div className="space-y-4">
+              <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-4 text-center">
+                <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                <p className="text-emerald-400 font-medium">All items picked!</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  {pickedCount} picked, {skippedCount} skipped
+                </p>
+              </div>
+
+              {/* Skipped Items - Allow marking as picked */}
+              {skippedItems.length > 0 && (
+                <div className="border border-amber-500/30 rounded-lg p-4">
+                  <h3 className="text-amber-400 font-medium mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    Skipped Items ({skippedItems.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {skippedItems.map(item => (
+                      <div 
+                        key={item.id}
+                        className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg"
+                      >
+                        <div>
+                          <div className="font-medium text-white">{item.masterSku}</div>
+                          <div className="text-sm text-slate-400">{item.adjustedQty} units</div>
+                        </div>
+                        <Button size="sm" onClick={() => markSkippedAsPicked(item.id)}>
+                          <Check className="w-4 h-4 mr-1" />
+                          Mark Picked
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -456,7 +652,7 @@ export default function PickingSection({
                     Interactive Pick
                   </h3>
                   <p className="text-sm text-slate-400 mb-3">
-                    Mobile-friendly mode with barcode scanning
+                    Mobile-friendly with scanning & qty adjustment
                   </p>
                   <Button 
                     size="sm" 
@@ -503,7 +699,7 @@ export default function PickingSection({
                               className="w-16 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm"
                               autoFocus
                             />
-                            <Button size="sm" onClick={() => adjustQty(item.id)}>
+                            <Button size="sm" onClick={() => adjustItemQty(item.id)}>
                               <Check className="w-3 h-3" />
                             </Button>
                           </>
@@ -520,12 +716,28 @@ export default function PickingSection({
                           </button>
                         )}
                       </div>
-                      <div className="w-20 text-right">
+                      <div className="w-24 text-right flex items-center justify-end gap-2">
                         {item.pickStatus === 'picked' && (
-                          <span className="text-emerald-400 text-sm">✓ Picked</span>
+                          <>
+                            <span className="text-emerald-400 text-sm">✓ Picked</span>
+                            <button
+                              onClick={() => resetToPending(item.id)}
+                              className="text-slate-400 hover:text-white"
+                              title="Reset to pending"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                            </button>
+                          </>
                         )}
                         {item.pickStatus === 'skipped' && (
-                          <span className="text-amber-400 text-sm">⚠ Skipped</span>
+                          <>
+                            <button
+                              onClick={() => markSkippedAsPicked(item.id)}
+                              className="text-amber-400 hover:text-amber-300 text-sm"
+                            >
+                              Mark Picked
+                            </button>
+                          </>
                         )}
                         {(!item.pickStatus || item.pickStatus === 'pending') && (
                           <span className="text-slate-500 text-sm">Pending</span>
@@ -553,4 +765,3 @@ export default function PickingSection({
     </Card>
   )
 }
-

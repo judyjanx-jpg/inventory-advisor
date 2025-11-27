@@ -2,7 +2,7 @@
 
 import { Check, Circle, Loader2 } from 'lucide-react'
 
-export type ShipmentStage = 'create' | 'pick' | 'label' | 'box' | 'ship'
+export type ShipmentStage = 'create' | 'pick' | 'label' | 'box' | 'submit' | 'ship'
 
 interface ShipmentSummaryBarProps {
   totalSkus: number
@@ -19,6 +19,7 @@ const stages: { id: ShipmentStage; label: string }[] = [
   { id: 'pick', label: 'PICK' },
   { id: 'label', label: 'LABEL' },
   { id: 'box', label: 'BOX' },
+  { id: 'submit', label: 'SUBMIT' },
   { id: 'ship', label: 'SHIP' },
 ]
 
