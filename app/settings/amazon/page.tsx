@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
+import { useSyncContext } from '@/components/sync/SyncProvider'
 
 const MARKETPLACES = [
   { id: 'ATVPDKIKX0DER', name: 'United States', region: 'na' },
@@ -22,7 +23,7 @@ const MARKETPLACES = [
 ]
 
 interface SyncState {
-  type: 'products' | 'inventory' | 'orders' | 'sales' | null
+  type: 'products' | 'inventory' | 'orders' | 'sales' | 'initial' | null
   status: 'idle' | 'syncing' | 'success' | 'error'
   message?: string
   startedAt?: number
@@ -194,9 +195,13 @@ export default function AmazonSettingsPage() {
     }
   }
 
-  const handleSync = async (type: 'products' | 'inventory' | 'orders') => {
+  // Get global sync context
+  const { startSync: globalStartSync, endSync: globalEndSync } = useSyncContext()
+
+  const handleSync = async (type: 'products' | 'inventory' | 'orders' | 'sales') => {
     setSyncState({ type, status: 'syncing', startedAt: Date.now() })
     setSyncResults(prev => ({ ...prev, [type]: {} }))
+    globalStartSync(type.charAt(0).toUpperCase() + type.slice(1))
 
     try {
       const res = await fetch(`/api/amazon/sync/${type}`, { method: 'POST' })
@@ -206,10 +211,12 @@ export default function AmazonSettingsPage() {
         setSyncState({ type, status: 'success', message: data.message })
         setSyncResults(prev => ({ ...prev, [type]: { success: true, message: data.message } }))
         showToast('success', `✓ ${data.message}`)
+        globalEndSync('success', data.message)
       } else {
         setSyncState({ type, status: 'error', message: data.error })
         setSyncResults(prev => ({ ...prev, [type]: { success: false, error: data.error } }))
         showToast('error', data.error || 'Sync failed')
+        globalEndSync('error', data.error)
       }
       
       fetchSettings()
@@ -217,6 +224,41 @@ export default function AmazonSettingsPage() {
       setSyncState({ type, status: 'error', message: error.message })
       setSyncResults(prev => ({ ...prev, [type]: { success: false, error: error.message } }))
       showToast('error', error.message || 'Sync failed')
+      globalEndSync('error', error.message)
+    }
+  }
+
+  const handleInitialSync = async () => {
+    if (!confirm('This will pull 2 years of historical data from Amazon.\n\nThis may take 1-4+ hours for large accounts.\n\nContinue?')) {
+      return
+    }
+
+    setSyncState({ type: 'initial', status: 'syncing', startedAt: Date.now() })
+    setSyncResults(prev => ({ ...prev, initial: {} }))
+    globalStartSync('2-Year Historical Data')
+
+    try {
+      const res = await fetch('/api/amazon/sync/initial', { method: 'POST' })
+      const data = await res.json()
+
+      if (data.success) {
+        setSyncState({ type: 'initial', status: 'success', message: data.message })
+        setSyncResults(prev => ({ ...prev, initial: { success: true, message: data.message } }))
+        showToast('success', `✓ ${data.message}`)
+        globalEndSync('success', data.message)
+      } else {
+        setSyncState({ type: 'initial', status: 'error', message: data.error })
+        setSyncResults(prev => ({ ...prev, initial: { success: false, error: data.error } }))
+        showToast('error', data.error || 'Initial sync failed')
+        globalEndSync('error', data.error)
+      }
+      
+      fetchSettings()
+    } catch (error: any) {
+      setSyncState({ type: 'initial', status: 'error', message: error.message })
+      setSyncResults(prev => ({ ...prev, initial: { success: false, error: error.message } }))
+      showToast('error', error.message || 'Initial sync failed')
+      globalEndSync('error', error.message)
     }
   }
 
@@ -260,32 +302,7 @@ export default function AmazonSettingsPage() {
         </div>
       )}
 
-      {/* Global Sync Progress Bar */}
-      {syncState.status === 'syncing' && (
-        <div className="fixed top-0 left-0 right-0 z-40">
-          <div className="h-1 bg-slate-800">
-            <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 animate-pulse" style={{ width: '100%' }}></div>
-          </div>
-          <div className="bg-slate-900/95 border-b border-slate-700 px-4 py-3">
-            <div className="max-w-4xl mx-auto flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-cyan-500 border-t-transparent"></div>
-                <span className="text-white font-medium">
-                  Syncing {syncState.type}...
-                </span>
-                <span className="text-slate-400 text-sm">
-                  {getSyncDuration()}
-                </span>
-              </div>
-              <span className="text-slate-400 text-sm">
-                This may take a few minutes for large catalogs
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className={`max-w-4xl mx-auto space-y-6 ${syncState.status === 'syncing' ? 'pt-16' : ''}`}>
+      <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -319,6 +336,49 @@ export default function AmazonSettingsPage() {
               </div>
             )}
 
+            {/* Initial Historical Sync */}
+            <div className={`mb-6 bg-gradient-to-r from-purple-900/30 to-cyan-900/30 border border-purple-500/30 rounded-xl p-5 ${syncState.type === 'initial' && syncState.status === 'syncing' ? 'ring-2 ring-purple-500' : ''}`}>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500/20 to-cyan-500/20 rounded-xl flex items-center justify-center">
+                    {syncState.type === 'initial' && syncState.status === 'syncing' ? (
+                      <div className="animate-spin rounded-full h-6 w-6 border-2 border-purple-400 border-t-transparent"></div>
+                    ) : (
+                      <span className="text-2xl">🚀</span>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white text-lg">Initial Historical Sync</h3>
+                    <p className="text-slate-400 text-sm">Pull 2 years of orders, fees, returns, reimbursements & more</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleInitialSync}
+                  disabled={syncState.status === 'syncing'}
+                  className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 disabled:from-slate-600 disabled:to-slate-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all flex items-center gap-2 shadow-lg shadow-purple-500/20"
+                >
+                  {syncState.type === 'initial' && syncState.status === 'syncing' ? (
+                    <>
+                      <span className="animate-spin">⟳</span> Running... {getSyncDuration()}
+                    </>
+                  ) : (
+                    <>🚀 Run Initial Sync</>
+                  )}
+                </button>
+              </div>
+              {syncResults.initial?.success && (
+                <p className="mt-3 text-sm text-emerald-400">✓ {syncResults.initial.message}</p>
+              )}
+              {syncResults.initial?.error && (
+                <p className="mt-3 text-sm text-red-400">✗ {syncResults.initial.error}</p>
+              )}
+              <p className="mt-3 text-xs text-slate-500">
+                ⚠️ This can take 1-4+ hours for large accounts. You can continue using the app while it runs.
+              </p>
+            </div>
+
+            {/* Quick Syncs */}
+            <h3 className="text-sm font-medium text-slate-400 mb-3">Quick Syncs</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Products Sync */}
               <div className={`bg-slate-900/50 rounded-lg p-4 ${syncState.type === 'products' && syncState.status === 'syncing' ? 'ring-2 ring-blue-500' : ''}`}>

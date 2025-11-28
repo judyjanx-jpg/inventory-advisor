@@ -436,8 +436,12 @@ export default function ProductsPage() {
   }
 
   const getInventoryTotal = (product: Product) => {
-    const fba = product.inventoryLevels?.fbaAvailable || 0
-    const warehouse = product.inventoryLevels?.warehouseAvailable || 0
+    // Handle both array (from Prisma) and object (from transform) cases
+    const inv = Array.isArray(product.inventoryLevels) 
+      ? product.inventoryLevels[0] 
+      : product.inventoryLevels
+    const fba = inv?.fbaAvailable || 0
+    const warehouse = inv?.warehouseAvailable || 0
     return fba + warehouse
   }
 

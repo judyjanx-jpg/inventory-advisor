@@ -81,6 +81,9 @@ model Product {
   demandForecasts    DemandForecast[]
   dailyProfits       DailyProfit[]
   returns            Return[]
+  reimbursements     Reimbursement[]
+  removalOrders      RemovalOrder[]
+  storageFees        StorageFee[]
   feeEstimates       FeeEstimate?
   bundleComponents   BundleComponent[]    @relation("ComponentProduct")
   bundleProducts     Bundle[]             @relation("BundleProduct")
@@ -334,13 +337,20 @@ model Order {
   shipDate     DateTime? @map("ship_date")
 
   // Customer (limited data Amazon gives)
-  shipCity    String? @map("ship_city")
-  shipState   String? @map("ship_state")
-  shipCountry String? @map("ship_country")
+  shipCity       String? @map("ship_city")
+  shipState      String? @map("ship_state")
+  shipPostalCode String? @map("ship_postal_code")
+  shipCountry    String? @map("ship_country")
 
   // Status
-  status             String // pending, shipped, delivered, cancelled, returned
-  fulfillmentChannel String? @map("fulfillment_channel") // FBA or FBM
+  status             String  @default("Shipped") // pending, shipped, delivered, cancelled, returned
+  fulfillmentChannel String? @map("fulfillment_channel") // Amazon or Merchant
+  salesChannel       String? @map("sales_channel") // Amazon.com, etc.
+  orderType          String? @map("order_type") // StandardOrder, etc.
+
+  // Totals
+  orderTotal Decimal  @default(0) @map("order_total") @db.Decimal(10, 2)
+  currency   String   @default("USD")
 
   // Relations
   orderItems OrderItem[]
@@ -349,6 +359,9 @@ model Order {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([purchaseDate])
+  @@index([status])
+  @@index([fulfillmentChannel])
   @@map("orders")
 }
 
@@ -359,19 +372,30 @@ model OrderItem {
 
   masterSku String  @map("master_sku")
   product   Product @relation(fields: [masterSku], references: [sku])
+  asin      String?
 
-  quantity      Int
-  itemPrice     Decimal  @map("item_price") @db.Decimal(10, 2)
-  itemTax       Decimal? @default(0) @map("item_tax") @db.Decimal(10, 2)
-  shippingPrice Decimal? @default(0) @map("shipping_price") @db.Decimal(10, 2)
-  shippingTax   Decimal? @default(0) @map("shipping_tax") @db.Decimal(10, 2)
+  quantity      Int     @default(1)
+  itemPrice     Decimal @default(0) @map("item_price") @db.Decimal(10, 2)
+  itemTax       Decimal @default(0) @map("item_tax") @db.Decimal(10, 2)
+  shippingPrice Decimal @default(0) @map("shipping_price") @db.Decimal(10, 2)
+  shippingTax   Decimal @default(0) @map("shipping_tax") @db.Decimal(10, 2)
+  giftWrapPrice Decimal @default(0) @map("gift_wrap_price") @db.Decimal(10, 2)
+  giftWrapTax   Decimal @default(0) @map("gift_wrap_tax") @db.Decimal(10, 2)
 
-  // For profit calculation
-  amazonFees Decimal? @default(0) @map("amazon_fees") @db.Decimal(10, 2)
+  // Promotions
+  promoDiscount     Decimal @default(0) @map("promo_discount") @db.Decimal(10, 2)
+  shipPromoDiscount Decimal @default(0) @map("ship_promo_discount") @db.Decimal(10, 2)
+  promoIds          String? @map("promo_ids")
 
-  // Promo
-  promoDiscount Decimal? @default(0) @map("promo_discount") @db.Decimal(10, 2)
-  promoIds      String?  @map("promo_ids")
+  // Amazon fees breakdown
+  amazonFees  Decimal @default(0) @map("amazon_fees") @db.Decimal(10, 2)
+  referralFee Decimal @default(0) @map("referral_fee") @db.Decimal(10, 2)
+  fbaFee      Decimal @default(0) @map("fba_fee") @db.Decimal(10, 2)
+  otherFees   Decimal @default(0) @map("other_fees") @db.Decimal(10, 2)
+
+  // Calculated fields
+  grossRevenue Decimal @default(0) @map("gross_revenue") @db.Decimal(10, 2)
+  netRevenue   Decimal @default(0) @map("net_revenue") @db.Decimal(10, 2)
 
   // Relations
   amazonFeesDetail AmazonFee?
@@ -379,6 +403,9 @@ model OrderItem {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@unique([orderId, masterSku])
+  @@index([masterSku])
+  @@index([orderId])
   @@map("order_items")
 }
 
@@ -460,6 +487,181 @@ model Return {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("returns")
+}
+
+// ============================================
+// 6b. REIMBURSEMENTS (from Amazon)
+// ============================================
+model Reimbursement {
+  id                Int      @id @default(autoincrement())
+  reimbursementId   String   @unique @map("reimbursement_id")
+  caseId            String?  @map("case_id")
+  
+  masterSku         String?  @map("master_sku")
+  product           Product? @relation(fields: [masterSku], references: [sku])
+  
+  // Timing
+  approvalDate      DateTime @map("approval_date")
+  
+  // Details
+  reason            String?  // CUSTOMER_RETURN_COF, WAREHOUSE_DAMAGE, etc.
+  condition         String?  // Sellable, Unsellable, etc.
+  quantity          Int      @default(1)
+  
+  // Financial
+  amountPerUnit     Decimal  @map("amount_per_unit") @db.Decimal(10, 2)
+  amountTotal       Decimal  @map("amount_total") @db.Decimal(10, 2)
+  currencyCode      String   @default("USD") @map("currency_code")
+  
+  // ASIN/FNSKU for matching
+  asin              String?
+  fnsku             String?
+  
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  @@map("reimbursements")
+}
+
+// ============================================
+// 6c. REMOVAL ORDERS (FBA inventory removals)
+// ============================================
+model RemovalOrder {
+  id                Int      @id @default(autoincrement())
+  removalOrderId    String   @unique @map("removal_order_id")
+  
+  masterSku         String?  @map("master_sku")
+  product           Product? @relation(fields: [masterSku], references: [sku])
+  
+  // Timing
+  requestDate       DateTime @map("request_date")
+  lastUpdatedDate   DateTime? @map("last_updated_date")
+  
+  // Details
+  orderType         String   @map("order_type") // Return, Disposal
+  orderStatus       String   @map("order_status") // Pending, Processing, Completed, Cancelled
+  
+  // Quantities
+  requestedQuantity     Int  @map("requested_quantity")
+  cancelledQuantity     Int  @default(0) @map("cancelled_quantity")
+  disposedQuantity      Int  @default(0) @map("disposed_quantity")
+  shippedQuantity       Int  @default(0) @map("shipped_quantity")
+  inProcessQuantity     Int  @default(0) @map("in_process_quantity")
+  
+  // Financial
+  removalFee        Decimal? @map("removal_fee") @db.Decimal(10, 2)
+  
+  // Shipping (for returns to seller)
+  shipmentDestination String? @map("shipment_destination")
+  carrier           String?
+  trackingNumber    String?  @map("tracking_number")
+  
+  // ASIN/FNSKU for matching
+  asin              String?
+  fnsku             String?
+  
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  @@map("removal_orders")
+}
+
+// ============================================
+// 6d. LONG-TERM STORAGE FEES
+// ============================================
+model StorageFee {
+  id                Int      @id @default(autoincrement())
+  
+  masterSku         String?  @map("master_sku")
+  product           Product? @relation(fields: [masterSku], references: [sku])
+  
+  // Period
+  snapshotDate      DateTime @map("snapshot_date")
+  
+  // Inventory at that time
+  asin              String?
+  fnsku             String?
+  condition         String?  // Sellable, Unsellable
+  quantityCharged   Int      @map("quantity_charged")
+  
+  // Age metrics
+  inventoryAge      Int?     @map("inventory_age") // days in warehouse
+  weeksOfCover12Mo  Decimal? @map("weeks_of_cover_12mo") @db.Decimal(10, 2)
+  
+  // Fees
+  monthlyStorageFee     Decimal  @default(0) @map("monthly_storage_fee") @db.Decimal(10, 2)
+  longTermStorageFee    Decimal  @default(0) @map("long_term_storage_fee") @db.Decimal(10, 2)
+  surcharge             Decimal  @default(0) @db.Decimal(10, 2)
+  
+  // Volume (for analytics)
+  volumeCubicFeet   Decimal? @map("volume_cubic_feet") @db.Decimal(10, 4)
+  
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  @@unique([masterSku, snapshotDate])
+  @@map("storage_fees")
+}
+
+// ============================================
+// 6e. SETTLEMENT REPORTS (Payment summaries)
+// ============================================
+model Settlement {
+  id                  Int      @id @default(autoincrement())
+  settlementId        String   @unique @map("settlement_id")
+  settlementStartDate DateTime @map("settlement_start_date")
+  settlementEndDate   DateTime @map("settlement_end_date")
+  depositDate         DateTime? @map("deposit_date")
+  
+  totalAmount         Decimal  @default(0) @map("total_amount") @db.Decimal(12, 2)
+  currency            String   @default("USD")
+  
+  // Breakdown
+  productCharges      Decimal  @default(0) @map("product_charges") @db.Decimal(12, 2)
+  productChargesTax   Decimal  @default(0) @map("product_charges_tax") @db.Decimal(12, 2)
+  shippingCharges     Decimal  @default(0) @map("shipping_charges") @db.Decimal(12, 2)
+  shippingChargesTax  Decimal  @default(0) @map("shipping_charges_tax") @db.Decimal(12, 2)
+  giftwrapCharges     Decimal  @default(0) @map("giftwrap_charges") @db.Decimal(12, 2)
+  giftwrapChargesTax  Decimal  @default(0) @map("giftwrap_charges_tax") @db.Decimal(12, 2)
+  promotionalRebates  Decimal  @default(0) @map("promotional_rebates") @db.Decimal(12, 2)
+  sellingFees         Decimal  @default(0) @map("selling_fees") @db.Decimal(12, 2)
+  fbaFees             Decimal  @default(0) @map("fba_fees") @db.Decimal(12, 2)
+  otherTransactionFees Decimal @default(0) @map("other_transaction_fees") @db.Decimal(12, 2)
+  otherAmount         Decimal  @default(0) @map("other_amount") @db.Decimal(12, 2)
+  
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  
+  @@index([settlementStartDate])
+  @@index([depositDate])
+  @@map("settlements")
+}
+
+// ============================================
+// 6f. SYNC LOG (Track sync operations)
+// ============================================
+model SyncLog {
+  id          Int       @id @default(autoincrement())
+  syncType    String    @map("sync_type") // 'initial-orders', 'initial-returns', 'initial-full', etc.
+  status      String    // 'running', 'success', 'failed'
+  
+  startedAt   DateTime  @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  
+  recordsProcessed Int   @default(0) @map("records_processed")
+  recordsCreated   Int   @default(0) @map("records_created")
+  recordsUpdated   Int   @default(0) @map("records_updated")
+  recordsSkipped   Int   @default(0) @map("records_skipped")
+  
+  errorMessage String?  @map("error_message")
+  errorDetails String?  @map("error_details") @db.Text
+  
+  metadata    Json?     // Additional info about the sync
+  
+  @@index([syncType])
+  @@index([status])
+  @@index([startedAt])
+  @@map("sync_logs")
 }
 
 // ============================================

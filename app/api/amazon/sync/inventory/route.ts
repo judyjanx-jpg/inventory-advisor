@@ -36,7 +36,7 @@ export async function POST() {
       const queryParams: any = {
         granularityType: 'Marketplace',
         granularityId: credentials.marketplaceId,
-        marketplaceIds: credentials.marketplaceId, // SP-API accepts string or array
+        marketplaceIds: [credentials.marketplaceId], // ✅ FIX: Must be an ARRAY!
         details: true,
       }
       
@@ -50,10 +50,31 @@ export async function POST() {
         query: queryParams,
       })
       
+      // Debug logging on first page
+      if (pageCount === 1) {
+        console.log('=== RAW INVENTORY RESPONSE ===')
+        console.log('Top-level keys:', Object.keys(inventoryResponse || {}))
+        console.log('Full response (first 5000 chars):')
+        console.log(JSON.stringify(inventoryResponse, null, 2).substring(0, 5000))
+      }
+      
       // FBA response structure: { payload: { inventorySummaries: [...], nextToken: "..." } }
       const payload = inventoryResponse?.payload || inventoryResponse
       const pageItems = payload?.inventorySummaries || []
       nextToken = payload?.nextToken || payload?.pagination?.nextToken
+      
+      // Debug first item
+      if (pageCount === 1 && pageItems.length > 0) {
+        console.log('\n=== FIRST INVENTORY ITEM ===')
+        console.log(JSON.stringify(pageItems[0], null, 2))
+        console.log('Item keys:', Object.keys(pageItems[0]))
+        if (pageItems[0].inventoryDetails) {
+          console.log('inventoryDetails keys:', Object.keys(pageItems[0].inventoryDetails))
+        } else {
+          console.log('⚠️ NO inventoryDetails object!')
+        }
+        console.log('=== END DEBUG ===')
+      }
       
       if (pageItems.length > 0) {
         inventorySummaries = [...inventorySummaries, ...pageItems]

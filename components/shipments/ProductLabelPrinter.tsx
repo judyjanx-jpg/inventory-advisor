@@ -355,10 +355,9 @@ export default function ProductLabelPrinter({
           .qr-container {
             display: flex;
             flex-direction: row;
-            align-items: flex-start;
-            gap: 1px;
+            align-items: center;
+            gap: 2px;
             flex: 1;
-            position: relative;
           }
           
           .qr-code {
@@ -380,16 +379,14 @@ export default function ProductLabelPrinter({
           }
           
           .tp-code-vertical {
-            font-size: 6pt;
+            font-size: 7pt;
             font-weight: normal;
             color: #000;
-            letter-spacing: 0.3px;
-            transform: rotate(90deg);
-            transform-origin: left top;
+            letter-spacing: 0.5px;
             white-space: nowrap;
-            position: absolute;
-            left: 0.58in;
-            top: 0.28in;
+            transform: rotate(90deg);
+            margin-left: -0.15in;
+            margin-right: -0.15in;
           }
           
           /* ========== FNSKU SECTION (RIGHT) ========== */
@@ -439,12 +436,9 @@ export default function ProductLabelPrinter({
             max-width: 100%;
             line-height: 1.15;
             margin-top: 0.005in;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
+            white-space: nowrap;
             overflow: hidden;
+            text-overflow: ellipsis;
           }
           
           .condition {
@@ -486,8 +480,15 @@ export default function ProductLabelPrinter({
               <div class="label tp-only-label">
                 <div class="tp-header">
                   <svg class="tp-icon" viewBox="0 0 24 24" fill="none">
-                    <rect width="24" height="24" rx="4" fill="#1a73e8"/>
-                    <path d="M6 12h12M12 6v12" stroke="#fff" stroke-width="2"/>
+                    <rect x="0" y="0" width="5" height="5" fill="#000"/>
+                    <rect x="5" y="0" width="5" height="5" fill="#000"/>
+                    <rect x="0" y="5" width="5" height="5" fill="#000"/>
+                    <rect x="10" y="0" width="5" height="5" fill="#000"/>
+                    <rect x="15" y="0" width="5" height="5" fill="#fff" stroke="#000" stroke-width="0.5"/>
+                    <rect x="20" y="0" width="4" height="5" fill="#000"/>
+                    <rect x="10" y="5" width="5" height="5" fill="#fff" stroke="#000" stroke-width="0.5"/>
+                    <rect x="15" y="5" width="5" height="5" fill="#000"/>
+                    <path d="M15 10 L20 10 L20 20 Q20 24 16 24 L15 24 L15 10 Z" fill="#000"/>
                   </svg>
                   <span class="tp-header-text">Scan with the<br/>Transparency app</span>
                 </div>
@@ -502,8 +503,15 @@ export default function ProductLabelPrinter({
                 <div class="tp-section">
                   <div class="tp-header">
                     <svg class="tp-icon" viewBox="0 0 24 24" fill="none">
-                      <rect width="24" height="24" rx="4" fill="#1a73e8"/>
-                      <path d="M7 7h4v4H7zM13 7h4v4h-4zM7 13h4v4H7zM13 13h4v4h-4z" fill="#fff"/>
+                      <rect x="0" y="0" width="5" height="5" fill="#000"/>
+                      <rect x="5" y="0" width="5" height="5" fill="#000"/>
+                      <rect x="0" y="5" width="5" height="5" fill="#000"/>
+                      <rect x="10" y="0" width="5" height="5" fill="#000"/>
+                      <rect x="15" y="0" width="5" height="5" fill="#fff" stroke="#000" stroke-width="0.5"/>
+                      <rect x="20" y="0" width="4" height="5" fill="#000"/>
+                      <rect x="10" y="5" width="5" height="5" fill="#fff" stroke="#000" stroke-width="0.5"/>
+                      <rect x="15" y="5" width="5" height="5" fill="#000"/>
+                      <path d="M15 10 L20 10 L20 20 Q20 24 16 24 L15 24 L15 10 Z" fill="#000"/>
                     </svg>
                     <span class="tp-header-text">Scan with the<br/>Transparency app</span>
                   </div>
@@ -516,7 +524,7 @@ export default function ProductLabelPrinter({
                   ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                   <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                   <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                  <div class="product-name">${item.productName.length > 30 ? item.productName.substring(0, 30) + '...' : item.productName}</div>
+                  <div class="product-name">${item.productName.length > 50 ? item.productName.substring(0, 50) + '...' : item.productName}</div>
                   <div class="condition">New</div>
                 </div>
               </div>
@@ -659,7 +667,7 @@ export default function ProductLabelPrinter({
         logging: false,
         backgroundColor: '#ffffff',
         window: iframe.contentWindow || undefined,
-      } as any)
+      })
       
       const imgData = canvas.toDataURL('image/png', 1.0)
       pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'FAST')

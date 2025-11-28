@@ -536,8 +536,9 @@ export async function POST() {
     console.log(`  ✓ Created ${virtualParentsCreated} parent groups, linked ${relationshipsLinked} variations`)
 
     // Step 7: Fetch FNSKUs from FBA Inventory API (this is the most reliable source)
-    console.log('\n📦 Fetching FNSKUs from FBA Inventory API...')
+    console.log('\n📦 Fetching FNSKUs and inventory from FBA Inventory API...')
     let fnskuUpdated = 0
+    let inventoryUpdated = 0
     
     try {
       let nextToken: string | undefined = undefined
@@ -548,8 +549,8 @@ export async function POST() {
         const query: any = {
           granularityType: 'Marketplace',
           granularityId: credentials.marketplaceId,
-          marketplaceIds: credentials.marketplaceId, // String not array
-          details: 'true',
+          marketplaceIds: [credentials.marketplaceId],  // ✅ FIX: Must be an ARRAY, not string
+          details: true,  // ✅ FIX: Must be boolean, not string
         }
         if (nextToken) query.nextToken = nextToken
         
@@ -559,12 +560,27 @@ export async function POST() {
           query,
         })
         
-        // Debug: log first response structure
+        // Detailed debug logging on first page
         if (pageCount === 0) {
-          console.log(`  First response keys: ${Object.keys(response || {}).join(', ')}`)
-          if (response?.payload) console.log(`  Payload keys: ${Object.keys(response.payload).join(', ')}`)
-          if (response?.pagination) console.log(`  Has pagination at root`)
-          if (response?.payload?.pagination) console.log(`  Has pagination in payload`)
+          console.log('=== RAW INVENTORY RESPONSE ===')
+          console.log('Top-level keys:', Object.keys(response || {}))
+          console.log('Full response (first 5000 chars):')
+          console.log(JSON.stringify(response, null, 2).substring(0, 5000))
+          
+          const payload = response?.payload || response
+          const items = payload?.inventorySummaries || []
+          
+          if (items.length > 0) {
+            console.log('\n=== FIRST INVENTORY ITEM ===')
+            console.log(JSON.stringify(items[0], null, 2))
+            console.log('Item keys:', Object.keys(items[0]))
+            if (items[0].inventoryDetails) {
+              console.log('inventoryDetails keys:', Object.keys(items[0].inventoryDetails))
+            } else {
+              console.log('⚠️ NO inventoryDetails object!')
+            }
+          }
+          console.log('=== END DEBUG ===')
         }
         
         const summaries = response?.payload?.inventorySummaries || response?.inventorySummaries || []
@@ -585,30 +601,81 @@ export async function POST() {
       
       console.log(`  Total inventory items: ${allInventory.length}`)
       
-      // Log sample item to see structure
-      if (allInventory.length > 0) {
-        const sample = allInventory[0]
-        console.log(`  Sample item: SKU=${sample.sellerSku}, FNSKU=${sample.fnSku}`)
-      }
-      
-      // Update products with FNSKUs - always overwrite
+      // Update products with FNSKUs AND inventory levels from FBA Inventory API
       for (const item of allInventory) {
-        if (item.sellerSku && item.fnSku) {
+        if (item.sellerSku) {
           try {
-            const result = await prisma.product.updateMany({
-              where: { 
-                sku: item.sellerSku,
+            // Update FNSKU on product
+            if (item.fnSku) {
+              const result = await prisma.product.updateMany({
+                where: { sku: item.sellerSku },
+                data: { fnsku: item.fnSku },
+              })
+              if (result.count > 0) fnskuUpdated++
+            }
+            
+            // ✅ FIX: Check both locations for inventory data (inventoryDetails or root level)
+            const details = item.inventoryDetails || {}
+            
+            // Fulfillable quantity - check both locations
+            const fbaAvailable = details.fulfillableQuantity ?? item.fulfillableQuantity ?? 0
+            
+            // Inbound quantities - check both locations  
+            const fbaInboundWorking = details.inboundWorkingQuantity ?? item.inboundWorkingQuantity ?? 0
+            const fbaInboundShipped = details.inboundShippedQuantity ?? item.inboundShippedQuantity ?? 0
+            const fbaInboundReceiving = details.inboundReceivingQuantity ?? item.inboundReceivingQuantity ?? 0
+            
+            // ✅ FIX: Reserved can be number OR object
+            let fbaReserved = 0
+            const reserved = details.reservedQuantity ?? item.reservedQuantity
+            if (reserved) {
+              if (typeof reserved === 'number') {
+                fbaReserved = reserved
+              } else if (reserved.totalReservedQuantity !== undefined) {
+                fbaReserved = reserved.totalReservedQuantity || 0
+              }
+            }
+            
+            // ✅ FIX: Unfulfillable can be number OR object
+            let fbaUnfulfillable = 0
+            const unfulfillableData = details.unfulfillableQuantity ?? item.unfulfillableQuantity
+            if (unfulfillableData) {
+              if (typeof unfulfillableData === 'number') {
+                fbaUnfulfillable = unfulfillableData
+              } else if (unfulfillableData.totalUnfulfillableQuantity !== undefined) {
+                fbaUnfulfillable = unfulfillableData.totalUnfulfillableQuantity || 0
+              }
+            }
+            
+            await prisma.inventoryLevel.upsert({
+              where: { masterSku: item.sellerSku },
+              update: {
+                fbaAvailable,
+                fbaReserved,
+                fbaUnfulfillable,
+                fbaInboundWorking,
+                fbaInboundShipped,
+                fbaInboundReceiving,
               },
-              data: { fnsku: item.fnSku },
+              create: {
+                masterSku: item.sellerSku,
+                fbaAvailable,
+                fbaReserved,
+                fbaUnfulfillable,
+                fbaInboundWorking,
+                fbaInboundShipped,
+                fbaInboundReceiving,
+                warehouseAvailable: 0,
+              },
             })
-            if (result.count > 0) fnskuUpdated++
+            inventoryUpdated++
           } catch (e) {
             // Ignore errors
           }
         }
       }
       
-      console.log(`  ✓ Updated ${fnskuUpdated} products with FNSKUs`)
+      console.log(`  ✓ Updated ${fnskuUpdated} FNSKUs and ${inventoryUpdated} inventory levels`)
     } catch (fbaError: any) {
       console.log(`  ⚠️ FBA Inventory API failed: ${fbaError.message}`)
     }
@@ -616,8 +683,9 @@ export async function POST() {
     await updateSyncStatus('success')
 
     console.log(`\n📊 FNSKU Stats: ${fnskuCount} from report + ${fnskuUpdated} from FBA API`)
+    console.log(`📦 Inventory: ${inventoryUpdated} products updated with FBA inventory levels`)
 
-    const message = `Synced ${reportData.length} products: ${created} created, ${updated} updated, ${virtualParentsCreated} parent groups, ${relationshipsLinked} variations linked, ${fnskuUpdated} FNSKUs updated`
+    const message = `Synced ${reportData.length} products: ${created} created, ${updated} updated, ${virtualParentsCreated} parent groups, ${relationshipsLinked} variations linked, ${fnskuUpdated} FNSKUs, ${inventoryUpdated} inventory levels updated`
     console.log(`\n✅ ${message}`)
 
     return NextResponse.json({
@@ -696,9 +764,37 @@ async function syncViaInventoryAPI(client: any, credentials: any, channel: strin
     if (!sku) continue
 
     const asin = item.asin
-    const fnsku = item.fnsku
+    const fnsku = item.fnSku  // ✅ FIX: Correct property name is fnSku not fnsku
     const title = item.productName || sku
-    const quantity = item.inventoryDetails?.fulfillableQuantity || 0
+    
+    // ✅ FIX: Robust quantity parsing - check both locations
+    const details = item.inventoryDetails || {}
+    const quantity = details.fulfillableQuantity ?? item.fulfillableQuantity ?? 0
+    const inboundWorking = details.inboundWorkingQuantity ?? item.inboundWorkingQuantity ?? 0
+    const inboundShipped = details.inboundShippedQuantity ?? item.inboundShippedQuantity ?? 0
+    const inboundReceiving = details.inboundReceivingQuantity ?? item.inboundReceivingQuantity ?? 0
+    
+    // Reserved can be number or object
+    let reserved = 0
+    const reservedData = details.reservedQuantity ?? item.reservedQuantity
+    if (reservedData) {
+      if (typeof reservedData === 'number') {
+        reserved = reservedData
+      } else if (reservedData.totalReservedQuantity !== undefined) {
+        reserved = reservedData.totalReservedQuantity || 0
+      }
+    }
+    
+    // Unfulfillable can be number or object
+    let unfulfillable = 0
+    const unfulfillableData = details.unfulfillableQuantity ?? item.unfulfillableQuantity
+    if (unfulfillableData) {
+      if (typeof unfulfillableData === 'number') {
+        unfulfillable = unfulfillableData
+      } else if (unfulfillableData.totalUnfulfillableQuantity !== undefined) {
+        unfulfillable = unfulfillableData.totalUnfulfillableQuantity || 0
+      }
+    }
 
     let product = await prisma.product.findUnique({
       where: { sku },
@@ -719,8 +815,11 @@ async function syncViaInventoryAPI(client: any, credentials: any, channel: strin
             inventoryLevels: {
               create: {
                 fbaAvailable: quantity,
-                fbaReserved: item.inventoryDetails?.reservedQuantity?.totalReservedQuantity || 0,
-                fbaUnfulfillable: item.inventoryDetails?.unfulfillableQuantity?.totalUnfulfillableQuantity || 0,
+                fbaReserved: reserved,
+                fbaUnfulfillable: unfulfillable,
+                fbaInboundWorking: inboundWorking,
+                fbaInboundShipped: inboundShipped,
+                fbaInboundReceiving: inboundReceiving,
                 warehouseAvailable: 0,
               },
             },
@@ -753,12 +852,20 @@ async function syncViaInventoryAPI(client: any, credentials: any, channel: strin
         where: { masterSku: sku },
         update: {
           fbaAvailable: quantity,
-          fbaReserved: item.inventoryDetails?.reservedQuantity?.totalReservedQuantity || 0,
-          fbaUnfulfillable: item.inventoryDetails?.unfulfillableQuantity?.totalUnfulfillableQuantity || 0,
+          fbaReserved: reserved,
+          fbaUnfulfillable: unfulfillable,
+          fbaInboundWorking: inboundWorking,
+          fbaInboundShipped: inboundShipped,
+          fbaInboundReceiving: inboundReceiving,
         },
         create: {
           masterSku: sku,
           fbaAvailable: quantity,
+          fbaReserved: reserved,
+          fbaUnfulfillable: unfulfillable,
+          fbaInboundWorking: inboundWorking,
+          fbaInboundShipped: inboundShipped,
+          fbaInboundReceiving: inboundReceiving,
           warehouseAvailable: 0,
         },
       })

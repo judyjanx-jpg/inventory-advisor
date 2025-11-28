@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+// Transform product to flatten inventoryLevels array to single object
+function transformProduct(product: any): any {
+  const inventoryLevels = product.inventoryLevels?.[0] || null
+  const transformed = {
+    ...product,
+    inventoryLevels: inventoryLevels ? {
+      fbaAvailable: inventoryLevels.fbaAvailable || 0,
+      warehouseAvailable: inventoryLevels.warehouseAvailable || 0,
+      fbaInboundWorking: inventoryLevels.fbaInboundWorking || 0,
+      fbaInboundShipped: inventoryLevels.fbaInboundShipped || 0,
+      fbaReserved: inventoryLevels.fbaReserved || 0,
+    } : null,
+  }
+  
+  // Also transform variations if present
+  if (product.variations) {
+    transformed.variations = product.variations.map(transformProduct)
+  }
+  
+  return transformed
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -28,7 +50,7 @@ export async function GET(request: NextRequest) {
           sku: 'asc',
         },
       })
-      return NextResponse.json(products)
+      return NextResponse.json(products.map(transformProduct))
     }
 
     // Fetch parent products and standalone products (products without a parent)
@@ -61,7 +83,7 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(parentAndStandaloneProducts)
+    return NextResponse.json(parentAndStandaloneProducts.map(transformProduct))
   } catch (error) {
     console.error('Error fetching products:', error)
     return NextResponse.json(

@@ -4,8 +4,8 @@ import { createSpApiClient, getAmazonCredentials, updateSyncStatus, marketplaceT
 
 // NOTE: This sync is READ-ONLY. We never push data to Amazon.
 
-async function waitForReport(client: any, reportId: string, maxWaitMinutes = 600): Promise<string | null> {
-  // 600 minutes = 10 hours for very large reports
+async function waitForReport(client: any, reportId: string, maxWaitMinutes = 720): Promise<string | null> {
+  // 720 minutes = 12 hours for very large reports
   const maxAttempts = maxWaitMinutes * 2 // Check every 30 seconds
   let attempts = 0
 
@@ -75,6 +75,429 @@ interface OrderReportItem {
   shipCountry: string
   promoDiscount: number
   asin: string
+  // Fee fields (from settlement/fee reports)
+  referralFee: number
+  fbaFee: number
+  otherFees: number
+}
+
+interface SettlementFee {
+  orderId: string
+  sku: string
+  referralFee: number
+  fbaFee: number
+  otherFees: number
+}
+
+function parseSettlementReport(reportContent: string): Map<string, SettlementFee> {
+  const feeMap = new Map<string, SettlementFee>()
+  const lines = reportContent.split('\n')
+  if (lines.length < 2) return feeMap
+
+  const header = lines[0].split('\t').map(h => h.toLowerCase().trim())
+  
+  const findCol = (patterns: string[]) => {
+    for (const p of patterns) {
+      const idx = header.findIndex(h => h === p || h.includes(p))
+      if (idx >= 0) return idx
+    }
+    return -1
+  }
+
+  const orderIdIdx = findCol(['order-id', 'amazon-order-id', 'order id'])
+  const skuIdx = findCol(['sku', 'seller-sku'])
+  const typeIdx = findCol(['amount-type', 'transaction-type', 'type'])
+  const descIdx = findCol(['amount-description', 'fee-type', 'description'])
+  const amountIdx = findCol(['amount', 'total', 'fee-amount'])
+
+  console.log(`  Settlement columns: orderId=${orderIdIdx}, sku=${skuIdx}, type=${typeIdx}, desc=${descIdx}, amount=${amountIdx}`)
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const cols = line.split('\t')
+    const orderId = orderIdIdx >= 0 ? cols[orderIdIdx]?.trim() : ''
+    const sku = skuIdx >= 0 ? cols[skuIdx]?.trim() : ''
+    const amountType = typeIdx >= 0 ? cols[typeIdx]?.trim().toLowerCase() : ''
+    const description = descIdx >= 0 ? cols[descIdx]?.trim().toLowerCase() : ''
+    const amount = amountIdx >= 0 ? Math.abs(parseFloat(cols[amountIdx]) || 0) : 0
+
+    if (!orderId || !sku || amount === 0) continue
+
+    const key = `${orderId}|${sku}`
+    if (!feeMap.has(key)) {
+      feeMap.set(key, { orderId, sku, referralFee: 0, fbaFee: 0, otherFees: 0 })
+    }
+
+    const entry = feeMap.get(key)!
+    
+    // Categorize fees
+    if (description.includes('referral') || description.includes('commission')) {
+      entry.referralFee += amount
+    } else if (description.includes('fba') || description.includes('fulfillment') || 
+               description.includes('pick & pack') || description.includes('weight')) {
+      entry.fbaFee += amount
+    } else if (amountType.includes('fee') || amountType.includes('itemfees') ||
+               description.includes('fee') || description.includes('closing')) {
+      entry.otherFees += amount
+    }
+  }
+
+  console.log(`  Parsed fees for ${feeMap.size} order-SKU combinations`)
+  return feeMap
+}
+
+// ============================================
+// RETURNS REPORT PARSING
+// ============================================
+interface ReturnItem {
+  returnId: string
+  orderId: string
+  sku: string
+  returnDate: string
+  quantity: number
+  reason: string
+  disposition: string
+  refundAmount: number
+  asin: string
+  fnsku: string
+}
+
+function parseReturnsReport(reportContent: string): ReturnItem[] {
+  const lines = reportContent.split('\n')
+  if (lines.length < 2) return []
+
+  const header = lines[0].split('\t').map(h => h.toLowerCase().trim())
+  
+  const findCol = (patterns: string[]) => {
+    for (const p of patterns) {
+      const idx = header.findIndex(h => h === p || h.includes(p))
+      if (idx >= 0) return idx
+    }
+    return -1
+  }
+
+  const returnIdIdx = findCol(['return-id', 'returnid', 'license-plate-number'])
+  const orderIdIdx = findCol(['order-id', 'amazon-order-id'])
+  const skuIdx = findCol(['sku', 'seller-sku', 'merchant-sku'])
+  const asinIdx = findCol(['asin'])
+  const fnskuIdx = findCol(['fnsku'])
+  const dateIdx = findCol(['return-date', 'return-request-date'])
+  const qtyIdx = findCol(['quantity', 'returned-quantity'])
+  const reasonIdx = findCol(['reason', 'return-reason', 'detailed-disposition'])
+  const dispositionIdx = findCol(['disposition', 'status'])
+  const refundIdx = findCol(['refund', 'refund-amount', 'item-refund'])
+
+  const items: ReturnItem[] = []
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const cols = line.split('\t')
+    
+    const returnId = returnIdIdx >= 0 ? cols[returnIdIdx]?.trim() : `RET-${i}`
+    const orderId = orderIdIdx >= 0 ? cols[orderIdIdx]?.trim() : ''
+    const sku = skuIdx >= 0 ? cols[skuIdx]?.trim() : ''
+    const asin = asinIdx >= 0 ? cols[asinIdx]?.trim() : ''
+    const fnsku = fnskuIdx >= 0 ? cols[fnskuIdx]?.trim() : ''
+    const returnDate = dateIdx >= 0 ? cols[dateIdx]?.trim() : ''
+    const quantity = qtyIdx >= 0 ? parseInt(cols[qtyIdx]) || 1 : 1
+    const reason = reasonIdx >= 0 ? cols[reasonIdx]?.trim() : ''
+    const disposition = dispositionIdx >= 0 ? cols[dispositionIdx]?.trim() : 'unknown'
+    const refundAmount = refundIdx >= 0 ? Math.abs(parseFloat(cols[refundIdx]) || 0) : 0
+
+    if (!sku && !asin) continue
+
+    items.push({
+      returnId,
+      orderId,
+      sku,
+      returnDate,
+      quantity,
+      reason,
+      disposition,
+      refundAmount,
+      asin,
+      fnsku
+    })
+  }
+
+  console.log(`  Parsed ${items.length} returns`)
+  return items
+}
+
+// ============================================
+// REIMBURSEMENTS REPORT PARSING
+// ============================================
+interface ReimbursementItem {
+  reimbursementId: string
+  caseId: string
+  sku: string
+  asin: string
+  fnsku: string
+  approvalDate: string
+  reason: string
+  condition: string
+  quantity: number
+  amountPerUnit: number
+  amountTotal: number
+  currencyCode: string
+}
+
+function parseReimbursementsReport(reportContent: string): ReimbursementItem[] {
+  const lines = reportContent.split('\n')
+  if (lines.length < 2) return []
+
+  const header = lines[0].split('\t').map(h => h.toLowerCase().trim())
+  
+  const findCol = (patterns: string[]) => {
+    for (const p of patterns) {
+      const idx = header.findIndex(h => h === p || h.includes(p))
+      if (idx >= 0) return idx
+    }
+    return -1
+  }
+
+  const reimbIdIdx = findCol(['reimbursement-id', 'reimbursementid'])
+  const caseIdIdx = findCol(['case-id', 'caseid'])
+  const skuIdx = findCol(['sku', 'seller-sku', 'merchant-sku'])
+  const asinIdx = findCol(['asin'])
+  const fnskuIdx = findCol(['fnsku'])
+  const dateIdx = findCol(['approval-date', 'reimbursement-date'])
+  const reasonIdx = findCol(['reason', 'reimbursement-reason'])
+  const conditionIdx = findCol(['condition'])
+  const qtyIdx = findCol(['quantity', 'quantity-reimbursed-inventory', 'quantity-reimbursed'])
+  const amountPerUnitIdx = findCol(['amount-per-unit', 'per-unit-amount'])
+  const amountTotalIdx = findCol(['amount-total', 'total-amount', 'amount'])
+  const currencyIdx = findCol(['currency', 'currency-code'])
+
+  const items: ReimbursementItem[] = []
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const cols = line.split('\t')
+    
+    const reimbursementId = reimbIdIdx >= 0 ? cols[reimbIdIdx]?.trim() : `REIMB-${i}`
+    const caseId = caseIdIdx >= 0 ? cols[caseIdIdx]?.trim() : ''
+    const sku = skuIdx >= 0 ? cols[skuIdx]?.trim() : ''
+    const asin = asinIdx >= 0 ? cols[asinIdx]?.trim() : ''
+    const fnsku = fnskuIdx >= 0 ? cols[fnskuIdx]?.trim() : ''
+    const approvalDate = dateIdx >= 0 ? cols[dateIdx]?.trim() : ''
+    const reason = reasonIdx >= 0 ? cols[reasonIdx]?.trim() : ''
+    const condition = conditionIdx >= 0 ? cols[conditionIdx]?.trim() : ''
+    const quantity = qtyIdx >= 0 ? parseInt(cols[qtyIdx]) || 1 : 1
+    const amountPerUnit = amountPerUnitIdx >= 0 ? parseFloat(cols[amountPerUnitIdx]) || 0 : 0
+    let amountTotal = amountTotalIdx >= 0 ? parseFloat(cols[amountTotalIdx]) || 0 : 0
+    const currencyCode = currencyIdx >= 0 ? cols[currencyIdx]?.trim() || 'USD' : 'USD'
+
+    if (!amountTotal && amountPerUnit) {
+      amountTotal = amountPerUnit * quantity
+    }
+
+    if (amountTotal === 0) continue
+
+    items.push({
+      reimbursementId,
+      caseId,
+      sku,
+      asin,
+      fnsku,
+      approvalDate,
+      reason,
+      condition,
+      quantity,
+      amountPerUnit,
+      amountTotal,
+      currencyCode
+    })
+  }
+
+  console.log(`  Parsed ${items.length} reimbursements`)
+  return items
+}
+
+// ============================================
+// REMOVAL ORDERS REPORT PARSING
+// ============================================
+interface RemovalItem {
+  removalOrderId: string
+  sku: string
+  asin: string
+  fnsku: string
+  requestDate: string
+  lastUpdatedDate: string
+  orderType: string
+  orderStatus: string
+  requestedQuantity: number
+  cancelledQuantity: number
+  disposedQuantity: number
+  shippedQuantity: number
+  inProcessQuantity: number
+  removalFee: number
+}
+
+function parseRemovalsReport(reportContent: string): RemovalItem[] {
+  const lines = reportContent.split('\n')
+  if (lines.length < 2) return []
+
+  const header = lines[0].split('\t').map(h => h.toLowerCase().trim())
+  
+  const findCol = (patterns: string[]) => {
+    for (const p of patterns) {
+      const idx = header.findIndex(h => h === p || h.includes(p))
+      if (idx >= 0) return idx
+    }
+    return -1
+  }
+
+  const removalIdIdx = findCol(['order-id', 'removal-order-id'])
+  const skuIdx = findCol(['sku', 'seller-sku', 'merchant-sku'])
+  const asinIdx = findCol(['asin'])
+  const fnskuIdx = findCol(['fnsku'])
+  const requestDateIdx = findCol(['request-date', 'order-date'])
+  const lastUpdatedIdx = findCol(['last-updated-date', 'last-updated'])
+  const orderTypeIdx = findCol(['order-type', 'removal-order-type'])
+  const orderStatusIdx = findCol(['order-status', 'status'])
+  const requestedQtyIdx = findCol(['requested-quantity', 'requested'])
+  const cancelledQtyIdx = findCol(['cancelled-quantity', 'cancelled'])
+  const disposedQtyIdx = findCol(['disposed-quantity', 'disposed'])
+  const shippedQtyIdx = findCol(['shipped-quantity', 'shipped'])
+  const inProcessQtyIdx = findCol(['in-process-quantity', 'in-process'])
+  const feeIdx = findCol(['removal-fee', 'fee'])
+
+  const items: RemovalItem[] = []
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const cols = line.split('\t')
+    
+    const removalOrderId = removalIdIdx >= 0 ? cols[removalIdIdx]?.trim() : ''
+    const sku = skuIdx >= 0 ? cols[skuIdx]?.trim() : ''
+    const asin = asinIdx >= 0 ? cols[asinIdx]?.trim() : ''
+    const fnsku = fnskuIdx >= 0 ? cols[fnskuIdx]?.trim() : ''
+    const requestDate = requestDateIdx >= 0 ? cols[requestDateIdx]?.trim() : ''
+    const lastUpdatedDate = lastUpdatedIdx >= 0 ? cols[lastUpdatedIdx]?.trim() : ''
+    const orderType = orderTypeIdx >= 0 ? cols[orderTypeIdx]?.trim() : 'Return'
+    const orderStatus = orderStatusIdx >= 0 ? cols[orderStatusIdx]?.trim() : 'Unknown'
+    const requestedQuantity = requestedQtyIdx >= 0 ? parseInt(cols[requestedQtyIdx]) || 0 : 0
+    const cancelledQuantity = cancelledQtyIdx >= 0 ? parseInt(cols[cancelledQtyIdx]) || 0 : 0
+    const disposedQuantity = disposedQtyIdx >= 0 ? parseInt(cols[disposedQtyIdx]) || 0 : 0
+    const shippedQuantity = shippedQtyIdx >= 0 ? parseInt(cols[shippedQtyIdx]) || 0 : 0
+    const inProcessQuantity = inProcessQtyIdx >= 0 ? parseInt(cols[inProcessQtyIdx]) || 0 : 0
+    const removalFee = feeIdx >= 0 ? parseFloat(cols[feeIdx]) || 0 : 0
+
+    if (!removalOrderId) continue
+
+    items.push({
+      removalOrderId,
+      sku,
+      asin,
+      fnsku,
+      requestDate,
+      lastUpdatedDate,
+      orderType,
+      orderStatus,
+      requestedQuantity,
+      cancelledQuantity,
+      disposedQuantity,
+      shippedQuantity,
+      inProcessQuantity,
+      removalFee
+    })
+  }
+
+  console.log(`  Parsed ${items.length} removal orders`)
+  return items
+}
+
+// ============================================
+// STORAGE FEES REPORT PARSING
+// ============================================
+interface StorageFeeItem {
+  sku: string
+  asin: string
+  fnsku: string
+  snapshotDate: string
+  condition: string
+  quantityCharged: number
+  inventoryAge: number
+  monthlyStorageFee: number
+  longTermStorageFee: number
+  surcharge: number
+  volumeCubicFeet: number
+}
+
+function parseStorageFeesReport(reportContent: string): StorageFeeItem[] {
+  const lines = reportContent.split('\n')
+  if (lines.length < 2) return []
+
+  const header = lines[0].split('\t').map(h => h.toLowerCase().trim())
+  
+  const findCol = (patterns: string[]) => {
+    for (const p of patterns) {
+      const idx = header.findIndex(h => h === p || h.includes(p))
+      if (idx >= 0) return idx
+    }
+    return -1
+  }
+
+  const skuIdx = findCol(['sku', 'seller-sku', 'merchant-sku'])
+  const asinIdx = findCol(['asin'])
+  const fnskuIdx = findCol(['fnsku'])
+  const dateIdx = findCol(['snapshot-date', 'month-of-charge', 'date'])
+  const conditionIdx = findCol(['condition', 'product-condition'])
+  const qtyIdx = findCol(['qty-charged-12-mo-long-term-storage-fee', 'qty', 'quantity'])
+  const ageIdx = findCol(['inventory-age', 'age', 'days-of-supply'])
+  const monthlyFeeIdx = findCol(['monthly-storage-fee', 'estimated-monthly-storage-fee'])
+  const longTermFeeIdx = findCol(['12-mo-long-term-storage-fee', 'long-term-storage-fee', 'aged-inventory-surcharge'])
+  const surchargeIdx = findCol(['surcharge', 'storage-surcharge'])
+  const volumeIdx = findCol(['volume', 'cubic-feet', 'volume-cubic-feet'])
+
+  const items: StorageFeeItem[] = []
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const cols = line.split('\t')
+    
+    const sku = skuIdx >= 0 ? cols[skuIdx]?.trim() : ''
+    const asin = asinIdx >= 0 ? cols[asinIdx]?.trim() : ''
+    const fnsku = fnskuIdx >= 0 ? cols[fnskuIdx]?.trim() : ''
+    const snapshotDate = dateIdx >= 0 ? cols[dateIdx]?.trim() : new Date().toISOString().split('T')[0]
+    const condition = conditionIdx >= 0 ? cols[conditionIdx]?.trim() : 'Sellable'
+    const quantityCharged = qtyIdx >= 0 ? parseInt(cols[qtyIdx]) || 0 : 0
+    const inventoryAge = ageIdx >= 0 ? parseInt(cols[ageIdx]) || 0 : 0
+    const monthlyStorageFee = monthlyFeeIdx >= 0 ? parseFloat(cols[monthlyFeeIdx]) || 0 : 0
+    const longTermStorageFee = longTermFeeIdx >= 0 ? parseFloat(cols[longTermFeeIdx]) || 0 : 0
+    const surcharge = surchargeIdx >= 0 ? parseFloat(cols[surchargeIdx]) || 0 : 0
+    const volumeCubicFeet = volumeIdx >= 0 ? parseFloat(cols[volumeIdx]) || 0 : 0
+
+    if (!sku && !asin && !fnsku) continue
+
+    items.push({
+      sku,
+      asin,
+      fnsku,
+      snapshotDate,
+      condition,
+      quantityCharged,
+      inventoryAge,
+      monthlyStorageFee,
+      longTermStorageFee,
+      surcharge,
+      volumeCubicFeet
+    })
+  }
+
+  console.log(`  Parsed ${items.length} storage fee records`)
+  return items
 }
 
 function parseOrdersReport(reportContent: string): OrderReportItem[] {
@@ -158,7 +581,8 @@ function parseOrdersReport(reportContent: string): OrderReportItem[] {
       orderId, sku, purchaseDate, purchaseDateTime, quantity: qty, 
       itemPrice: price, itemTax: tax, shippingPrice: shipPrice, shippingTax: shipTax,
       status, fulfillmentChannel: channel, shipCity: city, shipState: state, shipCountry: country,
-      promoDiscount: Math.abs(promo), asin
+      promoDiscount: Math.abs(promo), asin,
+      referralFee: 0, fbaFee: 0, otherFees: 0 // Will be populated from settlement data
     })
   }
 
@@ -202,7 +626,7 @@ export async function POST(request: NextRequest) {
     // Use Reports API for bulk data - much faster than Orders API for large volumes
     console.log('\n📋 Requesting order report from Amazon...')
     console.log('   (Large reports with 2 years of data can take 1-4+ hours to generate)')
-    console.log('   Will wait up to 10 hours for report to complete...')
+    console.log('   Will wait up to 12 hours for report to complete...')
 
     let reportItems: Array<{
       orderId: string
@@ -277,6 +701,85 @@ export async function POST(request: NextRequest) {
         if (reportError.message?.includes('forbidden') || reportError.message?.includes('Access')) {
           console.log(`    Access denied for this report type`)
         }
+      }
+    }
+
+    // Fetch settlement/fee data to get Amazon fees
+    if (reportSuccess && reportItems.length > 0) {
+      console.log('\n💰 Fetching Amazon fee data from settlement reports...')
+      
+      try {
+        // Request settlement report for fee data
+        const settlementReportTypes = [
+          'GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2',
+          'GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE',
+          'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE',
+        ]
+
+        let feeMap: Map<string, SettlementFee> = new Map()
+
+        for (const feeReportType of settlementReportTypes) {
+          if (feeMap.size > 0) break
+          
+          console.log(`  Trying fee report: ${feeReportType}`)
+          
+          try {
+            const feeReportResponse = await client.callAPI({
+              operation: 'createReport',
+              endpoint: 'reports',
+              body: {
+                reportType: feeReportType,
+                marketplaceIds: [credentials.marketplaceId],
+                dataStartTime: startDate.toISOString(),
+                dataEndTime: endDate.toISOString(),
+              },
+            })
+
+            const feeReportId = feeReportResponse?.reportId
+            if (!feeReportId) {
+              console.log(`    No report ID returned`)
+              continue
+            }
+
+            console.log(`    Fee report ID: ${feeReportId}`)
+            
+            // Wait for fee report (shorter timeout - 2 hours)
+            const feeDocId = await waitForReport(client, feeReportId, 360)
+            if (!feeDocId) {
+              console.log(`    Fee report completed but no document`)
+              continue
+            }
+
+            const feeContent = await downloadReport(client, feeDocId)
+            console.log(`    Downloaded fee report: ${feeContent.split('\n').length} lines`)
+            
+            feeMap = parseSettlementReport(feeContent)
+            
+          } catch (feeErr: any) {
+            console.log(`    Fee report ${feeReportType} failed: ${feeErr.message?.substring(0, 80)}`)
+          }
+        }
+
+        // Merge fee data into order items
+        if (feeMap.size > 0) {
+          let feesApplied = 0
+          for (const item of reportItems) {
+            const key = `${item.orderId}|${item.sku}`
+            const fees = feeMap.get(key)
+            if (fees) {
+              item.referralFee = fees.referralFee
+              item.fbaFee = fees.fbaFee
+              item.otherFees = fees.otherFees
+              feesApplied++
+            }
+          }
+          console.log(`  Applied fees to ${feesApplied} order items`)
+        } else {
+          console.log('  ⚠️ Could not fetch fee data - fees will be estimated later')
+        }
+        
+      } catch (feeError: any) {
+        console.log(`  Fee fetch error: ${feeError.message?.substring(0, 100)}`)
       }
     }
 
@@ -490,6 +993,9 @@ export async function POST(request: NextRequest) {
             if (!existingSkuSet.has(item.sku)) continue
             
             try {
+              // Calculate total Amazon fees
+              const totalFees = (item.referralFee || 0) + (item.fbaFee || 0) + (item.otherFees || 0)
+              
               await prisma.orderItem.create({
                 data: {
                   orderId: order.orderId,
@@ -500,6 +1006,10 @@ export async function POST(request: NextRequest) {
                   shippingPrice: item.shippingPrice,
                   shippingTax: item.shippingTax,
                   promoDiscount: item.promoDiscount,
+                  amazonFees: totalFees,
+                  referralFee: item.referralFee || 0,
+                  fbaFee: item.fbaFee || 0,
+                  otherFees: item.otherFees || 0,
                 },
               })
               orderItemsCreated++
@@ -670,9 +1180,354 @@ export async function POST(request: NextRequest) {
 
     console.log(`  Updated velocity for ${velocityUpdated} products`)
 
+    // ============================================
+    // FETCH ADDITIONAL AMAZON DATA
+    // ============================================
+    
+    let returnsCreated = 0
+    let reimbursementsCreated = 0
+    let removalsCreated = 0
+    let storageFeesCreated = 0
+
+    // Build SKU lookup maps for matching by ASIN/FNSKU
+    const productsByAsin = new Map<string, string>()
+    const productsByFnsku = new Map<string, string>()
+    const allProducts = await prisma.product.findMany({
+      select: { sku: true, asin: true, fnsku: true }
+    })
+    for (const p of allProducts) {
+      if (p.asin) productsByAsin.set(p.asin, p.sku)
+      if (p.fnsku) productsByFnsku.set(p.fnsku, p.sku)
+    }
+
+    // Helper to find SKU from various identifiers
+    const findSku = (sku: string, asin: string, fnsku: string): string | null => {
+      if (sku && existingSkuSet.has(sku)) return sku
+      if (asin && productsByAsin.has(asin)) return productsByAsin.get(asin)!
+      if (fnsku && productsByFnsku.has(fnsku)) return productsByFnsku.get(fnsku)!
+      return null
+    }
+
+    // ============================================
+    // 1. RETURNS REPORT
+    // ============================================
+    console.log('\n📦 Fetching returns data...')
+    
+    try {
+      const returnsReportTypes = [
+        'GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA',
+        'GET_FBA_CUSTOMER_RETURNS_DATA',
+      ]
+
+      for (const reportType of returnsReportTypes) {
+        console.log(`  Trying: ${reportType}`)
+        try {
+          const reportResponse = await client.callAPI({
+            operation: 'createReport',
+            endpoint: 'reports',
+            body: {
+              reportType,
+              marketplaceIds: [credentials.marketplaceId],
+              dataStartTime: startDate.toISOString(),
+              dataEndTime: endDate.toISOString(),
+            },
+          })
+
+          const reportId = reportResponse?.reportId
+          if (!reportId) continue
+
+          console.log(`    Report ID: ${reportId}`)
+          const docId = await waitForReport(client, reportId, 360) // 6 hour timeout
+          if (!docId) continue
+
+          const content = await downloadReport(client, docId)
+          const returns = parseReturnsReport(content)
+
+          // Save returns
+          for (const ret of returns) {
+            const masterSku = findSku(ret.sku, ret.asin, ret.fnsku)
+            if (!masterSku) continue
+
+            try {
+              await prisma.return.upsert({
+                where: { returnId: ret.returnId },
+                update: {},
+                create: {
+                  returnId: ret.returnId,
+                  orderId: ret.orderId || 'UNKNOWN',
+                  masterSku,
+                  returnDate: new Date(ret.returnDate || new Date()),
+                  quantity: ret.quantity,
+                  reason: ret.reason || null,
+                  disposition: ret.disposition || 'unknown',
+                  refundAmount: ret.refundAmount,
+                },
+              })
+              returnsCreated++
+            } catch (e) {
+              // Skip duplicates or FK errors
+            }
+          }
+
+          if (returns.length > 0) break // Got data, stop trying other report types
+        } catch (e: any) {
+          console.log(`    Failed: ${e.message?.substring(0, 60)}`)
+        }
+      }
+    } catch (e: any) {
+      console.log(`  Returns fetch failed: ${e.message?.substring(0, 60)}`)
+    }
+    console.log(`  Saved ${returnsCreated} returns`)
+
+    // ============================================
+    // 2. REIMBURSEMENTS REPORT
+    // ============================================
+    console.log('\n💵 Fetching reimbursements data...')
+    
+    try {
+      const reimbReportTypes = [
+        'GET_FBA_REIMBURSEMENTS_DATA',
+      ]
+
+      for (const reportType of reimbReportTypes) {
+        console.log(`  Trying: ${reportType}`)
+        try {
+          const reportResponse = await client.callAPI({
+            operation: 'createReport',
+            endpoint: 'reports',
+            body: {
+              reportType,
+              marketplaceIds: [credentials.marketplaceId],
+              dataStartTime: startDate.toISOString(),
+              dataEndTime: endDate.toISOString(),
+            },
+          })
+
+          const reportId = reportResponse?.reportId
+          if (!reportId) continue
+
+          console.log(`    Report ID: ${reportId}`)
+          const docId = await waitForReport(client, reportId, 360)
+          if (!docId) continue
+
+          const content = await downloadReport(client, docId)
+          const reimbursements = parseReimbursementsReport(content)
+
+          // Save reimbursements
+          for (const reimb of reimbursements) {
+            const masterSku = findSku(reimb.sku, reimb.asin, reimb.fnsku)
+
+            try {
+              await prisma.reimbursement.upsert({
+                where: { reimbursementId: reimb.reimbursementId },
+                update: {},
+                create: {
+                  reimbursementId: reimb.reimbursementId,
+                  caseId: reimb.caseId || null,
+                  masterSku: masterSku || null,
+                  approvalDate: new Date(reimb.approvalDate || new Date()),
+                  reason: reimb.reason || null,
+                  condition: reimb.condition || null,
+                  quantity: reimb.quantity,
+                  amountPerUnit: reimb.amountPerUnit,
+                  amountTotal: reimb.amountTotal,
+                  currencyCode: reimb.currencyCode,
+                  asin: reimb.asin || null,
+                  fnsku: reimb.fnsku || null,
+                },
+              })
+              reimbursementsCreated++
+            } catch (e) {
+              // Skip duplicates
+            }
+          }
+
+          if (reimbursements.length > 0) break
+        } catch (e: any) {
+          console.log(`    Failed: ${e.message?.substring(0, 60)}`)
+        }
+      }
+    } catch (e: any) {
+      console.log(`  Reimbursements fetch failed: ${e.message?.substring(0, 60)}`)
+    }
+    console.log(`  Saved ${reimbursementsCreated} reimbursements`)
+
+    // ============================================
+    // 3. REMOVAL ORDERS REPORT
+    // ============================================
+    console.log('\n🚚 Fetching removal orders data...')
+    
+    try {
+      const removalReportTypes = [
+        'GET_FBA_FULFILLMENT_REMOVAL_ORDER_DETAIL_DATA',
+        'GET_FBA_REMOVAL_ORDER_DETAIL_DATA',
+      ]
+
+      for (const reportType of removalReportTypes) {
+        console.log(`  Trying: ${reportType}`)
+        try {
+          const reportResponse = await client.callAPI({
+            operation: 'createReport',
+            endpoint: 'reports',
+            body: {
+              reportType,
+              marketplaceIds: [credentials.marketplaceId],
+              dataStartTime: startDate.toISOString(),
+              dataEndTime: endDate.toISOString(),
+            },
+          })
+
+          const reportId = reportResponse?.reportId
+          if (!reportId) continue
+
+          console.log(`    Report ID: ${reportId}`)
+          const docId = await waitForReport(client, reportId, 360)
+          if (!docId) continue
+
+          const content = await downloadReport(client, docId)
+          const removals = parseRemovalsReport(content)
+
+          // Save removals
+          for (const rem of removals) {
+            const masterSku = findSku(rem.sku, rem.asin, rem.fnsku)
+
+            try {
+              await prisma.removalOrder.upsert({
+                where: { removalOrderId: rem.removalOrderId },
+                update: {
+                  orderStatus: rem.orderStatus,
+                  cancelledQuantity: rem.cancelledQuantity,
+                  disposedQuantity: rem.disposedQuantity,
+                  shippedQuantity: rem.shippedQuantity,
+                  inProcessQuantity: rem.inProcessQuantity,
+                  lastUpdatedDate: rem.lastUpdatedDate ? new Date(rem.lastUpdatedDate) : null,
+                },
+                create: {
+                  removalOrderId: rem.removalOrderId,
+                  masterSku: masterSku || null,
+                  requestDate: new Date(rem.requestDate || new Date()),
+                  lastUpdatedDate: rem.lastUpdatedDate ? new Date(rem.lastUpdatedDate) : null,
+                  orderType: rem.orderType || 'Return',
+                  orderStatus: rem.orderStatus || 'Unknown',
+                  requestedQuantity: rem.requestedQuantity,
+                  cancelledQuantity: rem.cancelledQuantity,
+                  disposedQuantity: rem.disposedQuantity,
+                  shippedQuantity: rem.shippedQuantity,
+                  inProcessQuantity: rem.inProcessQuantity,
+                  removalFee: rem.removalFee || null,
+                  asin: rem.asin || null,
+                  fnsku: rem.fnsku || null,
+                },
+              })
+              removalsCreated++
+            } catch (e) {
+              // Skip duplicates
+            }
+          }
+
+          if (removals.length > 0) break
+        } catch (e: any) {
+          console.log(`    Failed: ${e.message?.substring(0, 60)}`)
+        }
+      }
+    } catch (e: any) {
+      console.log(`  Removals fetch failed: ${e.message?.substring(0, 60)}`)
+    }
+    console.log(`  Saved ${removalsCreated} removal orders`)
+
+    // ============================================
+    // 4. STORAGE FEES REPORT
+    // ============================================
+    console.log('\n📊 Fetching storage fees data...')
+    
+    try {
+      const storageReportTypes = [
+        'GET_FBA_STORAGE_FEE_CHARGES_DATA',
+        'GET_FBA_INVENTORY_AGED_DATA',
+      ]
+
+      for (const reportType of storageReportTypes) {
+        console.log(`  Trying: ${reportType}`)
+        try {
+          const reportResponse = await client.callAPI({
+            operation: 'createReport',
+            endpoint: 'reports',
+            body: {
+              reportType,
+              marketplaceIds: [credentials.marketplaceId],
+            },
+          })
+
+          const reportId = reportResponse?.reportId
+          if (!reportId) continue
+
+          console.log(`    Report ID: ${reportId}`)
+          const docId = await waitForReport(client, reportId, 360)
+          if (!docId) continue
+
+          const content = await downloadReport(client, docId)
+          const storageFees = parseStorageFeesReport(content)
+
+          // Save storage fees
+          for (const sf of storageFees) {
+            const masterSku = findSku(sf.sku, sf.asin, sf.fnsku)
+            if (!masterSku) continue
+
+            try {
+              // Parse snapshot date
+              let snapshotDate: Date
+              try {
+                snapshotDate = new Date(sf.snapshotDate)
+                if (isNaN(snapshotDate.getTime())) snapshotDate = new Date()
+              } catch {
+                snapshotDate = new Date()
+              }
+
+              await prisma.storageFee.upsert({
+                where: {
+                  masterSku_snapshotDate: {
+                    masterSku,
+                    snapshotDate,
+                  },
+                },
+                update: {
+                  monthlyStorageFee: sf.monthlyStorageFee,
+                  longTermStorageFee: sf.longTermStorageFee,
+                  surcharge: sf.surcharge,
+                },
+                create: {
+                  masterSku,
+                  snapshotDate,
+                  asin: sf.asin || null,
+                  fnsku: sf.fnsku || null,
+                  condition: sf.condition || 'Sellable',
+                  quantityCharged: sf.quantityCharged,
+                  inventoryAge: sf.inventoryAge || null,
+                  monthlyStorageFee: sf.monthlyStorageFee,
+                  longTermStorageFee: sf.longTermStorageFee,
+                  surcharge: sf.surcharge,
+                  volumeCubicFeet: sf.volumeCubicFeet || null,
+                },
+              })
+              storageFeesCreated++
+            } catch (e) {
+              // Skip duplicates
+            }
+          }
+
+          if (storageFees.length > 0) break
+        } catch (e: any) {
+          console.log(`    Failed: ${e.message?.substring(0, 60)}`)
+        }
+      }
+    } catch (e: any) {
+      console.log(`  Storage fees fetch failed: ${e.message?.substring(0, 60)}`)
+    }
+    console.log(`  Saved ${storageFeesCreated} storage fee records`)
+
     await updateSyncStatus('success')
 
-    const message = `Synced ${uniqueOrders.size.toLocaleString()} orders with ${reportItems.length.toLocaleString()} line items. Orders: ${ordersCreated} new, ${ordersUpdated} existing. Order items: ${orderItemsCreated}. Daily sales: ${created} new, ${updated} updated. Velocity updated for ${velocityUpdated} products.`
+    const message = `Synced ${uniqueOrders.size.toLocaleString()} orders with ${reportItems.length.toLocaleString()} line items. Orders: ${ordersCreated} new, ${ordersUpdated} existing. Order items: ${orderItemsCreated}. Daily sales: ${created} new, ${updated} updated. Velocity updated for ${velocityUpdated} products. Additional: ${returnsCreated} returns, ${reimbursementsCreated} reimbursements, ${removalsCreated} removals, ${storageFeesCreated} storage fees.`
     console.log(`\n✅ ${message}`)
 
     return NextResponse.json({
@@ -688,6 +1543,10 @@ export async function POST(request: NextRequest) {
         dailySalesCreated: created,
         dailySalesUpdated: updated,
         velocityUpdated,
+        returnsCreated,
+        reimbursementsCreated,
+        removalsCreated,
+        storageFeesCreated,
       },
     })
 
