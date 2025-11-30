@@ -196,177 +196,231 @@ async function fetchReportWithFallback(
 
 async function syncOrders(client: any, marketplaceId: string, startDate: Date, endDate: Date) {
   console.log('\n' + '='.repeat(60))
-  console.log('📦 PHASE 1: ORDERS & ORDER ITEMS')
+  console.log('📦 PHASE 1: ORDERS (using Amazon Reports for full history)')
   console.log(`   Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`)
   console.log('='.repeat(60))
   
+  // Report types to try (in order of preference)
   const ORDER_REPORT_TYPES = [
-    'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
-    'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE',
-    'GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL',
-    'GET_FLAT_FILE_ACTIONABLE_ORDER_DATA_SHIPPING',
+    'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE',     // Best for historical data
+    'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE',    // Alternative
+    'GET_FLAT_FILE_ORDERS_DATA_BY_ORDER_DATE',         // FBA orders
+    'GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL',     // FBA shipments with details
   ]
   
-  const orderRows = await fetchReportWithFallback(
-    client, ORDER_REPORT_TYPES, marketplaceId, startDate, endDate
-  )
+  let orderRows: Record<string, string>[] = []
+  let usedReportType = ''
+  
+  // Try each report type until one works
+  for (const reportType of ORDER_REPORT_TYPES) {
+    console.log(`\n  Trying report type: ${reportType}`)
+    const result = await fetchReport(client, reportType, marketplaceId, startDate, endDate)
+    
+    if (result.success && result.data && result.data.length > 0) {
+      orderRows = result.data
+      usedReportType = reportType
+      console.log(`  ✓ Success! Got ${orderRows.length} rows from ${reportType}`)
+      break
+    }
+  }
   
   if (orderRows.length === 0) {
-    console.log('⚠️ No order data retrieved from any report type')
-    return { orders: 0, items: 0 }
+    console.log('\n  ⚠️ No order data retrieved from any report type')
+    console.log('  Possible reasons:')
+    console.log('    - Missing report permissions in Seller Central')
+    console.log('    - No orders in the date range')
+    console.log('    - Report generation failed')
+    return { orders: 0, items: 0, reportType: 'none' }
   }
   
-  // Group rows by order ID
-  const orderMap = new Map<string, {
-    orderId: string
-    purchaseDate: Date
-    status: string
-    fulfillmentChannel: string
-    salesChannel: string
-    shipCity: string
-    shipState: string
-    shipPostalCode: string
-    shipCountry: string
-    items: any[]
-  }>()
+  console.log(`\n  Processing ${orderRows.length} order rows...`)
   
-  for (const row of orderRows) {
-    const orderId = getField(row, 'amazon-order-id', 'order-id')
-    const sku = getField(row, 'sku', 'seller-sku', 'merchant-sku')
-    
-    if (!orderId || !sku) continue
-    
-    if (!orderMap.has(orderId)) {
-      orderMap.set(orderId, {
-        orderId,
-        purchaseDate: safeDate(getField(row, 'purchase-date', 'order-date', 'payments-date')) || new Date(),
-        status: getField(row, 'order-status', 'status') || 'Shipped',
-        fulfillmentChannel: getField(row, 'fulfillment-channel', 'fulfillment-channel-code') || 'Amazon',
-        salesChannel: getField(row, 'sales-channel') || 'Amazon.com',
-        shipCity: getField(row, 'ship-city', 'recipient-city') || '',
-        shipState: getField(row, 'ship-state', 'recipient-state', 'ship-state-or-region') || '',
-        shipPostalCode: getField(row, 'ship-postal-code', 'recipient-postal-code') || '',
-        shipCountry: getField(row, 'ship-country', 'recipient-country') || '',
-        items: [],
-      })
-    }
-    
-    orderMap.get(orderId)!.items.push({
-      sku,
-      asin: getField(row, 'asin') || null,
-      quantity: safeInt(getField(row, 'quantity-purchased', 'quantity-shipped', 'quantity')) || 1,
-      itemPrice: safeFloat(getField(row, 'item-price', 'product-sales')),
-      itemTax: safeFloat(getField(row, 'item-tax', 'product-sales-tax')),
-      shippingPrice: safeFloat(getField(row, 'shipping-price', 'shipping-credits')),
-      shippingTax: safeFloat(getField(row, 'shipping-tax', 'shipping-credits-tax')),
-      giftWrapPrice: safeFloat(getField(row, 'gift-wrap-price', 'giftwrap-credits')),
-      giftWrapTax: safeFloat(getField(row, 'gift-wrap-tax', 'giftwrap-credits-tax')),
-      promoDiscount: Math.abs(safeFloat(getField(row, 'item-promotion-discount', 'promotional-rebates'))),
-      shipPromoDiscount: Math.abs(safeFloat(getField(row, 'ship-promotion-discount'))),
-    })
+  // Log first row headers to debug
+  if (orderRows.length > 0) {
+    console.log('  Available columns:', Object.keys(orderRows[0]).slice(0, 15).join(', '), '...')
   }
-  
-  console.log(`\n  Processing ${orderMap.size} orders...`)
   
   let ordersCreated = 0
   let ordersUpdated = 0
   let itemsCreated = 0
-  let processed = 0
+  let productsCreated = 0
+  const processedOrders = new Set<string>()
   
-  for (const [orderId, order] of orderMap) {
+  for (let i = 0; i < orderRows.length; i++) {
+    const row = orderRows[i]
+    
+    // Get order ID from various possible field names
+    const orderId = getField(row, 
+      'amazon-order-id', 
+      'order-id', 
+      'amazonorderid',
+      'merchant-order-id'
+    )
+    
+    if (!orderId) continue
+    
+    // Get SKU
+    const sku = getField(row, 
+      'sku', 
+      'seller-sku', 
+      'merchant-sku',
+      'sellersku'
+    )
+    
+    if (!sku) continue
+    
     try {
-      const existing = await prisma.order.findUnique({ where: { id: orderId } })
-      
-      await prisma.order.upsert({
-        where: { id: orderId },
-        update: {
-          status: order.status,
-          fulfillmentChannel: order.fulfillmentChannel,
-          salesChannel: order.salesChannel,
-          shipCity: order.shipCity,
-          shipState: order.shipState,
-          shipPostalCode: order.shipPostalCode,
-          shipCountry: order.shipCountry,
-        },
-        create: {
-          id: orderId,
-          purchaseDate: order.purchaseDate,
-          status: order.status,
-          fulfillmentChannel: order.fulfillmentChannel,
-          salesChannel: order.salesChannel,
-          shipCity: order.shipCity,
-          shipState: order.shipState,
-          shipPostalCode: order.shipPostalCode,
-          shipCountry: order.shipCountry,
-        },
-      })
-      
-      if (existing) {
-        ordersUpdated++
-      } else {
-        ordersCreated++
-      }
-      
-      // Upsert order items
-      for (const item of order.items) {
-        try {
-          // Check if product exists
-          const product = await prisma.product.findUnique({ where: { sku: item.sku } })
-          if (!product) continue // Skip if product doesn't exist
-          
-          const grossRevenue = item.itemPrice + item.shippingPrice + item.giftWrapPrice
-          
-          await prisma.orderItem.upsert({
-            where: {
-              orderId_masterSku: { orderId, masterSku: item.sku },
-            },
-            update: {
-              quantity: item.quantity,
-              itemPrice: item.itemPrice,
-              itemTax: item.itemTax,
-              shippingPrice: item.shippingPrice,
-              shippingTax: item.shippingTax,
-              giftWrapPrice: item.giftWrapPrice,
-              giftWrapTax: item.giftWrapTax,
-              promoDiscount: item.promoDiscount,
-              shipPromoDiscount: item.shipPromoDiscount,
-              grossRevenue,
-            },
-            create: {
-              orderId,
-              masterSku: item.sku,
-              asin: item.asin,
-              quantity: item.quantity,
-              itemPrice: item.itemPrice,
-              itemTax: item.itemTax,
-              shippingPrice: item.shippingPrice,
-              shippingTax: item.shippingTax,
-              giftWrapPrice: item.giftWrapPrice,
-              giftWrapTax: item.giftWrapTax,
-              promoDiscount: item.promoDiscount,
-              shipPromoDiscount: item.shipPromoDiscount,
-              grossRevenue,
-            },
-          })
-          itemsCreated++
-        } catch (e) {
-          // Skip errors
+      // Process order if not already done
+      if (!processedOrders.has(orderId)) {
+        processedOrders.add(orderId)
+        
+        const purchaseDate = safeDate(getField(row, 
+          'purchase-date', 
+          'order-date',
+          'purchasedate',
+          'payments-date'
+        )) || new Date()
+        
+        const existing = await prisma.order.findUnique({ where: { id: orderId } })
+        
+        await prisma.order.upsert({
+          where: { id: orderId },
+          update: {
+            status: getField(row, 'order-status', 'status', 'orderstatus') || 'Shipped',
+            fulfillmentChannel: getField(row, 'fulfillment-channel', 'fulfillmentchannel') || 'Amazon',
+            salesChannel: getField(row, 'sales-channel', 'saleschannel') || 'Amazon.com',
+            orderType: getField(row, 'order-type', 'ordertype') || null,
+            shipCity: getField(row, 'ship-city', 'city', 'recipient-city') || '',
+            shipState: getField(row, 'ship-state', 'state', 'recipient-state') || '',
+            shipPostalCode: getField(row, 'ship-postal-code', 'postal-code', 'recipient-postal-code') || '',
+            shipCountry: getField(row, 'ship-country', 'country', 'recipient-country') || '',
+          },
+          create: {
+            id: orderId,
+            purchaseDate,
+            status: getField(row, 'order-status', 'status', 'orderstatus') || 'Shipped',
+            fulfillmentChannel: getField(row, 'fulfillment-channel', 'fulfillmentchannel') || 'Amazon',
+            salesChannel: getField(row, 'sales-channel', 'saleschannel') || 'Amazon.com',
+            orderType: getField(row, 'order-type', 'ordertype') || null,
+            shipCity: getField(row, 'ship-city', 'city', 'recipient-city') || '',
+            shipState: getField(row, 'ship-state', 'state', 'recipient-state') || '',
+            shipPostalCode: getField(row, 'ship-postal-code', 'postal-code', 'recipient-postal-code') || '',
+            shipCountry: getField(row, 'ship-country', 'country', 'recipient-country') || '',
+          },
+        })
+        
+        if (existing) {
+          ordersUpdated++
+        } else {
+          ordersCreated++
         }
       }
       
-      processed++
-      if (processed % 5000 === 0) {
-        console.log(`  Progress: ${processed}/${orderMap.size} orders`)
+      // Ensure product exists - create placeholder if not
+      let product = await prisma.product.findUnique({ where: { sku } })
+      if (!product) {
+        try {
+          product = await prisma.product.create({
+            data: {
+              sku: sku,
+              title: getField(row, 'product-name', 'title', 'item-name') || `[Historical] ${sku}`,
+              asin: getField(row, 'asin') || null,
+              status: 'inactive',
+              source: 'order-sync',
+            },
+          })
+          productsCreated++
+          if (productsCreated <= 10 || productsCreated % 100 === 0) {
+            console.log(`    Created placeholder product: ${sku} (${productsCreated} total)`)
+          }
+        } catch (createErr: any) {
+          product = await prisma.product.findUnique({ where: { sku } })
+          if (!product) continue
+        }
       }
-    } catch (e) {
+      
+      // Parse prices with fallbacks for different column names
+      const quantity = safeInt(getField(row, 'quantity', 'quantity-shipped', 'qty')) || 1
+      const itemPrice = safeFloat(getField(row, 'item-price', 'price', 'principal', 'product-sales'))
+      const itemTax = safeFloat(getField(row, 'item-tax', 'tax', 'product-tax', 'product-sales-tax'))
+      const shippingPrice = safeFloat(getField(row, 'shipping-price', 'shipping', 'shipping-credits'))
+      const shippingTax = safeFloat(getField(row, 'shipping-tax', 'shipping-credits-tax'))
+      const giftWrapPrice = safeFloat(getField(row, 'gift-wrap-price', 'giftwrap', 'gift-wrap-credits'))
+      const giftWrapTax = safeFloat(getField(row, 'gift-wrap-tax', 'gift-wrap-credits-tax'))
+      const promoDiscount = Math.abs(safeFloat(getField(row, 'item-promotion-discount', 'promotion-discount', 'promotional-rebates')))
+      const shipPromoDiscount = Math.abs(safeFloat(getField(row, 'ship-promotion-discount', 'shipping-promotion-discount')))
+      const grossRevenue = itemPrice + shippingPrice + giftWrapPrice
+      
+      // Fees from report (if available)
+      const referralFee = Math.abs(safeFloat(getField(row, 'selling-fees', 'referral-fee', 'commission')))
+      const fbaFee = Math.abs(safeFloat(getField(row, 'fba-fees', 'fulfillment-fee', 'fba-per-unit-fulfillment-fee')))
+      const otherFees = Math.abs(safeFloat(getField(row, 'other-transaction-fees', 'other-fees', 'other')))
+      const totalFees = referralFee + fbaFee + otherFees
+      
+      await prisma.orderItem.upsert({
+        where: {
+          orderId_masterSku: { orderId, masterSku: sku },
+        },
+        update: {
+          quantity,
+          itemPrice,
+          itemTax,
+          shippingPrice,
+          shippingTax,
+          giftWrapPrice,
+          giftWrapTax,
+          promoDiscount,
+          shipPromoDiscount,
+          grossRevenue,
+          referralFee,
+          fbaFee,
+          otherFees,
+          amazonFees: totalFees,
+          asin: getField(row, 'asin') || null,
+        },
+        create: {
+          orderId,
+          masterSku: sku,
+          asin: getField(row, 'asin') || null,
+          quantity,
+          itemPrice,
+          itemTax,
+          shippingPrice,
+          shippingTax,
+          giftWrapPrice,
+          giftWrapTax,
+          promoDiscount,
+          shipPromoDiscount,
+          grossRevenue,
+          referralFee,
+          fbaFee,
+          otherFees,
+          amazonFees: totalFees,
+        },
+      })
+      itemsCreated++
+      
+    } catch (error: any) {
       // Continue on error
+    }
+    
+    // Progress logging
+    if ((i + 1) % 5000 === 0 || i === orderRows.length - 1) {
+      console.log(`  Progress: ${i + 1}/${orderRows.length} rows (${ordersCreated} new orders, ${ordersUpdated} updated, ${itemsCreated} items)`)
     }
   }
   
-  console.log(`\n  ✓ Orders: ${ordersCreated} created, ${ordersUpdated} updated`)
+  console.log(`\n  ✓ Report type used: ${usedReportType}`)
+  console.log(`  ✓ Orders: ${ordersCreated} created, ${ordersUpdated} updated (${processedOrders.size} unique)`)
   console.log(`  ✓ Order items: ${itemsCreated} saved`)
+  console.log(`  ✓ Placeholder products created: ${productsCreated}`)
   
-  return { orders: ordersCreated + ordersUpdated, items: itemsCreated }
+  return { 
+    orders: ordersCreated + ordersUpdated, 
+    items: itemsCreated,
+    productsCreated,
+    reportType: usedReportType 
+  }
 }
 
 async function syncFees(client: any, marketplaceId: string, startDate: Date, endDate: Date) {

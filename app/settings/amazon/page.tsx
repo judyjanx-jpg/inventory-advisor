@@ -111,8 +111,8 @@ export default function AmazonSettingsPage() {
             ...prev, 
             [syncState.type || 'products']: { success: true, message: 'Sync completed successfully!' } 
           }))
-          const typeLabels: Record<string, string> = { products: 'Products', inventory: 'Inventory', orders: 'Orders', sales: 'Sales History' }
-          showToast('success', `✓ ${typeLabels[syncState.type || 'products']} sync completed!`)
+          const typeLabels: Record<string, string> = { products: 'Products', inventory: 'Inventory', orders: 'Orders', sales: 'Sales History', initial: 'Initial Historical' }
+          showToast('success', `✓ ${typeLabels[syncState.type || ''] || 'Data'} sync completed!`)
           fetchSettings()
           clearInterval(interval)
         } else if (data.lastSyncStatus === 'error') {
@@ -262,6 +262,43 @@ export default function AmazonSettingsPage() {
     }
   }
 
+  const handleScheduledSync = async (schedule: 'quick' | 'hourly' | 'daily' | 'weekly') => {
+    const scheduleLabels: Record<string, string> = {
+      quick: 'Quick (24h)',
+      hourly: 'Hourly (2 days)',
+      daily: 'Daily (7 days)',
+      weekly: 'Weekly (30 days)',
+    }
+
+    setSyncState({ type: 'orders', status: 'syncing', startedAt: Date.now() })
+    setSyncResults(prev => ({ ...prev, [schedule]: {} }))
+    globalStartSync(`${scheduleLabels[schedule]} Sync`)
+
+    try {
+      const res = await fetch(`/api/amazon/sync/scheduled?schedule=${schedule}`, { method: 'POST' })
+      const data = await res.json()
+
+      if (data.success) {
+        setSyncState({ type: null, status: 'success', message: data.message })
+        setSyncResults(prev => ({ ...prev, [schedule]: { success: true, message: `Completed in ${data.elapsedSeconds}s` } }))
+        showToast('success', `✓ ${scheduleLabels[schedule]} sync completed!`)
+        globalEndSync('success', `${scheduleLabels[schedule]} sync completed`)
+      } else {
+        setSyncState({ type: null, status: 'error', message: data.error })
+        setSyncResults(prev => ({ ...prev, [schedule]: { success: false, error: data.error } }))
+        showToast('error', data.error || 'Scheduled sync failed')
+        globalEndSync('error', data.error)
+      }
+      
+      fetchSettings()
+    } catch (error: any) {
+      setSyncState({ type: null, status: 'error', message: error.message })
+      setSyncResults(prev => ({ ...prev, [schedule]: { success: false, error: error.message } }))
+      showToast('error', error.message || 'Scheduled sync failed')
+      globalEndSync('error', error.message)
+    }
+  }
+
   const getSyncDuration = () => {
     if (!syncState.startedAt) return ''
     const seconds = Math.floor((Date.now() - syncState.startedAt) / 1000)
@@ -366,10 +403,10 @@ export default function AmazonSettingsPage() {
                   )}
                 </button>
               </div>
-              {syncResults.initial?.success && (
+              {syncResults.initial?.success && !(syncState.type === 'initial' && syncState.status === 'syncing') && (
                 <p className="mt-3 text-sm text-emerald-400">✓ {syncResults.initial.message}</p>
               )}
-              {syncResults.initial?.error && (
+              {syncResults.initial?.error && !(syncState.type === 'initial' && syncState.status === 'syncing') && (
                 <p className="mt-3 text-sm text-red-400">✗ {syncResults.initial.error}</p>
               )}
               <p className="mt-3 text-xs text-slate-500">
@@ -522,6 +559,125 @@ export default function AmazonSettingsPage() {
                     <>⟳ Sync Sales</>
                   )}
                 </button>
+              </div>
+            </div>
+
+            {/* Scheduled Syncs */}
+            <div className="mt-6 pt-6 border-t border-slate-700/50">
+              <h3 className="text-sm font-medium text-slate-400 mb-3">🔄 Scheduled Syncs (for keeping data fresh)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Quick Sync */}
+                <div className="bg-slate-900/50 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center">
+                      <span className="text-cyan-400">⚡</span>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-white text-sm">Quick</h4>
+                      <p className="text-xs text-slate-500">Last 24 hours</p>
+                    </div>
+                  </div>
+                  {syncResults.quick?.success && <p className="text-xs text-emerald-400 mb-2">✓ {syncResults.quick.message}</p>}
+                  {syncResults.quick?.error && <p className="text-xs text-red-400 mb-2">✗ {syncResults.quick.error}</p>}
+                  <button
+                    onClick={() => handleScheduledSync('quick')}
+                    disabled={syncState.status === 'syncing'}
+                    className="w-full py-1.5 px-3 bg-cyan-600/80 hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors"
+                  >
+                    Run Now
+                  </button>
+                </div>
+
+                {/* Hourly Sync */}
+                <div className="bg-slate-900/50 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
+                      <span className="text-green-400">🕐</span>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-white text-sm">Hourly</h4>
+                      <p className="text-xs text-slate-500">Last 2 days</p>
+                    </div>
+                  </div>
+                  {syncResults.hourly?.success && <p className="text-xs text-emerald-400 mb-2">✓ {syncResults.hourly.message}</p>}
+                  {syncResults.hourly?.error && <p className="text-xs text-red-400 mb-2">✗ {syncResults.hourly.error}</p>}
+                  <button
+                    onClick={() => handleScheduledSync('hourly')}
+                    disabled={syncState.status === 'syncing'}
+                    className="w-full py-1.5 px-3 bg-green-600/80 hover:bg-green-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors"
+                  >
+                    Run Now
+                  </button>
+                </div>
+
+                {/* Daily Sync */}
+                <div className="bg-slate-900/50 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+                      <span className="text-yellow-400">📅</span>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-white text-sm">Daily</h4>
+                      <p className="text-xs text-slate-500">Last 7 days</p>
+                    </div>
+                  </div>
+                  {syncResults.daily?.success && <p className="text-xs text-emerald-400 mb-2">✓ {syncResults.daily.message}</p>}
+                  {syncResults.daily?.error && <p className="text-xs text-red-400 mb-2">✗ {syncResults.daily.error}</p>}
+                  <button
+                    onClick={() => handleScheduledSync('daily')}
+                    disabled={syncState.status === 'syncing'}
+                    className="w-full py-1.5 px-3 bg-yellow-600/80 hover:bg-yellow-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors"
+                  >
+                    Run Now
+                  </button>
+                </div>
+
+                {/* Weekly Sync */}
+                <div className="bg-slate-900/50 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                      <span className="text-orange-400">📊</span>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-white text-sm">Weekly</h4>
+                      <p className="text-xs text-slate-500">Last 30 days</p>
+                    </div>
+                  </div>
+                  {syncResults.weekly?.success && <p className="text-xs text-emerald-400 mb-2">✓ {syncResults.weekly.message}</p>}
+                  {syncResults.weekly?.error && <p className="text-xs text-red-400 mb-2">✗ {syncResults.weekly.error}</p>}
+                  <button
+                    onClick={() => handleScheduledSync('weekly')}
+                    disabled={syncState.status === 'syncing'}
+                    className="w-full py-1.5 px-3 bg-orange-600/80 hover:bg-orange-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors"
+                  >
+                    Run Now
+                  </button>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-4 bg-slate-900/30 rounded-lg">
+                <h4 className="text-sm font-medium text-slate-300 mb-2">⏰ Recommended Auto-Sync Schedule</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <span className="text-slate-400">Orders:</span>
+                    <span className="text-white ml-2">Every 15 min</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Inventory:</span>
+                    <span className="text-white ml-2">Every 2 hours</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Daily Sync:</span>
+                    <span className="text-white ml-2">6 AM daily</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Weekly Sync:</span>
+                    <span className="text-white ml-2">Sunday 5 AM</span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-3">
+                  💡 Set up cron jobs or use a service like cron-job.org to automate these syncs
+                </p>
               </div>
             </div>
 

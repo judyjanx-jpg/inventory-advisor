@@ -110,12 +110,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Check sync status on mount and periodically
+  // Only check sync status on initial mount (not continuously)
+  // The settings page handles its own polling when syncing
   useEffect(() => {
     checkSyncStatus()
-    const interval = setInterval(checkSyncStatus, 30000) // Check every 30 seconds
-    return () => clearInterval(interval)
-  }, [checkSyncStatus])
+    // Don't poll continuously - only check once on mount
+    // If sync is running, the settings page will poll and update
+  }, []) // Empty dependency array = only run once on mount
 
   return (
     <SyncContext.Provider value={{ syncState, startSync, endSync, updateProgress, checkSyncStatus }}>

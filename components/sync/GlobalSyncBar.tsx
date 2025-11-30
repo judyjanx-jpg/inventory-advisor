@@ -89,7 +89,7 @@ export function GlobalSyncBar() {
           <div className="max-w-7xl mx-auto flex items-center gap-3">
             <span className="text-emerald-300 text-xl">✓</span>
             <span className="text-white font-medium">
-              {syncState.type} sync completed successfully!
+              {syncState.type ? `${syncState.type} sync` : 'Sync'} completed successfully!
             </span>
             {syncState.message && (
               <span className="text-emerald-200 text-sm">{syncState.message}</span>
@@ -108,7 +108,7 @@ export function GlobalSyncBar() {
           <div className="max-w-7xl mx-auto flex items-center gap-3">
             <span className="text-red-300 text-xl">✗</span>
             <span className="text-white font-medium">
-              {syncState.type} sync failed
+              {syncState.type ? `${syncState.type} sync` : 'Sync'} failed
             </span>
             {syncState.message && (
               <span className="text-red-200 text-sm">{syncState.message}</span>

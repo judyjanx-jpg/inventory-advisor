@@ -7,6 +7,9 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '100')
     const offset = parseInt(searchParams.get('offset') || '0')
 
+    // Get total count for pagination
+    const totalCount = await prisma.order.count()
+
     const orders = await prisma.order.findMany({
       take: limit,
       skip: offset,
@@ -27,7 +30,15 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(orders)
+    return NextResponse.json({
+      orders,
+      pagination: {
+        total: totalCount,
+        limit,
+        offset,
+        hasMore: offset + limit < totalCount,
+      },
+    })
   } catch (error: any) {
     console.error('Error fetching orders:', error)
     return NextResponse.json(

@@ -60,6 +60,13 @@ interface SalesHistorySummary {
   totalFees: number
 }
 
+interface OrdersPagination {
+  total: number
+  limit: number
+  offset: number
+  hasMore: boolean
+}
+
 export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState<'orders' | 'sales'>('orders')
   const [orders, setOrders] = useState<Order[]>([])
@@ -70,6 +77,17 @@ export default function OrdersPage() {
   const [syncing, setSyncing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [salesSearchTerm, setSalesSearchTerm] = useState('')
+  const [ordersOffset, setOrdersOffset] = useState(0)
+  const [ordersPagination, setOrdersPagination] = useState<OrdersPagination | null>(null)
+  const [loadingMoreOrders, setLoadingMoreOrders] = useState(false)
+  const [salesOffset, setSalesOffset] = useState(0)
+  const [salesHasMore, setSalesHasMore] = useState(false)
+  const [loadingMoreSales, setLoadingMoreSales] = useState(false)
+  
+  // Date range for sales history
+  const [salesDateRange, setSalesDateRange] = useState<'7d' | '30d' | '90d' | '1y' | '2y' | 'custom'>('90d')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
 
   useEffect(() => {
     if (activeTab === 'orders') {
@@ -78,43 +96,121 @@ export default function OrdersPage() {
       fetchSalesHistory()
     }
   }, [activeTab])
+  
+  // Re-fetch when date range changes
+  useEffect(() => {
+    if (activeTab === 'sales' && salesDateRange !== 'custom') {
+      setSalesHistory([])
+      setSalesOffset(0)
+      fetchSalesHistory()
+    }
+  }, [salesDateRange])
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (offset = 0, append = false) => {
+    if (append) {
+      setLoadingMoreOrders(true)
+    }
     try {
-      const res = await fetch('/api/orders')
+      const limit = 100
+      const res = await fetch(`/api/orders?limit=${limit}&offset=${offset}`)
       const data = await res.json()
-      setOrders(Array.isArray(data) ? data : [])
+      const ordersData = data.orders || (Array.isArray(data) ? data : [])
+      
+      if (append) {
+        setOrders(prev => [...prev, ...ordersData])
+      } else {
+        setOrders(ordersData)
+      }
+      
+      if (data.pagination) {
+        setOrdersPagination(data.pagination)
+      } else {
+        // Estimate pagination if not provided
+        setOrdersPagination({
+          total: ordersData.length + offset,
+          limit,
+          offset,
+          hasMore: ordersData.length === limit
+        })
+      }
+      setOrdersOffset(offset)
     } catch (error) {
       console.error('Error fetching orders:', error)
     } finally {
       setLoading(false)
+      setLoadingMoreOrders(false)
     }
   }
 
-  const fetchSalesHistory = async (offset = 0) => {
-    setSalesLoading(true)
+  const getDateRange = () => {
+    const endDate = new Date()
+    const startDate = new Date()
+    
+    switch (salesDateRange) {
+      case '7d':
+        startDate.setDate(startDate.getDate() - 7)
+        break
+      case '30d':
+        startDate.setDate(startDate.getDate() - 30)
+        break
+      case '90d':
+        startDate.setDate(startDate.getDate() - 90)
+        break
+      case '1y':
+        startDate.setFullYear(startDate.getFullYear() - 1)
+        break
+      case '2y':
+        startDate.setFullYear(startDate.getFullYear() - 2)
+        break
+      case 'custom':
+        return {
+          start: customStartDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          end: customEndDate || new Date().toISOString().split('T')[0],
+        }
+    }
+    
+    return {
+      start: startDate.toISOString().split('T')[0],
+      end: endDate.toISOString().split('T')[0],
+    }
+  }
+
+  const fetchSalesHistory = async (offset = 0, append = false) => {
+    if (append) {
+      setLoadingMoreSales(true)
+    } else {
+      setSalesLoading(true)
+    }
     try {
-      // Get last 90 days by default, but fetch more records
-      const endDate = new Date()
-      const startDate = new Date()
-      startDate.setDate(startDate.getDate() - 90)
+      const { start, end } = getDateRange()
+      const limit = 200 // Smaller batches for better UX
       
       const res = await fetch(
-        `/api/sales-history?startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}&limit=5000&offset=${offset}`
+        `/api/sales-history?startDate=${start}&endDate=${end}&limit=${limit}&offset=${offset}`
       )
       const data = await res.json()
       
-      if (offset === 0) {
-        setSalesHistory(data.data || [])
-      } else {
-        // Append to existing data for pagination
+      if (append) {
         setSalesHistory(prev => [...prev, ...(data.data || [])])
+      } else {
+        setSalesHistory(data.data || [])
       }
       setSalesSummary(data.summary || null)
+      setSalesOffset(offset)
+      setSalesHasMore(data.pagination?.hasMore || false)
     } catch (error) {
       console.error('Error fetching sales history:', error)
     } finally {
       setSalesLoading(false)
+      setLoadingMoreSales(false)
+    }
+  }
+  
+  const handleCustomDateApply = () => {
+    if (customStartDate && customEndDate) {
+      setSalesHistory([])
+      setSalesOffset(0)
+      fetchSalesHistory()
     }
   }
 
@@ -156,7 +252,7 @@ export default function OrdersPage() {
   )
 
   const stats = {
-    total: orders.length,
+    total: ordersPagination?.total || orders.length,
     pending: orders.filter(o => o.status === 'pending').length,
     revenue: orders.reduce((sum, o) => sum + o.orderItems.reduce((s, i) => s + i.itemPrice * i.quantity, 0), 0),
   }
@@ -276,39 +372,126 @@ export default function OrdersPage() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-700/50">
-                    {filteredOrders.slice(0, 50).map((order) => (
-                      <div key={order.id} className="flex items-center px-6 py-4 hover:bg-slate-800/30">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3">
-                            <p className="font-mono text-white">{order.id}</p>
-                            {getStatusBadge(order.status)}
-                            {order.fulfillmentChannel && (
-                              <span className="text-xs text-slate-500">{order.fulfillmentChannel}</span>
-                            )}
+                  <>
+                    <div className="divide-y divide-slate-700/50">
+                      {filteredOrders.map((order) => (
+                        <div key={order.id} className="flex items-center px-6 py-4 hover:bg-slate-800/30">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3">
+                              <p className="font-mono text-white">{order.id}</p>
+                              {getStatusBadge(order.status)}
+                              {order.fulfillmentChannel && (
+                                <span className="text-xs text-slate-500">{order.fulfillmentChannel}</span>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-400 mt-1">
+                              {formatDate(new Date(order.purchaseDate))}
+                              {order.shipCity && ` • ${order.shipCity}, ${order.shipState || ''} ${order.shipCountry || ''}`}
+                            </p>
                           </div>
-                          <p className="text-sm text-slate-400 mt-1">
-                            {formatDate(new Date(order.purchaseDate))}
-                            {order.shipCity && ` • ${order.shipCity}, ${order.shipState || ''} ${order.shipCountry || ''}`}
-                          </p>
+                          <div className="text-right">
+                            <p className="text-lg font-semibold text-white">
+                              {formatCurrency(order.orderItems.reduce((sum, i) => sum + i.itemPrice * i.quantity, 0))}
+                            </p>
+                            <p className="text-sm text-slate-400">
+                              {order.orderItems.reduce((sum, i) => sum + i.quantity, 0)} items
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-lg font-semibold text-white">
-                            {formatCurrency(order.orderItems.reduce((sum, i) => sum + i.itemPrice * i.quantity, 0))}
-                          </p>
-                          <p className="text-sm text-slate-400">
-                            {order.orderItems.reduce((sum, i) => sum + i.quantity, 0)} items
-                          </p>
-                        </div>
+                      ))}
+                    </div>
+                    {ordersPagination?.hasMore && (
+                      <div className="p-4 border-t border-slate-700/50">
+                        <button
+                          onClick={() => fetchOrders(ordersOffset + 100, true)}
+                          disabled={loadingMoreOrders}
+                          className="w-full py-3 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+                        >
+                          {loadingMoreOrders ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyan-400 border-t-transparent"></div>
+                              Loading more...
+                            </>
+                          ) : (
+                            <>Load More Orders</>
+                          )}
+                        </button>
+                        <p className="text-center text-sm text-slate-500 mt-2">
+                          Showing {orders.length} orders
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
           </>
         ) : (
           <>
+            {/* Date Range Selector */}
+            <Card>
+              <CardContent className="py-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-slate-400" />
+                    <span className="text-sm text-slate-400">Date Range:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(['7d', '30d', '90d', '1y', '2y'] as const).map((range) => (
+                      <button
+                        key={range}
+                        onClick={() => setSalesDateRange(range)}
+                        className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                          salesDateRange === range
+                            ? 'bg-cyan-600 text-white'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                      >
+                        {range === '7d' ? '7 Days' : 
+                         range === '30d' ? '30 Days' : 
+                         range === '90d' ? '90 Days' : 
+                         range === '1y' ? '1 Year' : '2 Years'}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setSalesDateRange('custom')}
+                      className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                        salesDateRange === 'custom'
+                          ? 'bg-cyan-600 text-white'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                  {salesDateRange === 'custom' && (
+                    <div className="flex items-center gap-2 ml-auto">
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                      />
+                      <span className="text-slate-400">to</span>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                      />
+                      <button
+                        onClick={handleCustomDateApply}
+                        disabled={!customStartDate || !customEndDate}
+                        className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white text-sm rounded-lg transition-colors"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Sales History Stats */}
             {salesSummary && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -360,7 +543,14 @@ export default function OrdersPage() {
               <CardHeader>
                 <CardTitle>Sales History</CardTitle>
                 <CardDescription>
-                  {salesLoading ? 'Loading...' : `${filteredSalesHistory.length} records (Last 90 days)`}
+                  {salesLoading ? 'Loading...' : `${filteredSalesHistory.length} records (${
+                    salesDateRange === '7d' ? 'Last 7 days' :
+                    salesDateRange === '30d' ? 'Last 30 days' :
+                    salesDateRange === '90d' ? 'Last 90 days' :
+                    salesDateRange === '1y' ? 'Last 1 year' :
+                    salesDateRange === '2y' ? 'Last 2 years' :
+                    `${customStartDate} to ${customEndDate}`
+                  })`}
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
@@ -379,41 +569,64 @@ export default function OrdersPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-700/50">
-                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-800/30 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      <div className="col-span-2">Date</div>
-                      <div className="col-span-3">Product</div>
-                      <div className="col-span-2">Channel</div>
-                      <div className="col-span-1 text-right">Units</div>
-                      <div className="col-span-2 text-right">Revenue</div>
-                      <div className="col-span-2 text-right">Fees</div>
-                    </div>
-                    {filteredSalesHistory.slice(0, 100).map((item) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/30">
-                        <div className="col-span-2">
-                          <p className="text-white">{formatDate(new Date(item.date))}</p>
-                        </div>
-                        <div className="col-span-3">
-                          <p className="text-white font-medium">{item.skuMapping?.product?.title || item.masterSku}</p>
-                          <p className="text-xs text-slate-400 font-mono">{item.masterSku}</p>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="px-2 py-0.5 text-xs rounded bg-slate-700 text-slate-300">
-                            {item.channel}
-                          </span>
-                        </div>
-                        <div className="col-span-1 text-right">
-                          <p className="text-white">{item.unitsSold}</p>
-                        </div>
-                        <div className="col-span-2 text-right">
-                          <p className="text-white font-medium">{formatCurrency(Number(item.revenue))}</p>
-                        </div>
-                        <div className="col-span-2 text-right">
-                          <p className="text-slate-400">{formatCurrency(Number(item.fees))}</p>
-                        </div>
+                  <>
+                    <div className="divide-y divide-slate-700/50">
+                      <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-800/30 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                        <div className="col-span-2">Date</div>
+                        <div className="col-span-3">Product</div>
+                        <div className="col-span-2">Channel</div>
+                        <div className="col-span-1 text-right">Units</div>
+                        <div className="col-span-2 text-right">Revenue</div>
+                        <div className="col-span-2 text-right">Fees</div>
                       </div>
-                    ))}
-                  </div>
+                      {filteredSalesHistory.map((item) => (
+                        <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/30">
+                          <div className="col-span-2">
+                            <p className="text-white">{formatDate(new Date(item.date))}</p>
+                          </div>
+                          <div className="col-span-3">
+                            <p className="text-white font-medium">{item.skuMapping?.product?.title || item.masterSku}</p>
+                            <p className="text-xs text-slate-400 font-mono">{item.masterSku}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="px-2 py-0.5 text-xs rounded bg-slate-700 text-slate-300">
+                              {item.channel}
+                            </span>
+                          </div>
+                          <div className="col-span-1 text-right">
+                            <p className="text-white">{item.unitsSold}</p>
+                          </div>
+                          <div className="col-span-2 text-right">
+                            <p className="text-white font-medium">{formatCurrency(Number(item.revenue))}</p>
+                          </div>
+                          <div className="col-span-2 text-right">
+                            <p className="text-slate-400">{formatCurrency(Number(item.fees))}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {salesHasMore && (
+                      <div className="p-4 border-t border-slate-700/50">
+                        <button
+                          onClick={() => fetchSalesHistory(salesOffset + 200, true)}
+                          disabled={loadingMoreSales}
+                          className="w-full py-3 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+                        >
+                          {loadingMoreSales ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyan-400 border-t-transparent"></div>
+                              Loading more...
+                            </>
+                          ) : (
+                            <>Load More Sales</>
+                          )}
+                        </button>
+                        <p className="text-center text-sm text-slate-500 mt-2">
+                          Showing {salesHistory.length} of {salesSummary?.totalRecords || 0} records
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

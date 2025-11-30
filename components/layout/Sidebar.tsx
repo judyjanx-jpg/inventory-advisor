@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -18,6 +19,7 @@ import {
   MessageSquare,
   Sparkles,
   LineChart,
+  RefreshCw,
 } from 'lucide-react'
 
 const navigation = [
@@ -37,6 +39,66 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const [lastSync, setLastSync] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+
+  // Fetch last sync time
+  useEffect(() => {
+    async function fetchSyncStatus() {
+      try {
+        const res = await fetch('/api/sync/status')
+        const data = await res.json()
+        if (data.success && data.queues) {
+          // Find the most recent completed job
+          let latestTime: Date | null = null
+          for (const queue of data.queues) {
+            if (queue.lastCompleted?.finishedOn) {
+              const time = new Date(queue.lastCompleted.finishedOn)
+              if (!latestTime || time > latestTime) {
+                latestTime = time
+              }
+            }
+          }
+          if (latestTime) {
+            setLastSync(formatTimeAgo(latestTime))
+          }
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    }
+    
+    fetchSyncStatus()
+    const interval = setInterval(fetchSyncStatus, 60000) // Update every minute
+    return () => clearInterval(interval)
+  }, [])
+
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    return `${diffDays}d ago`
+  }
+
+  const handleSyncNow = async () => {
+    setSyncing(true)
+    try {
+      await fetch('/api/sync/trigger?type=all', { method: 'POST' })
+      // Update last sync time after a delay
+      setTimeout(() => {
+        setLastSync('Just now')
+        setSyncing(false)
+      }, 2000)
+    } catch (e) {
+      setSyncing(false)
+    }
+  }
 
   return (
     <div className="flex flex-col w-64 bg-slate-900 border-r border-slate-700/50 h-screen fixed left-0 top-0">
@@ -99,6 +161,32 @@ export default function Sidebar() {
             AI
           </span>
         </Link>
+      </div>
+
+      {/* Sync Status Section */}
+      <div className="border-t border-slate-700/50 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-slate-500">
+            {lastSync ? (
+              <>Last sync: <span className="text-slate-400">{lastSync}</span></>
+            ) : (
+              'No sync data'
+            )}
+          </div>
+          <button
+            onClick={handleSyncNow}
+            disabled={syncing}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all",
+              syncing
+                ? "bg-cyan-500/20 text-cyan-400 cursor-not-allowed"
+                : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+            )}
+          >
+            <RefreshCw className={cn("w-3 h-3", syncing && "animate-spin")} />
+            {syncing ? 'Syncing...' : 'Sync'}
+          </button>
+        </div>
       </div>
 
       {/* User/Status Section */}
