@@ -12,7 +12,7 @@ async function stopSync() {
       WHERE status = 'running'
     `;
     
-    console.log(`✅ Stopped ${result} running sync(s)`);
+    console.log(`✅ Stopped ${result} running sync(s) in sync_logs`);
     
     // Also reset api_connections sync status
     await prisma.$executeRaw`
@@ -22,6 +22,14 @@ async function stopSync() {
     `;
     
     console.log('✅ Reset API connection sync status');
+    
+    // Clear historical_sync_progress if exists
+    try {
+      await prisma.$executeRaw`DELETE FROM historical_sync_progress`;
+      console.log('✅ Cleared historical_sync_progress');
+    } catch (e) {
+      console.log('(historical_sync_progress table not found - OK)');
+    }
     
   } catch (e) {
     console.log('Error:', e.message);

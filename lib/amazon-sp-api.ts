@@ -33,7 +33,7 @@ export interface AmazonCredentials {
 
 // Get stored credentials
 export async function getAmazonCredentials(): Promise<AmazonCredentials | null> {
-  const connection = await prisma.apiConnection.findUnique({
+  const connection = await prisma.apiConnection.findFirst({
     where: { platform: 'amazon' },
   })
 
@@ -48,7 +48,7 @@ export async function getAmazonCredentials(): Promise<AmazonCredentials | null> 
   }
 }
 
-// Create SP-API client
+// Create SP-API client with timeout
 export async function createSpApiClient(): Promise<SellingPartner | null> {
   const credentials = await getAmazonCredentials()
 
@@ -66,10 +66,48 @@ export async function createSpApiClient(): Promise<SellingPartner | null> {
     options: {
       auto_request_tokens: true,
       auto_request_throttled: true,
+      use_sandbox: false,
+      // Add timeouts to prevent hanging
+      timeouts: {
+        response: 60000,  // 60 seconds for response
+        deadline: 120000, // 120 seconds total deadline
+      },
     },
   })
 
   return client
+}
+
+// Wrapper to call API with timeout (fallback if library timeout doesn't work)
+export async function callApiWithTimeout<T>(
+  client: SellingPartner,
+  params: any,
+  timeoutMs: number = 60000
+): Promise<T> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const result = await Promise.race([
+      client.callAPI(params),
+      new Promise<never>((_, reject) => {
+        const checkAbort = setInterval(() => {
+          if (controller.signal.aborted) {
+            clearInterval(checkAbort)
+            reject(new Error(`API request timed out after ${timeoutMs / 1000}s`))
+          }
+        }, 100)
+      }),
+    ])
+    clearTimeout(timeoutId)
+    return result as T
+  } catch (error: any) {
+    clearTimeout(timeoutId)
+    if (error.name === 'AbortError' || error.message.includes('timed out')) {
+      throw new Error(`API request timed out after ${timeoutMs / 1000}s`)
+    }
+    throw error
+  }
 }
 
 // Update sync status
@@ -114,4 +152,3 @@ export function marketplaceToChannel(marketplaceId: string): string {
   }
   return mapping[marketplaceId] || 'amazon_us'
 }
-
