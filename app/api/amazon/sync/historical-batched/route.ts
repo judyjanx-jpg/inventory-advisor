@@ -145,20 +145,48 @@ export async function GET(request: NextRequest) {
   
   if (searchParams.get('stream') === 'true') {
     const encoder = new TextEncoder()
+    let isClosed = false
+    
     const stream = new ReadableStream({
       async start(controller) {
-        const send = (data: any) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+        const send = (data: any) => {
+          if (isClosed) return
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+          } catch (e) {
+            // Controller already closed, ignore
+            isClosed = true
+          }
+        }
+        
+        const cleanup = () => {
+          isClosed = true
+          clearInterval(interval)
+          try {
+            controller.close()
+          } catch (e) {
+            // Already closed, ignore
+          }
+        }
+        
         send(syncState)
         
         const interval = setInterval(() => {
+          if (isClosed) {
+            clearInterval(interval)
+            return
+          }
           send(syncState)
           if (!syncState.isRunning && syncState.currentBatch > 0) {
-            clearInterval(interval)
-            controller.close()
+            cleanup()
           }
         }, 500)
         
-        setTimeout(() => { clearInterval(interval); controller.close() }, 3 * 60 * 60 * 1000) // 3 hour max
+        // Max 3 hour timeout
+        setTimeout(cleanup, 3 * 60 * 60 * 1000)
+      },
+      cancel() {
+        isClosed = true
       },
     })
     
