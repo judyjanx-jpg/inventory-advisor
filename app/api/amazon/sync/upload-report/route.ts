@@ -130,11 +130,34 @@ export async function POST(request: NextRequest) {
     })
     const validSkus = new Set(products.map(p => p.sku))
 
-    console.log(`   Loaded ${existingOrderIds.size} existing orders, ${validSkus.size} valid products`)
+    // OPTIMIZATION: Pre-load all existing order items in bulk
+    const allItemKeys: string[] = []
+    for (const [orderId, orderRows] of orderGroups.entries()) {
+      for (const row of orderRows) {
+        const sku = getField(row, 'sku', 'seller-sku', 'sellersku', 'merchant-sku', 'merchantsku')
+        if (sku && validSkus.has(sku)) {
+          allItemKeys.push(`${orderId}|${sku}`)
+        }
+      }
+    }
+
+    // Batch load existing items
+    const existingItems = await prisma.orderItem.findMany({
+      where: {
+        OR: allItemKeys.map(key => {
+          const [orderId, sku] = key.split('|')
+          return { orderId, masterSku: sku }
+        }),
+      },
+      select: { orderId: true, masterSku: true },
+    })
+    const existingItemKeys = new Set(existingItems.map(item => `${item.orderId}|${item.masterSku}`))
+
+    console.log(`   Loaded ${existingOrderIds.size} existing orders, ${validSkus.size} valid products, ${existingItemKeys.size} existing items`)
     uploadStatus.message = `Loaded ${existingOrderIds.size} existing orders, ${validSkus.size} valid products. Processing...`
 
-    // Process in batches for better performance
-    const BATCH_SIZE = 1000
+    // Process in larger batches for maximum performance
+    const BATCH_SIZE = 5000 // Increased from 1000
     const orderEntries = Array.from(orderGroups.entries())
     
     for (let i = 0; i < orderEntries.length; i += BATCH_SIZE) {
@@ -198,14 +221,14 @@ export async function POST(request: NextRequest) {
           await tx.order.createMany({ data: ordersToCreate, skipDuplicates: true })
         }
 
-        // Batch update orders
+        // Batch update orders - use individual updates (fast enough with batching)
         for (const update of ordersToUpdate) {
           await tx.order.update(update)
         }
 
-        // Process all order items in batch
-        const itemsToCreate: any[] = []
-        const itemsToUpdate: any[] = []
+        // Process all order items - collect all items first, deduplicating by orderId+sku
+        const allItems: any[] = []
+        const itemsInBatch = new Set<string>() // Track items in current batch to prevent duplicates
 
         for (const [orderId, orderRows] of batch) {
           for (const itemRow of orderRows) {
@@ -216,6 +239,16 @@ export async function POST(request: NextRequest) {
               uploadStatus.skipped++
               continue
             }
+
+            const itemKey = `${orderId}|${sku}`
+            
+            // Skip if we've already processed this orderId+sku in this batch
+            if (itemsInBatch.has(itemKey)) {
+              continue
+            }
+            itemsInBatch.add(itemKey)
+
+            const isExistingItem = existingItemKeys.has(itemKey)
 
             const asin = getField(itemRow, 'asin', 'asin1')
             const quantity = parseInt(getField(itemRow, 
@@ -243,7 +276,7 @@ export async function POST(request: NextRequest) {
 
             const grossRevenue = itemPrice + shippingPrice + giftWrapPrice - promoDiscount - shipPromoDiscount
 
-            const itemData = {
+            allItems.push({
               orderId,
               masterSku: sku,
               asin,
@@ -257,36 +290,51 @@ export async function POST(request: NextRequest) {
               promoDiscount,
               shipPromoDiscount,
               grossRevenue,
-            }
-
-            // Check if item exists
-            const existingItem = await tx.orderItem.findUnique({
-              where: { orderId_masterSku: { orderId, masterSku: sku } },
+              isExisting: isExistingItem,
             })
-
-            if (existingItem) {
-              itemsToUpdate.push({
-                where: { orderId_masterSku: { orderId, masterSku: sku } },
-                data: itemData,
-              })
-            } else {
-              itemsToCreate.push(itemData)
-            }
             uploadStatus.itemsProcessed++
           }
         }
+
+        // Separate items into create and update batches
+        const itemsToCreate = allItems.filter(item => !item.isExisting).map(({ isExisting, ...item }) => item)
+        const itemsToUpdate = allItems.filter(item => item.isExisting)
 
         // Batch create items
         if (itemsToCreate.length > 0) {
           await tx.orderItem.createMany({ data: itemsToCreate, skipDuplicates: true })
         }
 
-        // Batch update items
-        for (const update of itemsToUpdate) {
-          await tx.orderItem.update(update)
+        // Batch update items - use bulk upsert with Prisma (safer and still fast)
+        if (itemsToUpdate.length > 0) {
+          // Process updates in smaller chunks to avoid query size limits
+          const UPDATE_CHUNK_SIZE = 500
+          for (let j = 0; j < itemsToUpdate.length; j += UPDATE_CHUNK_SIZE) {
+            const chunk = itemsToUpdate.slice(j, j + UPDATE_CHUNK_SIZE)
+            await Promise.all(
+              chunk.map(item => 
+                tx.orderItem.update({
+                  where: { orderId_masterSku: { orderId: item.orderId, masterSku: item.masterSku } },
+                  data: {
+                    asin: item.asin,
+                    quantity: item.quantity,
+                    itemPrice: item.itemPrice,
+                    itemTax: item.itemTax,
+                    shippingPrice: item.shippingPrice,
+                    shippingTax: item.shippingTax,
+                    giftWrapPrice: item.giftWrapPrice,
+                    giftWrapTax: item.giftWrapTax,
+                    promoDiscount: item.promoDiscount,
+                    shipPromoDiscount: item.shipPromoDiscount,
+                    grossRevenue: item.grossRevenue,
+                  },
+                })
+              )
+            )
+          }
         }
       }, {
-        timeout: 60000, // 60 second timeout for large batches
+        timeout: 120000, // 120 second timeout for larger batches
       })
 
       // Progress logging
