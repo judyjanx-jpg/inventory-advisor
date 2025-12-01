@@ -106,38 +106,71 @@ export async function POST(request: NextRequest) {
     console.log(`   Found ${orderGroups.size} unique orders`)
     uploadStatus.message = `Processing ${orderGroups.size} orders...`
 
-    // Process each order
-    for (const [orderId, orderRows] of orderGroups) {
-      const firstRow = orderRows[0]
+    // OPTIMIZATION: Batch load all existing orders and products upfront
+    const orderIds = Array.from(orderGroups.keys())
+    const existingOrders = await prisma.order.findMany({
+      where: { id: { in: orderIds } },
+      select: { id: true },
+    })
+    const existingOrderIds = new Set(existingOrders.map(o => o.id))
 
-      try {
-        // Parse order fields
-        const purchaseDateStr = getField(firstRow, 
-          'purchase-date', 'purchasedate', 'shipment-date', 'shipmentdate', 'order-date'
-        )
-        const purchaseDate = purchaseDateStr ? new Date(purchaseDateStr) : new Date()
+    // Collect all unique SKUs
+    const allSkus = new Set<string>()
+    for (const orderRows of orderGroups.values()) {
+      for (const row of orderRows) {
+        const sku = getField(row, 'sku', 'seller-sku', 'sellersku', 'merchant-sku', 'merchantsku')
+        if (sku) allSkus.add(sku)
+      }
+    }
 
-        const shipDateStr = getField(firstRow, 
-          'ship-date', 'shipdate', 'shipment-date', 'shipmentdate'
-        )
-        const shipDate = shipDateStr ? new Date(shipDateStr) : null
+    // Batch load all products
+    const products = await prisma.product.findMany({
+      where: { sku: { in: Array.from(allSkus) } },
+      select: { sku: true },
+    })
+    const validSkus = new Set(products.map(p => p.sku))
 
-        const shipCity = getField(firstRow, 'ship-city', 'shipcity', 'city')
-        const shipState = getField(firstRow, 'ship-state', 'shipstate', 'state')
-        const shipPostalCode = getField(firstRow, 'ship-postal-code', 'shippostalcode', 'postalcode')
-        const shipCountry = getField(firstRow, 'ship-country', 'shipcountry', 'country')
+    console.log(`   Loaded ${existingOrderIds.size} existing orders, ${validSkus.size} valid products`)
+    uploadStatus.message = `Loaded ${existingOrderIds.size} existing orders, ${validSkus.size} valid products. Processing...`
 
-        const status = getField(firstRow, 'order-status', 'orderstatus', 'status') || 'Shipped'
-        const fulfillment = getField(firstRow, 'fulfillment-channel', 'fulfillmentchannel', 'fulfillment')
-        const salesChannel = getField(firstRow, 'sales-channel', 'saleschannel') || 'Amazon.com'
+    // Process in batches for better performance
+    const BATCH_SIZE = 1000
+    const orderEntries = Array.from(orderGroups.entries())
+    
+    for (let i = 0; i < orderEntries.length; i += BATCH_SIZE) {
+      const batch = orderEntries.slice(i, i + BATCH_SIZE)
+      
+      // Use transaction for each batch
+      await prisma.$transaction(async (tx) => {
+        // Prepare orders for batch upsert
+        const ordersToCreate: any[] = []
+        const ordersToUpdate: any[] = []
 
-        // Check if order exists
-        const existing = await prisma.order.findUnique({ where: { id: orderId } })
+        for (const [orderId, orderRows] of batch) {
+          const firstRow = orderRows[0]
+          const isExisting = existingOrderIds.has(orderId)
 
-        // Upsert order
-        await prisma.order.upsert({
-          where: { id: orderId },
-          create: {
+          // Parse order fields
+          const purchaseDateStr = getField(firstRow, 
+            'purchase-date', 'purchasedate', 'shipment-date', 'shipmentdate', 'order-date'
+          )
+          const purchaseDate = purchaseDateStr ? new Date(purchaseDateStr) : new Date()
+
+          const shipDateStr = getField(firstRow, 
+            'ship-date', 'shipdate', 'shipment-date', 'shipmentdate'
+          )
+          const shipDate = shipDateStr ? new Date(shipDateStr) : null
+
+          const shipCity = getField(firstRow, 'ship-city', 'shipcity', 'city')
+          const shipState = getField(firstRow, 'ship-state', 'shipstate', 'state')
+          const shipPostalCode = getField(firstRow, 'ship-postal-code', 'shippostalcode', 'postalcode')
+          const shipCountry = getField(firstRow, 'ship-country', 'shipcountry', 'country')
+
+          const status = getField(firstRow, 'order-status', 'orderstatus', 'status') || 'Shipped'
+          const fulfillment = getField(firstRow, 'fulfillment-channel', 'fulfillmentchannel', 'fulfillment')
+          const salesChannel = getField(firstRow, 'sales-channel', 'saleschannel') || 'Amazon.com'
+
+          const orderData = {
             id: orderId,
             purchaseDate,
             shipDate,
@@ -149,111 +182,118 @@ export async function POST(request: NextRequest) {
             shipPostalCode,
             shipCountry,
             currency: 'USD',
-          },
-          update: {
-            shipDate,
-            status: normalizeStatus(status),
-          },
-        })
+          }
 
-        if (existing) {
-          uploadStatus.ordersUpdated++
-        } else {
-          uploadStatus.ordersCreated++
+          if (isExisting) {
+            ordersToUpdate.push({ where: { id: orderId }, data: { shipDate, status: normalizeStatus(status) } })
+            uploadStatus.ordersUpdated++
+          } else {
+            ordersToCreate.push(orderData)
+            uploadStatus.ordersCreated++
+          }
         }
 
-        // Process order items
-        for (const itemRow of orderRows) {
-          const sku = getField(itemRow, 
-            'sku', 'seller-sku', 'sellersku', 'merchant-sku', 'merchantsku'
-          )
-          if (!sku) {
-            uploadStatus.skipped++
-            continue
-          }
+        // Batch create orders
+        if (ordersToCreate.length > 0) {
+          await tx.order.createMany({ data: ordersToCreate, skipDuplicates: true })
+        }
 
-          // Check if product exists
-          const product = await prisma.product.findUnique({ where: { sku } })
-          if (!product) {
-            uploadStatus.skipped++
-            continue
-          }
+        // Batch update orders
+        for (const update of ordersToUpdate) {
+          await tx.order.update(update)
+        }
 
-          const asin = getField(itemRow, 'asin', 'asin1')
-          const quantity = parseInt(getField(itemRow, 
-            'quantity-shipped', 'quantityshipped', 'quantity', 'qty'
-          )) || 1
+        // Process all order items in batch
+        const itemsToCreate: any[] = []
+        const itemsToUpdate: any[] = []
 
-          const itemPrice = parseFloat(getField(itemRow, 
-            'item-price', 'itemprice', 'price'
-          )) || 0
-          const itemTax = parseFloat(getField(itemRow, 'item-tax', 'itemtax', 'tax')) || 0
-          const shippingPrice = parseFloat(getField(itemRow, 
-            'shipping-price', 'shippingprice', 'ship-price'
-          )) || 0
-          const shippingTax = parseFloat(getField(itemRow, 'shipping-tax', 'shippingtax')) || 0
-          const giftWrapPrice = parseFloat(getField(itemRow, 
-            'gift-wrap-price', 'giftwrapprice'
-          )) || 0
-          const giftWrapTax = parseFloat(getField(itemRow, 'gift-wrap-tax', 'giftwraptax')) || 0
-          const promoDiscount = Math.abs(parseFloat(getField(itemRow, 
-            'item-promotion-discount', 'itempromotion-discount', 'promo-discount'
-          )) || 0)
-          const shipPromoDiscount = Math.abs(parseFloat(getField(itemRow, 
-            'ship-promotion-discount', 'shippromotion-discount'
-          )) || 0)
+        for (const [orderId, orderRows] of batch) {
+          for (const itemRow of orderRows) {
+            const sku = getField(itemRow, 
+              'sku', 'seller-sku', 'sellersku', 'merchant-sku', 'merchantsku'
+            )
+            if (!sku || !validSkus.has(sku)) {
+              uploadStatus.skipped++
+              continue
+            }
 
-          const grossRevenue = itemPrice + shippingPrice + giftWrapPrice - promoDiscount - shipPromoDiscount
+            const asin = getField(itemRow, 'asin', 'asin1')
+            const quantity = parseInt(getField(itemRow, 
+              'quantity-shipped', 'quantityshipped', 'quantity', 'qty'
+            )) || 1
 
-          try {
-            await prisma.orderItem.upsert({
+            const itemPrice = parseFloat(getField(itemRow, 
+              'item-price', 'itemprice', 'price'
+            )) || 0
+            const itemTax = parseFloat(getField(itemRow, 'item-tax', 'itemtax', 'tax')) || 0
+            const shippingPrice = parseFloat(getField(itemRow, 
+              'shipping-price', 'shippingprice', 'ship-price'
+            )) || 0
+            const shippingTax = parseFloat(getField(itemRow, 'shipping-tax', 'shippingtax')) || 0
+            const giftWrapPrice = parseFloat(getField(itemRow, 
+              'gift-wrap-price', 'giftwrapprice'
+            )) || 0
+            const giftWrapTax = parseFloat(getField(itemRow, 'gift-wrap-tax', 'giftwraptax')) || 0
+            const promoDiscount = Math.abs(parseFloat(getField(itemRow, 
+              'item-promotion-discount', 'itempromotion-discount', 'promo-discount'
+            )) || 0)
+            const shipPromoDiscount = Math.abs(parseFloat(getField(itemRow, 
+              'ship-promotion-discount', 'shippromotion-discount'
+            )) || 0)
+
+            const grossRevenue = itemPrice + shippingPrice + giftWrapPrice - promoDiscount - shipPromoDiscount
+
+            const itemData = {
+              orderId,
+              masterSku: sku,
+              asin,
+              quantity,
+              itemPrice,
+              itemTax,
+              shippingPrice,
+              shippingTax,
+              giftWrapPrice,
+              giftWrapTax,
+              promoDiscount,
+              shipPromoDiscount,
+              grossRevenue,
+            }
+
+            // Check if item exists
+            const existingItem = await tx.orderItem.findUnique({
               where: { orderId_masterSku: { orderId, masterSku: sku } },
-              create: {
-                orderId,
-                masterSku: sku,
-                asin,
-                quantity,
-                itemPrice,
-                itemTax,
-                shippingPrice,
-                shippingTax,
-                giftWrapPrice,
-                giftWrapTax,
-                promoDiscount,
-                shipPromoDiscount,
-                grossRevenue,
-              },
-              update: {
-                asin,
-                quantity,
-                itemPrice,
-                itemTax,
-                shippingPrice,
-                shippingTax,
-                giftWrapPrice,
-                giftWrapTax,
-                promoDiscount,
-                shipPromoDiscount,
-                grossRevenue,
-              },
             })
+
+            if (existingItem) {
+              itemsToUpdate.push({
+                where: { orderId_masterSku: { orderId, masterSku: sku } },
+                data: itemData,
+              })
+            } else {
+              itemsToCreate.push(itemData)
+            }
             uploadStatus.itemsProcessed++
-          } catch (err) {
-            uploadStatus.errors++
           }
         }
 
-        // Progress logging
-        const total = uploadStatus.ordersCreated + uploadStatus.ordersUpdated
-        if (total % 500 === 0) {
-          console.log(`   Processed ${total} orders...`)
-          uploadStatus.message = `Processed ${total} orders...`
+        // Batch create items
+        if (itemsToCreate.length > 0) {
+          await tx.orderItem.createMany({ data: itemsToCreate, skipDuplicates: true })
         }
 
-      } catch (err: any) {
-        uploadStatus.errors++
-        console.error(`   Error processing order ${orderId}:`, err.message)
-      }
+        // Batch update items
+        for (const update of itemsToUpdate) {
+          await tx.orderItem.update(update)
+        }
+      }, {
+        timeout: 60000, // 60 second timeout for large batches
+      })
+
+      // Progress logging
+      const total = uploadStatus.ordersCreated + uploadStatus.ordersUpdated
+      const progress = ((i + batch.length) / orderEntries.length * 100).toFixed(1)
+      console.log(`   Processed ${total} orders (${progress}%)...`)
+      uploadStatus.message = `Processed ${total} orders (${progress}%)...`
     }
 
     // Done
