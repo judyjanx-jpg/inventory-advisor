@@ -1,0 +1,19 @@
+# Railway Worker Dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy Prisma schema and generate client
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# Copy source files
+COPY lib ./lib
+COPY worker.ts ./
+
+# Run the worker
+CMD ["npx", "tsx", "worker.ts"]
