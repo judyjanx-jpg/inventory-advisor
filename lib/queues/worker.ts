@@ -417,30 +417,70 @@ async function processAggregation(job: any) {
 /**
  * Start processing jobs
  * 
- * IMPORTANT: Process handlers must be registered WITHOUT a job name
- * to process ALL jobs in the queue, or WITH the exact job name used when adding.
+ * IMPORTANT: Process handlers must be registered WITH the exact job name
+ * that matches what's used in the scheduler and manual triggers.
  */
 export function startWorker() {
   console.log('\n🔧 Starting sync worker...\n')
 
-  // Register processors - process ALL jobs in each queue
-  ordersQueue.process(processOrdersSync)
-  financesQueue.process(processFinancesSync)
-  inventoryQueue.process(processInventorySync)
-  productsQueue.process(processProductsSync)
-  reportsQueue.process(processReportsSync)
-  aggregationQueue.process(processAggregation)
+  // Register catch-all processors (no job name) to handle ALL jobs
+  // This works for both scheduled (repeatable) jobs and manual jobs
+  // Repeatable jobs use internal keys that don't match job names, so catch-all is required
+ordersQueue.process('orders-sync', processOrdersSync)
+financesQueue.process('finances-sync', processFinancesSync)
+inventoryQueue.process('inventory-sync', processInventorySync)
+productsQueue.process('products-sync', processProductsSync)
+reportsQueue.process('daily-reports', processReportsSync)
+aggregationQueue.process('daily-aggregation', processAggregation)
+
+  console.log('  ✓ Registered catch-all handler for orders-sync queue')
+  console.log('  ✓ Registered catch-all handler for finances-sync queue')
+  console.log('  ✓ Registered catch-all handler for inventory-sync queue')
+  console.log('  ✓ Registered catch-all handler for products-sync queue')
+  console.log('  ✓ Registered catch-all handler for reports-sync queue')
+  console.log('  ✓ Registered catch-all handler for aggregation queue')
+  console.log('  ℹ️  Catch-all handlers process ALL jobs regardless of job name')
 
   // Global event handlers
   allQueues.forEach(queue => {
+    // Log when queue is ready
+    queue.on('ready', () => {
+      console.log(`   ✓ Queue "${queue.name}" is ready and listening`)
+    })
+
+    // Log when waiting for jobs
+    queue.on('waiting', (jobId: string) => {
+      console.log(`   📥 Job ${jobId} is waiting in queue "${queue.name}"`)
+    })
+
+    queue.on('active', (job: any) => {
+      console.log(`\n🔄 Job ${job?.id} (${job?.name}) in ${queue.name} is now active`)
+      console.log(`   Data:`, JSON.stringify(job?.data || {}, null, 2))
+    })
+
+    queue.on('stalled', (job: any) => {
+      console.warn(`\n⚠️  Job ${job?.id} (${job?.name}) in ${queue.name} stalled`)
+    })
+
     queue.on('failed', (job: any, err: Error) => {
-      console.error(`❌ Job ${job?.id} in ${queue.name} failed:`, err.message)
+      console.error(`\n❌ Job ${job?.id} (${job?.name}) in ${queue.name} failed:`, err.message)
+      if (err.stack) {
+        console.error('Stack:', err.stack)
+      }
     })
 
     queue.on('completed', (job: any) => {
-      console.log(`✅ Job ${job?.id} in ${queue.name} completed`)
+      console.log(`\n✅ Job ${job?.id} (${job?.name}) in ${queue.name} completed`)
+      if (job?.returnvalue) {
+        console.log('   Result:', JSON.stringify(job.returnvalue, null, 2))
+      }
+    })
+
+    queue.on('error', (error: Error) => {
+      console.error(`\n❌ Queue "${queue.name}" error:`, error.message)
     })
   })
 
-  console.log('Worker started and listening for jobs!\n')
+  console.log('\n✅ Worker started and listening for jobs!')
+  console.log('   Waiting for jobs to process...\n')
 }
