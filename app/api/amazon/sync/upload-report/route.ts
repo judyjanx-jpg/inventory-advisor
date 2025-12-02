@@ -243,22 +243,37 @@ export async function POST(request: NextRequest) {
 
     console.log(`   ${allOrders.length.toLocaleString()} orders, ${allItems.length.toLocaleString()} items to insert`)
 
-    // PHASE 4: Bulk insert orders
+    // PHASE 4: Upsert orders using individual upserts (Prisma doesn't support bulk upsert)
     uploadStatus.phase = 'inserting_orders'
-    uploadStatus.message = 'Inserting orders...'
+    uploadStatus.message = 'Upserting orders...'
     
-    const ORDER_BATCH_SIZE = 10000
-    let ordersInserted = 0
+    let ordersProcessed = 0
 
-    for (let i = 0; i < allOrders.length; i += ORDER_BATCH_SIZE) {
-      const batch = allOrders.slice(i, i + ORDER_BATCH_SIZE)
+    // Process in parallel batches for speed
+    const BATCH_SIZE = 100
+    for (let i = 0; i < allOrders.length; i += BATCH_SIZE) {
+      const batch = allOrders.slice(i, i + BATCH_SIZE)
       
       try {
-        const result = await prisma.order.createMany({
-          data: batch,
-          skipDuplicates: true, // This handles existing orders - just skips them
-        })
-        ordersInserted += result.count
+        await Promise.all(batch.map(order => 
+          prisma.order.upsert({
+            where: { id: order.id },
+            create: order,
+            update: {
+              purchaseDate: order.purchaseDate,
+              shipDate: order.shipDate,
+              shipCity: order.shipCity,
+              shipState: order.shipState,
+              shipPostalCode: order.shipPostalCode,
+              shipCountry: order.shipCountry,
+              status: order.status,
+              fulfillmentChannel: order.fulfillmentChannel,
+              salesChannel: order.salesChannel,
+              orderTotal: order.orderTotal,
+            }
+          })
+        ))
+        ordersProcessed += batch.length
       } catch (err: any) {
         console.error(`   Order batch error at ${i}:`, err.message)
         uploadStatus.errors++
@@ -267,12 +282,12 @@ export async function POST(request: NextRequest) {
       uploadStatus.ordersProcessed = i + batch.length
       uploadStatus.message = `Orders: ${uploadStatus.ordersProcessed.toLocaleString()} / ${allOrders.length.toLocaleString()}`
       
-      if ((i + batch.length) % 50000 === 0) {
-        console.log(`   Inserted ${(i + batch.length).toLocaleString()} orders...`)
+      if ((i + batch.length) % 2000 === 0) {
+        console.log(`   Processed ${(i + batch.length).toLocaleString()} orders...`)
       }
     }
 
-    console.log(`   ✓ ${ordersInserted.toLocaleString()} new orders inserted (${allOrders.length - ordersInserted} already existed)`)
+    console.log(`   ✓ ${ordersProcessed.toLocaleString()} orders upserted`)
 
     // PHASE 5: Bulk insert items
     uploadStatus.phase = 'inserting_items'
@@ -303,17 +318,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`   ✓ ${itemsInserted.toLocaleString()} new items inserted (${allItems.length - itemsInserted} already existed)`)
+    console.log(`   ✓ ${itemsInserted.toLocaleString()} items inserted (${allItems.length - itemsInserted} already existed)`)
 
     // Done!
     const elapsed = ((Date.now() - uploadStatus.startTime) / 1000).toFixed(1)
     uploadStatus.processing = false
     uploadStatus.phase = 'complete'
-    uploadStatus.message = `✅ Done in ${elapsed}s! ${ordersInserted.toLocaleString()} orders, ${itemsInserted.toLocaleString()} items`
+    uploadStatus.message = `✅ Done in ${elapsed}s! ${ordersProcessed.toLocaleString()} orders upserted, ${itemsInserted.toLocaleString()} items`
 
     console.log(`\n✅ Upload complete in ${elapsed} seconds`)
-    console.log(`   Orders: ${ordersInserted.toLocaleString()} new (${allOrders.length - ordersInserted} skipped)`)
-    console.log(`   Items: ${itemsInserted.toLocaleString()} new (${allItems.length - itemsInserted} skipped)`)
+    console.log(`   Orders: ${ordersProcessed.toLocaleString()} upserted (dates updated for existing)`)
+    console.log(`   Items: ${itemsInserted.toLocaleString()} new (${allItems.length - itemsInserted} existed)`)
     console.log(`   Skipped (no product): ${uploadStatus.skipped.toLocaleString()}`)
 
     // Log to sync_logs
@@ -324,9 +339,9 @@ export async function POST(request: NextRequest) {
         startedAt: new Date(uploadStatus.startTime),
         completedAt: new Date(),
         recordsProcessed: allOrders.length,
-        recordsCreated: ordersInserted,
+        recordsCreated: ordersProcessed,
         recordsUpdated: 0,
-        recordsSkipped: allOrders.length - ordersInserted + uploadStatus.skipped,
+        recordsSkipped: allOrders.length - ordersProcessed + uploadStatus.skipped,
         metadata: {
           file: file.name,
           totalRows: uploadStatus.totalRows,
@@ -342,8 +357,8 @@ export async function POST(request: NextRequest) {
       elapsed: `${elapsed}s`,
       orders: {
         total: allOrders.length,
-        inserted: ordersInserted,
-        skipped: allOrders.length - ordersInserted,
+        inserted: ordersProcessed,
+        skipped: allOrders.length - ordersProcessed,
       },
       items: {
         total: allItems.length,
