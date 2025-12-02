@@ -116,6 +116,8 @@ export async function initializeScheduler() {
 
 /**
  * Manually trigger a sync
+ * 
+ * Uses the same job names as scheduled jobs so the worker processes them correctly.
  */
 export async function triggerSync(syncType: string, data?: any) {
   const queue = queueMap[syncType]
@@ -123,17 +125,40 @@ export async function triggerSync(syncType: string, data?: any) {
     throw new Error(`Unknown sync type: ${syncType}. Valid: ${Object.keys(queueMap).join(', ')}`)
   }
 
-  const job = await queue.add(
-    `${syncType}-manual`,
-    { 
-      manual: true, 
-      triggeredAt: new Date().toISOString(),
-      ...data,
-    },
-    { priority: 1 } // Higher priority than scheduled jobs
-  )
+  // Map syncType to the actual job name used by processors
+  const jobNameMap: Record<string, string> = {
+    orders: 'orders-sync',
+    finances: 'finances-sync',
+    inventory: 'inventory-sync',
+    products: 'products-sync',
+    reports: 'daily-reports',
+    aggregation: 'daily-aggregation',
+  }
 
-  return job
+  const jobName = jobNameMap[syncType] || `${syncType}-sync`
+  
+  console.log(`\n🚀 Triggering manual sync: ${jobName}`)
+  console.log(`   Queue: ${queue.name}`)
+
+  try {
+    await queue.isReady()
+
+    const job = await queue.add(
+      jobName,
+      { 
+        manual: true, 
+        triggeredAt: new Date().toISOString(),
+        ...data,
+      },
+      { priority: 1 } // Higher priority than scheduled jobs
+    )
+
+    console.log(`   ✅ Job added: ${job.id} (${job.name})`)
+    return job
+  } catch (error: any) {
+    console.error(`   ❌ Failed to add job:`, error.message)
+    throw error
+  }
 }
 
 /**
@@ -201,4 +226,3 @@ export function getScheduleConfig() {
     enabled: s.enabled,
   }))
 }
-
