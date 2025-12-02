@@ -1748,3 +1748,48 @@ model BundleComponent {
   @@unique([bundleProductId, componentProductId])
   @@map("bundle_components")
 }
+
+// ============================================
+// STOCKOUT TRACKING
+// ============================================
+
+model StockoutEvent {
+  id        Int      @id @default(autoincrement())
+  masterSku String   @map("master_sku")
+  
+  // When and how long
+  stockoutDate   DateTime @map("stockout_date")
+  resolvedDate   DateTime? @map("resolved_date")
+  daysOutOfStock Int      @default(0) @map("days_out_of_stock")
+  
+  // Impact
+  estimatedLostSales Decimal @default(0) @map("estimated_lost_sales") @db.Decimal(10, 2)
+  estimatedLostUnits Int     @default(0) @map("estimated_lost_units")
+  
+  // Root cause analysis
+  rootCause        String @map("root_cause") // 'forecast_low', 'supplier_delay', 'spike_missed', 'fba_delay', 'safety_stock_low', 'seasonal_miss'
+  rootCauseDetails String? @map("root_cause_details") @db.Text
+  
+  // What the system learned
+  preventionAction String  @map("prevention_action") @db.Text
+  actionTaken      Boolean @default(false) @map("action_taken")
+  
+  // Parameters adjusted
+  parametersAdjusted String? @map("parameters_adjusted") @db.Text // JSON: { "safetyStockDays": 14 -> 21, etc }
+  
+  // Resolution
+  resolved   Boolean   @default(false)
+  resolvedBy String?   @map("resolved_by")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([masterSku, stockoutDate])
+  @@index([resolved])
+  @@map("stockout_events")
+}
+
+// Also update SalesVelocity if not already present:
+// Add these fields to track stockout impact:
+//   daysOutOfStock30d  Int @default(0) @map("days_out_of_stock_30d")
+//   estimatedLostSales Int @default(0) @map("estimated_lost_sales")

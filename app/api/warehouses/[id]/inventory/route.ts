@@ -33,87 +33,119 @@ export async function POST(
     let created = 0
     let skipped = 0
 
-    // Process each inventory item
-    for (const item of inventory) {
-      const { masterSku, available = 0, reserved = 0 } = item
+    // OPTIMIZATION: Batch load all products upfront
+    const allSkus = inventory.map(item => item.masterSku)
+    const existingProducts = await prisma.product.findMany({
+      where: { sku: { in: allSkus } },
+      select: { sku: true },
+    })
+    const validSkus = new Set(existingProducts.map(p => p.sku))
 
-      // Verify product exists
-      const product = await prisma.product.findUnique({
-        where: { sku: masterSku },
+    // OPTIMIZATION: Batch load existing warehouse inventory
+    const existingInventory = await prisma.warehouseInventory.findMany({
+      where: {
+        warehouseId,
+        masterSku: { in: allSkus },
+      },
+      select: { masterSku: true },
+    })
+    const existingInventorySkus = new Set(existingInventory.map(inv => inv.masterSku))
+
+    // Filter out invalid SKUs
+    const validInventory = inventory.filter(item => validSkus.has(item.masterSku))
+    skipped = inventory.length - validInventory.length
+
+    // OPTIMIZATION: Process in smaller transactions to avoid timeouts
+    const now = new Date()
+    const BATCH_SIZE = 50 // Smaller batches to avoid transaction timeouts
+    
+    // Process warehouse inventory in batches
+    for (let i = 0; i < validInventory.length; i += BATCH_SIZE) {
+      const batch = validInventory.slice(i, i + BATCH_SIZE)
+      
+      await prisma.$transaction(async (tx) => {
+        for (const item of batch) {
+          const { masterSku, available = 0, reserved = 0 } = item
+          const isExisting = existingInventorySkus.has(masterSku)
+
+          await tx.warehouseInventory.upsert({
+            where: {
+              warehouseId_masterSku: {
+                warehouseId,
+                masterSku,
+              },
+            },
+            update: {
+              available,
+              reserved,
+              lastSynced: now,
+            },
+            create: {
+              warehouseId,
+              masterSku,
+              available,
+              reserved,
+              lastSynced: now,
+            },
+          })
+
+          if (isExisting) {
+            updated++
+          } else {
+            created++
+          }
+        }
+      }, {
+        timeout: 20000, // 20 second timeout per batch
       })
+    }
 
-      if (!product) {
-        skipped++
-        continue
-      }
-
-      // Upsert warehouse inventory
-      await prisma.warehouseInventory.upsert({
-        where: {
-          warehouseId_masterSku: {
-            warehouseId,
-            masterSku,
-          },
-        },
-        update: {
-          available,
-          reserved,
-          lastSynced: new Date(),
-        },
-        create: {
-          warehouseId,
-          masterSku,
-          available,
-          reserved,
-          lastSynced: new Date(),
-        },
-      })
-
-      // Update aggregated inventory level
-      const totalWarehouseInventory = await prisma.warehouseInventory.groupBy({
+    // Update inventory levels after all warehouse inventory is updated
+    const uniqueSkus = Array.from(new Set(validInventory.map(item => item.masterSku)))
+    
+    if (uniqueSkus.length > 0) {
+      // Calculate totals for all SKUs in one query (outside transaction for better performance)
+      const totals = await prisma.warehouseInventory.groupBy({
         by: ['masterSku'],
-        where: { masterSku },
+        where: {
+          masterSku: { in: uniqueSkus },
+        },
         _sum: {
           available: true,
           reserved: true,
         },
       })
 
-      const total = totalWarehouseInventory[0]?._sum || { available: 0, reserved: 0 }
-
-      await prisma.inventoryLevel.upsert({
-        where: { masterSku },
-        update: {
-          warehouseAvailable: total.available || 0,
-          warehouseReserved: total.reserved || 0,
-          warehouseLastSync: new Date(),
-        },
-        create: {
-          masterSku,
-          warehouseAvailable: total.available || 0,
-          warehouseReserved: total.reserved || 0,
-          fbaAvailable: 0,
-          fbaInboundWorking: 0,
-          fbaInboundShipped: 0,
-          fbaInboundReceiving: 0,
-          fbaReserved: 0,
-          fbaUnfulfillable: 0,
-        },
-      })
-
-      const existing = await prisma.warehouseInventory.findUnique({
-        where: {
-          warehouseId_masterSku: {
-            warehouseId,
-            masterSku,
-          },
-        },
-      })
-
-      if (existing) {
-        updated++
-      } else {
-        created++
+      // Update inventory levels in batches
+      for (let i = 0; i < totals.length; i += BATCH_SIZE) {
+        const batch = totals.slice(i, i + BATCH_SIZE)
+        
+        await prisma.$transaction(async (tx) => {
+          for (const total of batch) {
+            const masterSku = total.masterSku
+            await tx.inventoryLevel.upsert({
+              where: { masterSku },
+              update: {
+                warehouseAvailable: total._sum.available || 0,
+                warehouseReserved: total._sum.reserved || 0,
+                warehouseLastSync: now,
+              },
+              create: {
+                masterSku,
+                warehouseAvailable: total._sum.available || 0,
+                warehouseReserved: total._sum.reserved || 0,
+                fbaAvailable: 0,
+                fbaInboundWorking: 0,
+                fbaInboundShipped: 0,
+                fbaInboundReceiving: 0,
+                fbaReserved: 0,
+                fbaUnfulfillable: 0,
+              },
+            })
+          }
+        }, {
+          timeout: 20000,
+        })
       }
     }
 

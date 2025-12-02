@@ -97,6 +97,63 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
+    // Check if this is a bulk create request
+    if (body.products && Array.isArray(body.products)) {
+      // Bulk create
+      const products = body.products
+      const created = []
+      const skipped = []
+
+      for (const productData of products) {
+        try {
+          const product = await prisma.product.create({
+            data: {
+              sku: productData.sku,
+              title: productData.title || productData.sku,
+              brand: productData.brand || 'KISPER',
+              category: productData.category,
+              cost: productData.cost || 0,
+              price: productData.price || 0,
+              status: productData.status || 'active',
+              inventoryLevels: {
+                create: {
+                  fbaAvailable: 0,
+                  warehouseAvailable: 0,
+                  fbaReserved: 0,
+                  fbaUnfulfillable: 0,
+                },
+              },
+              salesVelocity: {
+                create: {
+                  velocity7d: 0,
+                  velocity30d: 0,
+                  velocity90d: 0,
+                },
+              },
+            },
+          })
+          created.push(product.sku)
+        } catch (error: any) {
+          if (error.code === 'P2002') {
+            // Duplicate SKU
+            skipped.push(productData.sku)
+          } else {
+            console.error(`Error creating product ${productData.sku}:`, error)
+            skipped.push(productData.sku)
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        created: created.length,
+        skipped: skipped.length,
+        createdSkus: created,
+        skippedSkus: skipped,
+      })
+    }
+    
+    // Single product create
     const product = await prisma.product.create({
       data: {
         sku: body.sku,
@@ -114,10 +171,10 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(product, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating product:', error)
     return NextResponse.json(
-      { error: 'Failed to create product' },
+      { error: error.message || 'Failed to create product' },
       { status: 500 }
     )
   }

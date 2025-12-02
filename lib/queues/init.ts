@@ -1,44 +1,25 @@
 /**
- * Queue Initialization
+ * Queue Initialization (App-side only)
  * 
- * This file auto-initializes when imported.
+ * This file is imported by the Next.js app but does NOT initialize the worker.
+ * The worker runs separately via Railway worker service (worker.ts).
+ * 
+ * The app can still trigger manual syncs via the API, but scheduled jobs
+ * and job processing happen in the separate worker service.
+ * 
  * Import in layout.tsx: import '@/lib/queues/init'
  */
 
-// Use global to prevent multiple initializations during hot reload
-const globalForQueues = globalThis as unknown as {
-  queuesInitialized: boolean
-}
+// Note: We don't initialize scheduler or worker here because:
+// 1. The worker service (worker.ts) handles both scheduling and processing
+// 2. The app can still trigger manual syncs via /api/sync/trigger
+// 3. This avoids conflicts and ensures jobs are processed by the dedicated worker
 
-if (!globalForQueues.queuesInitialized && typeof window === 'undefined') {
-  globalForQueues.queuesInitialized = true
-  
-  console.log('\n📦 Loading queue system...')
-  
+if (typeof window === 'undefined') {
   const redisUrl = process.env.REDIS_URL
-  console.log(`   REDIS_URL: ${redisUrl ? '✓ configured' : '✗ NOT SET'}`)
-  
-  if (!redisUrl) {
-    console.log('   ⚠️ Skipping queue initialization (no Redis)\n')
-  } else {
-    // Initialize asynchronously to not block app startup
-    ;(async () => {
-      try {
-        console.log('   Initializing scheduler and worker...')
-        
-        const { initializeScheduler } = await import('./scheduler')
-        const { startWorker } = await import('./worker')
-        
-        await initializeScheduler()
-        startWorker()
-        
-        console.log('   ✅ Queue system ready!\n')
-      } catch (error: any) {
-        console.error('   ❌ Queue init failed:', error.message)
-        // Reset so it can try again on next hot reload
-        globalForQueues.queuesInitialized = false
-      }
-    })()
+  if (redisUrl) {
+    console.log('\n📦 Queue system: Worker runs separately (Railway worker service)')
+    console.log('   ✅ App can trigger manual syncs via API\n')
   }
 }
 

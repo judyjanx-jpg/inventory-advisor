@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type') || 'all'
 
+    console.log(`\n🚀 [API] Sync trigger requested: type=${type}`)
+
     if (!VALID_TYPES.includes(type)) {
       return NextResponse.json({
         success: false,
@@ -33,6 +35,7 @@ export async function POST(request: NextRequest) {
 
     if (type === 'all') {
       // Trigger all syncs
+      console.log(`   Triggering: orders, finances, inventory, products`)
       const jobs = await Promise.all([
         triggerSync('orders', body),
         triggerSync('finances', body),
@@ -40,15 +43,22 @@ export async function POST(request: NextRequest) {
         triggerSync('products', body),
       ])
 
+      console.log(`   ✅ All jobs added to queue:`, jobs.map(j => `${j.name} (${j.id})`))
+      console.log(`   📝 Check Railway worker service logs to see processing\n`)
+
       return NextResponse.json({
         success: true,
         message: 'All syncs triggered',
         jobs: jobs.map(j => ({ id: j.id, name: j.name })),
+        note: 'Jobs are being processed by the worker service. Check worker logs on Railway.',
       })
     }
 
     // Trigger single sync
+    console.log(`   Triggering: ${type}`)
     const job = await triggerSync(type, body)
+    console.log(`   ✅ Job added to queue: ${job.name} (${job.id})`)
+    console.log(`   📝 Check Railway worker service logs to see processing\n`)
 
     return NextResponse.json({
       success: true,
@@ -57,9 +67,10 @@ export async function POST(request: NextRequest) {
         id: job.id,
         name: job.name,
       },
+      note: 'Job is being processed by the worker service. Check worker logs on Railway.',
     })
   } catch (error: any) {
-    console.error('Failed to trigger sync:', error)
+    console.error('❌ [API] Failed to trigger sync:', error)
     return NextResponse.json({
       success: false,
       error: error.message,

@@ -22,23 +22,34 @@ interface SyncContextType {
   checkSyncStatus: () => Promise<void>
 }
 
+const defaultSyncState: SyncState = {
+  status: 'idle',
+  type: null,
+  startedAt: null,
+  message: null,
+}
+
 const SyncContext = createContext<SyncContextType | undefined>(undefined)
 
-export function useSyncContext() {
+export function useSyncContext(): SyncContextType {
   const context = useContext(SyncContext)
+  
+  // Return safe defaults instead of throwing - handles SSR and initial render
   if (!context) {
-    throw new Error('useSyncContext must be used within a SyncProvider')
+    return {
+      syncState: defaultSyncState,
+      startSync: () => {},
+      endSync: () => {},
+      updateProgress: () => {},
+      checkSyncStatus: async () => {},
+    }
   }
+  
   return context
 }
 
 export function SyncProvider({ children }: { children: ReactNode }) {
-  const [syncState, setSyncState] = useState<SyncState>({
-    status: 'idle',
-    type: null,
-    startedAt: null,
-    message: null,
-  })
+  const [syncState, setSyncState] = useState<SyncState>(defaultSyncState)
 
   const startSync = useCallback((type: string) => {
     setSyncState({
@@ -56,15 +67,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       message: message || null,
     }))
     
-    // Auto-clear success after 5 seconds
     if (status === 'success') {
       setTimeout(() => {
-        setSyncState({
-          status: 'idle',
-          type: null,
-          startedAt: null,
-          message: null,
-        })
+        setSyncState(defaultSyncState)
       }, 5000)
     }
   }, [])
@@ -78,7 +83,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const checkSyncStatus = useCallback(async () => {
     try {
-      // Check Amazon connection status
       const amazonRes = await fetch('/api/settings/amazon')
       if (amazonRes.ok) {
         const data = await amazonRes.json()
@@ -92,7 +96,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         }
       }
       
-      // Check initial sync status
       const initialRes = await fetch('/api/amazon/sync/initial')
       if (initialRes.ok) {
         const data = await initialRes.json()
@@ -110,13 +113,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Only check sync status on initial mount (not continuously)
-  // The settings page handles its own polling when syncing
   useEffect(() => {
     checkSyncStatus()
-    // Don't poll continuously - only check once on mount
-    // If sync is running, the settings page will poll and update
-  }, []) // Empty dependency array = only run once on mount
+  }, [])
 
   return (
     <SyncContext.Provider value={{ syncState, startSync, endSync, updateProgress, checkSyncStatus }}>
@@ -124,4 +123,3 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     </SyncContext.Provider>
   )
 }
-

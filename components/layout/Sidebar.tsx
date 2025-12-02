@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -41,37 +41,7 @@ export default function Sidebar() {
   const pathname = usePathname()
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
-
-  // Fetch last sync time
-  useEffect(() => {
-    async function fetchSyncStatus() {
-      try {
-        const res = await fetch('/api/sync/status')
-        const data = await res.json()
-        if (data.success && data.queues) {
-          // Find the most recent completed job
-          let latestTime: Date | null = null
-          for (const queue of data.queues) {
-            if (queue.lastCompleted?.finishedOn) {
-              const time = new Date(queue.lastCompleted.finishedOn)
-              if (!latestTime || time > latestTime) {
-                latestTime = time
-              }
-            }
-          }
-          if (latestTime) {
-            setLastSync(formatTimeAgo(latestTime))
-          }
-        }
-      } catch (e) {
-        // Ignore errors
-      }
-    }
-    
-    fetchSyncStatus()
-    const interval = setInterval(fetchSyncStatus, 60000) // Update every minute
-    return () => clearInterval(interval)
-  }, [])
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const formatTimeAgo = (date: Date) => {
     const now = new Date()
@@ -86,17 +56,100 @@ export default function Sidebar() {
     return `${diffDays}d ago`
   }
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+      }
+    }
+  }, [])
+
+  // Fetch last sync time - only once on mount, no continuous polling
+  useEffect(() => {
+    async function fetchSyncStatus() {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5s timeout
+        
+        const res = await fetch('/api/sync/status', { signal: controller.signal })
+        clearTimeout(timeoutId)
+        
+        const data = await res.json()
+        if (data.success && data.queues) {
+          let latestTime: Date | null = null
+          for (const queue of data.queues) {
+            if (queue.lastCompleted?.finishedOn) {
+              const time = new Date(queue.lastCompleted.finishedOn)
+              if (!latestTime || time > latestTime) {
+                latestTime = time
+              }
+            }
+          }
+          if (latestTime) {
+            setLastSync(formatTimeAgo(latestTime))
+          }
+        }
+      } catch (e) {
+        // Ignore errors (including abort)
+      }
+    }
+    
+    fetchSyncStatus()
+    // Removed continuous polling - only fetch on mount
+  }, [])
+
   const handleSyncNow = async () => {
+    if (syncing) return // Prevent double-clicks
+    
+    // Clear any existing poll interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+    }
+    
     setSyncing(true)
+    
     try {
-      await fetch('/api/sync/trigger?type=all', { method: 'POST' })
-      // Update last sync time after a delay
-      setTimeout(() => {
-        setLastSync('Just now')
+      const response = await fetch('/api/sync/trigger?type=all', { method: 'POST' })
+      const data = await response.json()
+      
+      if (data.success) {
+        setLastSync('Syncing...')
+        console.log('✅ Sync triggered:', data.jobs || data.job)
+        
+        // Simple approach: just show "syncing" for 10 seconds, then refresh status once
+        setTimeout(async () => {
+          setSyncing(false)
+          try {
+            const statusRes = await fetch('/api/sync/status')
+            const statusData = await statusRes.json()
+            if (statusData.success && statusData.queues) {
+              let latestTime: Date | null = null
+              for (const queue of statusData.queues) {
+                if (queue.lastCompleted?.finishedOn) {
+                  const time = new Date(queue.lastCompleted.finishedOn)
+                  if (!latestTime || time > latestTime) {
+                    latestTime = time
+                  }
+                }
+              }
+              setLastSync(latestTime ? formatTimeAgo(latestTime) : 'Just now')
+            }
+          } catch {
+            setLastSync('Just now')
+          }
+        }, 10000) // Check status after 10 seconds
+        
+      } else {
+        console.error('❌ Sync failed:', data.error)
         setSyncing(false)
-      }, 2000)
-    } catch (e) {
+        setLastSync('Failed')
+      }
+    } catch (e: any) {
+      console.error('❌ Sync error:', e)
       setSyncing(false)
+      setLastSync('Error')
     }
   }
 

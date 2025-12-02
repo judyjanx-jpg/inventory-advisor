@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, StatCard } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -20,6 +20,7 @@ import {
   Globe,
   Building2
 } from 'lucide-react'
+import WarehouseInventoryUpload from '@/components/inventory/WarehouseInventoryUpload'
 
 interface ChannelInventory {
   channel: string
@@ -72,12 +73,21 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [expandedSku, setExpandedSku] = useState<string | null>(null)
+  const fetchingRef = useRef(false) // Prevent concurrent fetches
 
   useEffect(() => {
     fetchInventory()
   }, [])
 
   const fetchInventory = async () => {
+    // Prevent concurrent fetches
+    if (fetchingRef.current) {
+      console.log('Fetch already in progress, skipping...')
+      return
+    }
+    
+    fetchingRef.current = true
+    setLoading(true)
     try {
       const res = await fetch('/api/inventory')
       if (!res.ok) {
@@ -193,6 +203,7 @@ export default function InventoryPage() {
       console.error('Error fetching inventory:', error)
     } finally {
       setLoading(false)
+      fetchingRef.current = false
     }
   }
 
@@ -298,6 +309,7 @@ export default function InventoryPage() {
                 <p className="text-slate-400 mt-1">Multi-channel inventory tracking and forecasting</p>
               </div>
               <div className="flex gap-3">
+                <WarehouseInventoryUpload onUploadComplete={fetchInventory} />
                 <Button variant="outline" onClick={recalculateVelocity} loading={recalculatingVelocity}>
                   <TrendingUp className={`w-4 h-4 mr-2 ${recalculatingVelocity ? 'animate-spin' : ''}`} />
                   Recalculate Velocity

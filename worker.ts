@@ -32,29 +32,53 @@ async function main() {
   }
 
   try {
-    // Initialize the scheduler (sets up recurring jobs)
-    await initializeScheduler()
-
-    // Start the worker (processes jobs)
+    // IMPORTANT: Start worker FIRST, then initialize scheduler
+    // This ensures handlers are registered before any jobs are created
+    console.log('🔧 Starting worker processors...')
     startWorker()
+    console.log('✅ Worker processors registered\n')
 
-    console.log('Worker is running. Press Ctrl+C to stop.\n')
+    // Small delay to ensure processors are fully registered
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    // Initialize the scheduler (sets up recurring jobs)
+    console.log('📅 Initializing scheduler...')
+    await initializeScheduler()
+    console.log('✅ Scheduler initialized\n')
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('✅ Worker is running and ready to process jobs!')
+    console.log('   Waiting for jobs from queues...')
+    console.log('   (Jobs can be triggered manually via API or scheduled)')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+
+    // Keep process alive
+    setInterval(() => {
+      // Heartbeat every 5 minutes to show worker is alive
+      const now = new Date().toISOString()
+      console.log(`💓 Worker heartbeat: ${now} (still running)`)
+    }, 5 * 60 * 1000)
 
     // Graceful shutdown
     process.on('SIGTERM', async () => {
-      console.log('\nSIGTERM received, shutting down gracefully...')
+      console.log('\n⚠️  SIGTERM received, shutting down gracefully...')
       await closeQueues()
+      console.log('👋 Worker stopped')
       process.exit(0)
     })
 
     process.on('SIGINT', async () => {
-      console.log('\nSIGINT received, shutting down gracefully...')
+      console.log('\n⚠️  SIGINT received, shutting down gracefully...')
       await closeQueues()
+      console.log('👋 Worker stopped')
       process.exit(0)
     })
 
-  } catch (error) {
-    console.error('Failed to start worker:', error)
+  } catch (error: any) {
+    console.error('❌ Failed to start worker:', error)
+    if (error.stack) {
+      console.error('Stack:', error.stack)
+    }
     process.exit(1)
   }
 }
