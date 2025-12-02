@@ -3,17 +3,19 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
+# Copy package files and install dependencies
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy Prisma schema and generate client
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# Copy source files
-COPY lib ./lib
-COPY worker.ts ./
+# Copy ALL source files (needed for @/ path aliases)
+COPY . .
+
+# Install tsx globally
+RUN npm install -g tsx
 
 # Run the worker
-CMD ["npx", "tsx", "worker.ts"]
+CMD ["tsx", "worker.ts"]
