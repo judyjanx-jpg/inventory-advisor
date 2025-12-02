@@ -263,12 +263,12 @@ function startWorker() {
   console.log('🔧 Starting sync worker...\n')
 
   // Register processors
-  ordersQueue.process(1, processOrdersSync)
-  financesQueue.process(1, processFinancesSync)
-  inventoryQueue.process(1, processInventorySync)
-  productsQueue.process(1, processProductsSync)
-  reportsQueue.process(1, processReportsSync)
-  aggregationQueue.process(1, processAggregation)
+ordersQueue.process('orders-sync', 1, processOrdersSync)
+financesQueue.process('finances-sync', 1, processFinancesSync)
+inventoryQueue.process('inventory-sync', 1, processInventorySync)
+productsQueue.process('products-sync', 1, processProductsSync)
+reportsQueue.process('daily-reports', 1, processReportsSync)
+aggregationQueue.process('daily-aggregation', 1, processAggregation)
 
   // Event handlers
   allQueues.forEach(queue => {
