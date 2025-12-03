@@ -106,6 +106,9 @@ export default function PurchaseOrdersPage() {
   // Receive form
   const [receiveItems, setReceiveItems] = useState<Record<number, { received: number; damaged: number; backorder: number }>>({})
   const [savingReceive, setSavingReceive] = useState(false)
+  
+  // Delete options
+  const [deductOnDelete, setDeductOnDelete] = useState(true)
 
   useEffect(() => {
     fetchData()
@@ -236,12 +239,14 @@ export default function PurchaseOrdersPage() {
   const deletePO = async () => {
     if (!selectedPO) return
     
+    const hasReceivedItems = selectedPO.status === 'received' || selectedPO.status === 'partial'
+    
     try {
       const res = await fetch(`/api/purchase-orders/${selectedPO.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          deductInventory: selectedPO.status === 'received' || selectedPO.status === 'partial'
+          deductInventory: hasReceivedItems && deductOnDelete
         }),
       })
       
@@ -249,6 +254,7 @@ export default function PurchaseOrdersPage() {
         fetchData()
         setShowDeleteConfirm(false)
         setSelectedPO(null)
+        setDeductOnDelete(true) // Reset for next time
       } else {
         const data = await res.json()
         alert(data.error || 'Failed to delete PO')
@@ -1007,7 +1013,7 @@ export default function PurchaseOrdersPage() {
       {/* Delete Confirmation Modal */}
       <Modal
         isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
+        onClose={() => { setShowDeleteConfirm(false); setDeductOnDelete(true); }}
         title="Delete Purchase Order"
         size="md"
       >
@@ -1016,19 +1022,52 @@ export default function PurchaseOrdersPage() {
             <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-medium text-white">Are you sure you want to delete {selectedPO?.poNumber}?</p>
-              {(selectedPO?.status === 'received' || selectedPO?.status === 'partial') && (
-                <p className="text-sm text-red-400 mt-2">
-                  ⚠ This will deduct the quantities received from this PO from your warehouse inventory 
-                  and remove supplier performance tracking data.
-                </p>
-              )}
               <p className="text-sm text-slate-400 mt-2">This action cannot be undone.</p>
             </div>
           </div>
+          
+          {/* Show inventory options only if items were received */}
+          {(selectedPO?.status === 'received' || selectedPO?.status === 'partial') && (
+            <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-lg space-y-3">
+              <p className="text-sm font-medium text-white">What should happen to the received inventory?</p>
+              
+              <label className="flex items-start gap-3 p-3 rounded-lg cursor-pointer hover:bg-slate-700/50 transition-colors">
+                <input
+                  type="radio"
+                  name="deductOption"
+                  checked={deductOnDelete}
+                  onChange={() => setDeductOnDelete(true)}
+                  className="mt-1 w-4 h-4 text-cyan-500 bg-slate-700 border-slate-600 focus:ring-cyan-500"
+                />
+                <div>
+                  <p className="font-medium text-white">Deduct from inventory</p>
+                  <p className="text-sm text-slate-400">
+                    Remove the received quantities from warehouse inventory (use if items are being returned or were never actually received)
+                  </p>
+                </div>
+              </label>
+              
+              <label className="flex items-start gap-3 p-3 rounded-lg cursor-pointer hover:bg-slate-700/50 transition-colors">
+                <input
+                  type="radio"
+                  name="deductOption"
+                  checked={!deductOnDelete}
+                  onChange={() => setDeductOnDelete(false)}
+                  className="mt-1 w-4 h-4 text-cyan-500 bg-slate-700 border-slate-600 focus:ring-cyan-500"
+                />
+                <div>
+                  <p className="font-medium text-white">Keep inventory as is</p>
+                  <p className="text-sm text-slate-400">
+                    Keep the received quantities in inventory (use if items are already in stock and you just want to delete the PO record)
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
         </div>
 
         <ModalFooter>
-          <Button variant="ghost" onClick={() => setShowDeleteConfirm(false)}>
+          <Button variant="ghost" onClick={() => { setShowDeleteConfirm(false); setDeductOnDelete(true); }}>
             Cancel
           </Button>
           <Button variant="danger" onClick={deletePO}>

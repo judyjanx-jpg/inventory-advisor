@@ -30,8 +30,10 @@ import {
   List,
   Settings,
   DollarSign,
-  Truck
+  Truck,
+  Upload
 } from 'lucide-react'
+import BulkProductUpdate from '@/components/products/BulkProductUpdate'
 
 interface SkuMapping {
   id: number
@@ -135,6 +137,7 @@ export default function ProductsPage() {
   const [showAddProduct, setShowAddProduct] = useState(false)
   const [showSkuMapping, setShowSkuMapping] = useState(false)
   const [showProductSettings, setShowProductSettings] = useState(false)
+  const [showBulkUpdate, setShowBulkUpdate] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   
   // Suppliers
@@ -756,6 +759,10 @@ export default function ProductsPage() {
               <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
             </Button>
+            <Button variant="secondary" onClick={() => setShowBulkUpdate(true)}>
+              <Upload className="w-4 h-4 mr-2" />
+              Bulk Update
+            </Button>
             <Button onClick={() => setShowAddProduct(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Product
@@ -1239,6 +1246,15 @@ export default function ProductsPage() {
           </Button>
         </ModalFooter>
       </Modal>
+
+      {/* Bulk Update Modal */}
+      <BulkProductUpdate
+        isOpen={showBulkUpdate}
+        onClose={() => setShowBulkUpdate(false)}
+        onComplete={fetchProducts}
+        suppliers={suppliers}
+        products={[...products, ...hiddenProducts]}
+      />
     </MainLayout>
   )
 }

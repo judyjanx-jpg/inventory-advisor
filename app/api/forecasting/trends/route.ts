@@ -1,160 +1,115 @@
-/**
- * Forecasting Trends API
- * 
- * GET /api/forecasting/trends?sku=SKU123
- * 
- * Returns monthly sales data for current year vs previous year
- */
-
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const sku = searchParams.get('sku')
-
-    if (!sku) {
-      return NextResponse.json({ success: false, error: 'SKU required' }, { status: 400 })
+    const skusParam = searchParams.get('skus') // comma-separated SKUs
+    const sku = searchParams.get('sku') // single SKU (backwards compatible)
+    
+    // Support both single SKU and multiple SKUs
+    const skus = skusParam 
+      ? skusParam.split(',').map(s => s.trim()).filter(Boolean)
+      : sku 
+        ? [sku]
+        : []
+    
+    if (skus.length === 0) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'No SKUs provided' 
+      }, { status: 400 })
     }
 
-    const now = new Date()
-    const currentYear = now.getFullYear()
-    const previousYear = currentYear - 1
-
-    // Get sales data for both years
-    const startOfPreviousYear = new Date(previousYear, 0, 1)
-    const endOfCurrentYear = new Date(currentYear, 11, 31)
-
-    const salesData = await prisma.orderItem.findMany({
-      where: {
-        masterSku: sku,
-        order: {
-          purchaseDate: {
-            gte: startOfPreviousYear,
-            lte: endOfCurrentYear,
-          },
-          status: { notIn: ['Cancelled', 'Pending'] },
-        },
-      },
-      select: {
-        quantity: true,
-        order: {
-          select: {
-            purchaseDate: true,
-          },
-        },
-      },
+    // Get products for the SKUs
+    const products = await prisma.product.findMany({
+      where: { sku: { in: skus } },
+      select: { id: true, sku: true }
     })
 
-    // Aggregate by month
-    const monthlyData: Record<string, { currentYear: number; previousYear: number }> = {}
-    
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    months.forEach(month => {
-      monthlyData[month] = { currentYear: 0, previousYear: 0 }
-    })
+    if (products.length === 0) {
+      return NextResponse.json({ 
+        success: true, 
+        trends: [] 
+      })
+    }
 
-    for (const item of salesData) {
-      const date = new Date(item.order.purchaseDate)
-      const year = date.getFullYear()
-      const monthIndex = date.getMonth()
-      const monthName = months[monthIndex]
-      const qty = item.quantity || 0
+    const productIds = products.map(p => p.id)
+    const skuMap = Object.fromEntries(products.map(p => [p.id, p.sku]))
 
-      if (year === currentYear) {
-        monthlyData[monthName].currentYear += qty
-      } else if (year === previousYear) {
-        monthlyData[monthName].previousYear += qty
+    // Get monthly sales data for the last 24 months
+    const endDate = new Date()
+    const startDate = new Date()
+    startDate.setMonth(startDate.getMonth() - 24)
+
+    const monthlySales = await prisma.$queryRaw<Array<{
+      product_id: number
+      month: Date
+      units: bigint
+    }>>`
+      SELECT 
+        oi.product_id,
+        DATE_TRUNC('month', o.purchase_date) as month,
+        SUM(oi.quantity)::bigint as units
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      WHERE oi.product_id = ANY(${productIds})
+        AND o.purchase_date >= ${startDate}
+        AND o.purchase_date <= ${endDate}
+        AND o.status NOT IN ('Cancelled', 'Pending')
+      GROUP BY oi.product_id, DATE_TRUNC('month', o.purchase_date)
+      ORDER BY month ASC
+    `
+
+    // Build the trends array with all months
+    const monthsSet = new Set<string>()
+    const salesBySku: Record<string, Record<string, number>> = {}
+
+    // Initialize salesBySku for each requested SKU
+    for (const sku of skus) {
+      salesBySku[sku] = {}
+    }
+
+    // Populate with data
+    for (const row of monthlySales) {
+      const monthStr = new Date(row.month).toLocaleString('default', { month: 'short', year: '2-digit' })
+      monthsSet.add(monthStr)
+      
+      const sku = skuMap[row.product_id]
+      if (sku && salesBySku[sku]) {
+        salesBySku[sku][monthStr] = Number(row.units)
       }
     }
 
-    // Convert to array format for chart
-    const trends = months.map(month => ({
-      month,
-      currentYear: monthlyData[month].currentYear,
-      previousYear: monthlyData[month].previousYear,
-      change: monthlyData[month].previousYear > 0 
-        ? ((monthlyData[month].currentYear - monthlyData[month].previousYear) / monthlyData[month].previousYear * 100)
-        : 0,
-    }))
+    // Sort months chronologically
+    const allMonths: string[] = []
+    const currentDate = new Date(startDate)
+    while (currentDate <= endDate) {
+      const monthStr = currentDate.toLocaleString('default', { month: 'short', year: '2-digit' })
+      allMonths.push(monthStr)
+      currentDate.setMonth(currentDate.getMonth() + 1)
+    }
 
-    // Calculate velocity changes
-    const days7Ago = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const days14Ago = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
-    const days30Ago = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-    const days60Ago = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)
-
-    const [sales7d, salesPrev7d, sales30d, salesPrev30d] = await Promise.all([
-      prisma.orderItem.aggregate({
-        _sum: { quantity: true },
-        where: {
-          masterSku: sku,
-          order: {
-            purchaseDate: { gte: days7Ago },
-            status: { notIn: ['Cancelled', 'Pending'] },
-          },
-        },
-      }),
-      prisma.orderItem.aggregate({
-        _sum: { quantity: true },
-        where: {
-          masterSku: sku,
-          order: {
-            purchaseDate: { gte: days14Ago, lt: days7Ago },
-            status: { notIn: ['Cancelled', 'Pending'] },
-          },
-        },
-      }),
-      prisma.orderItem.aggregate({
-        _sum: { quantity: true },
-        where: {
-          masterSku: sku,
-          order: {
-            purchaseDate: { gte: days30Ago },
-            status: { notIn: ['Cancelled', 'Pending'] },
-          },
-        },
-      }),
-      prisma.orderItem.aggregate({
-        _sum: { quantity: true },
-        where: {
-          masterSku: sku,
-          order: {
-            purchaseDate: { gte: days60Ago, lt: days30Ago },
-            status: { notIn: ['Cancelled', 'Pending'] },
-          },
-        },
-      }),
-    ])
-
-    const current7d = sales7d._sum.quantity || 0
-    const prev7d = salesPrev7d._sum.quantity || 0
-    const current30d = sales30d._sum.quantity || 0
-    const prev30d = salesPrev30d._sum.quantity || 0
-
-    const velocityChange7d = prev7d > 0 ? ((current7d - prev7d) / prev7d * 100) : 0
-    const velocityChange30d = prev30d > 0 ? ((current30d - prev30d) / prev30d * 100) : 0
+    // Build final trends array
+    const trends = allMonths.map(month => {
+      const dataPoint: Record<string, any> = { month }
+      for (const sku of skus) {
+        dataPoint[sku] = salesBySku[sku]?.[month] || 0
+      }
+      return dataPoint
+    })
 
     return NextResponse.json({
       success: true,
       trends,
-      velocityChanges: {
-        change7d: velocityChange7d,
-        change30d: velocityChange30d,
-        current7dUnits: current7d,
-        prev7dUnits: prev7d,
-        current30dUnits: current30d,
-        prev30dUnits: prev30d,
-      },
-      summary: {
-        currentYearTotal: Object.values(monthlyData).reduce((sum, m) => sum + m.currentYear, 0),
-        previousYearTotal: Object.values(monthlyData).reduce((sum, m) => sum + m.previousYear, 0),
-      },
+      skus: skus,
     })
 
   } catch (error: any) {
     console.error('Trends API error:', error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    return NextResponse.json({
+      success: false,
+      error: error.message,
+    }, { status: 500 })
   }
 }

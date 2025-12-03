@@ -16,24 +16,41 @@ import {
   CheckCircle,
   DollarSign,
   TrendingUp,
-  Calendar
+  Calendar,
+  ArrowUpDown,
+  ChevronDown
 } from 'lucide-react'
+
+interface OrderItem {
+  id: string
+  masterSku: string
+  product?: { title: string; sku: string }
+  quantity: number
+  itemPrice: number
+  itemTax?: number
+  shippingPrice?: number
+  amazonFees?: number
+}
 
 interface Order {
   id: string
+  amazonOrderId?: string
   purchaseDate: string
   status: string
+  orderTotal?: number
   shipCity?: string
   shipState?: string
   shipCountry?: string
   fulfillmentChannel?: string
-  orderItems: {
-    masterSku: string
-    product?: { title: string }
-    quantity: number
-    itemPrice: number
-    amazonFees?: number
-  }[]
+  salesChannel?: string
+  orderItems: OrderItem[]
+}
+
+interface OrdersSummary {
+  totalOrders: number
+  totalRevenue: number
+  totalItems: number
+  totalFees: number
 }
 
 interface SalesHistoryItem {
@@ -67,9 +84,12 @@ interface OrdersPagination {
   hasMore: boolean
 }
 
+type DateFilterType = 'today' | 'yesterday' | '3d' | '7d' | '30d' | 'ytd' | '365d' | 'custom' | 'all'
+
 export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState<'orders' | 'sales'>('orders')
   const [orders, setOrders] = useState<Order[]>([])
+  const [ordersSummary, setOrdersSummary] = useState<OrdersSummary | null>(null)
   const [salesHistory, setSalesHistory] = useState<SalesHistoryItem[]>([])
   const [salesSummary, setSalesSummary] = useState<SalesHistorySummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -84,6 +104,13 @@ export default function OrdersPage() {
   const [salesHasMore, setSalesHasMore] = useState(false)
   const [loadingMoreSales, setLoadingMoreSales] = useState(false)
   
+  // Orders date filter and sort
+  const [ordersDateFilter, setOrdersDateFilter] = useState<DateFilterType>('7d')
+  const [ordersSortOrder, setOrdersSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [ordersCustomStartDate, setOrdersCustomStartDate] = useState('')
+  const [ordersCustomEndDate, setOrdersCustomEndDate] = useState('')
+  const [showOrdersDateDropdown, setShowOrdersDateDropdown] = useState(false)
+  
   // Date range for sales history
   const [salesDateRange, setSalesDateRange] = useState<'7d' | '30d' | '90d' | '1y' | '2y' | 'custom'>('90d')
   const [customStartDate, setCustomStartDate] = useState('')
@@ -97,6 +124,15 @@ export default function OrdersPage() {
     }
   }, [activeTab])
   
+  // Re-fetch orders when date filter or sort changes
+  useEffect(() => {
+    if (activeTab === 'orders' && ordersDateFilter !== 'custom') {
+      setOrders([])
+      setOrdersOffset(0)
+      fetchOrders()
+    }
+  }, [ordersDateFilter, ordersSortOrder])
+  
   // Re-fetch when date range changes
   useEffect(() => {
     if (activeTab === 'sales' && salesDateRange !== 'custom') {
@@ -109,10 +145,18 @@ export default function OrdersPage() {
   const fetchOrders = async (offset = 0, append = false) => {
     if (append) {
       setLoadingMoreOrders(true)
+    } else {
+      setLoading(true)
     }
     try {
       const limit = 100
-      const res = await fetch(`/api/orders?limit=${limit}&offset=${offset}`)
+      let url = `/api/orders?limit=${limit}&offset=${offset}&sort=${ordersSortOrder}&dateFilter=${ordersDateFilter}`
+      
+      if (ordersDateFilter === 'custom' && ordersCustomStartDate && ordersCustomEndDate) {
+        url += `&startDate=${ordersCustomStartDate}&endDate=${ordersCustomEndDate}`
+      }
+      
+      const res = await fetch(url)
       const data = await res.json()
       const ordersData = data.orders || (Array.isArray(data) ? data : [])
       
@@ -122,10 +166,13 @@ export default function OrdersPage() {
         setOrders(ordersData)
       }
       
+      if (data.summary) {
+        setOrdersSummary(data.summary)
+      }
+      
       if (data.pagination) {
         setOrdersPagination(data.pagination)
       } else {
-        // Estimate pagination if not provided
         setOrdersPagination({
           total: ordersData.length + offset,
           limit,
@@ -183,7 +230,7 @@ export default function OrdersPage() {
     }
     try {
       const { start, end } = getDateRange()
-      const limit = 200 // Smaller batches for better UX
+      const limit = 200
       
       const res = await fetch(
         `/api/sales-history?startDate=${start}&endDate=${end}&limit=${limit}&offset=${offset}`
@@ -203,6 +250,15 @@ export default function OrdersPage() {
     } finally {
       setSalesLoading(false)
       setLoadingMoreSales(false)
+    }
+  }
+  
+  const handleOrdersCustomDateApply = () => {
+    if (ordersCustomStartDate && ordersCustomEndDate) {
+      setOrders([])
+      setOrdersOffset(0)
+      fetchOrders()
+      setShowOrdersDateDropdown(false)
     }
   }
   
@@ -227,23 +283,47 @@ export default function OrdersPage() {
   }
 
   const getStatusBadge = (status: string) => {
+    const statusLower = status?.toLowerCase() || 'pending'
     const configs: Record<string, string> = {
       pending: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+      unshipped: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
       shipped: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
       delivered: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+      canceled: 'bg-red-500/20 text-red-400 border-red-500/30',
       cancelled: 'bg-red-500/20 text-red-400 border-red-500/30',
     }
     return (
-      <span className={`px-2 py-0.5 text-xs rounded-full border ${configs[status] || configs.pending}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <span className={`px-2 py-0.5 text-xs rounded-full border ${configs[statusLower] || configs.pending}`}>
+        {status || 'Pending'}
       </span>
     )
   }
 
-  const filteredOrders = orders.filter(o => 
-    o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.orderItems?.some(item => item.masterSku.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const getDateFilterLabel = (filter: DateFilterType) => {
+    switch (filter) {
+      case 'today': return 'Today'
+      case 'yesterday': return 'Yesterday'
+      case '3d': return 'Last 3 Days'
+      case '7d': return 'Last 7 Days'
+      case '30d': return 'Last 30 Days'
+      case 'ytd': return 'Year to Date'
+      case '365d': return 'Last 365 Days'
+      case 'custom': return 'Custom Range'
+      case 'all': return 'All Time'
+      default: return 'Last 7 Days'
+    }
+  }
+
+  const filteredOrders = orders.filter(o => {
+    const orderId = o.id || ''
+    const matchesSearch = orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      o.orderItems?.some(item => 
+        item.masterSku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.product?.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.product?.title?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    return matchesSearch
+  })
 
   const filteredSalesHistory = salesHistory.filter(sh =>
     sh.masterSku.toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
@@ -251,10 +331,25 @@ export default function OrdersPage() {
     sh.channelSku.toLowerCase().includes(salesSearchTerm.toLowerCase())
   )
 
-  const stats = {
-    total: ordersPagination?.total || orders.length,
-    pending: orders.filter(o => o.status === 'pending').length,
-    revenue: orders.reduce((sum, o) => sum + o.orderItems.reduce((s, i) => s + i.itemPrice * i.quantity, 0), 0),
+  // Calculate order total safely - use orderTotal from Order model, or calculate from items
+  const getOrderTotal = (order: Order) => {
+    // First try to use the orderTotal from the order itself (if it's > 0)
+    const orderTotal = Number(order.orderTotal) || 0
+    if (orderTotal > 0) {
+      return orderTotal
+    }
+    // Fallback to calculating from items
+    if (!order.orderItems || order.orderItems.length === 0) return 0
+    return order.orderItems.reduce((sum, item) => {
+      const price = Number(item.itemPrice) || 0
+      const qty = Number(item.quantity) || 0
+      return sum + (price * qty)
+    }, 0)
+  }
+
+  const getOrderItemCount = (order: Order) => {
+    if (!order.orderItems || order.orderItems.length === 0) return 0
+    return order.orderItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
   }
 
   if (loading && activeTab === 'orders') {
@@ -316,89 +411,228 @@ export default function OrdersPage() {
 
         {activeTab === 'orders' ? (
           <>
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <StatCard
-                title="Total Orders"
-                value={stats.total}
-                icon={<ShoppingCart className="w-6 h-6 text-cyan-400" />}
-                iconBg="bg-cyan-500/20"
-              />
-              <StatCard
-                title="Pending"
-                value={stats.pending}
-                icon={<Clock className="w-6 h-6 text-amber-400" />}
-                iconBg="bg-amber-500/20"
-              />
-              <StatCard
-                title="Total Revenue"
-                value={formatCurrency(stats.revenue)}
-                icon={<DollarSign className="w-6 h-6 text-emerald-400" />}
-                iconBg="bg-emerald-500/20"
-              />
-            </div>
+            {/* Date Filter & Sort Controls */}
+            <Card className="overflow-visible">
+              <CardContent className="py-4 overflow-visible">
+                <div className="flex flex-wrap items-center gap-4">
+                  {/* Date Filter Dropdown */}
+                  <div className="relative z-50">
+                    <button
+                      onClick={() => setShowOrdersDateDropdown(!showOrdersDateDropdown)}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white hover:bg-slate-700 transition-colors"
+                    >
+                      <Calendar className="w-4 h-4 text-slate-400" />
+                      <span>{getDateFilterLabel(ordersDateFilter)}</span>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showOrdersDateDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {showOrdersDateDropdown && (
+                      <>
+                        {/* Backdrop to close dropdown */}
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setShowOrdersDateDropdown(false)}
+                        />
+                        <div className="absolute top-full left-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
+                          <div className="p-2 space-y-1">
+                            {(['today', 'yesterday', '3d', '7d', '30d', 'ytd', '365d', 'all'] as DateFilterType[]).map((filter) => (
+                              <button
+                                key={filter}
+                                onClick={() => {
+                                  setOrdersDateFilter(filter)
+                                  setShowOrdersDateDropdown(false)
+                                }}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                                  ordersDateFilter === filter
+                                    ? 'bg-cyan-600 text-white'
+                                    : 'text-slate-300 hover:bg-slate-700'
+                                }`}
+                              >
+                                {getDateFilterLabel(filter)}
+                              </button>
+                            ))}
+                            <div className="border-t border-slate-700 pt-2 mt-2">
+                              <button
+                                onClick={() => setOrdersDateFilter('custom')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                                  ordersDateFilter === 'custom'
+                                    ? 'bg-cyan-600 text-white'
+                                    : 'text-slate-300 hover:bg-slate-700'
+                                }`}
+                              >
+                                Custom Range
+                              </button>
+                              {ordersDateFilter === 'custom' && (
+                                <div className="p-3 space-y-2">
+                                  <input
+                                    type="date"
+                                    value={ordersCustomStartDate}
+                                    onChange={(e) => setOrdersCustomStartDate(e.target.value)}
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm"
+                                  />
+                                  <input
+                                    type="date"
+                                    value={ordersCustomEndDate}
+                                    onChange={(e) => setOrdersCustomEndDate(e.target.value)}
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm"
+                                  />
+                                  <button
+                                    onClick={handleOrdersCustomDateApply}
+                                    disabled={!ordersCustomStartDate || !ordersCustomEndDate}
+                                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white text-sm rounded-lg"
+                                  >
+                                    Apply
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
 
-            {/* Search */}
-            <Card>
-              <CardContent className="py-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by order ID or SKU..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                  />
+                  {/* Sort Order Toggle */}
+                  <button
+                    onClick={() => setOrdersSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white hover:bg-slate-700 transition-colors"
+                  >
+                    <ArrowUpDown className="w-4 h-4 text-slate-400" />
+                    <span>{ordersSortOrder === 'desc' ? 'Newest First' : 'Oldest First'}</span>
+                  </button>
+
+                  {/* Search */}
+                  <div className="flex-1 min-w-64 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by order ID, SKU, or product..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <StatCard
+                title="Total Orders"
+                value={(ordersSummary?.totalOrders || ordersPagination?.total || orders.length).toLocaleString()}
+                icon={<ShoppingCart className="w-6 h-6 text-cyan-400" />}
+                iconBg="bg-cyan-500/20"
+              />
+              <StatCard
+                title="Total Items"
+                value={(ordersSummary?.totalItems || orders.reduce((sum, o) => sum + getOrderItemCount(o), 0)).toLocaleString()}
+                icon={<Package className="w-6 h-6 text-blue-400" />}
+                iconBg="bg-blue-500/20"
+              />
+              <StatCard
+                title="Total Revenue"
+                value={formatCurrency(ordersSummary?.totalRevenue || orders.reduce((sum, o) => sum + getOrderTotal(o), 0))}
+                icon={<DollarSign className="w-6 h-6 text-emerald-400" />}
+                iconBg="bg-emerald-500/20"
+              />
+              <StatCard
+                title="Amazon Fees"
+                value={formatCurrency(ordersSummary?.totalFees || 0)}
+                icon={<TrendingUp className="w-6 h-6 text-purple-400" />}
+                iconBg="bg-purple-500/20"
+              />
+            </div>
+
             {/* Orders List */}
             <Card>
               <CardHeader>
-                <CardTitle>Recent Orders</CardTitle>
-                <CardDescription>{filteredOrders.length} orders</CardDescription>
+                <CardTitle>Orders</CardTitle>
+                <CardDescription>
+                  {filteredOrders.length} orders • {getDateFilterLabel(ordersDateFilter)}
+                </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 {filteredOrders.length === 0 ? (
                   <div className="text-center py-12">
                     <ShoppingCart className="w-16 h-16 text-slate-600 mx-auto mb-4" />
                     <p className="text-lg text-slate-400">No orders found</p>
-                    <p className="text-sm text-slate-500 mt-1">Sync from Amazon to import orders</p>
-                    <Button className="mt-4" onClick={syncOrders}>
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Sync Orders
-                    </Button>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {orders.length === 0 ? 'Sync from Amazon to import orders' : 'Try adjusting your filters'}
+                    </p>
+                    {orders.length === 0 && (
+                      <Button className="mt-4" onClick={syncOrders}>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Sync Orders
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <>
+                    {/* Table Header */}
+                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-800/30 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-700/50">
+                      <div className="col-span-3">Order ID</div>
+                      <div className="col-span-2">Date</div>
+                      <div className="col-span-2">Status</div>
+                      <div className="col-span-2">Items</div>
+                      <div className="col-span-1 text-right">Qty</div>
+                      <div className="col-span-2 text-right">Revenue</div>
+                    </div>
+                    
                     <div className="divide-y divide-slate-700/50">
-                      {filteredOrders.map((order) => (
-                        <div key={order.id} className="flex items-center px-6 py-4 hover:bg-slate-800/30">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <p className="font-mono text-white">{order.id}</p>
-                              {getStatusBadge(order.status)}
+                      {filteredOrders.map((order) => {
+                        const orderTotal = getOrderTotal(order)
+                        const itemCount = getOrderItemCount(order)
+                        const firstItem = order.orderItems?.[0]
+                        const orderId = order.id
+                        
+                        return (
+                          <div key={order.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/30 items-center">
+                            <div className="col-span-3">
+                              <p className="font-mono text-white text-sm truncate" title={orderId}>
+                                {orderId}
+                              </p>
                               {order.fulfillmentChannel && (
                                 <span className="text-xs text-slate-500">{order.fulfillmentChannel}</span>
                               )}
                             </div>
-                            <p className="text-sm text-slate-400 mt-1">
-                              {formatDate(new Date(order.purchaseDate))}
-                              {order.shipCity && ` • ${order.shipCity}, ${order.shipState || ''} ${order.shipCountry || ''}`}
-                            </p>
+                            <div className="col-span-2">
+                              <p className="text-white text-sm">{formatDate(new Date(order.purchaseDate))}</p>
+                              {order.shipCity && (
+                                <p className="text-xs text-slate-500 truncate">
+                                  {order.shipCity}, {order.shipState || ''}
+                                </p>
+                              )}
+                            </div>
+                            <div className="col-span-2">
+                              {getStatusBadge(order.status)}
+                            </div>
+                            <div className="col-span-2">
+                              {firstItem && (
+                                <>
+                                  <p className="text-white text-sm truncate" title={firstItem.product?.title || firstItem.masterSku}>
+                                    {firstItem.product?.title || firstItem.masterSku}
+                                  </p>
+                                  <p className="text-xs text-slate-500 font-mono">
+                                    {firstItem.product?.sku || firstItem.masterSku}
+                                  </p>
+                                  {order.orderItems.length > 1 && (
+                                    <p className="text-xs text-cyan-400">+{order.orderItems.length - 1} more</p>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                            <div className="col-span-1 text-right">
+                              <p className="text-white">{itemCount}</p>
+                            </div>
+                            <div className="col-span-2 text-right">
+                              <p className="text-lg font-semibold text-white">
+                                {formatCurrency(orderTotal)}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-lg font-semibold text-white">
-                              {formatCurrency(order.orderItems.reduce((sum, i) => sum + i.itemPrice * i.quantity, 0))}
-                            </p>
-                            <p className="text-sm text-slate-400">
-                              {order.orderItems.reduce((sum, i) => sum + i.quantity, 0)} items
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                     {ordersPagination?.hasMore && (
                       <div className="p-4 border-t border-slate-700/50">
@@ -417,7 +651,7 @@ export default function OrdersPage() {
                           )}
                         </button>
                         <p className="text-center text-sm text-slate-500 mt-2">
-                          Showing {orders.length} orders
+                          Showing {orders.length} of {ordersPagination.total} orders
                         </p>
                       </div>
                     )}
