@@ -39,6 +39,7 @@ const SYSTEM_COLUMNS = [
   { key: 'sku', label: 'SKU (Required)', required: true, type: 'text' },
   { key: 'supplierId', label: 'Supplier', required: false, type: 'supplier' },
   { key: 'supplierSku', label: 'Supplier SKU', required: false, type: 'text' },
+  { key: 'upc', label: 'UPC', required: false, type: 'text' },
   { key: 'cost', label: 'Unit Cost', required: false, type: 'number' },
   { key: 'price', label: 'Price', required: false, type: 'number' },
   { key: 'mapPrice', label: 'MAP Price', required: false, type: 'number' },
@@ -63,6 +64,7 @@ const LABEL_TYPES = [
   { value: 'fnsku_only', label: 'FNSKU Only' },
   { value: 'fnsku_tp', label: 'FNSKU + Transparency' },
   { value: 'tp_only', label: 'Transparency Only' },
+  { value: 'none', label: 'None (Pre-labeled)' },
 ]
 
 const PREP_TYPES = [
@@ -88,6 +90,7 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
   const [fileColumns, setFileColumns] = useState<string[]>([])
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
   const [processing, setProcessing] = useState(false)
+  const [processingProgress, setProcessingProgress] = useState<string>('')
   const [result, setResult] = useState<{ success: number; failed: number; errors: string[] }>({ success: 0, failed: 0, errors: [] })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -115,8 +118,33 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
     let rows: any[][] = []
     
     if (prefilled && products.length > 0) {
-      // Export with current product data
-      rows = products.map(product => {
+      // Flatten products array to get all child SKUs
+      // Parent products have variations nested, so we need to extract them
+      const allChildProducts: Product[] = []
+      
+      for (const product of products) {
+        // If product has variations, it's a parent - extract the variations
+        if (product.variations && Array.isArray(product.variations) && product.variations.length > 0) {
+          // Add all variations (these are child SKUs)
+          allChildProducts.push(...product.variations)
+        } 
+        // If product has a parentSku, it's a child - include it
+        else if (product.parentSku) {
+          allChildProducts.push(product)
+        }
+        // If product is marked as a parent, skip it
+        else if (product.isParent) {
+          // Skip parent products
+          continue
+        }
+        // Standalone product (no parent, not a parent itself) - include it
+        else {
+          allChildProducts.push(product)
+        }
+      }
+      
+      // Export with current product data (only child SKUs)
+      rows = allChildProducts.map(product => {
         return selectedFields.map(key => {
           const value = product[key]
           
@@ -124,6 +152,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
           if (key === 'supplierId' && value) {
             const supplier = suppliers.find(s => s.id === value)
             return supplier?.name || ''
+          }
+          
+          // Special handling for labelType - show label instead of value
+          if (key === 'labelType' && value) {
+            const labelType = LABEL_TYPES.find(lt => lt.value === value)
+            return labelType ? labelType.label : String(value)
           }
           
           // Boolean values
@@ -145,9 +179,10 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
         switch (key) {
           case 'sku': return 'YOUR-SKU-001'
           case 'supplierId': return suppliers[0]?.name || 'Supplier Name'
+          case 'upc': return '123456789012'
           case 'cost': return '10.00'
           case 'price': return '29.99'
-          case 'labelType': return 'fnsku_only'
+          case 'labelType': return 'FNSKU Only'
           case 'transparencyEnabled': return 'false'
           case 'prepType': return 'none'
           case 'status': return 'active'
@@ -165,6 +200,48 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
     // Auto-size columns
     const colWidths = headers.map(h => ({ wch: Math.max(h.length + 2, 15) }))
     ws['!cols'] = colWidths
+    
+    // Add dropdown validation for Label Type column
+    const labelTypeColIndex = headers.findIndex(h => 
+      h.toLowerCase().includes('label type') || h.toLowerCase().replace(/\s/g, '') === 'labeltype'
+    )
+    
+    if (labelTypeColIndex !== -1 && rows.length > 0) {
+      // Create a helper sheet with label type options
+      const optionsData = [
+        ['Label Type Options'],
+        ['Value', 'Label'],
+        ...LABEL_TYPES.map(lt => [lt.value, lt.label])
+      ]
+      const optionsSheet = XLSX.utils.aoa_to_sheet(optionsData)
+      XLSX.utils.book_append_sheet(wb, optionsSheet, 'LabelTypeOptions')
+      
+      // Add data validation using Excel's data validation format
+      // XLSX.js supports data validation through the cell's dataValidation property
+      const labelTypeCol = XLSX.utils.encode_col(labelTypeColIndex)
+      const labelTypeOptions = LABEL_TYPES.map(lt => lt.label).join(',')
+      
+      // Add data validation to all data rows (skip header row)
+      for (let row = 2; row <= rows.length + 1; row++) {
+        const cellAddress = `${labelTypeCol}${row}`
+        if (!ws[cellAddress]) {
+          ws[cellAddress] = { t: 's', v: '' }
+        }
+        // Add data validation
+        ws[cellAddress].dv = {
+          type: 'list',
+          allowBlank: true,
+          showInputMessage: true,
+          promptTitle: 'Label Type',
+          prompt: `Select a label type: ${labelTypeOptions}`,
+          showErrorMessage: true,
+          errorTitle: 'Invalid Label Type',
+          error: `Must be one of: ${labelTypeOptions}`,
+          sqref: cellAddress,
+          formulas: [`"${LABEL_TYPES.map(lt => lt.label).join(',')}"`]
+        }
+      }
+    }
     
     const filename = prefilled ? 'product_bulk_update_data.xlsx' : 'product_bulk_update_template.xlsx'
     XLSX.writeFile(wb, filename)
@@ -228,90 +305,160 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
     }
 
     setProcessing(true)
+    setProcessingProgress('Starting...')
     const errors: string[] = []
     let success = 0
     let failed = 0
+    
+    // Cache for newly created suppliers to avoid duplicates
+    const supplierCache = new Map<string, number>()
+    const currentSuppliers = [...suppliers]
 
-    for (const row of uploadedData) {
-      const sku = row[columnMapping.sku]
-      if (!sku) {
-        errors.push(`Row missing SKU`)
-        failed++
-        continue
-      }
-
-      // Build update data
-      const updateData: Record<string, any> = {}
-      
-      for (const [systemKey, fileCol] of Object.entries(columnMapping)) {
-        if (systemKey === 'sku') continue
-        
-        const value = row[fileCol]
-        if (value === undefined || value === '') continue
-
-        const colDef = SYSTEM_COLUMNS.find(c => c.key === systemKey)
-        if (!colDef) continue
-
-        // Convert value based on type
-        switch (colDef.type) {
-          case 'number':
-            const num = parseFloat(value)
-            if (!isNaN(num)) updateData[systemKey] = num
-            break
-          case 'boolean':
-            updateData[systemKey] = value === true || value === 'true' || value === 'yes' || value === '1' || value === 'TRUE' || value === 'Yes'
-            break
-          case 'supplier':
-            // Find supplier by name
-            const supplier = suppliers.find(s => s.name.toLowerCase() === String(value).toLowerCase())
-            if (supplier) updateData.supplierId = supplier.id
-            break
-          case 'labelType':
-            if (LABEL_TYPES.some(lt => lt.value === value)) updateData[systemKey] = value
-            break
-          case 'prepType':
-            if (PREP_TYPES.some(pt => pt.value === value)) updateData[systemKey] = value
-            break
-          case 'status':
-            if (STATUS_TYPES.some(st => st.value === value)) updateData[systemKey] = value
-            break
-          default:
-            updateData[systemKey] = String(value)
+    try {
+      const totalRows = uploadedData.length
+      for (let i = 0; i < uploadedData.length; i++) {
+        const row = uploadedData[i]
+        const progress = Math.round(((i + 1) / totalRows) * 100)
+        setProcessingProgress(`Processing row ${i + 1} of ${totalRows} (${progress}%)...`)
+        const sku = row[columnMapping.sku]
+        if (!sku) {
+          errors.push(`Row missing SKU`)
+          failed++
+          continue
         }
-      }
 
-      if (Object.keys(updateData).length === 0) {
-        errors.push(`${sku}: No valid fields to update`)
-        failed++
-        continue
-      }
+        // Build update data
+        const updateData: Record<string, any> = {}
+        
+        for (const [systemKey, fileCol] of Object.entries(columnMapping)) {
+          if (systemKey === 'sku') continue
+          
+          const value = row[fileCol]
+          if (value === undefined || value === '') continue
 
-      try {
-        const res = await fetch(`/api/products/${encodeURIComponent(sku)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updateData),
-        })
+          const colDef = SYSTEM_COLUMNS.find(c => c.key === systemKey)
+          if (!colDef) continue
 
-        if (res.ok) {
-          success++
-        } else {
-          const data = await res.json()
-          errors.push(`${sku}: ${data.error || 'Update failed'}`)
+          // Convert value based on type
+          switch (colDef.type) {
+            case 'number':
+              const num = parseFloat(value)
+              if (!isNaN(num)) updateData[systemKey] = num
+              break
+            case 'boolean':
+              updateData[systemKey] = value === true || value === 'true' || value === 'yes' || value === '1' || value === 'TRUE' || value === 'Yes'
+              break
+            case 'supplier':
+              // Find supplier by name (check both existing and cached)
+              const supplierName = String(value).trim()
+              const normalizedName = supplierName.toLowerCase()
+              
+              // Check cache first
+              if (supplierCache.has(normalizedName)) {
+                updateData.supplierId = supplierCache.get(normalizedName)
+              } else {
+                // Check existing suppliers
+                let supplier = currentSuppliers.find(s => s.name.toLowerCase() === normalizedName)
+                
+                // If not found, create new supplier
+                if (!supplier && supplierName) {
+                  try {
+                    setProcessingProgress(`Creating supplier "${supplierName}"...`)
+                    const res = await fetch('/api/suppliers', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ name: supplierName }),
+                    })
+                    
+                    if (res.ok) {
+                      const newSupplier = await res.json()
+                      supplier = { id: newSupplier.id, name: newSupplier.name }
+                      currentSuppliers.push(supplier)
+                      supplierCache.set(normalizedName, supplier.id)
+                      updateData.supplierId = supplier.id
+                      console.log(`Created supplier: ${supplierName} (ID: ${supplier.id})`)
+                    } else {
+                      const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+                      console.error(`Failed to create supplier "${supplierName}":`, errorData)
+                      errors.push(`Failed to create supplier "${supplierName}": ${errorData.error || 'Unknown error'}`)
+                    }
+                  } catch (error: any) {
+                    console.error(`Error creating supplier "${supplierName}":`, error)
+                    errors.push(`Error creating supplier "${supplierName}": ${error.message}`)
+                  }
+                } else if (supplier) {
+                  updateData.supplierId = supplier.id
+                  supplierCache.set(normalizedName, supplier.id)
+                }
+              }
+              break
+            case 'labelType':
+              // Accept both value (fnsku_only) and label (FNSKU Only)
+              const labelType = LABEL_TYPES.find(lt => 
+                lt.value === value || lt.label === value || lt.label.toLowerCase() === String(value).toLowerCase()
+              )
+              if (labelType) updateData[systemKey] = labelType.value
+              break
+            case 'prepType':
+              if (PREP_TYPES.some(pt => pt.value === value)) updateData[systemKey] = value
+              break
+            case 'status':
+              if (STATUS_TYPES.some(st => st.value === value)) updateData[systemKey] = value
+              break
+            default:
+              updateData[systemKey] = String(value)
+          }
+        }
+
+        if (Object.keys(updateData).length === 0) {
+          errors.push(`${sku}: No valid fields to update`)
+          failed++
+          continue
+        }
+
+        try {
+          const res = await fetch(`/api/products/${encodeURIComponent(sku)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updateData),
+          })
+
+          if (res.ok) {
+            success++
+            if (success % 10 === 0) {
+              console.log(`Updated ${success} products so far...`)
+            }
+          } else {
+            const data = await res.json().catch(() => ({ error: 'Update failed' }))
+            console.error(`Failed to update ${sku}:`, data)
+            errors.push(`${sku}: ${data.error || 'Update failed'}`)
+            failed++
+          }
+        } catch (err: any) {
+          console.error(`Network error updating ${sku}:`, err)
+          errors.push(`${sku}: Network error - ${err.message}`)
           failed++
         }
-      } catch (err) {
-        errors.push(`${sku}: Network error`)
-        failed++
       }
-    }
 
-    setResult({ success, failed, errors })
+      setProcessingProgress('Complete!')
+      setResult({ success, failed, errors })
+      setProcessing(false)
+      setStep('result')
+      
+      if (success > 0) {
+        onComplete()
+      }
+    } catch (error: any) {
+    console.error('Bulk update error:', error)
+    setProcessingProgress('Error occurred')
+    setResult({ 
+      success, 
+      failed: failed + (uploadedData.length - success - failed), 
+      errors: [...errors, `Fatal error: ${error.message || 'Unknown error'}`] 
+    })
     setProcessing(false)
     setStep('result')
-    
-    if (success > 0) {
-      onComplete()
     }
   }
 
@@ -340,7 +487,7 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             {/* Supplier & Sourcing */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Supplier & Sourcing</h4>
-              {SYSTEM_COLUMNS.filter(c => ['supplierId', 'supplierSku', 'cost'].includes(c.key)).map(col => (
+              {SYSTEM_COLUMNS.filter(c => ['supplierId', 'supplierSku', 'upc', 'cost'].includes(c.key)).map(col => (
                 <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
                   <input
                     type="checkbox"
@@ -559,7 +706,13 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
               Back
             </Button>
             <Button onClick={processBulkUpdate} disabled={!columnMapping.sku || processing} loading={processing}>
-              {processing ? 'Processing...' : `Update ${uploadedData.length} Products`}
+              {processing ? (
+                <>
+                  {processingProgress || 'Processing...'}
+                </>
+              ) : (
+                `Update ${uploadedData.length} Products`
+              )}
             </Button>
           </ModalFooter>
         </div>
