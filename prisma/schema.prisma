@@ -678,6 +678,7 @@ model PurchaseOrder {
 
   // Dates
   createdDate         DateTime  @default(now()) @map("created_date")
+  orderDate           DateTime? @map("order_date")
   sentDate            DateTime? @map("sent_date")
   confirmedDate       DateTime? @map("confirmed_date")
   expectedShipDate    DateTime? @map("expected_ship_date")

@@ -43,6 +43,7 @@ export async function PUT(
     const body = await request.json()
     const {
       status,
+      orderDate,
       expectedShipDate,
       expectedArrivalDate,
       actualShipDate,
@@ -79,8 +80,9 @@ export async function PUT(
       }
     }
 
+    if (orderDate !== undefined) updateData.orderDate = new Date(orderDate)
     if (expectedShipDate !== undefined) updateData.expectedShipDate = new Date(expectedShipDate)
-    if (expectedArrivalDate !== undefined) updateData.expectedArrivalDate = new Date(expectedArrivalDate)
+    if (expectedArrivalDate !== undefined) updateData.expectedArrivalDate = expectedArrivalDate ? new Date(expectedArrivalDate) : null
     if (actualShipDate !== undefined) updateData.actualShipDate = new Date(actualShipDate)
     if (actualArrivalDate !== undefined) updateData.actualArrivalDate = new Date(actualArrivalDate)
     if (carrier !== undefined) updateData.carrier = carrier

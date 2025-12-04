@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
         supplierId: body.supplierId,
         status: body.status || 'draft',
         createdDate: new Date(),
+        orderDate: body.orderDate ? new Date(body.orderDate) : new Date(),
         expectedArrivalDate: body.expectedArrivalDate ? new Date(body.expectedArrivalDate) : null,
         subtotal: body.subtotal,
         shippingCost: body.shippingCost || 0,

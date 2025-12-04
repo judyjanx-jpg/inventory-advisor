@@ -94,6 +94,7 @@ export default function PurchaseOrdersPage() {
   const [showReceive, setShowReceive] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showEditCosts, setShowEditCosts] = useState(false)
+  const [showEditDates, setShowEditDates] = useState(false)
   const [showSendEmail, setShowSendEmail] = useState(false)
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null)
   
@@ -102,6 +103,12 @@ export default function PurchaseOrdersPage() {
     shippingCost: 0,
     tax: 0,
     otherCosts: 0,
+  })
+  
+  // Edit dates form
+  const [datesForm, setDatesForm] = useState({
+    orderDate: '',
+    expectedArrivalDate: '',
   })
   
   // Create PO form
@@ -342,6 +349,42 @@ export default function PurchaseOrdersPage() {
     } catch (error) {
       console.error('Error updating costs:', error)
       alert('Failed to update costs')
+    }
+  }
+
+  const openEditDatesModal = (po: PurchaseOrder) => {
+    setSelectedPO(po)
+    setDatesForm({
+      orderDate: po.orderDate ? new Date(po.orderDate).toISOString().split('T')[0] : new Date(po.createdDate).toISOString().split('T')[0],
+      expectedArrivalDate: po.expectedArrivalDate ? new Date(po.expectedArrivalDate).toISOString().split('T')[0] : '',
+    })
+    setShowEditDates(true)
+  }
+
+  const saveDates = async () => {
+    if (!selectedPO) return
+    
+    try {
+      const res = await fetch(`/api/purchase-orders/${selectedPO.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderDate: datesForm.orderDate,
+          expectedArrivalDate: datesForm.expectedArrivalDate || null,
+        }),
+      })
+      
+      if (res.ok) {
+        fetchData()
+        setShowEditDates(false)
+        setSelectedPO(null)
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Failed to update dates')
+      }
+    } catch (error) {
+      console.error('Error updating dates:', error)
+      alert('Failed to update dates')
     }
   }
 
@@ -872,33 +915,48 @@ export default function PurchaseOrdersPage() {
                       {expandedPO === po.id && (
                         <div className="px-6 py-4 bg-slate-900/30 border-t border-slate-700/50">
                           <div className="ml-8">
-                            {/* Date Summary for received POs */}
-                            {po.actualArrivalDate && (
-                              <div className="mb-4 p-4 bg-slate-800/50 rounded-lg flex items-center gap-8 text-sm">
+                            {/* Date Summary */}
+                            <div className="mb-4 p-4 bg-slate-800/50 rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-sm font-medium text-slate-300">Order Dates</h4>
+                                <Button variant="ghost" size="sm" onClick={() => openEditDatesModal(po)}>
+                                  <Edit className="w-3 h-3 mr-1" />
+                                  Edit
+                                </Button>
+                              </div>
+                              <div className="flex items-center gap-8 text-sm">
                                 <div>
                                   <p className="text-slate-400">Order Date</p>
                                   <p className="text-white font-medium">{formatDate(new Date(po.orderDate || po.createdDate))}</p>
                                 </div>
-                                <ArrowRight className="w-4 h-4 text-slate-500" />
-                                <div>
-                                  <p className="text-slate-400">Expected</p>
-                                  <p className="text-white font-medium">
-                                    {formatDate(new Date(po.expectedArrivalDate!))}
-                                    <span className="text-slate-500 ml-1">
-                                      ({Math.round((new Date(po.expectedArrivalDate!).getTime() - new Date(po.orderDate || po.createdDate).getTime()) / (1000 * 60 * 60 * 24))} days)
-                                    </span>
-                                  </p>
-                                </div>
-                                <ArrowRight className="w-4 h-4 text-slate-500" />
-                                <div>
-                                  <p className="text-slate-400">Arrived</p>
-                                  <p className="text-white font-medium">
-                                    {formatDate(new Date(po.actualArrivalDate))}
-                                    <span className={`ml-2 ${arrivalStatus?.color}`}>{arrivalStatus?.text}</span>
-                                  </p>
-                                </div>
+                                {po.expectedArrivalDate && (
+                                  <>
+                                    <ArrowRight className="w-4 h-4 text-slate-500" />
+                                    <div>
+                                      <p className="text-slate-400">Expected</p>
+                                      <p className="text-white font-medium">
+                                        {formatDate(new Date(po.expectedArrivalDate))}
+                                        <span className="text-slate-500 ml-1">
+                                          ({Math.round((new Date(po.expectedArrivalDate).getTime() - new Date(po.orderDate || po.createdDate).getTime()) / (1000 * 60 * 60 * 24))} days)
+                                        </span>
+                                      </p>
+                                    </div>
+                                  </>
+                                )}
+                                {po.actualArrivalDate && (
+                                  <>
+                                    <ArrowRight className="w-4 h-4 text-slate-500" />
+                                    <div>
+                                      <p className="text-slate-400">Arrived</p>
+                                      <p className="text-white font-medium">
+                                        {formatDate(new Date(po.actualArrivalDate))}
+                                        <span className={`ml-2 ${arrivalStatus?.color}`}>{arrivalStatus?.text}</span>
+                                      </p>
+                                    </div>
+                                  </>
+                                )}
                               </div>
-                            )}
+                            </div>
 
                             <table className="w-full">
                               <thead>
@@ -1397,6 +1455,72 @@ export default function PurchaseOrdersPage() {
           <Button onClick={saveReceive} loading={savingReceive}>
             <PackageCheck className="w-4 h-4 mr-2" />
             Confirm Received
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Edit Dates Modal */}
+      <Modal
+        isOpen={showEditDates}
+        onClose={() => { setShowEditDates(false); setSelectedPO(null); }}
+        title="Edit Purchase Order Dates"
+        size="md"
+      >
+        {selectedPO && (
+          <div className="space-y-4">
+            <div className="p-4 bg-slate-800/50 rounded-lg">
+              <p className="text-sm text-slate-400 mb-2">PO Number</p>
+              <p className="text-white font-medium">{selectedPO.poNumber}</p>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Order Date <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={datesForm.orderDate}
+                  onChange={(e) => setDatesForm({ ...datesForm, orderDate: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  required
+                />
+                <p className="text-xs text-slate-500 mt-1">The date the order was placed with the supplier</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Expected Arrival Date
+                </label>
+                <input
+                  type="date"
+                  value={datesForm.expectedArrivalDate}
+                  onChange={(e) => setDatesForm({ ...datesForm, expectedArrivalDate: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">Expected delivery date from supplier</p>
+              </div>
+            </div>
+            
+            {datesForm.orderDate && datesForm.expectedArrivalDate && (
+              <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Lead Time</span>
+                  <span className="text-white font-medium">
+                    {Math.round((new Date(datesForm.expectedArrivalDate).getTime() - new Date(datesForm.orderDate).getTime()) / (1000 * 60 * 60 * 24))} days
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => { setShowEditDates(false); setSelectedPO(null); }}>
+            Cancel
+          </Button>
+          <Button onClick={saveDates} disabled={!datesForm.orderDate}>
+            Save Dates
           </Button>
         </ModalFooter>
       </Modal>
