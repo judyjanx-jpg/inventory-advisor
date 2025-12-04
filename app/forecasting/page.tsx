@@ -1039,9 +1039,11 @@ function PurchasingTab({
                     <div>
                       <h4 className="text-sm font-medium text-gray-400 mb-2">Inventory</h4>
                       <div className="space-y-1 text-sm">
-                        <div className="flex justify-between"><span className="text-gray-500">FBA</span><span className="text-white">{item.fbaAvailable + item.fbaInbound}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Warehouse</span><span className="text-white">{item.warehouseAvailable}</span></div>
-                        <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-gray-400 font-medium">Total</span><span className="text-white font-medium">{item.totalInventory}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">FBA</span><span className="text-white">{item.fbaAvailable || 0}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">FBA Inbound</span><span className="text-cyan-400">{item.fbaInbound || 0}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Warehouse</span><span className="text-white">{item.warehouseAvailable || 0}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Incoming PO</span><span className="text-green-400">{item.incomingFromPO || 0}</span></div>
+                        <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-gray-400 font-medium">Total</span><span className="text-white font-medium">{item.currentInventory || item.totalInventory || 0}</span></div>
                       </div>
                     </div>
                     
@@ -1092,7 +1094,8 @@ function PurchasingTab({
 
 interface IncomingPO {
   quantity: number
-  expectedDate: string
+  expectedDate: string | null
+  daysUntil: number | null  // NEW: days until arrival (negative = overdue)
   poNumber?: string
 }
 
@@ -1113,7 +1116,7 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor }: {
 }) {
   const router = useRouter()
   const [shipmentItems, setShipmentItems] = useState<FbaShipmentItemExtended[]>([])
-  const [incomingData, setIncomingData] = useState<Record<string, IncomingPO[]>>({})
+  const [incomingData, setIncomingData] = useState<Record<string, { totalQuantity: number; items: IncomingPO[] }>>({})
   const [roundFbaTo5, setRoundFbaTo5] = useState(true)
   const [isCreatingShipment, setIsCreatingShipment] = useState(false)
   const hasAutoSelectedRef = useRef(false) // Use ref to avoid re-renders
@@ -1235,12 +1238,16 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor }: {
         const statusCategory = getStatusCategory(totalDaysOfSupply, currentFbaTotal)
         const statusDisplay = getStatusDisplay(item.fbaAvailable, item.fbaInbound, totalDaysOfSupply)
         
+        // Get incoming data for this SKU
+        const skuIncoming = incomingData[item.sku]
+        const incomingItems: IncomingPO[] = skuIncoming?.items || []
+        
         return {
           ...item,
           replenishmentNeeded,
           sendQty: sendQty,
           selected: false,
-          incoming: incomingData[item.sku] || [],
+          incoming: incomingItems,
           shipBy,
           statusCategory,
           statusDisplay,
@@ -1449,13 +1456,54 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor }: {
     }
   }
 
+  // UPDATED: Format incoming PO data with days until/overdue
   const formatIncoming = (incoming?: IncomingPO[]) => {
     if (!incoming || incoming.length === 0) return null
-    const totalQty = incoming.reduce((sum, po) => sum + po.quantity, 0)
-    const nextDate = incoming
-      .map(po => new Date(po.expectedDate))
-      .sort((a, b) => a.getTime() - b.getTime())[0]
-    return { totalQty, nextDate }
+    
+    // Return formatted data for display
+    return {
+      items: incoming,
+      totalQty: incoming.reduce((sum, po) => sum + po.quantity, 0),
+    }
+  }
+
+  // NEW: Render incoming PO cell with proper formatting
+  const renderIncomingCell = (incoming?: IncomingPO[]) => {
+    const data = formatIncoming(incoming)
+    if (!data) {
+      return <span className="text-gray-600">—</span>
+    }
+    
+    return (
+      <div className="text-xs space-y-0.5">
+        {data.items.map((item, idx) => (
+          <div key={idx} className="flex items-center gap-1 justify-center">
+            <span className="text-cyan-400 font-medium">{item.quantity}</span>
+            {item.daysUntil !== null ? (
+              item.daysUntil < 0 ? (
+                // Overdue - show in red
+                <span className="text-red-400">{Math.abs(item.daysUntil)}d overdue</span>
+              ) : item.daysUntil === 0 ? (
+                // Arriving today
+                <span className="text-green-400">today</span>
+              ) : (
+                // Coming soon
+                <span className="text-slate-400">in {item.daysUntil}d</span>
+              )
+            ) : (
+              // No date set - show date if available
+              item.expectedDate ? (
+                <span className="text-slate-500">
+                  {new Date(item.expectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+              ) : (
+                <span className="text-slate-500">(no ETA)</span>
+              )
+            )}
+          </div>
+        ))}
+      </div>
+    )
   }
 
   const getShipByBadge = (shipBy: { label: string; urgency: string }) => {
@@ -1501,249 +1549,169 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor }: {
               </span>
             </div>
           </div>
-
-          {/* Round to 5 toggle */}
+          
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
-              id="roundFba5"
+              id="roundFbaTo5"
               checked={roundFbaTo5}
               onChange={(e) => setRoundFbaTo5(e.target.checked)}
               className="rounded bg-slate-900 border-slate-700"
             />
-            <label htmlFor="roundFba5" className="text-sm text-gray-300">Round to 5s</label>
+            <label htmlFor="roundFbaTo5" className="text-sm text-gray-300">Round to 5s</label>
           </div>
-
+          
           {/* Status Filter */}
           <div className="relative">
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white hover:bg-slate-700"
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white hover:bg-slate-800"
             >
               <Filter className="w-4 h-4" />
-              {statusFilter === 'all' ? 'All Status' : 
-               statusFilter === 'outOfStock' ? 'Out of Stock' :
-               statusFilter === 'critical' ? 'Critical (<7d)' :
-               statusFilter === 'warning' ? 'Warning (7-14d)' : 'OK (14d+)'}
-              <ChevronDown className="w-3 h-3" />
+              {statusFilter === 'all' ? 'All Status' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+              <ChevronDown className="w-4 h-4" />
             </button>
+            
             {showFilterDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowFilterDropdown(false)} />
-                <div className="absolute top-full right-0 mt-1 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
-                  {[
-                    { value: 'all', label: 'All Status' },
-                    { value: 'outOfStock', label: 'Out of Stock' },
-                    { value: 'critical', label: 'Critical (<7d)' },
-                    { value: 'warning', label: 'Warning (7-14d)' },
-                    { value: 'ok', label: 'OK (14d+)' },
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => { setStatusFilter(opt.value as typeof statusFilter); setShowFilterDropdown(false) }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-700 first:rounded-t-lg last:rounded-b-lg ${
-                        statusFilter === opt.value ? 'bg-cyan-600 text-white' : 'text-slate-300'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </>
+              <div className="absolute z-10 mt-1 w-40 bg-slate-900 border border-slate-700 rounded-lg shadow-xl">
+                {['all', 'outOfStock', 'critical', 'warning', 'ok'].map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => { setStatusFilter(status as any); setShowFilterDropdown(false) }}
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-800 ${statusFilter === status ? 'text-cyan-400' : 'text-white'}`}
+                  >
+                    {status === 'all' ? 'All Status' : status === 'outOfStock' ? 'Out of Stock' : status.charAt(0).toUpperCase() + status.slice(1)}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
-          
-          <button
-            onClick={() => {
-              // Re-run auto-selection
-              const sortedForSelection = [...shipmentItems].sort((a, b) => {
-                const statusOrder = { outOfStock: 0, critical: 1, warning: 2, ok: 3 }
-                const statusDiff = statusOrder[a.statusCategory] - statusOrder[b.statusCategory]
-                if (statusDiff !== 0) return statusDiff
-                return a.totalDaysOfSupply - b.totalDaysOfSupply
-              })
-              
-              let capacityRemaining = settings.fbaCapacity
-              const selectedSkus = new Set<string>()
-              
-              for (const item of sortedForSelection) {
-                if (item.sendQty === 0) continue
-                if (item.sendQty <= capacityRemaining) {
-                  selectedSkus.add(item.sku)
-                  capacityRemaining -= item.sendQty
-                }
-                if (capacityRemaining <= 0) break
-              }
-              
-              setShipmentItems(prev => prev.map(item => ({
-                ...item,
-                selected: selectedSkus.has(item.sku)
-              })))
-            }}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition-colors"
-            title="Auto-select items to fill capacity"
-          >
-            <Zap className="w-4 h-4 text-yellow-400" />
-            Auto-fill
-          </button>
           
           <button
             onClick={createFbaShipment}
             disabled={selectedItems.length === 0 || isCreatingShipment}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-              selectedItems.length > 0 && !isCreatingShipment
-                ? 'bg-purple-600 hover:bg-purple-700' 
-                : 'bg-slate-700 cursor-not-allowed text-gray-500'
-            }`}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white"
           >
             {isCreatingShipment ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Creating...
-              </>
+              <RefreshCw className="w-4 h-4 animate-spin" />
             ) : (
-              <>
-                <Truck className="w-4 h-4" />
-                Create Shipment ({selectedItems.length} SKUs)
-              </>
+              <Truck className="w-4 h-4" />
             )}
+            Create Shipment ({selectedItems.length})
           </button>
         </div>
+        
+        {/* Quick Stats */}
+        <div className="flex gap-4 mt-3 pt-3 border-t border-slate-700">
+          <div className="text-sm">
+            <span className="text-gray-400">Selected:</span>
+            <span className="ml-1 text-white font-medium">{selectedItems.length} items</span>
+          </div>
+          <div className="text-sm">
+            <span className="text-gray-400">Total Units:</span>
+            <span className="ml-1 text-purple-400 font-medium">{totalSelectedUnits.toLocaleString()}</span>
+          </div>
+        </div>
       </div>
-
-      {capacityUsed > 100 && (
-        <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-red-400" />
-            <p className="text-red-400">Selected items exceed daily capacity by {totalSelectedUnits - settings.fbaCapacity} units.</p>
+      
+      {sortedAndFilteredItems.length === 0 ? (
+        <div className="bg-slate-800 rounded-xl p-8 text-center">
+          <Truck className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-400">
+            {shipmentItems.length === 0 ? 'No FBA replenishment needed right now' : 'No items match your filter'}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-700 text-left text-sm text-gray-400">
+                  <th className="p-3 w-10">
+                    <input 
+                      type="checkbox" 
+                      checked={sortedAndFilteredItems.length > 0 && sortedAndFilteredItems.every(i => i.selected)} 
+                      onChange={toggleSelectAll} 
+                      className="rounded bg-slate-900 border-slate-700" 
+                    />
+                  </th>
+                  <SortHeader column="sku" label="SKU" className="text-left" />
+                  <SortHeader column="status" label="Status" />
+                  <SortHeader column="shipBy" label="Ship By" />
+                  <SortHeader column="velocity" label="Velocity" />
+                  <SortHeader column="fba" label="FBA" />
+                  <SortHeader column="inbound" label="Inbound" />
+                  <SortHeader column="replenishment" label="Replenishment" />
+                  <SortHeader column="whAvail" label="WH Avail" />
+                  <th className="p-3 text-center">Incoming PO</th>
+                  <th className="p-3 text-center w-32">Send Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedAndFilteredItems.map((item) => {
+                  // Show what we can actually send with smart rounding
+                  const smartRounded = roundTo5(item.replenishmentNeeded, item.warehouseAvailable)
+                  const cantFulfill = item.replenishmentNeeded > item.warehouseAvailable
+                  
+                  return (
+                    <tr key={item.sku} className={`border-b border-slate-700/50 hover:bg-slate-750 ${item.selected ? 'bg-purple-900/10' : ''}`}>
+                      <td className="p-3">
+                        <input type="checkbox" checked={item.selected} onChange={() => toggleSelect(item.sku)} className="rounded bg-slate-900 border-slate-700" />
+                      </td>
+                      <td className="p-3">
+                        <p className="font-medium text-white">{item.sku}</p>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={`inline-flex items-center justify-center min-w-[5.5rem] px-2 py-1 rounded text-xs font-medium border ${item.statusDisplay.color}`}>
+                          {item.statusDisplay.label}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        {getShipByBadge(item.shipBy)}
+                      </td>
+                      <td className="p-3 text-center text-white">{item.velocity30d.toFixed(1)}/day</td>
+                      <td className="p-3 text-center text-white">{item.fbaAvailable}</td>
+                      <td className="p-3 text-center text-cyan-400">{item.fbaInbound || 0}</td>
+                      <td className="p-3 text-center">
+                        <span className={`font-medium ${cantFulfill ? 'text-orange-400' : 'text-cyan-400'}`}>
+                          {item.replenishmentNeeded}
+                        </span>
+                        {cantFulfill && (
+                          <p className="text-xs text-orange-400">Need more</p>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className="text-white">{item.warehouseAvailable}</span>
+                      </td>
+                      <td className="p-3 text-center">
+                        {renderIncomingCell(item.incoming)}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <input
+                            type="number"
+                            value={editingQty?.sku === item.sku ? editingQty.value : item.sendQty}
+                            onChange={(e) => handleQtyChange(item.sku, e.target.value)}
+                            onBlur={() => handleQtyBlur(item.sku)}
+                            onKeyDown={(e) => handleQtyKeyDown(e, item.sku)}
+                            onFocus={(e) => setEditingQty({ sku: item.sku, value: String(item.sendQty) })}
+                            className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-center"
+                            min={0}
+                            max={item.warehouseAvailable}
+                          />
+                          <button onClick={() => updateQty(item.sku, item.replenishmentNeeded)} className="p-1 hover:bg-slate-700 rounded text-gray-400 hover:text-white" title="Set to replenishment needed">
+                            <RefreshCw className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
-
-      {/* Items Table */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium text-white">FBA Replenishment List</h3>
-          <div className="flex items-center gap-4">
-            {roundFbaTo5 && (
-              <span className="text-xs px-2 py-1 bg-purple-500/20 text-purple-400 rounded">Rounding to 5s enabled</span>
-            )}
-            <p className="text-sm text-gray-400">
-              {sortedAndFilteredItems.length} items 
-              {statusFilter !== 'all' && ` (filtered from ${shipmentItems.length})`}
-            </p>
-          </div>
-        </div>
-        
-        {sortedAndFilteredItems.length === 0 ? (
-          <div className="bg-slate-800 rounded-xl p-8 text-center">
-            <Truck className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400">
-              {shipmentItems.length === 0 ? 'No FBA replenishment needed right now' : 'No items match your filter'}
-            </p>
-          </div>
-        ) : (
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-700 text-left text-sm text-gray-400">
-                    <th className="p-3 w-10">
-                      <input 
-                        type="checkbox" 
-                        checked={sortedAndFilteredItems.length > 0 && sortedAndFilteredItems.every(i => i.selected)} 
-                        onChange={toggleSelectAll} 
-                        className="rounded bg-slate-900 border-slate-700" 
-                      />
-                    </th>
-                    <SortHeader column="sku" label="SKU" className="text-left" />
-                    <SortHeader column="status" label="Status" />
-                    <SortHeader column="shipBy" label="Ship By" />
-                    <SortHeader column="velocity" label="Velocity" />
-                    <SortHeader column="fba" label="FBA" />
-                    <SortHeader column="inbound" label="Inbound" />
-                    <SortHeader column="replenishment" label="Replenishment" />
-                    <SortHeader column="whAvail" label="WH Avail" />
-                    <th className="p-3 text-center">Incoming PO</th>
-                    <th className="p-3 text-center w-32">Send Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedAndFilteredItems.map((item) => {
-                    const incoming = formatIncoming(item.incoming)
-                    // Show what we can actually send with smart rounding
-                    const smartRounded = roundTo5(item.replenishmentNeeded, item.warehouseAvailable)
-                    const cantFulfill = item.replenishmentNeeded > item.warehouseAvailable
-                    
-                    return (
-                      <tr key={item.sku} className={`border-b border-slate-700/50 hover:bg-slate-750 ${item.selected ? 'bg-purple-900/10' : ''}`}>
-                        <td className="p-3">
-                          <input type="checkbox" checked={item.selected} onChange={() => toggleSelect(item.sku)} className="rounded bg-slate-900 border-slate-700" />
-                        </td>
-                        <td className="p-3">
-                          <p className="font-medium text-white">{item.sku}</p>
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className={`inline-flex items-center justify-center min-w-[5.5rem] px-2 py-1 rounded text-xs font-medium border ${item.statusDisplay.color}`}>
-                            {item.statusDisplay.label}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          {getShipByBadge(item.shipBy)}
-                        </td>
-                        <td className="p-3 text-center text-white">{item.velocity30d.toFixed(1)}/day</td>
-                        <td className="p-3 text-center text-white">{item.fbaAvailable}</td>
-                        <td className="p-3 text-center text-cyan-400">{item.fbaInbound || 0}</td>
-                        <td className="p-3 text-center">
-                          <span className={`font-medium ${cantFulfill ? 'text-orange-400' : 'text-cyan-400'}`}>
-                            {item.replenishmentNeeded}
-                          </span>
-                          {cantFulfill && (
-                            <p className="text-xs text-orange-400">Need more</p>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className="text-white">{item.warehouseAvailable}</span>
-                        </td>
-                        <td className="p-3 text-center">
-                          {incoming ? (
-                            <div>
-                              <span className="text-green-400 font-medium">{incoming.totalQty}</span>
-                              <p className="text-xs text-gray-500">
-                                {incoming.nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </p>
-                            </div>
-                          ) : (
-                            <span className="text-gray-600">—</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <input
-                              type="number"
-                              value={editingQty?.sku === item.sku ? editingQty.value : item.sendQty}
-                              onChange={(e) => handleQtyChange(item.sku, e.target.value)}
-                              onBlur={() => handleQtyBlur(item.sku)}
-                              onKeyDown={(e) => handleQtyKeyDown(e, item.sku)}
-                              onFocus={(e) => setEditingQty({ sku: item.sku, value: String(item.sendQty) })}
-                              className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-center"
-                              min={0}
-                              max={item.warehouseAvailable}
-                            />
-                            <button onClick={() => updateQty(item.sku, item.replenishmentNeeded)} className="p-1 hover:bg-slate-700 rounded text-gray-400 hover:text-white" title="Set to replenishment needed">
-                              <RefreshCw className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   )
 }

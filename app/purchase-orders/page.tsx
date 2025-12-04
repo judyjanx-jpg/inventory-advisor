@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -25,7 +25,9 @@ import {
   PackageCheck,
   CalendarDays,
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react'
 
 interface PurchaseOrderItem {
@@ -60,6 +62,7 @@ interface PurchaseOrder {
   subtotal: number
   shippingCost: number
   tax: number
+  otherCosts?: number
   total: number
   paymentStatus: string
   items: PurchaseOrderItem[]
@@ -90,7 +93,16 @@ export default function PurchaseOrdersPage() {
   const [showCreatePO, setShowCreatePO] = useState(false)
   const [showReceive, setShowReceive] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showEditCosts, setShowEditCosts] = useState(false)
+  const [showSendEmail, setShowSendEmail] = useState(false)
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null)
+  
+  // Edit costs form
+  const [costsForm, setCostsForm] = useState({
+    shippingCost: 0,
+    tax: 0,
+    otherCosts: 0,
+  })
   
   // Create PO form
   const [createForm, setCreateForm] = useState({
@@ -110,21 +122,54 @@ export default function PurchaseOrdersPage() {
   // Delete options
   const [deductOnDelete, setDeductOnDelete] = useState(true)
 
+  // Searchable SKU dropdown states
+  const [skuSearchTerms, setSkuSearchTerms] = useState<Record<number, string>>({})
+  const [openSkuDropdown, setOpenSkuDropdown] = useState<number | null>(null)
+  const [itemsFileInputRef, setItemsFileInputRef] = useState<HTMLInputElement | null>(null)
+
   useEffect(() => {
     fetchData()
   }, [])
 
-  // Update expected date when supplier or days change
+  // Track which field was last changed to prevent circular updates
+  const lastChangedField = useRef<'days' | 'date' | null>(null)
+
+  // Update expected date when lead time changes
   useEffect(() => {
-    if (createForm.orderDate && createForm.expectedDays) {
+    // Calculate expected date if:
+    // 1. User changed lead time (days), OR
+    // 2. Initial load and expectedDate is empty
+    const shouldCalculate = lastChangedField.current === 'days' || 
+                           (lastChangedField.current === null && !createForm.expectedDate && createForm.expectedDays > 0)
+    
+    if (shouldCalculate && createForm.orderDate && createForm.expectedDays) {
       const orderDate = new Date(createForm.orderDate)
       orderDate.setDate(orderDate.getDate() + createForm.expectedDays)
       setCreateForm(prev => ({
         ...prev,
         expectedDate: orderDate.toISOString().split('T')[0]
       }))
+      if (lastChangedField.current === 'days') {
+        lastChangedField.current = null
+      }
     }
-  }, [createForm.orderDate, createForm.expectedDays])
+  }, [createForm.orderDate, createForm.expectedDays, createForm.expectedDate])
+
+  // Update lead time when expected date changes
+  useEffect(() => {
+    if (lastChangedField.current === 'date' && createForm.orderDate && createForm.expectedDate) {
+      const orderDate = new Date(createForm.orderDate)
+      const expectedDate = new Date(createForm.expectedDate)
+      const daysDiff = Math.round((expectedDate.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysDiff >= 0) {
+        setCreateForm(prev => ({
+          ...prev,
+          expectedDays: daysDiff
+        }))
+      }
+      lastChangedField.current = null
+    }
+  }, [createForm.orderDate, createForm.expectedDate])
 
   // Update lead time when supplier changes
   useEffect(() => {
@@ -144,7 +189,7 @@ export default function PurchaseOrdersPage() {
       const [posRes, suppliersRes, productsRes, backordersRes] = await Promise.all([
         fetch('/api/purchase-orders'),
         fetch('/api/suppliers'),
-        fetch('/api/products'),
+        fetch('/api/products?flat=true'), // Fetch all products including child SKUs
         fetch('/api/backorders'),
       ])
       
@@ -173,6 +218,21 @@ export default function PurchaseOrdersPage() {
 
   const createPurchaseOrder = async () => {
     if (!createForm.supplierId || createForm.items.length === 0) return
+    
+    // Validate that all items have valid SKUs
+    const invalidItems = createForm.items.filter(item => !item.masterSku || item.masterSku.trim() === '')
+    if (invalidItems.length > 0) {
+      alert('Please select a SKU for all items before creating the purchase order.')
+      return
+    }
+    
+    // Validate that all SKUs exist in the products list
+    const itemSkus = createForm.items.map(item => item.masterSku)
+    const missingSkus = itemSkus.filter(sku => !products.find(p => p.sku === sku))
+    if (missingSkus.length > 0) {
+      alert(`The following SKUs are not in the system: ${missingSkus.join(', ')}\n\nPlease add these products first or remove them from the purchase order.`)
+      return
+    }
     
     setSavingPO(true)
     try {
@@ -214,7 +274,14 @@ export default function PurchaseOrdersPage() {
         })
       } else {
         const data = await res.json()
-        alert(data.error || 'Failed to create PO')
+        const errorMessage = data.error || 'Failed to create purchase order'
+        const missingSkus = data.missingSkus || []
+        
+        if (missingSkus.length > 0) {
+          alert(`Failed to create purchase order:\n\n${errorMessage}\n\nMissing SKUs: ${missingSkus.join(', ')}\n\nPlease add these products to the system first.`)
+        } else {
+          alert(`Failed to create purchase order: ${errorMessage}`)
+        }
       }
     } catch (error) {
       console.error('Error creating PO:', error)
@@ -233,6 +300,120 @@ export default function PurchaseOrdersPage() {
       fetchData()
     } catch (error) {
       console.error('Error updating PO:', error)
+    }
+  }
+
+  const openEditCostsModal = (po: PurchaseOrder) => {
+    setSelectedPO(po)
+    setCostsForm({
+      shippingCost: Number(po.shippingCost) || 0,
+      tax: Number(po.tax) || 0,
+      otherCosts: Number(po.otherCosts) || 0,
+    })
+    setShowEditCosts(true)
+  }
+
+  const saveCosts = async () => {
+    if (!selectedPO) return
+    
+    try {
+      const newSubtotal = selectedPO.subtotal
+      const newTotal = newSubtotal + costsForm.shippingCost + costsForm.tax + costsForm.otherCosts
+      
+      const res = await fetch(`/api/purchase-orders/${selectedPO.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shippingCost: costsForm.shippingCost,
+          tax: costsForm.tax,
+          otherCosts: costsForm.otherCosts,
+          total: newTotal,
+        }),
+      })
+      
+      if (res.ok) {
+        fetchData()
+        setShowEditCosts(false)
+        setSelectedPO(null)
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Failed to update costs')
+      }
+    } catch (error) {
+      console.error('Error updating costs:', error)
+      alert('Failed to update costs')
+    }
+  }
+
+  const generatePOExcel = async (po: PurchaseOrder) => {
+    const XLSX = await import('xlsx')
+    
+    // Create worksheet data
+    const worksheetData = [
+      ['SKU', 'Quantity'],
+      ...po.items.map(item => [item.masterSku, item.quantityOrdered]),
+    ]
+    
+    // Create workbook
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(worksheetData)
+    
+    // Set column widths
+    ws['!cols'] = [{ wch: 20 }, { wch: 10 }]
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Purchase Order')
+    
+    // Generate file
+    const fileName = `PO-${po.poNumber}-${po.supplier.name.replace(/[^a-z0-9]/gi, '_')}.xlsx`
+    XLSX.writeFile(wb, fileName)
+    
+    return fileName
+  }
+
+  const openSendEmailModal = async (po: PurchaseOrder) => {
+    setSelectedPO(po)
+    setShowSendEmail(true)
+  }
+
+  const sendEmailToSupplier = async (markAsSent: boolean) => {
+    if (!selectedPO) return
+    
+    try {
+      // Generate Excel file
+      const fileName = await generatePOExcel(selectedPO)
+      
+      // Get supplier email
+      const supplier = suppliers.find(s => s.id === selectedPO.supplier.id)
+      const supplierEmail = supplier?.email || supplier?.contactEmail || ''
+      
+      // Create email subject and body
+      const subject = encodeURIComponent(`Purchase Order ${selectedPO.poNumber}`)
+      const body = encodeURIComponent(
+        `Dear ${selectedPO.supplier.name},\n\n` +
+        `Please find attached the purchase order ${selectedPO.poNumber}.\n\n` +
+        `Order Date: ${formatDate(new Date(selectedPO.orderDate || selectedPO.createdDate))}\n` +
+        `Expected Arrival: ${selectedPO.expectedArrivalDate ? formatDate(new Date(selectedPO.expectedArrivalDate)) : 'TBD'}\n\n` +
+        `Items:\n${selectedPO.items.map(item => `- ${item.masterSku}: ${item.quantityOrdered} units`).join('\n')}\n\n` +
+        `Total: ${formatCurrency(selectedPO.total)}\n\n` +
+        `Please confirm receipt and expected delivery date.\n\n` +
+        `Thank you,\n` +
+        `Inventory Advisor`
+      )
+      
+      // Open email client (mailto link)
+      const mailtoLink = `mailto:${supplierEmail}?subject=${subject}&body=${body}`
+      window.open(mailtoLink)
+      
+      // If mark as sent is checked, update status
+      if (markAsSent) {
+        await updatePOStatus(selectedPO, 'sent')
+      }
+      
+      setShowSendEmail(false)
+      setSelectedPO(null)
+    } catch (error) {
+      console.error('Error sending email:', error)
+      alert('Failed to generate email. Please check your email client.')
     }
   }
 
@@ -328,6 +509,103 @@ export default function PurchaseOrdersPage() {
   const removeFormItem = (index: number) => {
     const newItems = createForm.items.filter((_, i) => i !== index)
     setCreateForm({ ...createForm, items: newItems })
+    // Clean up search terms
+    const newSearchTerms = { ...skuSearchTerms }
+    delete newSearchTerms[index]
+    // Reindex remaining search terms
+    const reindexed: Record<number, string> = {}
+    Object.keys(newSearchTerms).forEach(key => {
+      const oldIdx = parseInt(key)
+      if (oldIdx > index) {
+        reindexed[oldIdx - 1] = newSearchTerms[oldIdx]
+      } else if (oldIdx < index) {
+        reindexed[oldIdx] = newSearchTerms[oldIdx]
+      }
+    })
+    setSkuSearchTerms(reindexed)
+  }
+
+  // Handle items file upload
+  const handleItemsFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      // Check if xlsx library is available
+      const XLSX = await import('xlsx')
+      
+      const reader = new FileReader()
+      reader.onload = (evt) => {
+        try {
+          const data = evt.target?.result
+          const workbook = XLSX.read(data, { type: 'binary' })
+          const sheetName = workbook.SheetNames[0]
+          const sheet = workbook.Sheets[sheetName]
+          const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]
+          
+          if (json.length < 2) {
+            alert('File must have headers and at least one data row')
+            return
+          }
+
+          const headers = json[0] as string[]
+          const rows = json.slice(1).filter(row => row.some(cell => cell !== undefined && cell !== ''))
+          
+          // Find column indices
+          const skuCol = headers.findIndex(h => 
+            h.toLowerCase().includes('sku') || h.toLowerCase().includes('product')
+          )
+          const qtyCol = headers.findIndex(h => 
+            h.toLowerCase().includes('qty') || h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty')
+          )
+          const costCol = headers.findIndex(h => 
+            h.toLowerCase().includes('cost') || h.toLowerCase().includes('price') || h.toLowerCase().includes('unit')
+          )
+
+          if (skuCol === -1) {
+            alert('File must have a SKU column')
+            return
+          }
+
+          // Parse rows and add to form
+          const newItems = rows.map(row => {
+            const sku = String(row[skuCol] || '').trim()
+            const qty = qtyCol >= 0 ? parseInt(String(row[qtyCol] || '1')) : 1
+            const cost = costCol >= 0 ? parseFloat(String(row[costCol] || '0')) : 0
+            
+            // Find product to get default cost if not provided
+            const product = products.find(p => p.sku === sku)
+            const unitCost = cost > 0 ? cost : (product ? parseFloat(product.cost) || 0 : 0)
+            
+            return {
+              masterSku: sku,
+              quantityOrdered: qty || 1,
+              unitCost: unitCost
+            }
+          }).filter(item => item.masterSku) // Only add items with valid SKUs
+
+          // Add to existing items (don't replace)
+          setCreateForm({
+            ...createForm,
+            items: [...createForm.items, ...newItems]
+          })
+
+          alert(`Added ${newItems.length} items from file`)
+        } catch (error: any) {
+          console.error('Error parsing file:', error)
+          alert(`Error parsing file: ${error.message}`)
+        }
+      }
+      reader.readAsBinaryString(file)
+    } catch (error: any) {
+      console.error('Error loading xlsx library:', error)
+      alert('Error loading file parser. Please ensure the file is in Excel (.xlsx) or CSV format.')
+    }
+    
+    // Reset file input
+    if (e.target) {
+      e.target.value = ''
+    }
   }
 
   const filteredPOs = purchaseOrders
@@ -668,19 +946,53 @@ export default function PurchaseOrdersPage() {
                               </tfoot>
                             </table>
 
+                            {/* Financial Summary */}
+                            <div className="mt-4 p-4 bg-slate-800/50 rounded-lg">
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <p className="text-slate-400">Subtotal</p>
+                                  <p className="text-white font-medium">{formatCurrency(po.subtotal)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-400">Shipping</p>
+                                  <p className="text-white font-medium">{formatCurrency(po.shippingCost || 0)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-400">Tax</p>
+                                  <p className="text-white font-medium">{formatCurrency(po.tax || 0)}</p>
+                                </div>
+                                {po.otherCosts && Number(po.otherCosts) > 0 && (
+                                  <div>
+                                    <p className="text-slate-400">Other Costs</p>
+                                    <p className="text-white font-medium">{formatCurrency(po.otherCosts)}</p>
+                                  </div>
+                                )}
+                                <div className="col-span-2 border-t border-slate-700 pt-2">
+                                  <p className="text-slate-400">Total</p>
+                                  <p className="text-white font-bold text-lg">{formatCurrency(po.total)}</p>
+                                </div>
+                              </div>
+                            </div>
+
                             {/* Action buttons */}
                             <div className="flex items-center gap-3 mt-4 pt-4 border-t border-slate-700/50">
                               {po.status === 'draft' && (
                                 <>
-                                  <Button variant="primary" size="sm" onClick={() => updatePOStatus(po, 'sent')}>
+                                  <Button variant="primary" size="sm" onClick={() => openSendEmailModal(po)}>
                                     <Send className="w-4 h-4 mr-1" />
                                     Send to Supplier
                                   </Button>
-                                  <Button variant="ghost" size="sm">
+                                  <Button variant="ghost" size="sm" onClick={() => openEditCostsModal(po)}>
                                     <Edit className="w-4 h-4 mr-1" />
-                                    Edit
+                                    Edit Costs
                                   </Button>
                                 </>
+                              )}
+                              {po.status !== 'draft' && (
+                                <Button variant="ghost" size="sm" onClick={() => openEditCostsModal(po)}>
+                                  <Edit className="w-4 h-4 mr-1" />
+                                  Edit Costs
+                                </Button>
                               )}
                               {po.status === 'sent' && (
                                 <Button variant="secondary" size="sm" onClick={() => updatePOStatus(po, 'confirmed')}>
@@ -766,7 +1078,10 @@ export default function PurchaseOrdersPage() {
               <input
                 type="number"
                 value={createForm.expectedDays}
-                onChange={(e) => setCreateForm({ ...createForm, expectedDays: parseInt(e.target.value) || 0 })}
+                onChange={(e) => {
+                  lastChangedField.current = 'days'
+                  setCreateForm({ ...createForm, expectedDays: parseInt(e.target.value) || 0 })
+                }}
                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
               />
             </div>
@@ -777,7 +1092,10 @@ export default function PurchaseOrdersPage() {
               <input
                 type="date"
                 value={createForm.expectedDate}
-                onChange={(e) => setCreateForm({ ...createForm, expectedDate: e.target.value })}
+                onChange={(e) => {
+                  lastChangedField.current = 'date'
+                  setCreateForm({ ...createForm, expectedDate: e.target.value })
+                }}
                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
               />
             </div>
@@ -789,36 +1107,108 @@ export default function PurchaseOrdersPage() {
               <label className="block text-sm font-medium text-slate-300">
                 Items <span className="text-red-400">*</span>
               </label>
-              <Button variant="ghost" size="sm" onClick={addItemToForm}>
-                <Plus className="w-4 h-4 mr-1" />
-                Add Item
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => itemsFileInputRef?.click()}
+                >
+                  <Upload className="w-4 h-4 mr-1" />
+                  Upload List
+                </Button>
+                <input
+                  ref={(el) => setItemsFileInputRef(el)}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleItemsFileUpload}
+                  className="hidden"
+                />
+                <Button variant="ghost" size="sm" onClick={addItemToForm}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Item
+                </Button>
+              </div>
             </div>
             
             {createForm.items.length === 0 ? (
               <div className="text-center py-8 bg-slate-900/30 rounded-lg border border-dashed border-slate-700">
                 <Package className="w-8 h-8 text-slate-600 mx-auto mb-2" />
                 <p className="text-sm text-slate-400">No items added yet</p>
-                <Button variant="ghost" size="sm" className="mt-2" onClick={addItemToForm}>
-                  Add Item
-                </Button>
+                <div className="flex gap-2 justify-center mt-3">
+                  <Button variant="ghost" size="sm" onClick={() => itemsFileInputRef?.click()}>
+                    <Upload className="w-4 h-4 mr-1" />
+                    Upload List
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={addItemToForm}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Item
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
-                {createForm.items.map((item, index) => (
+                {createForm.items.map((item, index) => {
+                  const searchTerm = skuSearchTerms[index] || ''
+                  const filteredProducts = products.filter(p => 
+                    p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+                  )
+                  const isDropdownOpen = openSkuDropdown === index
+                  
+                  return (
                   <div key={index} className="flex items-center gap-3 p-3 bg-slate-900/50 rounded-lg">
-                    <select
-                      value={item.masterSku}
-                      onChange={(e) => updateFormItem(index, 'masterSku', e.target.value)}
-                      className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                    >
-                      <option value="">Select product...</option>
-                      {products.map((product) => (
-                        <option key={product.sku} value={product.sku}>
-                          {product.sku} - {product.title}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex-1 relative">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="Search SKU..."
+                          value={isDropdownOpen ? searchTerm : (item.masterSku || '')}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setSkuSearchTerms({ ...skuSearchTerms, [index]: value })
+                            setOpenSkuDropdown(index)
+                            // Clear selection if typing
+                            if (value && item.masterSku) {
+                              updateFormItem(index, 'masterSku', '')
+                            }
+                          }}
+                          onFocus={() => {
+                            setOpenSkuDropdown(index)
+                            if (!skuSearchTerms[index] && item.masterSku) {
+                              setSkuSearchTerms({ ...skuSearchTerms, [index]: item.masterSku })
+                            }
+                          }}
+                          onBlur={() => {
+                            // Delay to allow clicking on dropdown items
+                            setTimeout(() => {
+                              setOpenSkuDropdown(null)
+                              if (item.masterSku) {
+                                setSkuSearchTerms({ ...skuSearchTerms, [index]: '' })
+                              }
+                            }, 200)
+                          }}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                        />
+                      </div>
+                      {isDropdownOpen && filteredProducts.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {filteredProducts.map((product) => (
+                            <button
+                              key={product.sku}
+                              type="button"
+                              onClick={() => {
+                                updateFormItem(index, 'masterSku', product.sku)
+                                setSkuSearchTerms({ ...skuSearchTerms, [index]: '' })
+                                setOpenSkuDropdown(null)
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm text-white hover:bg-slate-700 focus:bg-slate-700 focus:outline-none"
+                            >
+                              {product.sku}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <input
                       type="number"
                       value={item.quantityOrdered}
@@ -847,7 +1237,8 @@ export default function PurchaseOrdersPage() {
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </Button>
                   </div>
-                ))}
+                  )
+                })}
                 
                 {/* Totals */}
                 <div className="flex justify-end pt-3 border-t border-slate-700">
@@ -1006,6 +1397,162 @@ export default function PurchaseOrdersPage() {
           <Button onClick={saveReceive} loading={savingReceive}>
             <PackageCheck className="w-4 h-4 mr-2" />
             Confirm Received
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Edit Costs Modal */}
+      <Modal
+        isOpen={showEditCosts}
+        onClose={() => { setShowEditCosts(false); setSelectedPO(null); }}
+        title="Edit Purchase Order Costs"
+        size="md"
+      >
+        {selectedPO && (
+          <div className="space-y-4">
+            <div className="p-4 bg-slate-800/50 rounded-lg">
+              <p className="text-sm text-slate-400 mb-2">PO Number</p>
+              <p className="text-white font-medium">{selectedPO.poNumber}</p>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Shipping Cost
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={costsForm.shippingCost}
+                  onChange={(e) => setCostsForm({ ...costsForm, shippingCost: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Tax
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={costsForm.tax}
+                  onChange={(e) => setCostsForm({ ...costsForm, tax: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Other Costs
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={costsForm.otherCosts}
+                  onChange={(e) => setCostsForm({ ...costsForm, otherCosts: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  placeholder="Additional fees, handling, etc."
+                />
+              </div>
+            </div>
+            
+            <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-slate-400">Subtotal</span>
+                <span className="text-white font-medium">{formatCurrency(selectedPO.subtotal)}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-slate-400">Shipping</span>
+                <span className="text-white">{formatCurrency(costsForm.shippingCost)}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-slate-400">Tax</span>
+                <span className="text-white">{formatCurrency(costsForm.tax)}</span>
+              </div>
+              {costsForm.otherCosts > 0 && (
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-slate-400">Other Costs</span>
+                  <span className="text-white">{formatCurrency(costsForm.otherCosts)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t border-slate-700">
+                <span className="text-white font-medium">Total</span>
+                <span className="text-white font-bold text-lg">
+                  {formatCurrency(selectedPO.subtotal + costsForm.shippingCost + costsForm.tax + costsForm.otherCosts)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => { setShowEditCosts(false); setSelectedPO(null); }}>
+            Cancel
+          </Button>
+          <Button onClick={saveCosts}>
+            Save Costs
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Send Email Modal */}
+      <Modal
+        isOpen={showSendEmail}
+        onClose={() => { setShowSendEmail(false); setSelectedPO(null); }}
+        title="Send Purchase Order to Supplier"
+        size="md"
+      >
+        {selectedPO && (
+          <div className="space-y-4">
+            <div className="p-4 bg-slate-800/50 rounded-lg">
+              <p className="text-sm text-slate-400 mb-1">PO Number</p>
+              <p className="text-white font-medium">{selectedPO.poNumber}</p>
+              <p className="text-sm text-slate-400 mt-2 mb-1">Supplier</p>
+              <p className="text-white">{selectedPO.supplier.name}</p>
+              {selectedPO.supplier.email && (
+                <p className="text-sm text-slate-400 mt-2">{selectedPO.supplier.email}</p>
+              )}
+            </div>
+            
+            <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <p className="text-sm text-blue-400">
+                This will:
+              </p>
+              <ul className="text-sm text-slate-300 mt-2 space-y-1 list-disc list-inside">
+                <li>Generate an Excel file with SKU and Quantity columns</li>
+                <li>Open your email client with a pre-filled message</li>
+                <li>Allow you to attach the Excel file manually</li>
+              </ul>
+            </div>
+            
+            <div className="flex items-center gap-2 p-3 bg-slate-800/50 rounded-lg">
+              <input
+                type="checkbox"
+                id="markAsSent"
+                defaultChecked={true}
+                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500"
+              />
+              <label htmlFor="markAsSent" className="text-sm text-slate-300 cursor-pointer">
+                Mark purchase order as "Sent" after opening email
+              </label>
+            </div>
+          </div>
+        )}
+        
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => { setShowSendEmail(false); setSelectedPO(null); }}>
+            Cancel
+          </Button>
+          <Button onClick={() => {
+            const checkbox = document.getElementById('markAsSent') as HTMLInputElement
+            sendEmailToSupplier(checkbox?.checked || false)
+          }}>
+            <Send className="w-4 h-4 mr-2" />
+            Open Email Client
           </Button>
         </ModalFooter>
       </Modal>

@@ -12,7 +12,7 @@ interface ShipmentItem {
   fnsku: string | null
   productName: string
   adjustedQty: number
-  labelType?: string // fnsku_tp, fnsku_only, tp_only
+  labelType?: string // fnsku_tp, fnsku_only, tp_only, none
   transparencyEnabled?: boolean
   brandLogo?: string // Optional URL or base64 of brand logo
 }
@@ -23,7 +23,7 @@ interface ProductLabelPrinterProps {
   items: ShipmentItem[]
 }
 
-type LabelType = 'fnsku_tp' | 'fnsku_only' | 'tp_only'
+type LabelType = 'fnsku_tp' | 'fnsku_only' | 'tp_only' | 'none'
 
 interface LabelSettings {
   fnskuLabelSize: string
@@ -81,6 +81,7 @@ export default function ProductLabelPrinter({
       case 'fnsku_tp': return { label: 'FNSKU + TP', color: 'text-purple-400', bg: 'bg-purple-900/20' }
       case 'fnsku_only': return { label: 'FNSKU', color: 'text-cyan-400', bg: 'bg-cyan-900/20' }
       case 'tp_only': return { label: 'TP Only', color: 'text-amber-400', bg: 'bg-amber-900/20' }
+      case 'none': return { label: 'Pre-labeled', color: 'text-slate-400', bg: 'bg-slate-900/20' }
     }
   }
 
@@ -666,7 +667,6 @@ export default function ProductLabelPrinter({
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
-        window: iframe.contentWindow || undefined,
       })
       
       const imgData = canvas.toDataURL('image/png', 1.0)
@@ -686,6 +686,7 @@ export default function ProductLabelPrinter({
     fnsku_tp: items.filter(i => getLabelType(i) === 'fnsku_tp'),
     fnsku_only: items.filter(i => getLabelType(i) === 'fnsku_only'),
     tp_only: items.filter(i => getLabelType(i) === 'tp_only'),
+    none: items.filter(i => getLabelType(i) === 'none'),
   }
 
   return (
@@ -745,24 +746,30 @@ export default function ProductLabelPrinter({
                   </div>
                 )}
 
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => printLabels(item)}
-                  disabled={loadingTp === item.masterSku}
-                >
-                  {loadingTp === item.masterSku ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                      Getting TP...
-                    </>
-                  ) : (
-                    <>
-                      <Printer className="w-4 h-4 mr-1" />
-                      Print
-                    </>
-                  )}
-                </Button>
+                {labelType === 'none' ? (
+                  <div className="text-sm text-slate-400 italic">
+                    Pre-labeled
+                  </div>
+                ) : (
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => printLabels(item)}
+                    disabled={loadingTp === item.masterSku}
+                  >
+                    {loadingTp === item.masterSku ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                        Getting TP...
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="w-4 h-4 mr-1" />
+                        Print
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             )
           })}
@@ -770,7 +777,7 @@ export default function ProductLabelPrinter({
 
         {/* Summary by Type */}
         <div className="mt-4 pt-4 border-t border-slate-700">
-          <div className="grid grid-cols-3 gap-4 text-center text-sm">
+          <div className="grid grid-cols-4 gap-4 text-center text-sm">
             <div>
               <div className="text-purple-400 font-medium">
                 {itemsByType.fnsku_tp.length} SKUs
@@ -788,6 +795,12 @@ export default function ProductLabelPrinter({
                 {itemsByType.tp_only.length} SKUs
               </div>
               <div className="text-slate-500">TP Only</div>
+            </div>
+            <div>
+              <div className="text-slate-400 font-medium">
+                {itemsByType.none.length} SKUs
+              </div>
+              <div className="text-slate-500">Pre-labeled</div>
             </div>
           </div>
         </div>

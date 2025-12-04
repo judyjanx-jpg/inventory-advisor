@@ -146,6 +146,13 @@ export default function NewShipmentPage() {
     setItems(items.filter(item => item.sku !== sku))
   }
 
+  const clearAllItems = () => {
+    if (items.length === 0) return
+    if (confirm(`Are you sure you want to remove all ${items.length} items from this shipment?`)) {
+      setItems([])
+    }
+  }
+
   const updateItemQty = (sku: string, field: 'requestedQty' | 'adjustedQty', value: number) => {
     setItems(items.map(item => {
       if (item.sku === sku) {
@@ -166,7 +173,7 @@ export default function NewShipmentPage() {
   }
 
   // Parse bulk text input like "MJBC116x10, MJBC118x20" or "MJBC116 x 10, MJBC118 x 20"
-  const parseBulkText = async (text: string) => {
+  const parseBulkText = async (text: string, overwrite: boolean = false) => {
     setBulkError('')
     const entries = text.split(/[,\n]/).map(s => s.trim()).filter(s => s)
     const parsed: { sku: string; qty: number }[] = []
@@ -201,9 +208,6 @@ export default function NewShipmentPage() {
       const notFound: string[] = []
 
       for (const { sku, qty } of parsed) {
-        // Skip if already in items
-        if (items.some(item => item.sku === sku)) continue
-
         const product = products.find((p: any) => p.sku.toUpperCase() === sku)
         if (product) {
           newItems.push({
@@ -225,7 +229,12 @@ export default function NewShipmentPage() {
       }
 
       if (newItems.length > 0) {
-        setItems([...items, ...newItems])
+        // Overwrite existing items or append to them
+        if (overwrite) {
+          setItems(newItems)
+        } else {
+          setItems([...items, ...newItems])
+        }
         setBulkText('')
         if (notFound.length === 0) {
           setShowBulkInput(false)
@@ -273,7 +282,8 @@ export default function NewShipmentPage() {
       }
 
       if (entries.length > 0) {
-        await parseBulkText(entries.join(', '))
+        // Overwrite: replace all existing items with uploaded ones
+        await parseBulkText(entries.join(', '), true)
       } else {
         setBulkError('No valid SKU/QTY data found in file')
       }
@@ -438,8 +448,14 @@ export default function NewShipmentPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Items</CardTitle>
+              <CardTitle>Items {items.length > 0 && <span className="text-slate-400 text-base">({items.length})</span>}</CardTitle>
               <div className="flex gap-2">
+                {items.length > 0 && (
+                  <Button variant="outline" onClick={clearAllItems}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => setShowBulkInput(!showBulkInput)}>
                   <FileSpreadsheet className="w-4 h-4 mr-2" />
                   Bulk Entry

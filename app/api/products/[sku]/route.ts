@@ -49,6 +49,10 @@ export async function PUT(
       cost,
       price,
       weight,
+      weightOz,
+      lengthIn,
+      widthIn,
+      heightIn,
       dimensions,
       imageUrl,
       status,
@@ -60,33 +64,49 @@ export async function PUT(
       caseQty,
       moq,
       notes,
+      isHidden,
+      hidden,
+      labelType,
+      unitsPerCase,
     } = body
+
+    // Build update data - only include fields that are provided
+    const updateData: Record<string, any> = {
+      updatedAt: new Date(),
+    }
+
+    if (title !== undefined) updateData.title = title
+    if (asin !== undefined) updateData.asin = asin || null
+    if (fnsku !== undefined) updateData.fnsku = fnsku || null
+    if (upc !== undefined) updateData.upc = upc || null
+    if (brand !== undefined) updateData.brand = brand
+    if (category !== undefined) updateData.category = category || null
+    if (cost !== undefined) updateData.cost = cost ? parseFloat(cost) : undefined
+    if (price !== undefined) updateData.price = price ? parseFloat(price) : undefined
+    if (weight !== undefined) updateData.weightOz = weight ? parseFloat(weight) : undefined
+    if (weightOz !== undefined) updateData.weightOz = weightOz ? parseFloat(weightOz) : undefined
+    if (lengthIn !== undefined) updateData.lengthIn = lengthIn ? parseFloat(lengthIn) : undefined
+    if (widthIn !== undefined) updateData.widthIn = widthIn ? parseFloat(widthIn) : undefined
+    if (heightIn !== undefined) updateData.heightIn = heightIn ? parseFloat(heightIn) : undefined
+    if (dimensions !== undefined) updateData.dimensions = dimensions || null
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null
+    if (status !== undefined) updateData.status = status
+    if (supplierId !== undefined) updateData.supplierId = supplierId || null
+    if (minStockLevel !== undefined) updateData.minStockLevel = minStockLevel ? parseInt(minStockLevel) : undefined
+    if (reorderPoint !== undefined) updateData.reorderPoint = reorderPoint ? parseInt(reorderPoint) : undefined
+    if (reorderQty !== undefined) updateData.reorderQty = reorderQty ? parseInt(reorderQty) : undefined
+    if (packSize !== undefined) updateData.packSize = packSize ? parseInt(packSize) : undefined
+    if (caseQty !== undefined) updateData.caseQty = caseQty ? parseInt(caseQty) : undefined
+    if (moq !== undefined) updateData.moq = moq ? parseInt(moq) : undefined
+    if (notes !== undefined) updateData.notes = notes || null
+    if (isHidden !== undefined) updateData.isHidden = isHidden
+    if (hidden !== undefined) updateData.isHidden = hidden // Support both 'hidden' and 'isHidden'
+    if (labelType !== undefined) updateData.labelType = labelType || 'fnsku_only'
+    if (unitsPerCase !== undefined) updateData.unitsPerCase = unitsPerCase ? parseInt(unitsPerCase) : undefined
 
     const product = await prisma.product.update({
       where: { sku: params.sku },
-      data: {
-        title,
-        asin,
-        fnsku,
-        upc,
-        brand,
-        category,
-        cost: cost ? parseFloat(cost) : undefined,
-        price: price ? parseFloat(price) : undefined,
-        weight: weight ? parseFloat(weight) : undefined,
-        dimensions,
-        imageUrl,
-        status,
-        supplierId: supplierId || null,
-        minStockLevel: minStockLevel ? parseInt(minStockLevel) : undefined,
-        reorderPoint: reorderPoint ? parseInt(reorderPoint) : undefined,
-        reorderQty: reorderQty ? parseInt(reorderQty) : undefined,
-        packSize: packSize ? parseInt(packSize) : undefined,
-        caseQty: caseQty ? parseInt(caseQty) : undefined,
-        moq: moq ? parseInt(moq) : undefined,
-        notes,
-        updatedAt: new Date(),
-      },
+      data: updateData,
       include: {
         supplier: true,
         inventoryLevels: true,

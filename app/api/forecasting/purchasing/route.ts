@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 /**
  * Generate purchasing forecast
  * Analyzes all SKUs, all channels, all sales, all inventory
+ * NOW INCLUDES: Pending purchase order quantities
  * Suggests what needs to be ordered and when to maintain 180 days of inventory
  */
 export async function POST(request: NextRequest) {
@@ -14,7 +15,57 @@ export async function POST(request: NextRequest) {
       orderFrequency = 'monthly', // 'weekly', 'bi-weekly', 'monthly'
     } = body
 
-    // Get all products (excluding parent products)
+    // ========================================
+    // STEP 1: Get all pending PO quantities by SKU
+    // ========================================
+    const pendingPOItems = await prisma.purchaseOrderItem.findMany({
+      where: {
+        purchaseOrder: {
+          status: { in: ['sent', 'confirmed', 'shipped', 'partial'] }
+        }
+      },
+      select: {
+        masterSku: true,
+        quantityOrdered: true,
+        quantityReceived: true,
+        purchaseOrder: {
+          select: {
+            poNumber: true,
+            expectedArrivalDate: true,
+            status: true,
+          }
+        }
+      }
+    })
+
+    // Group by SKU - sum up all pending quantities
+    const incomingBySku: Record<string, { 
+      totalIncoming: number
+      items: Array<{ qty: number; poNumber: string; expectedDate: string | null; status: string }>
+    }> = {}
+
+    for (const item of pendingPOItems) {
+      const remainingQty = item.quantityOrdered - (item.quantityReceived || 0)
+      if (remainingQty <= 0) continue
+
+      if (!incomingBySku[item.masterSku]) {
+        incomingBySku[item.masterSku] = { totalIncoming: 0, items: [] }
+      }
+      
+      incomingBySku[item.masterSku].totalIncoming += remainingQty
+      incomingBySku[item.masterSku].items.push({
+        qty: remainingQty,
+        poNumber: item.purchaseOrder.poNumber,
+        expectedDate: item.purchaseOrder.expectedArrivalDate?.toISOString() || null,
+        status: item.purchaseOrder.status,
+      })
+    }
+
+    console.log(`[Purchasing Forecast] Found incoming POs for ${Object.keys(incomingBySku).length} SKUs`)
+
+    // ========================================
+    // STEP 2: Get all products (excluding parent products)
+    // ========================================
     const products = await prisma.product.findMany({
       where: {
         isHidden: false,
@@ -69,6 +120,26 @@ export async function POST(request: NextRequest) {
 
       if (currentVelocity === 0) continue // Skip products with no sales
 
+      // Get 30-day sales for reporting
+      const thirtyDaysAgo = new Date(now)
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      
+      let unitsSold30d = 0
+      try {
+        const recentSales = await prisma.dailyProfit.aggregate({
+          where: {
+            masterSku: product.sku,
+            date: { gte: thirtyDaysAgo },
+          },
+          _sum: {
+            unitsSold: true,
+          },
+        })
+        unitsSold30d = Number(recentSales._sum.unitsSold || 0)
+      } catch (e) {
+        // Table might not exist
+      }
+
       // Get current inventory across all locations
       // inventoryLevels is an array, get the first one or use defaults
       const inventoryLevel = product.inventoryLevels?.[0] || null
@@ -81,12 +152,24 @@ export async function POST(request: NextRequest) {
         warehouseAvailable: 0,
       }
 
-      const totalInventory =
-        Number(inventory.fbaAvailable || 0) +
+      // ========================================
+      // UPDATED: Include incoming PO quantities
+      // ========================================
+      const incomingPO = incomingBySku[product.sku] || { totalIncoming: 0, items: [] }
+      
+      // Break down inventory components
+      const fbaAvailable = Number(inventory.fbaAvailable || 0)
+      const fbaInbound = 
         Number(inventory.fbaInboundWorking || 0) +
         Number(inventory.fbaInboundShipped || 0) +
-        Number(inventory.fbaInboundReceiving || 0) +
-        Number(inventory.warehouseAvailable || 0)
+        Number(inventory.fbaInboundReceiving || 0)
+      const warehouseAvailable = Number(inventory.warehouseAvailable || 0)
+      const incomingFromPO = incomingPO.totalIncoming
+      
+      const inventoryOnHand = fbaAvailable + fbaInbound + warehouseAvailable
+      
+      // Total inventory = on hand + incoming from POs
+      const totalInventory = inventoryOnHand + incomingFromPO
 
       // Calculate days of stock
       const daysOfStock = currentVelocity > 0 ? totalInventory / currentVelocity : 999
@@ -153,42 +236,25 @@ export async function POST(request: NextRequest) {
           const projectedNeeded = Math.max(0, (currentVelocity * daysTarget) - projectedInventory)
 
           if (projectedNeeded > 0) {
-            // Round up to reasonable order quantity (minimum order quantity, MOQ)
-            const moq = Number(product.supplier?.moq || 1)
-            const orderQuantity = Math.max(moq, Math.ceil(projectedNeeded / 10) * 10) // Round to nearest 10
+            // Round up to reasonable batch sizes
+            let orderQty = projectedNeeded
+            const moq = product.supplier?.moq || 1
+            if (moq > 1) {
+              orderQty = Math.ceil(orderQty / moq) * moq
+            }
 
             orderCycles.push({
               orderDate: new Date(currentDate).toISOString(),
-              quantity: orderQuantity,
-              projectedInventory: Math.max(0, projectedInventory),
-              needed: projectedNeeded,
+              quantity: Math.ceil(orderQty),
+              projectedInventory: Math.max(0, Math.floor(projectedInventory)),
+              needed: Math.ceil(projectedNeeded),
             })
 
-            remainingNeeded -= orderQuantity
+            remainingNeeded -= orderQty
           }
 
           // Move to next order cycle
           currentDate.setDate(currentDate.getDate() + daysBetweenOrders)
-        }
-
-        // Get sales data for the last 30 days for display
-        let unitsSold30d = 0
-        try {
-          const thirtyDaysAgo = new Date(now)
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-          const recentSales = await prisma.dailyProfit.aggregate({
-            where: {
-              masterSku: product.sku,
-              date: { gte: thirtyDaysAgo },
-            },
-            _sum: {
-              unitsSold: true,
-            },
-          })
-          unitsSold30d = Number(recentSales._sum.unitsSold || 0)
-        } catch (error: any) {
-          // If dailyProfit table doesn't exist, just use 0
-          console.warn(`Could not fetch sales data for ${product.sku}:`, error.message)
         }
 
         recommendations.push({
@@ -200,6 +266,11 @@ export async function POST(request: NextRequest) {
             moq: product.supplier.moq || 1,
           } : null,
           currentInventory: totalInventory,
+          fbaAvailable,  // NEW: FBA available
+          fbaInbound,    // NEW: FBA inbound (working+shipped+receiving)
+          warehouseAvailable,  // NEW: Warehouse on hand
+          incomingFromPO: incomingPO.totalIncoming,  // What's on order
+          incomingPODetails: incomingPO.items,  // PO details
           currentVelocity: currentVelocity,
           daysOfStock: Math.floor(daysOfStock),
           targetDays: daysTarget,
@@ -217,6 +288,10 @@ export async function POST(request: NextRequest) {
             seasonalityMultiplier,
             seasonalityNote,
             adjustedDemand: adjustedDemandForPeriod,
+            fbaAvailable,  // NEW
+            fbaInbound,    // NEW
+            warehouseAvailable,  // NEW
+            incomingFromPO: incomingPO.totalIncoming,  // NEW
             currentInventory: totalInventory,
             safetyStock,
             totalNeeded: adjustedDemandForPeriod + safetyStock,
@@ -242,6 +317,7 @@ export async function POST(request: NextRequest) {
         totalNeeded: recommendations.reduce((sum, r) => sum + r.neededInventory, 0),
         urgent: recommendations.filter(r => r.daysUntilReorder < 14).length,
         critical: recommendations.filter(r => r.daysUntilReorder < 7).length,
+        skusWithIncomingPO: recommendations.filter(r => r.incomingFromPO > 0).length,
       },
     })
   } catch (error: any) {
@@ -252,4 +328,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

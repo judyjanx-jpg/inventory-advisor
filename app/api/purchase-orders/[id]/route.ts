@@ -54,6 +54,10 @@ export async function PUT(
       paymentMethod,
       paymentReference,
       notes,
+      shippingCost,
+      tax,
+      otherCosts,
+      total,
     } = body
 
     const updateData: any = {}
@@ -86,6 +90,10 @@ export async function PUT(
     if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod
     if (paymentReference !== undefined) updateData.paymentReference = paymentReference
     if (notes !== undefined) updateData.notes = notes
+    if (shippingCost !== undefined) updateData.shippingCost = shippingCost
+    if (tax !== undefined) updateData.tax = tax
+    if (otherCosts !== undefined) updateData.otherCosts = otherCosts
+    if (total !== undefined) updateData.total = total
 
     const purchaseOrder = await prisma.purchaseOrder.update({
       where: { id: parseInt(params.id) },
