@@ -144,7 +144,7 @@ export async function GET(request: Request) {
       )
     }
 
-    const client = await createSpApiClient(credentials)
+    const client = await createSpApiClient()
 
     const inventoryResponse = await client.callAPI({
       operation: 'getInventorySummaries',
