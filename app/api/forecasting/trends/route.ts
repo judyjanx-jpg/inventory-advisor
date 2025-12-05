@@ -24,18 +24,17 @@ export async function GET(request: Request) {
     // Get products for the SKUs
     const products = await prisma.product.findMany({
       where: { sku: { in: skus } },
-      select: { id: true, sku: true }
+      select: { sku: true }
     })
 
     if (products.length === 0) {
-      return NextResponse.json({ 
-        success: true, 
-        trends: [] 
+      return NextResponse.json({
+        success: true,
+        trends: []
       })
     }
 
-    const productIds = products.map((p: any) => p.id)
-    const skuMap = Object.fromEntries(products.map((p: any) => [p.id, p.sku]))
+    const validSkus = products.map((p: any) => p.sku)
 
     // Get monthly sales data for the last 24 months
     const endDate = new Date()
@@ -43,21 +42,21 @@ export async function GET(request: Request) {
     startDate.setMonth(startDate.getMonth() - 24)
 
     const monthlySales = await prisma.$queryRaw<Array<{
-      product_id: number
+      master_sku: string
       month: Date
       units: bigint
     }>>`
-      SELECT 
-        oi.product_id,
+      SELECT
+        oi.master_sku,
         DATE_TRUNC('month', o.purchase_date) as month,
         SUM(oi.quantity)::bigint as units
       FROM order_items oi
       JOIN orders o ON o.id = oi.order_id
-      WHERE oi.product_id = ANY(${productIds})
+      WHERE oi.master_sku = ANY(${validSkus})
         AND o.purchase_date >= ${startDate}
         AND o.purchase_date <= ${endDate}
         AND o.status NOT IN ('Cancelled', 'Pending')
-      GROUP BY oi.product_id, DATE_TRUNC('month', o.purchase_date)
+      GROUP BY oi.master_sku, DATE_TRUNC('month', o.purchase_date)
       ORDER BY month ASC
     `
 
@@ -74,8 +73,8 @@ export async function GET(request: Request) {
     for (const row of monthlySales) {
       const monthStr = new Date(row.month).toLocaleString('default', { month: 'short', year: '2-digit' })
       monthsSet.add(monthStr)
-      
-      const sku = skuMap[row.product_id]
+
+      const sku = row.master_sku
       if (sku && salesBySku[sku]) {
         salesBySku[sku][monthStr] = Number(row.units)
       }
