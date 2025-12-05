@@ -157,7 +157,7 @@ export async function saveAdsCredentials(credentials: AdsCredentials): Promise<v
       platform: 'amazon_ads',
       isConnected: true,
       isPrimary: false,
-      provides: ['advertising'],
+      provides: JSON.stringify(['advertising']),
       credentials: JSON.stringify(credentials),
       syncEnabled: true,
       syncFrequencyMinutes: 1440, // Daily
