@@ -32,7 +32,7 @@ export async function POST() {
     let updated = 0
 
     do {
-      const ordersResponse = await client.callAPI({
+      const ordersResponse: any = await client.callAPI({
         operation: 'getOrders',
         endpoint: 'orders',
         query: {

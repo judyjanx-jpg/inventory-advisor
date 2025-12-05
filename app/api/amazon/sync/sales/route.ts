@@ -802,7 +802,7 @@ export async function POST(request: NextRequest) {
         pageCount++
         console.log(`  Fetching orders page ${pageCount}...`)
 
-        const ordersResponse = await client.callAPI({
+        const ordersResponse: any = await client.callAPI({
           operation: 'getOrders',
           endpoint: 'orders',
           query: {
