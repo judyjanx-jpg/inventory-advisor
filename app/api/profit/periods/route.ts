@@ -143,7 +143,7 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
       SELECT COALESCE(SUM(oi.quantity * COALESCE(p.cogs, 0)), 0) as total_cogs
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
-      LEFT JOIN products p ON oi.sku = p.sku
+      LEFT JOIN products p ON oi.master_sku = p.sku
       WHERE o.purchase_date >= ${startDate}
       AND o.purchase_date <= ${endDate}
       AND o.status != 'Cancelled'

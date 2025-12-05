@@ -297,13 +297,35 @@ async function processOrdersReport(rows: any[]): Promise<{
     if (itemsToInsert.length > 0) {
       const orderIdsInBatch = [...new Set(itemsToInsert.map(i => i.orderId))]
       
+      // Aggregate duplicates (same order_id + master_sku) by summing values
+      const itemMap = new Map<string, any>()
+      for (const item of itemsToInsert) {
+        const key = `${item.orderId}|${item.masterSku}`
+        if (itemMap.has(key)) {
+          const existing = itemMap.get(key)
+          existing.quantity += item.quantity
+          existing.itemPrice += item.itemPrice
+          existing.itemTax += item.itemTax
+          existing.shippingPrice += item.shippingPrice
+          existing.shippingTax += item.shippingTax
+          existing.promoDiscount += item.promoDiscount
+          existing.shipPromoDiscount += item.shipPromoDiscount
+          existing.giftWrapPrice += item.giftWrapPrice
+          existing.giftWrapTax += item.giftWrapTax
+          existing.grossRevenue += item.grossRevenue
+        } else {
+          itemMap.set(key, { ...item })
+        }
+      }
+      const aggregatedItems = Array.from(itemMap.values())
+      
       // Delete existing items for these orders
       await prisma.$executeRawUnsafe(`
         DELETE FROM order_items WHERE order_id IN (${orderIdsInBatch.map(id => `'${id}'`).join(',')})
       `)
 
       // Bulk insert new items
-      const itemValues = itemsToInsert.map(i => 
+      const itemValues = aggregatedItems.map(i => 
         `('${i.orderId}', '${i.masterSku.replace(/'/g, "''")}', ${i.asin ? `'${i.asin}'` : 'NULL'}, ${i.quantity}, ${i.itemPrice}, ${i.itemTax}, ${i.shippingPrice}, ${i.shippingTax}, ${i.promoDiscount}, ${i.shipPromoDiscount}, ${i.giftWrapPrice}, ${i.giftWrapTax}, ${i.grossRevenue}, NOW(), NOW())`
       ).join(',\n')
 
@@ -312,7 +334,7 @@ async function processOrdersReport(rows: any[]): Promise<{
         VALUES ${itemValues}
       `)
 
-      itemsCreated += itemsToInsert.length
+      itemsCreated += aggregatedItems.length
     }
 
     const progress = Math.min(100, Math.round(((i + batchSize) / orderIds.length) * 100))

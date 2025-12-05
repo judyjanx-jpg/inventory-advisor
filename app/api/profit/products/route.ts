@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
         COALESCE(SUM(oi.quantity), 0)::int as units_sold,
         COALESCE(SUM(oi.item_price), 0)::numeric as total_sales
       FROM products p
-      LEFT JOIN order_items oi ON p.sku = oi.sku
+      LEFT JOIN order_items oi ON p.sku = oi.master_sku
       LEFT JOIN orders o ON oi.order_id = o.id
         AND o.purchase_date >= ${startDate}
         AND o.purchase_date <= ${endDate}
@@ -128,13 +128,13 @@ export async function GET(request: NextRequest) {
         total_fees: number
       }>>`
         SELECT 
-          oi.sku,
+          oi.master_sku as sku,
           COALESCE(SUM(ABS(af.fee_amount)), 0)::numeric as total_fees
         FROM amazon_fees af
         JOIN order_items oi ON af.order_item_id = oi.id
         WHERE af.posted_date >= ${startDate}
           AND af.posted_date <= ${endDate}
-        GROUP BY oi.sku
+        GROUP BY oi.master_sku
       `
     } catch (e) {
       console.log('Fees query skipped')
