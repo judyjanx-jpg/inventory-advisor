@@ -322,13 +322,15 @@ async function syncOrders(client: any, marketplaceId: string, startDate: Date, e
       if (!product) {
         try {
           product = await prisma.product.create({
-            data: {
-              sku: sku,
-              title: getField(row, 'product-name', 'title', 'item-name') || `[Historical] ${sku}`,
-              asin: getField(row, 'asin') || null,
-              status: 'inactive',
-            },
-          })
+  data: {
+    sku: sku,
+    title: getField(row, 'product-name', 'title', 'item-name') || `[Historical] ${sku}`,
+    asin: getField(row, 'asin') || null,
+    status: 'inactive',
+    cost: 0,
+    price: 0,
+  },
+})
           productsCreated++
           if (productsCreated <= 10 || productsCreated % 100 === 0) {
             console.log(`    Created placeholder product: ${sku} (${productsCreated} total)`)
