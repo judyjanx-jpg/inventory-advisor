@@ -1795,3 +1795,42 @@ model StockoutEvent {
 // Add these fields to track stockout impact:
 //   daysOutOfStock30d  Int @default(0) @map("days_out_of_stock_30d")
 //   estimatedLostSales Int @default(0) @map("estimated_lost_sales")
+
+// Daily advertising aggregates
+model AdvertisingDaily {
+  id            String   @id @default(uuid())
+  date          DateTime @db.Date
+  campaignType  String   @map("campaign_type")  // SP, SB, SD
+  
+  // Metrics
+  impressions   Int      @default(0)
+  clicks        Int      @default(0)
+  spend         Decimal  @default(0) @db.Decimal(12, 2)
+  
+  // 7-day attribution
+  sales7d       Decimal? @map("sales_7d") @db.Decimal(12, 2)
+  orders7d      Int?     @map("orders_7d")
+  unitsSold7d   Int?     @map("units_sold_7d")
+  
+  // 14-day attribution (most commonly used)
+  sales14d      Decimal? @map("sales_14d") @db.Decimal(12, 2)
+  orders14d     Int?     @map("orders_14d")
+  unitsSold14d  Int?     @map("units_sold_14d")
+  
+  // 30-day attribution
+  sales30d      Decimal? @map("sales_30d") @db.Decimal(12, 2)
+  orders30d     Int?     @map("orders_30d")
+  unitsSold30d  Int?     @map("units_sold_30d")
+  
+  // Calculated
+  acos          Decimal? @db.Decimal(6, 2)  // (spend/sales)*100
+  roas          Decimal? @db.Decimal(6, 2)  // sales/spend
+  ctr           Decimal? @db.Decimal(6, 4)  // (clicks/impressions)*100
+  cpc           Decimal? @db.Decimal(8, 4)  // spend/clicks
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([date, campaignType], name: "date_campaignType")
+  @@map("advertising_daily")
+}

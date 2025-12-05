@@ -32,7 +32,7 @@ const navigation = [
   { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText },
   { name: 'FBA Shipments', href: '/fba-shipments', icon: Truck },
   { name: 'Suppliers', href: '/suppliers', icon: Users },
-  { name: 'Profits', href: '/profits', icon: TrendingUp },
+  { name: 'Profit', href: '/profit', icon: TrendingUp },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]

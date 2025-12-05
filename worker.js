@@ -38,16 +38,26 @@ const defaultJobOptions = {
 
 // Create queues
 const ordersQueue = new Queue('orders-sync', REDIS_URL, { defaultJobOptions })
+const ordersReportQueue = new Queue('orders-report-sync', REDIS_URL, { 
+  defaultJobOptions: {
+    ...defaultJobOptions,
+    timeout: 600000, // 10 minute timeout for report generation
+  }
+})
 const financesQueue = new Queue('finances-sync', REDIS_URL, { defaultJobOptions })
 const inventoryQueue = new Queue('inventory-sync', REDIS_URL, { defaultJobOptions })
 const productsQueue = new Queue('products-sync', REDIS_URL, { defaultJobOptions })
 const reportsQueue = new Queue('reports-sync', REDIS_URL, { defaultJobOptions })
 const aggregationQueue = new Queue('aggregation', REDIS_URL, { defaultJobOptions })
 
-const allQueues = [ordersQueue, financesQueue, inventoryQueue, productsQueue, reportsQueue, aggregationQueue]
+const allQueues = [ordersQueue, ordersReportQueue, financesQueue, inventoryQueue, productsQueue, reportsQueue, aggregationQueue]
 
 // Schedule configuration
 const schedules = [
+  // NEW: Orders Report sync - gets pending order items (like Sellerboard)
+  { queue: ordersReportQueue, name: 'orders-report-sync', cron: '*/30 * * * *', description: 'Sync orders via Report API (includes pending orders)' },
+  
+  // Existing schedules
   { queue: ordersQueue, name: 'orders-sync', cron: '*/15 * * * *', description: 'Sync recent orders' },
   { queue: financesQueue, name: 'finances-sync', cron: '0 */2 * * *', description: 'Sync financial events' },
   { queue: inventoryQueue, name: 'inventory-sync', cron: '0 * * * *', description: 'Sync FBA inventory' },
@@ -84,6 +94,37 @@ async function initializeScheduler() {
   }
 
   console.log('Scheduler initialized!\n')
+}
+
+// ============================================
+// NEW: Orders Report Sync (Report API)
+// ============================================
+async function processOrdersReportSync(job) {
+  console.log(`[orders-report] Processing job ${job.id}...`)
+  
+  try {
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const days = job.data?.days || 2
+    
+    const response = await fetch(`${baseUrl}/api/sync/orders-report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ days }),
+    })
+    
+    const data = await response.json()
+    
+    if (data.success) {
+      console.log(`[orders-report] Completed: ${data.stats?.ordersProcessed || 0} orders, ${data.stats?.itemsCreated || 0} items`)
+    } else {
+      console.log(`[orders-report] Error:`, data.error)
+    }
+    
+    return data
+  } catch (error) {
+    console.error(`[orders-report] Failed:`, error.message)
+    throw error
+  }
 }
 
 // Job processors
@@ -263,12 +304,13 @@ function startWorker() {
   console.log('🔧 Starting sync worker...\n')
 
   // Register processors
-ordersQueue.process('orders-sync', 1, processOrdersSync)
-financesQueue.process('finances-sync', 1, processFinancesSync)
-inventoryQueue.process('inventory-sync', 1, processInventorySync)
-productsQueue.process('products-sync', 1, processProductsSync)
-reportsQueue.process('daily-reports', 1, processReportsSync)
-aggregationQueue.process('daily-aggregation', 1, processAggregation)
+  ordersReportQueue.process('orders-report-sync', 1, processOrdersReportSync)  // NEW
+  ordersQueue.process('orders-sync', 1, processOrdersSync)
+  financesQueue.process('finances-sync', 1, processFinancesSync)
+  inventoryQueue.process('inventory-sync', 1, processInventorySync)
+  productsQueue.process('products-sync', 1, processProductsSync)
+  reportsQueue.process('daily-reports', 1, processReportsSync)
+  aggregationQueue.process('daily-aggregation', 1, processAggregation)
 
   // Event handlers
   allQueues.forEach(queue => {
@@ -312,4 +354,3 @@ process.on('SIGINT', async () => {
 })
 
 main()
-

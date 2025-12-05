@@ -17,8 +17,5 @@ RUN npx prisma generate
 # Copy ALL source files (needed for @/ path aliases)
 COPY . .
 
-# Install tsx globally
-RUN npm install -g tsx
-
 # Run the worker (this runs both scheduler and worker)
-CMD ["tsx", "worker.ts"]
+CMD ["node", "worker.js"]
