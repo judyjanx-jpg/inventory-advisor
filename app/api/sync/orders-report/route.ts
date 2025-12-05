@@ -229,7 +229,7 @@ async function processOrdersReport(rows: any[]): Promise<{
     where: { sku: { in: Array.from(allSkus) } },
     select: { sku: true },
   })
-  const existingSkuSet = new Set(existingProducts.map(p => p.sku))
+  const existingSkuSet = new Set(existingProducts.map((p: any) => p.sku))
   console.log(`[Orders Report] Found ${existingSkuSet.size} existing products out of ${allSkus.size} SKUs`)
 
   // Process orders in batches using Prisma transactions
@@ -240,7 +240,7 @@ async function processOrdersReport(rows: any[]): Promise<{
     const batch = orderIds.slice(i, i + batchSize)
 
     try {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         for (const orderId of batch) {
           const items = orderMap.get(orderId)!
           const firstItem = items[0]

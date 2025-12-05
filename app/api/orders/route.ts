@@ -137,8 +137,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform orders to ensure numeric values are properly converted
-    const transformedOrders = orders.map(order => {
-      const orderItems = order.orderItems.map(item => ({
+    const transformedOrders = orders.map((order: any) => {
+      const orderItems = order.orderItems.map((item: any) => ({
         ...item,
         quantity: toNumber(item.quantity),
         itemPrice: toNumber(item.itemPrice),
@@ -164,9 +164,9 @@ export async function GET(request: NextRequest) {
     // Calculate summary stats for the filtered period
     const summary = {
       totalOrders: totalCount,
-      totalRevenue: transformedOrders.reduce((sum, order) => sum + order.orderTotal, 0),
-      totalItems: transformedOrders.reduce((sum, order) => 
-        sum + order.orderItems.reduce((itemSum, item) => itemSum + item.quantity, 0), 0),
+      totalRevenue: transformedOrders.reduce((sum: any, order: any) => sum + order.orderTotal, 0),
+      totalItems: transformedOrders.reduce((sum: any, order: any) =>
+        sum + order.orderItems.reduce((itemSum: any, item: any) => itemSum + item.quantity, 0), 0),
       totalFees: 0, // No amazonFees field in schema
     }
 

@@ -33,7 +33,7 @@ export async function POST() {
     const existingProducts = await prisma.product.findMany({
       select: { sku: true },
     })
-    const existingSkuSet = new Set(existingProducts.map(p => p.sku))
+    const existingSkuSet = new Set(existingProducts.map((p: any) => p.sku))
 
     do {
       const ordersResponse: any = await client.callAPI({

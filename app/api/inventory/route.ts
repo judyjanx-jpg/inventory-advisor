@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Filter out any products that are actually parents (have variations but no parentSku)
-    const childProducts = products.filter(p => {
+    const childProducts = products.filter((p: any) => {
       // If it has variations and no parent, it's a parent - exclude it
       if (p.parentSku === null && (p.isParent || (p._count?.variations || 0) > 0)) {
         return false
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Get all inventory levels for these products in one query
-    const productSkus = childProducts.map(p => p.sku)
+    const productSkus = childProducts.map((p: any) => p.sku)
     const inventoryLevels = await prisma.inventoryLevel.findMany({
       where: {
         masterSku: {
@@ -74,21 +74,21 @@ export async function GET(request: NextRequest) {
     console.log(`[Inventory API] Found ${inventoryLevels.length} inventory levels for ${productSkus.length} products`)
     
     // Check how many have been synced
-    const syncedLevels = inventoryLevels.filter(il => il.fbaLastSync !== null)
+    const syncedLevels = inventoryLevels.filter((il: any) => il.fbaLastSync !== null)
     console.log(`[Inventory API] ${syncedLevels.length} inventory levels have been synced from Amazon (fbaLastSync is not null)`)
     
     // Log products with inventory > 0
-    const productsWithInventory = inventoryLevels.filter(il => 
-      Number(il.fbaAvailable) > 0 || 
-      Number(il.fbaInboundWorking) > 0 || 
-      Number(il.fbaInboundShipped) > 0 || 
+    const productsWithInventory = inventoryLevels.filter((il: any) =>
+      Number(il.fbaAvailable) > 0 ||
+      Number(il.fbaInboundWorking) > 0 ||
+      Number(il.fbaInboundShipped) > 0 ||
       Number(il.fbaInboundReceiving) > 0 ||
       Number(il.warehouseAvailable) > 0
     )
     
     if (productsWithInventory.length > 0) {
       console.log(`[Inventory API] ${productsWithInventory.length} products have inventory > 0`)
-      productsWithInventory.slice(0, 5).forEach(il => {
+      productsWithInventory.slice(0, 5).forEach((il: any) => {
         console.log(`  - ${il.masterSku}: FBA=${il.fbaAvailable}, Inbound=${Number(il.fbaInboundWorking) + Number(il.fbaInboundShipped) + Number(il.fbaInboundReceiving)}, Warehouse=${il.warehouseAvailable}, LastSync=${il.fbaLastSync ? 'Yes' : 'No'}`)
       })
     } else {
@@ -105,14 +105,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Create a map for quick lookup
-    const inventoryMap = new Map(inventoryLevels.map(il => [il.masterSku, il]))
+    const inventoryMap = new Map(inventoryLevels.map((il: any) => [il.masterSku, il]))
 
     // Transform to inventory format
     let itemCount = 0
-    const inventory = childProducts.map((product) => {
+    const inventory = childProducts.map((product: any) => {
       itemCount++
       // Get inventory level from map or create default
-      const existingLevel = inventoryMap.get(product.sku)
+      const existingLevel: any = inventoryMap.get(product.sku)
 
       const level = existingLevel ? {
         ...existingLevel,

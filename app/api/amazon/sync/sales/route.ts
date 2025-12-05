@@ -628,13 +628,7 @@ export async function POST(request: NextRequest) {
     console.log('   (Large reports with 2 years of data can take 1-4+ hours to generate)')
     console.log('   Will wait up to 12 hours for report to complete...')
 
-    let reportItems: Array<{
-      orderId: string
-      sku: string
-      purchaseDate: string
-      quantity: number
-      itemPrice: number
-    }> = []
+    let reportItems: any[] = []
 
     // Try different report types
     const reportTypes = [
@@ -932,7 +926,7 @@ export async function POST(request: NextRequest) {
     const existingProducts = await prisma.product.findMany({
       select: { sku: true },
     })
-    const existingSkuSet = new Set(existingProducts.map(p => p.sku))
+    const existingSkuSet = new Set(existingProducts.map((p: any) => p.sku))
 
     // Save individual orders and order items
     console.log('\n💾 Saving order data to database...')
@@ -1142,15 +1136,15 @@ export async function POST(request: NextRequest) {
     })
 
     // Create maps for quick lookup
-    const velocity7dMap = new Map(velocity7dData.map(v => [v.masterSku, v._sum.unitsSold || 0]))
-    const velocity30dMap = new Map(velocity30dData.map(v => [v.masterSku, v._sum.unitsSold || 0]))
-    const velocity90dMap = new Map(velocity90dData.map(v => [v.masterSku, v._sum.unitsSold || 0]))
+    const velocity7dMap = new Map(velocity7dData.map((v: any) => [v.masterSku, v._sum.unitsSold || 0]))
+    const velocity30dMap = new Map(velocity30dData.map((v: any) => [v.masterSku, v._sum.unitsSold || 0]))
+    const velocity90dMap = new Map(velocity90dData.map((v: any) => [v.masterSku, v._sum.unitsSold || 0]))
 
     let velocityUpdated = 0
     for (const sku of existingSkuSet) {
-      const v7d = velocity7dMap.get(sku) || 0
-      const v30d = velocity30dMap.get(sku) || 0
-      const v90d = velocity90dMap.get(sku) || 0
+      const v7d = Number(velocity7dMap.get(sku) || 0)
+      const v30d = Number(velocity30dMap.get(sku) || 0)
+      const v90d = Number(velocity90dMap.get(sku) || 0)
 
       // Only update if we have sales data
       if (v7d > 0 || v30d > 0 || v90d > 0) {

@@ -27,10 +27,10 @@ export async function GET() {
 
     if (dailySummaries.length > 0) {
       // Use DailySummary data
-      totalRevenue = dailySummaries.reduce((sum, day) => sum + Number(day.totalRevenue), 0)
-      totalProfit = dailySummaries.reduce((sum, day) => sum + Number(day.totalProfit), 0)
-      totalUnitsSold = dailySummaries.reduce((sum, day) => sum + day.unitsSold, 0)
-      totalOrders = dailySummaries.reduce((sum, day) => sum + day.ordersCount, 0)
+      totalRevenue = dailySummaries.reduce((sum: any, day: any) => sum + Number(day.totalRevenue), 0)
+      totalProfit = dailySummaries.reduce((sum: any, day: any) => sum + Number(day.totalProfit), 0)
+      totalUnitsSold = dailySummaries.reduce((sum: any, day: any) => sum + day.unitsSold, 0)
+      totalOrders = dailySummaries.reduce((sum: any, day: any) => sum + day.ordersCount, 0)
     } else {
       // Fallback: Calculate directly from orders and order items
       const orders = await prisma.order.findMany({
