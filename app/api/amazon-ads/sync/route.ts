@@ -2,7 +2,7 @@
 // Sync advertising data from Amazon Ads API
 
 import { NextRequest, NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 import {
   getAdsCredentials,
   requestSpReport,
