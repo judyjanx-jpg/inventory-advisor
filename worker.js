@@ -7,8 +7,18 @@
 
 require('dotenv').config()
 
+const http = require('http')
 const { PrismaClient } = require('@prisma/client')
 const Queue = require('bull')
+
+// Minimal HTTP server for Railway healthcheck
+const PORT = process.env.PORT || 3001
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify({ status: 'ok', service: 'worker' }))
+}).listen(PORT, () => {
+  console.log(`Healthcheck server listening on port ${PORT}`)
+})
 
 // Redis URL
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379'
