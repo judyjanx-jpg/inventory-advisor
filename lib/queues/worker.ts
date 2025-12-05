@@ -218,6 +218,7 @@ async function processInventorySync(job: any) {
     if (!client) throw new Error('Failed to create SP-API client')
 
     let updated = 0
+    let skipped = 0
     let nextToken: string | null = null
 
     do {
@@ -250,17 +251,26 @@ async function processInventorySync(job: any) {
           })
         }
 
-        await prisma.inventoryLevel.upsert({
-          where: { masterSku: item.sellerSku },
-          update: { fbaAvailable },
-          create: {
-            masterSku: item.sellerSku,
-            fbaAvailable,
-            warehouseAvailable: 0,
-          },
-        })
-        updated++
+        const product = await prisma.product.findUnique({
+        where: { sku: item.sellerSku },
+      })
+      
+      if (!product) {
+        skipped++
+        continue
       }
+
+      await prisma.inventoryLevel.upsert({
+        where: { masterSku: item.sellerSku },
+        update: { fbaAvailable },
+        create: {
+          masterSku: item.sellerSku,
+          fbaAvailable,
+          warehouseAvailable: 0,
+        },
+      })
+      updated++
+    }
 
       if (nextToken) await sleep(500)
     } while (nextToken)
@@ -370,6 +380,7 @@ async function processAggregation(job: any) {
     }
 
     let updated = 0
+    let skipped = 0
     for (const [_, daily] of dailyMap) {
       const grossProfit = daily.revenue - daily.amazonFees
       const netProfit = grossProfit - daily.cogs
