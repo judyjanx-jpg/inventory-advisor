@@ -98,21 +98,18 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
     console.log('Returns query skipped:', e)
   }
 
-  // Get Amazon fees - skip if table doesn't exist
+  // Get Amazon fees - join through orderItem to order for date filtering
   let amazonFees = 0
   try {
-    const feeData = await prisma.amazonFee.aggregate({
-      where: {
-        postedDate: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      _sum: {
-        feeAmount: true,
-      },
-    })
-    amazonFees = Math.abs(Number(feeData._sum.feeAmount || 0))
+    const feeData = await prisma.$queryRaw<{ total_fees: number }[]>`
+      SELECT COALESCE(SUM(af.total_fees), 0) as total_fees
+      FROM amazon_fees af
+      JOIN order_items oi ON af.order_item_id = oi.id
+      JOIN orders o ON oi.order_id = o.id
+      WHERE o.purchase_date >= ${startDate}
+        AND o.purchase_date <= ${endDate}
+    `
+    amazonFees = Math.abs(Number(feeData[0]?.total_fees || 0))
   } catch (e) {
     // Fees table might not exist
   }
