@@ -362,7 +362,7 @@ async function forecastNewItem(params: ForecastParams): Promise<ForecastResult[]
     where: { sku: masterSku },
   })
 
-  if (!product || !product.analogSkuId) {
+  if (!product || !product.analogSku) {
     // No analog - use conservative default
     const defaultVelocity = 1.0 // 1 unit per day
     return generateDefaultForecast(defaultVelocity, daysAhead)
@@ -371,7 +371,7 @@ async function forecastNewItem(params: ForecastParams): Promise<ForecastResult[]
   // Get analog SKU's first 30 days of sales
   const analogSales = await prisma.dailyProfit.findMany({
     where: {
-      masterSku: product.analogSkuId,
+      masterSku: product.analogSku,
     },
     orderBy: {
       date: 'asc',
