@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
           if (projectedNeeded > 0) {
             // Round up to reasonable batch sizes
             let orderQty = projectedNeeded
-            const moq = product.supplier?.moq || 1
+            const moq = product.supplier?.minimumOrderQuantity || 1
             if (moq > 1) {
               orderQty = Math.ceil(orderQty / moq) * moq
             }
