@@ -130,10 +130,10 @@ export async function DELETE(
   { params }: { params: { sku: string } }
 ) {
   try {
-    // Delete related records first
+    // Check if product exists
     const product = await prisma.product.findUnique({
       where: { sku: params.sku },
-      select: { id: true },
+      select: { sku: true },
     })
 
     if (!product) {
@@ -143,15 +143,15 @@ export async function DELETE(
       )
     }
 
-    // Delete related data
+    // Delete related data (these tables use masterSku as the key)
     await prisma.inventoryLevel.deleteMany({
-      where: { productId: product.id },
+      where: { masterSku: params.sku },
     })
-    
+
     await prisma.salesVelocity.deleteMany({
-      where: { productId: product.id },
+      where: { masterSku: params.sku },
     })
-    
+
     await prisma.skuMapping.deleteMany({
       where: { masterSku: params.sku },
     })
