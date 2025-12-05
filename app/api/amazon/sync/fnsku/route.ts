@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const client = await createSpApiClient(credentials)
+    const client = await createSpApiClient()
     
     // Get products that need FNSKU
     const whereClause: any = {
