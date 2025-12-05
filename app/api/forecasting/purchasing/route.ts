@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
           supplier: product.supplier ? {
             id: product.supplier.id,
             name: product.supplier.name,
-            moq: product.supplier.moq || 1,
+            moq: product.supplier.minimumOrderQuantity || 1,
           } : null,
           currentInventory: totalInventory,
           fbaAvailable,  // NEW: FBA available
