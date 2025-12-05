@@ -25,39 +25,65 @@ export async function POST(request: Request) {
       )
     }
 
-    // Find existing inventory level
-    const existingInventory = await prisma.inventoryLevel.findFirst({
-      where: {
-        masterSku: sku,
-        ...(warehouseId && { warehouseId }),
-      },
-    })
+    let oldQty = 0
 
-    const oldQty = existingInventory?.quantity || 0
-    const adjustment = newQty - oldQty
-
-    if (existingInventory) {
-      // Update existing inventory level
-      await prisma.inventoryLevel.update({
-        where: { id: existingInventory.id },
-        data: { 
-          quantity: newQty,
-          updatedAt: new Date(),
+    if (warehouseId) {
+      // Update warehouse-specific inventory
+      const existingWarehouseInv = await prisma.warehouseInventory.findUnique({
+        where: {
+          warehouseId_masterSku: {
+            warehouseId: warehouseId,
+            masterSku: sku,
+          },
         },
       })
-    } else if (warehouseId) {
-      // Create new inventory level
-      await prisma.inventoryLevel.create({
-        data: {
+
+      oldQty = existingWarehouseInv?.available || 0
+
+      await prisma.warehouseInventory.upsert({
+        where: {
+          warehouseId_masterSku: {
+            warehouseId: warehouseId,
+            masterSku: sku,
+          },
+        },
+        update: {
+          available: newQty,
+          lastSynced: new Date(),
+        },
+        create: {
+          warehouseId: warehouseId,
           masterSku: sku,
-          warehouseId,
-          quantity: newQty,
-          channel: 'warehouse',
+          available: newQty,
+          reserved: 0,
+          lastSynced: new Date(),
+        },
+      })
+    } else {
+      // Update general inventory level (warehouseAvailable)
+      const existingInventory = await prisma.inventoryLevel.findUnique({
+        where: { masterSku: sku },
+      })
+
+      oldQty = existingInventory?.warehouseAvailable || 0
+
+      await prisma.inventoryLevel.upsert({
+        where: { masterSku: sku },
+        update: {
+          warehouseAvailable: newQty,
+          warehouseLastSync: new Date(),
+        },
+        create: {
+          masterSku: sku,
+          warehouseAvailable: newQty,
+          warehouseLastSync: new Date(),
         },
       })
     }
 
-    // Log the adjustment (optional - if you have an adjustment log table)
+    const adjustment = newQty - oldQty
+
+    // Log the adjustment
     console.log('Inventory adjustment:', {
       sku,
       oldQty,
