@@ -21,10 +21,7 @@ export async function POST(request: Request) {
       businessName,
       businessType,
       primaryMarketplace,
-      additionalMarketplaces,
       currency,
-      warehouseLocations,
-      defaultLeadTime,
       reorderBuffer,
       targetDaysOfStock,
     } = body
@@ -39,15 +36,12 @@ export async function POST(request: Request) {
         data: {
           businessName,
           businessType,
-          primaryMarketplace,
-          additionalMarketplaces,
-          currency,
-          warehouseLocations,
-          defaultLeadTime: parseInt(defaultLeadTime) || 14,
-          reorderBuffer: parseInt(reorderBuffer) || 7,
-          targetDaysOfStock: parseInt(targetDaysOfStock) || 30,
-          isSetupComplete: true,
-          updatedAt: new Date(),
+          marketplace: primaryMarketplace,
+          currency: currency || 'USD',
+          safetyStockDays: parseInt(reorderBuffer) || 14,
+          targetFbaDays: parseInt(targetDaysOfStock) || 45,
+          interviewCompleted: true,
+          interviewCompletedAt: new Date(),
         },
       })
     } else {
@@ -55,14 +49,12 @@ export async function POST(request: Request) {
         data: {
           businessName,
           businessType,
-          primaryMarketplace,
-          additionalMarketplaces,
-          currency,
-          warehouseLocations,
-          defaultLeadTime: parseInt(defaultLeadTime) || 14,
-          reorderBuffer: parseInt(reorderBuffer) || 7,
-          targetDaysOfStock: parseInt(targetDaysOfStock) || 30,
-          isSetupComplete: true,
+          marketplace: primaryMarketplace,
+          currency: currency || 'USD',
+          safetyStockDays: parseInt(reorderBuffer) || 14,
+          targetFbaDays: parseInt(targetDaysOfStock) || 45,
+          interviewCompleted: true,
+          interviewCompletedAt: new Date(),
         },
       })
     }
