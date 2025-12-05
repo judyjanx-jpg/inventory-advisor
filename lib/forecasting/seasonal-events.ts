@@ -89,20 +89,30 @@ export async function initializeSeasonalEvents() {
   ]
 
   for (const eventData of defaultEvents) {
-    await prisma.seasonalEvent.upsert({
-      where: {
-        name: eventData.name,
-      },
-      update: {
-        eventType: eventData.eventType,
-        startMonth: eventData.startMonth,
-        startDay: eventData.startDay,
-        endMonth: eventData.endMonth,
-        endDay: eventData.endDay,
-        baseMultiplier: eventData.baseMultiplier,
-      },
-      create: eventData,
+    // Find existing event by name
+    const existing = await prisma.seasonalEvent.findFirst({
+      where: { name: eventData.name },
     })
+
+    if (existing) {
+      // Update existing event
+      await prisma.seasonalEvent.update({
+        where: { id: existing.id },
+        data: {
+          eventType: eventData.eventType,
+          startMonth: eventData.startMonth,
+          startDay: eventData.startDay,
+          endMonth: eventData.endMonth,
+          endDay: eventData.endDay,
+          baseMultiplier: eventData.baseMultiplier,
+        },
+      })
+    } else {
+      // Create new event
+      await prisma.seasonalEvent.create({
+        data: eventData,
+      })
+    }
   }
 
   console.log(`Initialized ${defaultEvents.length} seasonal events`)
