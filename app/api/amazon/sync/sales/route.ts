@@ -1552,7 +1552,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Sales sync error:', error)
-    await updateSyncStatus('failed', error.message)
+    await updateSyncStatus('error', error.message)
     
     return NextResponse.json(
       { error: error.message || 'Failed to sync sales history' },

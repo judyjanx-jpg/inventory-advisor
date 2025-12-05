@@ -5,7 +5,11 @@ import { SyncWrapper } from '@/components/sync/SyncWrapper'
 // Initialize queue system (scheduler + worker)
 import '@/lib/queues/init'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  fallback: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+})
 
 export const metadata: Metadata = {
   title: 'Inventory Advisor',

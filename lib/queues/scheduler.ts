@@ -12,6 +12,7 @@
 
 import {
   ordersQueue,
+  ordersReportQueue,
   financesQueue,
   inventoryQueue,
   productsQueue,
@@ -29,6 +30,13 @@ interface ScheduleConfig {
 }
 
 const schedules: ScheduleConfig[] = [
+  {
+    queue: ordersReportQueue,
+    name: 'orders-report-sync',
+    cron: '*/30 * * * *',  // Every 30 minutes
+    description: 'Sync orders via Report API (includes pending orders)',
+    enabled: true,
+  },
   {
     queue: ordersQueue,
     name: 'orders-sync',

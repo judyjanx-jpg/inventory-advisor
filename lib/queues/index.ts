@@ -50,9 +50,17 @@ export const aggregationQueue = new Queue('aggregation', REDIS_URL, {
   defaultJobOptions,
 })
 
+export const ordersReportQueue = new Queue('orders-report-sync', REDIS_URL, {
+  defaultJobOptions: {
+    ...defaultJobOptions,
+    timeout: 600000, // 10 minute timeout for report generation
+  },
+})
+
 // All queues for easy iteration
 export const allQueues = [
   ordersQueue,
+  ordersReportQueue,
   financesQueue,
   inventoryQueue,
   productsQueue,
@@ -63,6 +71,7 @@ export const allQueues = [
 // Queue name to queue map
 export const queueMap: Record<string, Queue.Queue> = {
   orders: ordersQueue,
+  'orders-report': ordersReportQueue,
   finances: financesQueue,
   inventory: inventoryQueue,
   products: productsQueue,

@@ -12,13 +12,28 @@ const gunzipAsync = promisify(zlib.gunzip)
 
 const REPORT_TYPE = 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL'
 
+// Type definitions for API responses
+interface CreateReportResponse {
+  reportId: string
+}
+
+interface ReportStatusResponse {
+  processingStatus: string
+  reportDocumentId?: string
+}
+
+interface ReportDocumentResponse {
+  url: string
+  compressionAlgorithm?: string
+}
+
 export async function POST(request: Request) {
   console.log('[Orders Report] POST request received')
-  
+
   try {
     const body = await request.json().catch(() => ({}))
     const days = body.days || 3 // Default to last 3 days
-    
+
     console.log(`[Orders Report] Syncing last ${days} days`)
 
     const endDate = new Date()
@@ -32,7 +47,7 @@ export async function POST(request: Request) {
       console.log('[Orders Report] No credentials found')
       return NextResponse.json({ error: 'Amazon credentials not configured' }, { status: 400 })
     }
-    
+
     console.log('[Orders Report] Credentials found, creating client...')
 
     const client = await createSpApiClient()
@@ -40,11 +55,11 @@ export async function POST(request: Request) {
       console.log('[Orders Report] Failed to create client')
       return NextResponse.json({ error: 'Failed to create SP-API client' }, { status: 500 })
     }
-    
+
     console.log('[Orders Report] Client created, requesting report...')
 
     // Step 1: Create report request
-    const createResponse = await callApiWithTimeout(client, {
+    const createResponse = await callApiWithTimeout<CreateReportResponse>(client, {
       endpoint: 'reports',
       operation: 'createReport',
       body: {
@@ -67,7 +82,7 @@ export async function POST(request: Request) {
       await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5 seconds
       attempts++
 
-      const statusResponse = await callApiWithTimeout(client, {
+      const statusResponse = await callApiWithTimeout<ReportStatusResponse>(client, {
         endpoint: 'reports',
         operation: 'getReport',
         path: { reportId },
@@ -76,14 +91,14 @@ export async function POST(request: Request) {
       console.log(`[Orders Report] Status: ${statusResponse.processingStatus} (attempt ${attempts})`)
 
       if (statusResponse.processingStatus === 'DONE') {
-        reportDocumentId = statusResponse.reportDocumentId
+        reportDocumentId = statusResponse.reportDocumentId || null
       } else if (statusResponse.processingStatus === 'FATAL' || statusResponse.processingStatus === 'CANCELLED') {
         throw new Error(`Report failed: ${statusResponse.processingStatus}`)
       }
     }
 
     if (!reportDocumentId) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Report timed out - try again later',
         reportId,
         lastStatus: 'IN_PROGRESS'
@@ -91,7 +106,7 @@ export async function POST(request: Request) {
     }
 
     // Step 3: Get report document URL
-    const documentResponse = await callApiWithTimeout(client, {
+    const documentResponse = await callApiWithTimeout<ReportDocumentResponse>(client, {
       endpoint: 'reports',
       operation: 'getReportDocument',
       path: { reportDocumentId },
@@ -99,7 +114,7 @@ export async function POST(request: Request) {
 
     // Step 4: Download and parse report
     const reportData = await downloadAndParseReport(
-      documentResponse.url, 
+      documentResponse.url,
       documentResponse.compressionAlgorithm
     )
 
@@ -137,13 +152,13 @@ export async function POST(request: Request) {
 
 async function downloadAndParseReport(url: string, compression?: string): Promise<any[]> {
   console.log(`[Orders Report] Downloading from ${url.substring(0, 50)}...`)
-  
+
   const response = await fetch(url)
-  
+
   if (!response.ok) {
     throw new Error(`Failed to download report: ${response.status}`)
   }
-  
+
   let text: string
   if (compression === 'GZIP') {
     const buffer = await response.arrayBuffer()
@@ -162,7 +177,7 @@ async function downloadAndParseReport(url: string, compression?: string): Promis
 
   const headers = lines[0].split('\t').map(h => h.trim().toLowerCase().replace(/-/g, '_'))
   console.log(`[Orders Report] Headers: ${headers.slice(0, 10).join(', ')}...`)
-  
+
   const rows = []
   for (let i = 1; i < lines.length; i++) {
     const values = lines[i].split('\t')
@@ -192,149 +207,154 @@ async function processOrdersReport(rows: any[]): Promise<{
   for (const row of rows) {
     const orderId = row['amazon_order_id'] || row['order_id']
     if (!orderId) continue
-    
+
     if (!orderMap.has(orderId)) {
       orderMap.set(orderId, [])
     }
     orderMap.get(orderId)!.push(row)
   }
 
-  console.log(`[Orders Report] Processing ${orderMap.size} unique orders with BULK operations`)
+  console.log(`[Orders Report] Processing ${orderMap.size} unique orders`)
 
-  // Process in larger batches with bulk operations
+  // Get existing products for foreign key validation
+  const allSkus = new Set<string>()
+  for (const [, items] of orderMap) {
+    for (const item of items) {
+      const sku = item['sku'] || item['seller_sku']
+      if (sku) allSkus.add(sku)
+    }
+  }
+
+  const existingProducts = await prisma.product.findMany({
+    where: { sku: { in: Array.from(allSkus) } },
+    select: { sku: true },
+  })
+  const existingSkuSet = new Set(existingProducts.map(p => p.sku))
+  console.log(`[Orders Report] Found ${existingSkuSet.size} existing products out of ${allSkus.size} SKUs`)
+
+  // Process orders in batches using Prisma transactions
   const orderIds = Array.from(orderMap.keys())
-  const batchSize = 500
+  const batchSize = 100
 
   for (let i = 0; i < orderIds.length; i += batchSize) {
     const batch = orderIds.slice(i, i + batchSize)
-    
-    // Prepare bulk data
-    const ordersToUpsert: any[] = []
-    const itemsToInsert: any[] = []
 
-    for (const orderId of batch) {
-      const items = orderMap.get(orderId)!
-      const firstItem = items[0]
+    try {
+      await prisma.$transaction(async (tx) => {
+        for (const orderId of batch) {
+          const items = orderMap.get(orderId)!
+          const firstItem = items[0]
 
-      try {
-        const purchaseDate = parseDate(firstItem['purchase_date'])
-        const status = firstItem['order_status'] || 'Unknown'
-        
-        let orderTotal = 0
-        for (const item of items) {
-          orderTotal += parseFloat(item['item_price'] || '0')
+          try {
+            const purchaseDate = parseDate(firstItem['purchase_date'])
+            const status = firstItem['order_status'] || 'Unknown'
+
+            let orderTotal = 0
+            for (const item of items) {
+              orderTotal += parseFloat(item['item_price'] || '0')
+            }
+
+            // Upsert order using Prisma (safe from SQL injection)
+            await tx.order.upsert({
+              where: { id: orderId },
+              update: {
+                status,
+                orderTotal,
+                shipCity: firstItem['ship_city'] || null,
+                shipState: firstItem['ship_state'] || null,
+                shipCountry: firstItem['ship_country'] || null,
+                shipPostalCode: firstItem['ship_postal_code'] || null,
+                fulfillmentChannel: firstItem['fulfillment_channel'] || null,
+                salesChannel: firstItem['sales_channel'] || null,
+              },
+              create: {
+                id: orderId,
+                purchaseDate,
+                status,
+                orderTotal,
+                currency: firstItem['currency'] || 'USD',
+                shipCity: firstItem['ship_city'] || null,
+                shipState: firstItem['ship_state'] || null,
+                shipCountry: firstItem['ship_country'] || null,
+                shipPostalCode: firstItem['ship_postal_code'] || null,
+                fulfillmentChannel: firstItem['fulfillment_channel'] || null,
+                salesChannel: firstItem['sales_channel'] || null,
+              },
+            })
+
+            // Delete existing order items for this order
+            await tx.orderItem.deleteMany({
+              where: { orderId },
+            })
+
+            // Aggregate items by SKU (in case of duplicates)
+            const itemsBySku = new Map<string, any>()
+            for (const item of items) {
+              const sku = item['sku'] || item['seller_sku']
+              if (!sku) continue
+
+              // Skip items for products that don't exist (foreign key constraint)
+              if (!existingSkuSet.has(sku)) {
+                console.log(`[Orders Report] Skipping item for unknown SKU: ${sku}`)
+                continue
+              }
+
+              const itemPrice = parseFloat(item['item_price'] || '0')
+              const shippingPrice = parseFloat(item['shipping_price'] || '0')
+              const giftWrapPrice = parseFloat(item['gift_wrap_price'] || '0')
+              const promoDiscount = Math.abs(parseFloat(item['item_promotion_discount'] || '0'))
+              const shipPromoDiscount = Math.abs(parseFloat(item['ship_promotion_discount'] || '0'))
+
+              if (itemsBySku.has(sku)) {
+                const existing = itemsBySku.get(sku)
+                existing.quantity += parseInt(item['quantity'] || item['quantity_purchased'] || '1')
+                existing.itemPrice += itemPrice
+                existing.itemTax += parseFloat(item['item_tax'] || '0')
+                existing.shippingPrice += shippingPrice
+                existing.shippingTax += parseFloat(item['shipping_tax'] || '0')
+                existing.promoDiscount += promoDiscount + shipPromoDiscount
+                existing.shipPromoDiscount += shipPromoDiscount
+                existing.giftWrapPrice += giftWrapPrice
+                existing.giftWrapTax += parseFloat(item['gift_wrap_tax'] || '0')
+                existing.grossRevenue += itemPrice + shippingPrice + giftWrapPrice
+              } else {
+                itemsBySku.set(sku, {
+                  orderId,
+                  masterSku: sku,
+                  asin: item['asin'] || null,
+                  quantity: parseInt(item['quantity'] || item['quantity_purchased'] || '1'),
+                  itemPrice,
+                  itemTax: parseFloat(item['item_tax'] || '0'),
+                  shippingPrice,
+                  shippingTax: parseFloat(item['shipping_tax'] || '0'),
+                  promoDiscount: promoDiscount + shipPromoDiscount,
+                  shipPromoDiscount,
+                  giftWrapPrice,
+                  giftWrapTax: parseFloat(item['gift_wrap_tax'] || '0'),
+                  grossRevenue: itemPrice + shippingPrice + giftWrapPrice,
+                })
+              }
+            }
+
+            // Create order items using Prisma createMany (safe from SQL injection)
+            const itemsToCreate = Array.from(itemsBySku.values())
+            if (itemsToCreate.length > 0) {
+              await tx.orderItem.createMany({
+                data: itemsToCreate,
+              })
+              itemsCreated += itemsToCreate.length
+            }
+
+            ordersProcessed++
+          } catch (err: any) {
+            console.error(`[Orders Report] Error processing order ${orderId}:`, err.message)
+            errors++
+          }
         }
-
-        ordersToUpsert.push({
-          id: orderId,
-          purchaseDate,
-          status,
-          orderTotal,
-          currency: firstItem['currency'] || 'USD',
-          shipCity: firstItem['ship_city'] || null,
-          shipState: firstItem['ship_state'] || null,
-          shipCountry: firstItem['ship_country'] || null,
-          shipPostalCode: firstItem['ship_postal_code'] || null,
-          fulfillmentChannel: firstItem['fulfillment_channel'] || null,
-          salesChannel: firstItem['sales_channel'] || null,
-        })
-
-        for (const item of items) {
-          const sku = item['sku'] || item['seller_sku']
-          if (!sku) continue
-
-          const itemPrice = parseFloat(item['item_price'] || '0')
-          const shippingPrice = parseFloat(item['shipping_price'] || '0')
-          const giftWrapPrice = parseFloat(item['gift_wrap_price'] || '0')
-          const promoDiscount = Math.abs(parseFloat(item['item_promotion_discount'] || '0'))
-          const shipPromoDiscount = Math.abs(parseFloat(item['ship_promotion_discount'] || '0'))
-
-          itemsToInsert.push({
-            orderId,
-            masterSku: sku,
-            asin: item['asin'] || null,
-            quantity: parseInt(item['quantity'] || item['quantity_purchased'] || '1'),
-            itemPrice,
-            itemTax: parseFloat(item['item_tax'] || '0'),
-            shippingPrice,
-            shippingTax: parseFloat(item['shipping_tax'] || '0'),
-            promoDiscount: promoDiscount + shipPromoDiscount,
-            shipPromoDiscount,
-            giftWrapPrice,
-            giftWrapTax: parseFloat(item['gift_wrap_tax'] || '0'),
-            grossRevenue: itemPrice + shippingPrice + giftWrapPrice,
-          })
-        }
-        ordersProcessed++
-      } catch (err: any) {
-        errors++
-      }
-    }
-
-    // Bulk upsert orders using raw SQL
-    if (ordersToUpsert.length > 0) {
-      const orderValues = ordersToUpsert.map(o => 
-        `('${o.id}', '${o.purchaseDate.toISOString()}', '${o.status}', ${o.orderTotal}, '${o.currency}', ${o.shipCity ? `'${o.shipCity.replace(/'/g, "''")}'` : 'NULL'}, ${o.shipState ? `'${o.shipState.replace(/'/g, "''")}'` : 'NULL'}, ${o.shipCountry ? `'${o.shipCountry.replace(/'/g, "''")}'` : 'NULL'}, ${o.shipPostalCode ? `'${o.shipPostalCode}'` : 'NULL'}, ${o.fulfillmentChannel ? `'${o.fulfillmentChannel}'` : 'NULL'}, ${o.salesChannel ? `'${o.salesChannel}'` : 'NULL'}, NOW(), NOW())`
-      ).join(',\n')
-
-      await prisma.$executeRawUnsafe(`
-        INSERT INTO orders (id, purchase_date, status, order_total, currency, ship_city, ship_state, ship_country, ship_postal_code, fulfillment_channel, sales_channel, created_at, updated_at)
-        VALUES ${orderValues}
-        ON CONFLICT (id) DO UPDATE SET
-          status = EXCLUDED.status,
-          order_total = EXCLUDED.order_total,
-          ship_city = EXCLUDED.ship_city,
-          ship_state = EXCLUDED.ship_state,
-          ship_country = EXCLUDED.ship_country,
-          ship_postal_code = EXCLUDED.ship_postal_code,
-          fulfillment_channel = EXCLUDED.fulfillment_channel,
-          sales_channel = EXCLUDED.sales_channel,
-          updated_at = NOW()
-      `)
-    }
-
-    // Bulk upsert items - delete existing and insert new
-    if (itemsToInsert.length > 0) {
-      const orderIdsInBatch = [...new Set(itemsToInsert.map(i => i.orderId))]
-      
-      // Aggregate duplicates (same order_id + master_sku) by summing values
-      const itemMap = new Map<string, any>()
-      for (const item of itemsToInsert) {
-        const key = `${item.orderId}|${item.masterSku}`
-        if (itemMap.has(key)) {
-          const existing = itemMap.get(key)
-          existing.quantity += item.quantity
-          existing.itemPrice += item.itemPrice
-          existing.itemTax += item.itemTax
-          existing.shippingPrice += item.shippingPrice
-          existing.shippingTax += item.shippingTax
-          existing.promoDiscount += item.promoDiscount
-          existing.shipPromoDiscount += item.shipPromoDiscount
-          existing.giftWrapPrice += item.giftWrapPrice
-          existing.giftWrapTax += item.giftWrapTax
-          existing.grossRevenue += item.grossRevenue
-        } else {
-          itemMap.set(key, { ...item })
-        }
-      }
-      const aggregatedItems = Array.from(itemMap.values())
-      
-      // Delete existing items for these orders
-      await prisma.$executeRawUnsafe(`
-        DELETE FROM order_items WHERE order_id IN (${orderIdsInBatch.map(id => `'${id}'`).join(',')})
-      `)
-
-      // Bulk insert new items
-      const itemValues = aggregatedItems.map(i => 
-        `('${i.orderId}', '${i.masterSku.replace(/'/g, "''")}', ${i.asin ? `'${i.asin}'` : 'NULL'}, ${i.quantity}, ${i.itemPrice}, ${i.itemTax}, ${i.shippingPrice}, ${i.shippingTax}, ${i.promoDiscount}, ${i.shipPromoDiscount}, ${i.giftWrapPrice}, ${i.giftWrapTax}, ${i.grossRevenue}, NOW(), NOW())`
-      ).join(',\n')
-
-      await prisma.$executeRawUnsafe(`
-        INSERT INTO order_items (order_id, master_sku, asin, quantity, item_price, item_tax, shipping_price, shipping_tax, promo_discount, ship_promo_discount, gift_wrap_price, gift_wrap_tax, gross_revenue, created_at, updated_at)
-        VALUES ${itemValues}
-      `)
-
-      itemsCreated += aggregatedItems.length
+      })
+    } catch (txError: any) {
+      console.error(`[Orders Report] Transaction error for batch starting at ${i}:`, txError.message)
+      errors += batch.length
     }
 
     const progress = Math.min(100, Math.round(((i + batchSize) / orderIds.length) * 100))
@@ -346,7 +366,7 @@ async function processOrdersReport(rows: any[]): Promise<{
 
 function parseDate(dateStr: string | null): Date {
   if (!dateStr) return new Date()
-  
+
   // Handle various Amazon date formats
   const parsed = new Date(dateStr)
   return isNaN(parsed.getTime()) ? new Date() : parsed
@@ -357,7 +377,7 @@ export async function GET() {
   try {
     // Get recent sync stats
     const recentOrders = await prisma.$queryRaw`
-      SELECT 
+      SELECT
         DATE(purchase_date) as date,
         COUNT(DISTINCT o.id)::int as orders,
         COUNT(oi.id)::int as items,
