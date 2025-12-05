@@ -1,6 +1,6 @@
 /**
  * Simple Orders Sync - Based on the working 30-day pattern
- * 
+ *
  * GET /api/amazon/sync/simple-orders - Check status
  * POST /api/amazon/sync/simple-orders?days=30 - Start sync
  */
@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createSpApiClient, getAmazonCredentials } from '@/lib/amazon-sp-api'
+
+export const dynamic = 'force-dynamic'
 
 // Simple state
 let syncStatus = {

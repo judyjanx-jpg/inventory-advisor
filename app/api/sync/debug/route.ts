@@ -1,10 +1,12 @@
 /**
  * Debug Sync Queue
- * 
+ *
  * GET /api/sync/debug - Check queue status and Redis connection
  */
 
 import { NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 import { 
   ordersQueue, 
   financesQueue, 

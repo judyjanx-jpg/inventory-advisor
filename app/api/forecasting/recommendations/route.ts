@@ -1,11 +1,13 @@
 /**
  * Forecasting Recommendations API - OPTIMIZED
- * 
+ *
  * Handles large datasets (300k+ orders) without freezing
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+
+export const dynamic = 'force-dynamic'
 
 const TARGETS = {
   fbaTargetDays: 45,

@@ -6,6 +6,8 @@
 import { NextResponse } from 'next/server'
 import { createSpApiClient } from '@/lib/amazon-sp-api'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const client = await createSpApiClient()

@@ -1,10 +1,12 @@
 /**
  * Sync Status API
- * 
+ *
  * GET /api/sync/status - Get status of all sync queues
  */
 
 import { NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 import { getQueueStatus, getScheduleConfig } from '@/lib/queues/scheduler'
 import { checkRedisConnection } from '@/lib/queues'
 

@@ -3,15 +3,17 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { 
-  startOfDay, 
-  endOfDay, 
-  startOfMonth, 
-  endOfMonth, 
-  subDays, 
+import {
+  startOfDay,
+  endOfDay,
+  startOfMonth,
+  endOfMonth,
+  subDays,
   subMonths,
-  format 
+  format,
 } from 'date-fns'
+
+export const dynamic = 'force-dynamic'
 
 interface PeriodSummary {
   period: string
