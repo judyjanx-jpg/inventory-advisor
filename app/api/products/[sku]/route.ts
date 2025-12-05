@@ -53,16 +53,8 @@ export async function PUT(
       lengthIn,
       widthIn,
       heightIn,
-      dimensions,
-      imageUrl,
       status,
       supplierId,
-      minStockLevel,
-      reorderPoint,
-      reorderQty,
-      packSize,
-      caseQty,
-      moq,
       notes,
       isHidden,
       hidden,
@@ -88,16 +80,8 @@ export async function PUT(
     if (lengthIn !== undefined) updateData.lengthIn = lengthIn ? parseFloat(lengthIn) : undefined
     if (widthIn !== undefined) updateData.widthIn = widthIn ? parseFloat(widthIn) : undefined
     if (heightIn !== undefined) updateData.heightIn = heightIn ? parseFloat(heightIn) : undefined
-    if (dimensions !== undefined) updateData.dimensions = dimensions || null
-    if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null
     if (status !== undefined) updateData.status = status
     if (supplierId !== undefined) updateData.supplierId = supplierId || null
-    if (minStockLevel !== undefined) updateData.minStockLevel = minStockLevel ? parseInt(minStockLevel) : undefined
-    if (reorderPoint !== undefined) updateData.reorderPoint = reorderPoint ? parseInt(reorderPoint) : undefined
-    if (reorderQty !== undefined) updateData.reorderQty = reorderQty ? parseInt(reorderQty) : undefined
-    if (packSize !== undefined) updateData.packSize = packSize ? parseInt(packSize) : undefined
-    if (caseQty !== undefined) updateData.caseQty = caseQty ? parseInt(caseQty) : undefined
-    if (moq !== undefined) updateData.moq = moq ? parseInt(moq) : undefined
     if (notes !== undefined) updateData.notes = notes || null
     if (isHidden !== undefined) updateData.isHidden = isHidden
     if (hidden !== undefined) updateData.isHidden = hidden // Support both 'hidden' and 'isHidden'
