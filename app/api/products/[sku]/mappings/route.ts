@@ -112,14 +112,16 @@ export async function PUT(
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
+    const idParam = searchParams.get('id')
 
-    if (!id) {
+    if (!idParam) {
       return NextResponse.json(
         { error: 'Mapping ID is required' },
         { status: 400 }
       )
     }
+
+    const id = parseInt(idParam, 10)
 
     await prisma.skuMapping.delete({
       where: { id },
