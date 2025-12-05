@@ -327,7 +327,6 @@ async function syncOrders(client: any, marketplaceId: string, startDate: Date, e
               title: getField(row, 'product-name', 'title', 'item-name') || `[Historical] ${sku}`,
               asin: getField(row, 'asin') || null,
               status: 'inactive',
-              source: 'order-sync',
             },
           })
           productsCreated++
