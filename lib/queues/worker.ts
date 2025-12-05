@@ -64,7 +64,7 @@ async function processOrdersSync(job: any) {
     let nextToken: string | null = null
 
     do {
-      const response = await client.callAPI({
+      const response: any = await client.callAPI({
         operation: 'getOrders',
         endpoint: 'orders',
         query: {
@@ -140,7 +140,7 @@ async function processFinancesSync(job: any) {
     let nextToken: string | null = null
 
     do {
-      const response = await client.callAPI({
+      const response: any = await client.callAPI({
         operation: 'listFinancialEvents',
         endpoint: 'finances',
         query: {
@@ -222,7 +222,7 @@ async function processInventorySync(job: any) {
     let nextToken: string | null = null
 
     do {
-      const response = await client.callAPI({
+      const response: any = await client.callAPI({
         operation: 'getInventorySummaries',
         endpoint: 'fbaInventory',
         query: {
@@ -234,7 +234,7 @@ async function processInventorySync(job: any) {
         },
       })
 
-      const payload = response?.payload || response
+      const payload: any = response?.payload || response
       const items = payload?.inventorySummaries || []
       nextToken = payload?.pagination?.nextToken || null
 
@@ -308,7 +308,7 @@ async function processProductsSync(job: any) {
 
     // Get all FBA inventory items (includes SKU, FNSKU, ASIN)
     do {
-      const response = await client.callAPI({
+      const response: any = await client.callAPI({
         operation: 'getInventorySummaries',
         endpoint: 'fbaInventory',
         query: {
@@ -320,7 +320,7 @@ async function processProductsSync(job: any) {
         },
       })
 
-      const payload = response?.payload || response
+      const payload: any = response?.payload || response
       const items = payload?.inventorySummaries || []
       nextToken = payload?.pagination?.nextToken || null
 

@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
     const feesMap = new Map(feesByProduct.map(f => [f.sku, f]))
 
     // Build product profit data
-    const products: ProductProfit[] = salesByProduct.map((sale) => {
+    const products: ProductProfit[] = salesByProduct.map((sale: any) => {
       const refund = refundsMap.get(sale.sku)
       const fees = feesMap.get(sale.sku)
 

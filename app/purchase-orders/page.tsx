@@ -715,7 +715,8 @@ export default function PurchaseOrdersPage() {
             const count = purchaseOrders.filter(po => po.status === status).length
             const Icon = config.icon
             return (
-              <Card key={status} hover onClick={() => setStatusFilter(status === statusFilter ? 'all' : status)}>
+              <div key={status} onClick={() => setStatusFilter(status === statusFilter ? 'all' : status)} className="cursor-pointer">
+              <Card hover>
                 <CardContent className="py-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -726,6 +727,7 @@ export default function PurchaseOrdersPage() {
                   </div>
                 </CardContent>
               </Card>
+              </div>
             )
           })}
         </div>
@@ -1637,8 +1639,8 @@ export default function PurchaseOrdersPage() {
               <p className="text-white font-medium">{selectedPO.poNumber}</p>
               <p className="text-sm text-slate-400 mt-2 mb-1">Supplier</p>
               <p className="text-white">{selectedPO.supplier.name}</p>
-              {selectedPO.supplier.email && (
-                <p className="text-sm text-slate-400 mt-2">{selectedPO.supplier.email}</p>
+              {(selectedPO.supplier as any).email && (
+                <p className="text-sm text-slate-400 mt-2">{(selectedPO.supplier as any).email}</p>
               )}
             </div>
             

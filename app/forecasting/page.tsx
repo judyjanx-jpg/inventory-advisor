@@ -1042,8 +1042,8 @@ function PurchasingTab({
                         <div className="flex justify-between"><span className="text-gray-500">FBA</span><span className="text-white">{item.fbaAvailable || 0}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">FBA Inbound</span><span className="text-cyan-400">{item.fbaInbound || 0}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">Warehouse</span><span className="text-white">{item.warehouseAvailable || 0}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Incoming PO</span><span className="text-green-400">{item.incomingFromPO || 0}</span></div>
-                        <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-gray-400 font-medium">Total</span><span className="text-white font-medium">{item.currentInventory || item.totalInventory || 0}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Incoming PO</span><span className="text-green-400">{(item as any).incomingFromPO || 0}</span></div>
+                        <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-gray-400 font-medium">Total</span><span className="text-white font-medium">{(item as any).currentInventory || item.totalInventory || 0}</span></div>
                       </div>
                     </div>
                     

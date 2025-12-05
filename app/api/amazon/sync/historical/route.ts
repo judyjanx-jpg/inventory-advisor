@@ -353,7 +353,7 @@ export async function POST(request: NextRequest) {
         where: { id: { in: batchIds } },
         select: { id: true },
       })
-      const existingOrderIds = new Set(existingOrders.map(o => o.id))
+      const existingOrderIds = new Set(existingOrders.map((o: any) => o.id))
       
       // Process each order in the batch
       for (const orderId of batchIds) {
@@ -584,7 +584,7 @@ export async function GET() {
     })
     
     return NextResponse.json({
-      recentSyncs: recentSyncs.map(s => ({
+      recentSyncs: recentSyncs.map((s: any) => ({
         id: s.id,
         status: s.status,
         startedAt: s.startedAt,

@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       )
     }
 
-    let verificationResult = { success: true, error: undefined as string | undefined }
+    let verificationResult: { success: boolean; error?: string } = { success: true }
 
     // Test the credentials using Amazon Cognito endpoint (only if not skipping)
     if (!skipVerify) {

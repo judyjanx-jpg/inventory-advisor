@@ -219,7 +219,7 @@ async function analyzeStockout(sku: string, stockoutDate: Date) {
     })
     
     if (forecasts.length > 0) {
-      const avgError = forecasts.reduce((sum, f) => sum + Math.abs(Number(f.percentageError)), 0) / forecasts.length
+      const avgError = forecasts.reduce((sum: any, f: any) => sum + Math.abs(Number(f.percentageError)), 0) / forecasts.length
       forecastAccuracy = 100 - avgError
     }
   } catch (e) {

@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
         where: { sku: { in: chunk } },
         select: { sku: true },
       })
-      products.forEach(p => validSkus.add(p.sku))
+      products.forEach((p: any) => validSkus.add(p.sku))
     }
     
     console.log(`   ${validSkus.size.toLocaleString()} valid SKUs found in database`)

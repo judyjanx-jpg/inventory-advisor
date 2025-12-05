@@ -309,7 +309,7 @@ historicalSyncQueue.process(async (job: Bull.Job<HistoricalSyncJobData>) => {
         where: { id: { in: batchIds } },
         select: { id: true },
       })
-      const existingOrderIds = new Set(existingOrders.map(o => o.id))
+      const existingOrderIds = new Set(existingOrders.map((o: any) => o.id))
       
       for (const orderId of batchIds) {
         const orderRows = orderGroups.get(orderId)!

@@ -41,8 +41,8 @@ export async function POST(
 
     // Validate all items are assigned to boxes
     for (const item of shipment.items) {
-      const boxTotal = shipment.boxes.reduce((sum, box) => {
-        const boxItem = box.items.find(bi => bi.masterSku === item.masterSku)
+      const boxTotal = shipment.boxes.reduce((sum: any, box: any) => {
+        const boxItem = box.items.find((bi: any) => bi.masterSku === item.masterSku)
         return sum + (boxItem?.quantity || 0)
       }, 0)
 

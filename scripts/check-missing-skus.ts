@@ -22,7 +22,7 @@ async function main() {
     select: { sku: true },
   })
   
-  const existingSkus = new Set(existingProducts.map(p => p.sku))
+  const existingSkus = new Set(existingProducts.map((p: any) => p.sku))
   
   console.log('SKUs from report:')
   for (const sku of reportSkus) {

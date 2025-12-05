@@ -56,10 +56,10 @@ export async function GET(request: NextRequest) {
     ])
 
     // Transform shipments to include total counts
-    const transformedShipments = shipments.map(shipment => ({
+    const transformedShipments = shipments.map((shipment: any) => ({
       ...shipment,
       totalItems: shipment.items.length,
-      totalUnits: shipment.items.reduce((sum, item) => sum + item.adjustedQty, 0),
+      totalUnits: shipment.items.reduce((sum: any, item: any) => sum + item.adjustedQty, 0),
     }))
 
     return NextResponse.json({

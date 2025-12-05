@@ -71,7 +71,7 @@ async function checkWorkerStatus() {
       if (recentSyncs.length === 0) {
         console.log('  No sync logs found.')
       } else {
-        recentSyncs.forEach(log => {
+        recentSyncs.forEach((log: any) => {
           const statusIcon = log.status === 'success' ? '✅' : log.status === 'failed' ? '❌' : '🔄'
           console.log(`  ${statusIcon} ${log.syncType} (${log.status})`)
           if (log.startedAt) {

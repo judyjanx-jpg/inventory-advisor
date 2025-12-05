@@ -154,8 +154,8 @@ export async function PUT(
       })
       const requestItemIds = items.map((i: any) => i.id).filter(Boolean)
       const deletedItemIds = existingItems
-        .map(i => i.id)
-        .filter(id => !requestItemIds.includes(id))
+        .map((i: any) => i.id)
+        .filter((id: any) => !requestItemIds.includes(id))
       
       if (deletedItemIds.length > 0) {
         await prisma.shipmentItem.deleteMany({

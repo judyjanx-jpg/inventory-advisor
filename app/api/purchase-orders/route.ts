@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       where: { sku: { in: skus } },
       select: { sku: true },
     })
-    const existingSkus = new Set(existingProducts.map(p => p.sku))
+    const existingSkus = new Set(existingProducts.map((p: any) => p.sku))
     const missingSkus = skus.filter((sku: string) => !existingSkus.has(sku))
 
     if (missingSkus.length > 0) {

@@ -622,7 +622,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
         success: false,
         message: error.message || 'Upload failed',
       })
-      setProgressMessage(null)
+      setProgressMessage('')
     } finally {
       setUploading(false)
     }

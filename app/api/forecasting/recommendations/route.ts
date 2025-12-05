@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
       // Inventory
       const fbaAvailable = inv?.fbaAvailable || 0
       const fbaInbound = (inv?.fbaInboundWorking || 0) + (inv?.fbaInboundShipped || 0) + (inv?.fbaInboundReceiving || 0)
-      const warehouseAvailable = product.warehouseInventory.reduce((sum, w) => sum + w.available, 0)
+      const warehouseAvailable = product.warehouseInventory.reduce((sum: any, w: any) => sum + w.available, 0)
       const totalInventory = fbaAvailable + fbaInbound + warehouseAvailable
 
       // Skip products with no sales AND no inventory

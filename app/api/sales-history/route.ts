@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Transform to match SalesHistory format for frontend
-    const salesHistory = dailyProfits.map(dp => ({
+    const salesHistory = dailyProfits.map((dp: any) => ({
       id: dp.id,
       date: dp.date,
       masterSku: dp.masterSku,

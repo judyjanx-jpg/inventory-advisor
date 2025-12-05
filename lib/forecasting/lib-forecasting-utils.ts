@@ -217,17 +217,17 @@ export async function calculateVelocityBatch(masterSkus: string[]): Promise<Map<
   ])
 
   // Create lookup maps
-  const map7d = new Map(sales7d.map(s => [s.masterSku, s._sum.quantity || 0]))
-  const map30d = new Map(sales30d.map(s => [s.masterSku, s._sum.quantity || 0]))
-  const map90d = new Map(sales90d.map(s => [s.masterSku, s._sum.quantity || 0]))
+  const map7d = new Map(sales7d.map((s: any) => [s.masterSku, s._sum.quantity || 0]))
+  const map30d = new Map(sales30d.map((s: any) => [s.masterSku, s._sum.quantity || 0]))
+  const map90d = new Map(sales90d.map((s: any) => [s.masterSku, s._sum.quantity || 0]))
 
   // Calculate velocity for each SKU
   const result = new Map<string, VelocityData>()
-  
+
   for (const sku of masterSkus) {
-    const velocity7d = (map7d.get(sku) || 0) / 7
-    const velocity30d = (map30d.get(sku) || 0) / 30
-    const velocity90d = (map90d.get(sku) || 0) / 90
+    const velocity7d = Number(map7d.get(sku) || 0) / 7
+    const velocity30d = Number(map30d.get(sku) || 0) / 30
+    const velocity90d = Number(map90d.get(sku) || 0) / 90
 
     let trend: 'rising' | 'stable' | 'declining' = 'stable'
     if (velocity30d > 0) {
@@ -325,9 +325,9 @@ export async function calculateDemandStdDev(
 
   if (dailySales.length < 7) return 0
 
-  const quantities = dailySales.map(d => Number(d.quantity))
-  const mean = quantities.reduce((a, b) => a + b, 0) / quantities.length
-  const variance = quantities.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / quantities.length
+  const quantities = dailySales.map((d: any) => Number(d.quantity))
+  const mean = quantities.reduce((a: any, b: any) => a + b, 0) / quantities.length
+  const variance = quantities.reduce((sum: any, val: any) => sum + Math.pow(val - mean, 2), 0) / quantities.length
 
   return Math.sqrt(variance)
 }

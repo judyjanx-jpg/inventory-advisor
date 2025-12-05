@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
       console.log(`[GET Forecasts] Found ${forecasts.length} forecasts`)
 
       // Format dates for frontend
-      const formattedForecasts = forecasts.map(f => ({
+      const formattedForecasts = forecasts.map((f: any) => ({
         ...f,
         date: f.forecastDate instanceof Date ? f.forecastDate.toISOString() : f.forecastDate,
         forecastDate: f.forecastDate instanceof Date ? f.forecastDate.toISOString() : f.forecastDate,

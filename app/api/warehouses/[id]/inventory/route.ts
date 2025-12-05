@@ -39,7 +39,7 @@ export async function POST(
       where: { sku: { in: allSkus } },
       select: { sku: true },
     })
-    const validSkus = new Set(existingProducts.map(p => p.sku))
+    const validSkus = new Set(existingProducts.map((p: any) => p.sku))
 
     // OPTIMIZATION: Batch load existing warehouse inventory
     const existingInventory = await prisma.warehouseInventory.findMany({
@@ -49,7 +49,7 @@ export async function POST(
       },
       select: { masterSku: true },
     })
-    const existingInventorySkus = new Set(existingInventory.map(inv => inv.masterSku))
+    const existingInventorySkus = new Set(existingInventory.map((inv: any) => inv.masterSku))
 
     // Filter out invalid SKUs
     const validInventory = inventory.filter(item => validSkus.has(item.masterSku))
@@ -63,7 +63,7 @@ export async function POST(
     for (let i = 0; i < validInventory.length; i += BATCH_SIZE) {
       const batch = validInventory.slice(i, i + BATCH_SIZE)
       
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         for (const item of batch) {
           const { masterSku, available = 0, reserved = 0 } = item
           const isExisting = existingInventorySkus.has(masterSku)
@@ -120,7 +120,7 @@ export async function POST(
       for (let i = 0; i < totals.length; i += BATCH_SIZE) {
         const batch = totals.slice(i, i + BATCH_SIZE)
         
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           for (const total of batch) {
             const masterSku = total.masterSku
             await tx.inventoryLevel.upsert({

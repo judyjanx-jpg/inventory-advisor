@@ -415,7 +415,7 @@ async function runBatchedSync(batchSize: number, totalDays: number, totalBatches
             where: { id: { in: chunk } },
             select: { id: true },
           })
-          const existingIds = new Set(existing.map(o => o.id))
+          const existingIds = new Set(existing.map((o: any) => o.id))
           
           for (const orderId of chunk) {
             const orderRows = orderGroups.get(orderId)!

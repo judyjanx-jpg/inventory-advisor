@@ -147,14 +147,15 @@ async function syncRecentOrders(client: any, marketplaceId: string, startDate: D
             // Check if product exists
             const product = await prisma.product.findUnique({ where: { sku } })
             if (!product) {
-              // Create placeholder
+              // Create placeholder with required fields
               await prisma.product.create({
                 data: {
                   sku,
                   title: item.Title || `[Auto] ${sku}`,
                   asin: item.ASIN || null,
                   status: 'inactive',
-                  source: 'order-sync',
+                  cost: 0,
+                  price: 0,
                 },
               }).catch(() => {}) // Ignore if exists
             }

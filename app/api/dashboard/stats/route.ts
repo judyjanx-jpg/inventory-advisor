@@ -100,7 +100,7 @@ export async function GET() {
     })
 
     // Transform to match frontend expected format
-    const lowStockProducts = lowStockData.map(item => {
+    const lowStockProducts = lowStockData.map((item: any) => {
       const totalStock = (item.fbaAvailable || 0) + (item.warehouseAvailable || 0)
       const velocity30d = Number(item.product?.salesVelocity?.velocity30d || 0)
       const dailyVelocity = velocity30d / 30
@@ -142,11 +142,11 @@ export async function GET() {
     })
 
     // Format recent activity to match frontend expected format
-    const recentActivity = recentOrders.map(order => {
+    const recentActivity = recentOrders.map((order: any) => {
       // Calculate order total from items if orderTotal is 0
       let amount = Number(order.orderTotal || 0)
       if (amount === 0) {
-        amount = order.orderItems.reduce((sum, item) => {
+        amount = order.orderItems.reduce((sum: any, item: any) => {
           return sum + (Number(item.itemPrice || 0) * (item.quantity || 1))
         }, 0)
       }

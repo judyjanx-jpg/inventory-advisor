@@ -49,14 +49,14 @@ export async function getAmazonCredentials(): Promise<AmazonCredentials | null> 
 }
 
 // Create SP-API client with timeout
-export async function createSpApiClient(): Promise<SellingPartner | null> {
+export async function createSpApiClient(): Promise<any> {
   const credentials = await getAmazonCredentials()
 
   if (!credentials) {
     throw new Error('Amazon credentials not configured')
   }
 
-  const client = new SellingPartner({
+  const client = new (SellingPartner as any)({
     region: credentials.region || 'na', // na, eu, fe
     refresh_token: credentials.refreshToken,
     credentials: {
@@ -80,7 +80,7 @@ export async function createSpApiClient(): Promise<SellingPartner | null> {
 
 // Wrapper to call API with timeout (fallback if library timeout doesn't work)
 export async function callApiWithTimeout<T>(
-  client: SellingPartner,
+  client: any,
   params: any,
   timeoutMs: number = 60000
 ): Promise<T> {

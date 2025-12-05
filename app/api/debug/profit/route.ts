@@ -28,7 +28,7 @@ export async function GET() {
     })
 
     // 3. Check if those order IDs have any items
-    const todayOrderIds = todayOrders.map(o => o.id)
+    const todayOrderIds = todayOrders.map((o: any) => o.id)
     const itemsForTodayOrders = await prisma.orderItem.count({
       where: { orderId: { in: todayOrderIds } }
     })

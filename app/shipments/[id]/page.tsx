@@ -670,7 +670,7 @@ export default function ShipmentDetailPage() {
             shipmentId={String(shipment.id)}
             shipmentInternalId={shipment.internalId || `SHP-${shipment.id}`}
             items={shipment.items}
-            onItemsChange={(items) => setShipment({ ...shipment, items })}
+            onItemsChange={(items: any) => setShipment({ ...shipment, items })}
             onPickComplete={() => {}}
             onInventoryAdjust={handleInventoryAdjust}
           />

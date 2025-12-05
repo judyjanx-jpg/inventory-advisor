@@ -98,7 +98,7 @@ export default function SettingsPage() {
                       {Icon ? (
                         <Icon className="w-6 h-6 text-slate-400" />
                       ) : (
-                        <span className="text-2xl">{section.icon}</span>
+                        <span className="text-2xl">{typeof section.icon === 'string' ? section.icon : ''}</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">

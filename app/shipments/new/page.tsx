@@ -59,7 +59,7 @@ export default function NewShipmentPage() {
       if (res.ok) {
         setWarehouses(data)
         // Set default warehouse if available
-        const defaultWarehouse = data.find((w: Warehouse) => w.isDefault)
+        const defaultWarehouse = data.find((w: any) => w.isDefault)
         if (defaultWarehouse) {
           setFromLocationId(defaultWarehouse.id)
         }

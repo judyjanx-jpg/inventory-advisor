@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Filter out parent products
-    const childProducts = products.filter(p => {
+    const childProducts = products.filter((p: any) => {
       if (p.parentSku === null && (p.isParent || (p._count?.variations || 0) > 0)) {
         return false
       }

@@ -385,7 +385,7 @@ async function forecastNewItem(params: ForecastParams): Promise<ForecastResult[]
   }
 
   // Use analog's average velocity
-  const analogVelocity = analogSales.reduce((sum, s) => sum + Number(s.unitsSold || 0), 0) / analogSales.length
+  const analogVelocity = analogSales.reduce((sum: any, s: any) => sum + Number(s.unitsSold || 0), 0) / analogSales.length
 
   // Apply current seasonality
   const today = new Date()

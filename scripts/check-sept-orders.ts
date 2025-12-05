@@ -64,7 +64,7 @@ async function main() {
   
   if (ordersWithoutItems.length > 0) {
     console.log('Sample orders WITHOUT items:')
-    ordersWithoutItems.forEach(o => {
+    ordersWithoutItems.forEach((o: any) => {
       console.log(`  ${o.id} - ${o.purchaseDate?.toISOString().split('T')[0]} - ${o.status}`)
     })
   }

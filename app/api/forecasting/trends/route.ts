@@ -34,8 +34,8 @@ export async function GET(request: Request) {
       })
     }
 
-    const productIds = products.map(p => p.id)
-    const skuMap = Object.fromEntries(products.map(p => [p.id, p.sku]))
+    const productIds = products.map((p: any) => p.id)
+    const skuMap = Object.fromEntries(products.map((p: any) => [p.id, p.sku]))
 
     // Get monthly sales data for the last 24 months
     const endDate = new Date()

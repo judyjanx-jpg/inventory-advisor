@@ -46,7 +46,7 @@ export async function POST(
       const itemId = parseInt(itemIdStr)
       const { received, damaged, backorder } = quantities as { received: number; damaged: number; backorder: number }
 
-      const poItem = purchaseOrder.items.find(i => i.id === itemId)
+      const poItem = purchaseOrder.items.find((i: any) => i.id === itemId)
       if (!poItem) continue
 
       // Calculate new totals
@@ -122,9 +122,9 @@ export async function POST(
     })
 
     if (updatedPO) {
-      const totalOrdered = updatedPO.items.reduce((sum, item) => sum + item.quantityOrdered, 0)
-      const totalReceived = updatedPO.items.reduce((sum, item) => sum + item.quantityReceived, 0)
-      const totalDamaged = updatedPO.items.reduce((sum, item) => sum + item.quantityDamaged, 0)
+      const totalOrdered = updatedPO.items.reduce((sum: any, item: any) => sum + item.quantityOrdered, 0)
+      const totalReceived = updatedPO.items.reduce((sum: any, item: any) => sum + item.quantityReceived, 0)
+      const totalDamaged = updatedPO.items.reduce((sum: any, item: any) => sum + item.quantityDamaged, 0)
 
       // Check if all items are accounted for (received + damaged + backordered)
       const hasBackorders = backorderCreates.length > 0
