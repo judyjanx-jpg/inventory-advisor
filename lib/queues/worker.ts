@@ -295,15 +295,107 @@ async function processProductsSync(job: any) {
   console.log(`\n[products-sync] Starting job ${job.id}...`)
 
   try {
-    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/amazon/sync/products`, { method: 'POST' })
-    const result = await response.json()
-    
+    const credentials = await getAmazonCredentials()
+    if (!credentials) throw new Error('Amazon credentials not configured')
+
+    const client = await createSpApiClient()
+    if (!client) throw new Error('Failed to create SP-API client')
+
+    let created = 0
+    let updated = 0
+    let skipped = 0
+    let nextToken: string | null = null
+
+    // Get all FBA inventory items (includes SKU, FNSKU, ASIN)
+    do {
+      const response = await client.callAPI({
+        operation: 'getInventorySummaries',
+        endpoint: 'fbaInventory',
+        query: {
+          granularityType: 'Marketplace',
+          granularityId: credentials.marketplaceId,
+          marketplaceIds: [credentials.marketplaceId],
+          details: true,
+          ...(nextToken ? { nextToken } : {}),
+        },
+      })
+
+      const payload = response?.payload || response
+      const items = payload?.inventorySummaries || []
+      nextToken = payload?.pagination?.nextToken || null
+
+      for (const item of items) {
+        const sku = item.sellerSku
+        if (!sku) continue
+
+        const asin = item.asin || null
+        const fnsku = item.fnSku || null
+        const productName = item.productName || sku
+
+        // Check if product exists
+        const existingProduct = await prisma.product.findUnique({
+          where: { sku },
+        })
+
+        if (existingProduct) {
+          // Update existing product with FNSKU and ASIN if missing
+          const updateData: any = {}
+          if (fnsku && !existingProduct.fnsku) updateData.fnsku = fnsku
+          if (asin && !existingProduct.asin) updateData.asin = asin
+          
+          if (Object.keys(updateData).length > 0) {
+            await prisma.product.update({
+              where: { sku },
+              data: updateData,
+            })
+            updated++
+          } else {
+            skipped++
+          }
+        } else {
+          // Create new product
+          try {
+            await prisma.product.create({
+              data: {
+                sku,
+                title: productName,
+                asin,
+                fnsku,
+                cost: 0,
+                price: 0,
+                status: 'active',
+                brand: 'KISPER',
+              },
+            })
+            
+            // Also create inventory level record
+            await prisma.inventoryLevel.create({
+              data: {
+                masterSku: sku,
+                fbaAvailable: 0,
+                warehouseAvailable: 0,
+              },
+            })
+            
+            created++
+          } catch (err: any) {
+            // Skip if duplicate or other error
+            if (err.code !== 'P2002') {
+              console.log(`  ⚠️ Failed to create ${sku}: ${err.message}`)
+            }
+            skipped++
+          }
+        }
+      }
+
+      if (nextToken) await sleep(500)
+    } while (nextToken)
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
-    console.log(`[products-sync] Completed in ${duration}s`)
+    console.log(`[products-sync] Completed in ${duration}s - ${created} created, ${updated} updated, ${skipped} skipped`)
     
-    await logSyncResult('products', 'success', result, null)
-    return result
+    await logSyncResult('products', 'success', { created, updated, skipped }, null)
+    return { created, updated, skipped }
   } catch (error: any) {
     console.error(`[products-sync] Failed:`, error.message)
     await logSyncResult('products', 'failed', null, error.message)
