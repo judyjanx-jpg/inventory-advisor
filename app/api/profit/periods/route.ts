@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getQuickFeeEstimate } from '@/lib/fee-estimation'
 import {
   startOfDay,
   endOfDay,
@@ -26,6 +27,7 @@ interface PeriodSummary {
   refundCount: number
   adCost: number
   amazonFees: number
+  amazonFeesEstimated: number  // Portion that was estimated
   cogs: number
   grossProfit: number
   netProfit: number
@@ -36,6 +38,7 @@ interface PeriodSummary {
   acos: number | null
   tacos: number | null
   realAcos: number | null
+  feeEstimationRate: number  // % of items that used estimated fees
 }
 
 async function getPeriodData(startDate: Date, endDate: Date): Promise<{
@@ -46,26 +49,58 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
   refundCount: number
   adCost: number
   amazonFees: number
+  amazonFeesEstimated: number
   cogs: number
+  feeEstimationRate: number
 }> {
-  // Get order data
-  const orderData = await prisma.orderItem.aggregate({
-    where: {
-      order: {
-        purchaseDate: {
-          gte: startDate,
-          lte: endDate,
-        },
-        status: {
-          not: 'Cancelled',
-        },
-      },
-    },
-    _sum: {
-      itemPrice: true,
-      quantity: true,
-    },
-  })
+  // Get order items with fee data directly from OrderItem table
+  // This is where the financial-events sync stores the fees
+  const orderItems = await prisma.$queryRaw<Array<{
+    item_price: string
+    quantity: number
+    amazon_fees: string
+  }>>`
+    SELECT
+      oi.item_price::text,
+      oi.quantity,
+      oi.amazon_fees::text
+    FROM order_items oi
+    JOIN orders o ON oi.order_id = o.id
+    WHERE o.purchase_date >= ${startDate}
+      AND o.purchase_date <= ${endDate}
+      AND o.status != 'Cancelled'
+  `
+
+  // Calculate fees with estimation for items missing actual fees
+  let totalSales = 0
+  let totalUnits = 0
+  let actualFees = 0
+  let estimatedFees = 0
+  let itemsWithActualFees = 0
+  let itemsWithEstimatedFees = 0
+
+  for (const item of orderItems) {
+    const itemPrice = parseFloat(item.item_price || '0')
+    const quantity = item.quantity || 1
+    const amazonFees = parseFloat(item.amazon_fees || '0')
+
+    totalSales += itemPrice
+    totalUnits += quantity
+
+    if (amazonFees > 0) {
+      // Use actual fees from synced financial events
+      actualFees += amazonFees
+      itemsWithActualFees++
+    } else if (itemPrice > 0) {
+      // Estimate fees for items that haven't synced yet
+      const estimate = getQuickFeeEstimate(itemPrice, quantity)
+      estimatedFees += estimate.totalFees
+      itemsWithEstimatedFees++
+    }
+  }
+
+  const totalItems = orderItems.length
+  const feeEstimationRate = totalItems > 0 ? (itemsWithEstimatedFees / totalItems) * 100 : 0
 
   // Get unique order count
   const orderCount = await prisma.order.count({
@@ -80,7 +115,7 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
     },
   })
 
-  // Get refund data - use correct field name: quantity (not quantityReturned)
+  // Get refund data
   let refundCount = 0
   try {
     const refundData = await prisma.return.aggregate({
@@ -97,23 +132,7 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
     })
     refundCount = Number(refundData._sum.quantity || 0)
   } catch (e) {
-    console.log('Returns query skipped:', e)
-  }
-
-  // Get Amazon fees - join through orderItem to order for date filtering
-  let amazonFees = 0
-  try {
-    const feeData = await prisma.$queryRaw<{ total_fees: number }[]>`
-      SELECT COALESCE(SUM(af.total_fees), 0) as total_fees
-      FROM amazon_fees af
-      JOIN order_items oi ON af.order_item_id = oi.id
-      JOIN orders o ON oi.order_id = o.id
-      WHERE o.purchase_date >= ${startDate}
-        AND o.purchase_date <= ${endDate}
-    `
-    amazonFees = Math.abs(Number(feeData[0]?.total_fees || 0))
-  } catch (e) {
-    // Fees table might not exist
+    // Returns table might not have data
   }
 
   // Get ad spend from advertising_daily (if connected)
@@ -135,11 +154,11 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
     // Ads table might not exist yet
   }
 
-  // Calculate COGS using raw query - use 'sku' column
+  // Calculate COGS - use 'cost' column from products table
   let cogs = 0
   try {
     const cogsData = await prisma.$queryRaw<{ total_cogs: number }[]>`
-      SELECT COALESCE(SUM(oi.quantity * COALESCE(p.cogs, 0)), 0) as total_cogs
+      SELECT COALESCE(SUM(oi.quantity * COALESCE(p.cost, 0)), 0) as total_cogs
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       LEFT JOIN products p ON oi.master_sku = p.sku
@@ -149,18 +168,20 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
     `
     cogs = Number(cogsData[0]?.total_cogs || 0)
   } catch (e) {
-    console.log('COGS query skipped:', e)
+    console.log('COGS query error:', e)
   }
 
   return {
-    sales: Number(orderData._sum.itemPrice || 0),
+    sales: totalSales,
     orders: orderCount,
-    units: Number(orderData._sum.quantity || 0),
+    units: totalUnits,
     refunds: 0,
     refundCount,
     adCost,
-    amazonFees,
+    amazonFees: actualFees + estimatedFees,
+    amazonFeesEstimated: estimatedFees,
     cogs,
+    feeEstimationRate,
   }
 }
 
@@ -192,7 +213,18 @@ export async function GET() {
       const tacos = data.sales > 0 ? (data.adCost / data.sales) * 100 : null
       const realAcos = netProfit > 0 && data.adCost > 0 ? (data.adCost / netProfit) * 100 : null
 
-      return { grossProfit, netProfit, estPayout, margin, roi, acos, tacos, realAcos }
+      return {
+        grossProfit,
+        netProfit,
+        estPayout,
+        margin,
+        roi,
+        acos,
+        tacos,
+        realAcos,
+        amazonFeesEstimated: data.amazonFeesEstimated,
+        feeEstimationRate: data.feeEstimationRate,
+      }
     }
 
     const todayMetrics = calculateMetrics(todayData)
@@ -213,7 +245,9 @@ export async function GET() {
       refundCount: Math.round(mtdData.refundCount * forecastMultiplier),
       adCost: mtdData.adCost * forecastMultiplier,
       amazonFees: mtdData.amazonFees * forecastMultiplier,
+      amazonFeesEstimated: mtdData.amazonFeesEstimated * forecastMultiplier,
       cogs: mtdData.cogs * forecastMultiplier,
+      feeEstimationRate: mtdData.feeEstimationRate,  // Keep same rate for forecast
     }
     const forecastMetrics = calculateMetrics(forecastData)
 
