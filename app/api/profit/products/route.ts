@@ -46,12 +46,22 @@ interface ProductProfit {
 
 function getDateRange(period: string): { startDate: Date; endDate: Date } {
   const now = new Date()
-  
+
   switch (period) {
     case 'today':
       return { startDate: startOfDay(now), endDate: endOfDay(now) }
     case 'yesterday':
       return { startDate: startOfDay(subDays(now, 1)), endDate: endOfDay(subDays(now, 1)) }
+    case '2daysAgo':
+      return { startDate: startOfDay(subDays(now, 2)), endDate: endOfDay(subDays(now, 2)) }
+    case '3daysAgo':
+      return { startDate: startOfDay(subDays(now, 3)), endDate: endOfDay(subDays(now, 3)) }
+    case '7days':
+      return { startDate: startOfDay(subDays(now, 6)), endDate: endOfDay(now) }
+    case '14days':
+      return { startDate: startOfDay(subDays(now, 13)), endDate: endOfDay(now) }
+    case '30days':
+      return { startDate: startOfDay(subDays(now, 29)), endDate: endOfDay(now) }
     case 'mtd':
     case 'forecast':
       return { startDate: startOfMonth(now), endDate: endOfDay(now) }
@@ -72,8 +82,7 @@ export async function GET(request: NextRequest) {
 
     // Get product-level data with fees directly from OrderItem table
     // This is where financial-events sync stores the actual fees
-    // IMPORTANT: Use INNER JOINs with WHERE clause for date filtering
-    // (not LEFT JOIN with date in ON clause, which would include ALL order_items)
+    // Use LEFT JOIN on products to include order_items that don't have matching products
     const salesByProduct = await prisma.$queryRaw<Array<{
       sku: string
       asin: string | null
@@ -90,14 +99,14 @@ export async function GET(request: NextRequest) {
       total_items: number
     }>>`
       SELECT
-        p.sku,
-        p.asin,
-        p.title,
+        COALESCE(p.sku, oi.master_sku, oi.sku) as sku,
+        COALESCE(p.asin, oi.asin) as asin,
+        COALESCE(p.title, oi.title) as title,
         p.image_url,
         p.brand,
         p.supplier_id,
         p.parent_sku,
-        p.cost::text,
+        COALESCE(p.cost, 0)::text as cost,
         COALESCE(SUM(oi.quantity), 0)::int as units_sold,
         COALESCE(SUM(oi.item_price), 0)::text as total_sales,
         COALESCE(SUM(oi.amazon_fees), 0)::text as actual_fees,
@@ -105,11 +114,12 @@ export async function GET(request: NextRequest) {
         COUNT(oi.id)::int as total_items
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
-      INNER JOIN products p ON oi.master_sku = p.sku
+      LEFT JOIN products p ON oi.master_sku = p.sku
       WHERE o.purchase_date >= ${startDate}
         AND o.purchase_date <= ${endDate}
         AND o.status != 'Cancelled'
-      GROUP BY p.sku, p.asin, p.title, p.image_url, p.brand, p.supplier_id, p.parent_sku, p.cost
+      GROUP BY COALESCE(p.sku, oi.master_sku, oi.sku), COALESCE(p.asin, oi.asin), COALESCE(p.title, oi.title),
+               p.image_url, p.brand, p.supplier_id, p.parent_sku, COALESCE(p.cost, 0)
       ORDER BY SUM(oi.item_price) DESC
     `
 

@@ -5,20 +5,18 @@ import { useState, useRef, useEffect } from 'react'
 import { Calendar, ChevronDown, Check } from 'lucide-react'
 
 interface PeriodSelectorProps {
+  selectedPreset: string
+  onPresetChange: (preset: string) => void
   compareMode: 'none' | 'previous' | 'lastYear'
   onCompareModeChange: (mode: 'none' | 'previous' | 'lastYear') => void
 }
 
 const periodPresets = [
-  { label: 'Today / Yesterday / Month to date / This month (forecast) / Last month', value: 'default' },
+  { label: 'Today / Yesterday / Month to date / Forecast / Last month', value: 'default' },
   { label: 'Today / Yesterday / Month to date / Last month', value: 'simple' },
   { label: 'Today / Yesterday / 7 days / 14 days / 30 days', value: 'days' },
-  { label: 'This week / Last week / 2 weeks ago / 3 weeks ago', value: 'weeks' },
-  { label: 'Month to date / Last month / 2 months ago / 3 months ago', value: 'months' },
   { label: 'Today / Yesterday / 2 days ago / 3 days ago', value: 'recent' },
-  { label: 'Today / Yesterday / 7 days ago / 8 days ago', value: 'weekAgo' },
-  { label: 'This quarter / Last quarter / 2 quarters ago / 3 quarters ago', value: 'quarters' },
-  { label: 'Custom range', value: 'custom' },
+  { label: 'Month to date / Last month / 2 months ago / 3 months ago', value: 'months' },
 ]
 
 const compareModes = [
@@ -27,9 +25,8 @@ const compareModes = [
   { label: 'Compare with same period last year', value: 'lastYear' },
 ]
 
-export function PeriodSelector({ compareMode, onCompareModeChange }: PeriodSelectorProps) {
+export function PeriodSelector({ selectedPreset, onPresetChange, compareMode, onCompareModeChange }: PeriodSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [selectedPreset, setSelectedPreset] = useState('default')
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -60,7 +57,10 @@ export function PeriodSelector({ compareMode, onCompareModeChange }: PeriodSelec
             {periodPresets.map((preset) => (
               <button
                 key={preset.value}
-                onClick={() => setSelectedPreset(preset.value)}
+                onClick={() => {
+                  onPresetChange(preset.value)
+                  setIsOpen(false)
+                }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
                   selectedPreset === preset.value ? 'text-cyan-400' : 'text-slate-300'
                 }`}

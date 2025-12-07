@@ -10,8 +10,9 @@ import { GroupBySelector } from '@/components/profit/GroupBySelector'
 import { ColumnSelector } from '@/components/profit/ColumnSelector'
 import { Download, RefreshCw, FileText, Package } from 'lucide-react'
 
-export type PeriodType = 'today' | 'yesterday' | 'mtd' | 'forecast' | 'lastMonth'
+export type PeriodType = 'today' | 'yesterday' | '2daysAgo' | '3daysAgo' | '7days' | '14days' | '30days' | 'mtd' | 'forecast' | 'lastMonth'
 export type GroupByType = 'sku' | 'asin' | 'parent' | 'brand' | 'supplier' | 'channel'
+export type PresetType = 'default' | 'simple' | 'days' | 'recent' | 'months'
 
 export interface PeriodData {
   period: string
@@ -80,6 +81,7 @@ export default function ProfitDashboard() {
   const [products, setProducts] = useState<ProductProfit[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('yesterday')
+  const [selectedPreset, setSelectedPreset] = useState<PresetType>('default')
   const [groupBy, setGroupBy] = useState<GroupByType>('sku')
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS)
   const [compareMode, setCompareMode] = useState<'none' | 'previous' | 'lastYear'>('none')
@@ -87,16 +89,23 @@ export default function ProfitDashboard() {
 
   useEffect(() => {
     fetchDashboardData()
-  }, [selectedPeriod, groupBy])
+  }, [selectedPeriod, groupBy, selectedPreset])
 
   const fetchDashboardData = async () => {
     setLoading(true)
     try {
-      // Fetch period summaries
-      const periodsRes = await fetch('/api/profit/periods')
+      // Fetch period summaries with preset
+      const periodsRes = await fetch(`/api/profit/periods?preset=${selectedPreset}`)
       if (periodsRes.ok) {
         const data = await periodsRes.json()
         setPeriodData(data.periods || [])
+        // If selected period is not in the new preset, select the first one
+        if (data.periods?.length > 0) {
+          const periodExists = data.periods.some((p: PeriodData) => p.period === selectedPeriod)
+          if (!periodExists) {
+            setSelectedPeriod(data.periods[0].period as PeriodType)
+          }
+        }
       }
 
       // Fetch product-level data
@@ -138,7 +147,9 @@ export default function ProfitDashboard() {
             <p className="text-slate-400 mt-1">Track profitability by product and period</p>
           </div>
           <div className="flex items-center gap-3">
-            <PeriodSelector 
+            <PeriodSelector
+              selectedPreset={selectedPreset}
+              onPresetChange={(preset) => setSelectedPreset(preset as PresetType)}
               compareMode={compareMode}
               onCompareModeChange={setCompareMode}
             />

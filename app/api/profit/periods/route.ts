@@ -231,28 +231,93 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   }
 }
 
+// Helper to get date range for a period type
+function getDateRangeForPeriod(period: string, now: Date): { start: Date; end: Date; label: string } {
+  switch (period) {
+    case 'today':
+      return { start: startOfDay(now), end: endOfDay(now), label: format(now, 'd MMMM yyyy') }
+    case 'yesterday':
+      return { start: startOfDay(subDays(now, 1)), end: endOfDay(subDays(now, 1)), label: format(subDays(now, 1), 'd MMMM yyyy') }
+    case '2daysAgo':
+      return { start: startOfDay(subDays(now, 2)), end: endOfDay(subDays(now, 2)), label: format(subDays(now, 2), 'd MMMM yyyy') }
+    case '3daysAgo':
+      return { start: startOfDay(subDays(now, 3)), end: endOfDay(subDays(now, 3)), label: format(subDays(now, 3), 'd MMMM yyyy') }
+    case '7days':
+      return { start: startOfDay(subDays(now, 6)), end: endOfDay(now), label: `${format(subDays(now, 6), 'd')}-${format(now, 'd MMMM yyyy')}` }
+    case '14days':
+      return { start: startOfDay(subDays(now, 13)), end: endOfDay(now), label: `${format(subDays(now, 13), 'd')}-${format(now, 'd MMMM yyyy')}` }
+    case '30days':
+      return { start: startOfDay(subDays(now, 29)), end: endOfDay(now), label: `${format(subDays(now, 29), 'd')}-${format(now, 'd MMMM yyyy')}` }
+    case 'mtd':
+      return { start: startOfMonth(now), end: endOfDay(now), label: `${format(startOfMonth(now), 'd')}-${format(now, 'd MMMM yyyy')}` }
+    case 'lastMonth':
+      return { start: startOfMonth(subMonths(now, 1)), end: endOfMonth(subMonths(now, 1)), label: `${format(startOfMonth(subMonths(now, 1)), 'd')}-${format(endOfMonth(subMonths(now, 1)), 'd MMMM yyyy')}` }
+    default:
+      return { start: startOfDay(subDays(now, 1)), end: endOfDay(subDays(now, 1)), label: format(subDays(now, 1), 'd MMMM yyyy') }
+  }
+}
+
+// Period presets configuration
+const periodPresets: Record<string, string[]> = {
+  default: ['today', 'yesterday', 'mtd', 'forecast', 'lastMonth'],
+  simple: ['today', 'yesterday', 'mtd', 'lastMonth'],
+  days: ['today', 'yesterday', '7days', '14days', '30days'],
+  recent: ['today', 'yesterday', '2daysAgo', '3daysAgo'],
+  months: ['mtd', 'lastMonth', '2monthsAgo', '3monthsAgo'],
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const includeDebug = searchParams.get('debug') === 'true'
+    const preset = searchParams.get('preset') || 'default'
 
     const now = new Date()
-    const today = startOfDay(now)
-    const yesterday = startOfDay(subDays(now, 1))
-    const monthStart = startOfMonth(now)
-    const lastMonthStart = startOfMonth(subMonths(now, 1))
-    const lastMonthEnd = endOfMonth(subMonths(now, 1))
+    const monthStart = startOfMonth(now)  // Needed for forecast calculation
 
-    // Fetch data for each period
-    const [todayData, yesterdayData, mtdData, lastMonthData] = await Promise.all([
-      getPeriodData(today, endOfDay(now), includeDebug),
-      getPeriodData(yesterday, endOfDay(subDays(now, 1)), includeDebug),
-      getPeriodData(monthStart, endOfDay(now), includeDebug),
-      getPeriodData(lastMonthStart, lastMonthEnd, includeDebug),
-    ])
+    // Get which periods to fetch based on preset
+    const periodsToFetch = periodPresets[preset] || periodPresets.default
+
+    // Build period data for each requested period
+    const periodPromises = periodsToFetch.map(async (period) => {
+      const range = getDateRangeForPeriod(period, now)
+
+      // Special handling for forecast - it's based on MTD extrapolated
+      if (period === 'forecast') {
+        const mtdData = await getPeriodData(monthStart, endOfDay(now), includeDebug)
+        const daysInMonth = endOfMonth(now).getDate()
+        const dayOfMonth = now.getDate()
+        const forecastMultiplier = daysInMonth / dayOfMonth
+
+        return {
+          period: 'forecast',
+          dateRange: `${format(monthStart, 'd')}-${format(endOfMonth(now), 'd MMMM yyyy')}`,
+          sales: mtdData.sales * forecastMultiplier,
+          orders: Math.round(mtdData.orders * forecastMultiplier),
+          units: Math.round(mtdData.units * forecastMultiplier),
+          refunds: mtdData.refunds * forecastMultiplier,
+          refundCount: Math.round(mtdData.refundCount * forecastMultiplier),
+          adCost: mtdData.adCost * forecastMultiplier,
+          amazonFees: mtdData.amazonFees * forecastMultiplier,
+          amazonFeesEstimated: mtdData.amazonFeesEstimated * forecastMultiplier,
+          cogs: mtdData.cogs * forecastMultiplier,
+          feeEstimationRate: mtdData.feeEstimationRate,
+          debug: mtdData.debug,
+        }
+      }
+
+      const data = await getPeriodData(range.start, range.end, includeDebug)
+      return {
+        period,
+        dateRange: range.label,
+        ...data,
+      }
+    })
+
+    const periodsData = await Promise.all(periodPromises)
 
     // Calculate derived metrics
-    const calculateMetrics = (data: Awaited<ReturnType<typeof getPeriodData>>) => {
+    const calculateMetrics = (data: any) => {
       const grossProfit = data.sales - data.amazonFees - data.cogs
       const netProfit = grossProfit - data.adCost - data.refunds
       const estPayout = data.sales - data.amazonFees - data.refunds
@@ -276,87 +341,42 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const todayMetrics = calculateMetrics(todayData)
-    const yesterdayMetrics = calculateMetrics(yesterdayData)
-    const mtdMetrics = calculateMetrics(mtdData)
-    const lastMonthMetrics = calculateMetrics(lastMonthData)
+    // Build the final periods array with metrics
+    const periods: PeriodSummary[] = periodsData.map((periodData, index) => {
+      const metrics = calculateMetrics(periodData)
 
-    // Build forecast based on MTD data
-    const daysInMonth = endOfMonth(now).getDate()
-    const dayOfMonth = now.getDate()
-    const forecastMultiplier = daysInMonth / dayOfMonth
+      // Calculate sales change for first period (compare to second period)
+      let salesChange: number | undefined
+      if (index === 0 && periodsData[1]?.sales > 0) {
+        salesChange = ((periodData.sales - periodsData[1].sales) / periodsData[1].sales) * 100
+      }
 
-    const forecastData = {
-      sales: mtdData.sales * forecastMultiplier,
-      orders: Math.round(mtdData.orders * forecastMultiplier),
-      units: Math.round(mtdData.units * forecastMultiplier),
-      refunds: mtdData.refunds * forecastMultiplier,
-      refundCount: Math.round(mtdData.refundCount * forecastMultiplier),
-      adCost: mtdData.adCost * forecastMultiplier,
-      amazonFees: mtdData.amazonFees * forecastMultiplier,
-      amazonFeesEstimated: mtdData.amazonFeesEstimated * forecastMultiplier,
-      cogs: mtdData.cogs * forecastMultiplier,
-      feeEstimationRate: mtdData.feeEstimationRate,  // Keep same rate for forecast
-    }
-    const forecastMetrics = calculateMetrics(forecastData)
-
-    // Calculate changes
-    const salesChangeToday = yesterdayData.sales > 0 
-      ? ((todayData.sales - yesterdayData.sales) / yesterdayData.sales) * 100 
-      : undefined
-
-    const periods: PeriodSummary[] = [
-      {
-        period: 'today',
-        dateRange: format(today, 'd MMMM yyyy'),
-        ...todayData,
-        ...todayMetrics,
-        salesChange: salesChangeToday,
-      },
-      {
-        period: 'yesterday',
-        dateRange: format(yesterday, 'd MMMM yyyy'),
-        ...yesterdayData,
-        ...yesterdayMetrics,
-      },
-      {
-        period: 'mtd',
-        dateRange: `${format(monthStart, 'd')}-${format(now, 'd MMMM yyyy')}`,
-        ...mtdData,
-        ...mtdMetrics,
-        salesChange: lastMonthData.sales > 0 
-          ? ((mtdData.sales - lastMonthData.sales) / lastMonthData.sales) * 100 
-          : undefined,
-      },
-      {
-        period: 'forecast',
-        dateRange: `${format(monthStart, 'd')}-${format(endOfMonth(now), 'd MMMM yyyy')}`,
-        ...forecastData,
-        ...forecastMetrics,
-        salesChange: lastMonthData.sales > 0 
-          ? ((forecastData.sales - lastMonthData.sales) / lastMonthData.sales) * 100 
-          : undefined,
-      },
-      {
-        period: 'lastMonth',
-        dateRange: `${format(lastMonthStart, 'd')}-${format(lastMonthEnd, 'd MMMM yyyy')}`,
-        ...lastMonthData,
-        ...lastMonthMetrics,
-      },
-    ]
+      return {
+        period: periodData.period,
+        dateRange: periodData.dateRange,
+        sales: periodData.sales,
+        orders: periodData.orders,
+        units: periodData.units,
+        refunds: periodData.refunds || 0,
+        refundCount: periodData.refundCount,
+        adCost: periodData.adCost,
+        amazonFees: periodData.amazonFees,
+        cogs: periodData.cogs,
+        ...metrics,
+        salesChange,
+      }
+    })
 
     // Build response with optional debug info
-    const response: any = { periods }
+    const response: any = { periods, preset }
 
     if (includeDebug) {
       response.debug = {
         serverTime: format(now, 'yyyy-MM-dd HH:mm:ss'),
-        periodDebug: {
-          today: todayData.debug,
-          yesterday: yesterdayData.debug,
-          mtd: mtdData.debug,
-          lastMonth: lastMonthData.debug,
-        },
+        periodDebug: periodsData.reduce((acc: any, p) => {
+          acc[p.period] = p.debug
+          return acc
+        }, {}),
       }
     }
 

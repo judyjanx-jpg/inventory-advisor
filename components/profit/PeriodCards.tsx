@@ -12,12 +12,27 @@ interface PeriodCardsProps {
   onPeriodSelect: (period: PeriodType) => void
 }
 
-const periodConfig: { key: PeriodType; label: string; gradient: string }[] = [
-  { key: 'today', label: 'Today', gradient: 'from-cyan-500 to-cyan-600' },
-  { key: 'yesterday', label: 'Yesterday', gradient: 'from-cyan-600 to-cyan-700' },
-  { key: 'mtd', label: 'Month to date', gradient: 'from-blue-500 to-blue-600' },
-  { key: 'forecast', label: 'This month (forecast)', gradient: 'from-blue-600 to-blue-700' },
-  { key: 'lastMonth', label: 'Last month', gradient: 'from-emerald-500 to-emerald-600' },
+// Labels for period types
+const periodLabels: Record<string, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  '2daysAgo': '2 Days Ago',
+  '3daysAgo': '3 Days Ago',
+  '7days': 'Last 7 Days',
+  '14days': 'Last 14 Days',
+  '30days': 'Last 30 Days',
+  mtd: 'Month to Date',
+  forecast: 'Forecast',
+  lastMonth: 'Last Month',
+}
+
+// Gradients for each card position
+const gradients = [
+  'from-cyan-500 to-cyan-600',
+  'from-cyan-600 to-cyan-700',
+  'from-blue-500 to-blue-600',
+  'from-blue-600 to-blue-700',
+  'from-emerald-500 to-emerald-600',
 ]
 
 function formatCurrency(value: number): string {
@@ -65,34 +80,36 @@ function PeriodCardSkeleton({ gradient }: { gradient: string }) {
   )
 }
 
-function PeriodCard({ 
-  data, 
-  config, 
+function PeriodCard({
+  data,
+  label,
+  gradient,
   isSelected,
-  onClick 
-}: { 
+  onClick
+}: {
   data?: PeriodData
-  config: typeof periodConfig[0]
+  label: string
+  gradient: string
   isSelected: boolean
   onClick: () => void
 }) {
   const [showDetails, setShowDetails] = useState(false)
 
   if (!data) {
-    return <PeriodCardSkeleton gradient={config.gradient} />
+    return <PeriodCardSkeleton gradient={gradient} />
   }
 
   return (
     <div className="relative flex-1 min-w-0">
-      <div 
-        className={`bg-gradient-to-br ${config.gradient} rounded-xl p-5 text-white h-full cursor-pointer transition-all ${
+      <div
+        className={`bg-gradient-to-br ${gradient} rounded-xl p-5 text-white h-full cursor-pointer transition-all ${
           isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900' : 'hover:brightness-110'
         }`}
         onClick={onClick}
       >
         {/* Header */}
         <div className="mb-3">
-          <h3 className="font-semibold text-lg">{config.label}</h3>
+          <h3 className="font-semibold text-lg">{label}</h3>
           <p className="text-sm text-white/70">{data.dateRange}</p>
         </div>
 
@@ -169,19 +186,27 @@ function PeriodCard({
 }
 
 export function PeriodCards({ data, loading, selectedPeriod, onPeriodSelect }: PeriodCardsProps) {
-  const getPeriodData = (key: PeriodType): PeriodData | undefined => {
-    return data.find(d => d.period === key)
+  // If loading, show skeleton cards for default preset
+  if (loading && data.length === 0) {
+    return (
+      <div className="flex gap-4">
+        {gradients.map((gradient, index) => (
+          <PeriodCardSkeleton key={index} gradient={gradient} />
+        ))}
+      </div>
+    )
   }
 
   return (
     <div className="flex gap-4">
-      {periodConfig.map((config) => (
+      {data.map((periodData, index) => (
         <PeriodCard
-          key={config.key}
-          config={config}
-          data={loading ? undefined : getPeriodData(config.key)}
-          isSelected={selectedPeriod === config.key}
-          onClick={() => onPeriodSelect(config.key)}
+          key={periodData.period}
+          data={loading ? undefined : periodData}
+          label={periodLabels[periodData.period] || periodData.period}
+          gradient={gradients[index % gradients.length]}
+          isSelected={selectedPeriod === periodData.period}
+          onClick={() => onPeriodSelect(periodData.period as PeriodType)}
         />
       ))}
     </div>
