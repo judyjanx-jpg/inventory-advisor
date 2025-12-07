@@ -78,11 +78,15 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   // Get order items with fee data directly using pg
   const orderItems = await query<{
     item_price: string
+    shipping_price: string
+    promo_discount: string
     quantity: string
     amazon_fees: string
   }>(`
     SELECT
       oi.item_price::text,
+      COALESCE(oi.shipping_price, 0)::text as shipping_price,
+      COALESCE(oi.promo_discount, 0)::text as promo_discount,
       oi.quantity::text,
       oi.amazon_fees::text
     FROM order_items oi
@@ -103,10 +107,13 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
 
   for (const item of orderItems) {
     const itemPrice = parseFloat(item.item_price || '0')
+    const shippingPrice = parseFloat(item.shipping_price || '0')
+    const promoDiscount = parseFloat(item.promo_discount || '0')
     const quantity = parseInt(item.quantity || '1', 10)
     const amazonFees = parseFloat(item.amazon_fees || '0')
 
-    totalSales += itemPrice
+    // Sales = item_price + shipping_price - promo_discount
+    totalSales += itemPrice + shippingPrice - promoDiscount
     totalUnits += quantity
 
     let itemEstimatedFees = 0
