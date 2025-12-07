@@ -176,7 +176,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   let refundCount = 0
   let refundAmount = 0
 
-  // First try returns table
+  // First try returns table with actual refund_amount
   try {
     const refundData = await queryOne<{ total_quantity: string; total_amount: string }>(`
       SELECT
@@ -192,7 +192,24 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     // Returns table might not have data
   }
 
-  // If refund_amount is 0, try daily_summary table
+  // If refund_amount is 0 but we have refund count, estimate from order item prices
+  if (refundAmount === 0 && refundCount > 0) {
+    try {
+      // Join returns with order_items to get the original item prices
+      const estimatedRefunds = await queryOne<{ total: string }>(`
+        SELECT COALESCE(SUM(oi.item_price * r.quantity), 0)::text as total
+        FROM returns r
+        JOIN order_items oi ON r.order_id = oi.order_id AND r.master_sku = oi.master_sku
+        WHERE r.return_date >= $1
+          AND r.return_date <= $2
+      `, [startDate, endDate])
+      refundAmount = parseFloat(estimatedRefunds?.total || '0')
+    } catch (e) {
+      // Estimation failed, continue to other sources
+    }
+  }
+
+  // If still 0, try daily_summary table
   if (refundAmount === 0) {
     try {
       const summaryRefunds = await queryOne<{ total: string }>(`
