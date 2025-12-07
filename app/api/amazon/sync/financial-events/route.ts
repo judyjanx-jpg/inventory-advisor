@@ -21,6 +21,8 @@ const syncStatus = {
   pagesProcessed: 0,
   itemsProcessed: 0,
   itemsUpdated: 0,
+  refundsProcessed: 0,
+  refundsUpdated: 0,
   errors: 0,
   startTime: 0,
   message: '',
@@ -83,10 +85,10 @@ function safeFloat(value: any): number {
 async function updateFeesInDb(feesByOrderSku: Map<string, { referralFee: number; fbaFee: number; otherFees: number }>) {
   let updated = 0
   const entries = Array.from(feesByOrderSku.entries())
-  
+
   for (let i = 0; i < entries.length; i += 50) {
     const batch = entries.slice(i, i + 50)
-    
+
     await Promise.all(batch.map(async ([key, fees]) => {
       const [orderId, sku] = key.split('|')
       const totalFees = fees.referralFee + fees.fbaFee + fees.otherFees
@@ -107,7 +109,40 @@ async function updateFeesInDb(feesByOrderSku: Map<string, { referralFee: number;
       }
     }))
   }
-  
+
+  return updated
+}
+
+// Update returns table with refund amounts from RefundEventList
+async function updateRefundsInDb(refundsByOrderSku: Map<string, number>) {
+  let updated = 0
+  const entries = Array.from(refundsByOrderSku.entries())
+
+  for (let i = 0; i < entries.length; i += 50) {
+    const batch = entries.slice(i, i + 50)
+
+    await Promise.all(batch.map(async ([key, refundAmount]) => {
+      const [orderId, sku] = key.split('|')
+
+      try {
+        // Update existing return records that don't have refund amount set
+        const result = await prisma.return.updateMany({
+          where: {
+            orderId,
+            masterSku: sku,
+            refundAmount: 0, // Only update if not already set
+          },
+          data: {
+            refundAmount: refundAmount,
+          },
+        })
+        if (result.count > 0) updated++
+      } catch {
+        // Return record might not exist
+      }
+    }))
+  }
+
   return updated
 }
 
@@ -137,6 +172,8 @@ export async function POST(request: NextRequest) {
   syncStatus.pagesProcessed = 0
   syncStatus.itemsProcessed = 0
   syncStatus.itemsUpdated = 0
+  syncStatus.refundsProcessed = 0
+  syncStatus.refundsUpdated = 0
   syncStatus.errors = 0
   syncStatus.startTime = Date.now()
   syncStatus.message = 'Starting...'
@@ -187,6 +224,7 @@ export async function POST(request: NextRequest) {
       let batchItems = 0
       let pageCount = 0
       const feesBatch = new Map<string, { referralFee: number; fbaFee: number; otherFees: number }>()
+      const refundsBatch = new Map<string, number>() // orderId|sku -> refund amount
 
       // Fetch all pages for this date range
       do {
@@ -202,24 +240,30 @@ export async function POST(request: NextRequest) {
 
         // Handle rate limit
         if (response.rateLimited) {
-          console.log(`   ⚠️ Rate limited on page ${pageCount}. Saving ${feesBatch.size} items and waiting...`)
-          
+          console.log(`   ⚠️ Rate limited on page ${pageCount}. Saving ${feesBatch.size} items and ${refundsBatch.size} refunds...`)
+
           // SAVE what we have so far
           if (feesBatch.size > 0) {
             const updated = await updateFeesInDb(feesBatch)
             syncStatus.itemsUpdated += updated
-            console.log(`   ✓ Saved ${updated} items to database`)
+            console.log(`   ✓ Saved ${updated} fee items to database`)
             feesBatch.clear()
           }
-          
+          if (refundsBatch.size > 0) {
+            const updated = await updateRefundsInDb(refundsBatch)
+            syncStatus.refundsUpdated += updated
+            console.log(`   ✓ Saved ${updated} refunds to database`)
+            refundsBatch.clear()
+          }
+
           // Wait and retry
           syncStatus.message = `Batch ${batch}: Rate limited, waiting 2 min...`
           await delay(2 * 60 * 1000)
-          
+
           // Refresh token after wait
           accessToken = await getAccessToken(credentials)
           tokenTime = Date.now()
-          
+
           // Start this batch over (no nextToken since we saved already)
           nextToken = null
           pageCount = 0
@@ -228,12 +272,17 @@ export async function POST(request: NextRequest) {
 
         // Handle token expiry - move to next batch
         if (response.tokenExpired) {
-          console.log(`   ⚠️ Token expired. Saving ${feesBatch.size} items and moving to next batch...`)
-          
+          console.log(`   ⚠️ Token expired. Saving ${feesBatch.size} items and ${refundsBatch.size} refunds...`)
+
           if (feesBatch.size > 0) {
             const updated = await updateFeesInDb(feesBatch)
             syncStatus.itemsUpdated += updated
-            console.log(`   ✓ Saved ${updated} items`)
+            console.log(`   ✓ Saved ${updated} fee items`)
+          }
+          if (refundsBatch.size > 0) {
+            const updated = await updateRefundsInDb(refundsBatch)
+            syncStatus.refundsUpdated += updated
+            console.log(`   ✓ Saved ${updated} refunds`)
           }
           
           // Refresh token and move on
@@ -286,8 +335,35 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Process RefundEventList to get refund amounts for returns
+        const refundEvents = financialEvents.RefundEventList || []
+        for (const event of refundEvents) {
+          const orderId = event.AmazonOrderId
+          if (!orderId) continue
+
+          for (const item of event.ShipmentItemAdjustmentList || []) {
+            const sku = item.SellerSKU
+            if (!sku) continue
+
+            // Calculate total refund from charge adjustments
+            let refundAmount = 0
+            for (const charge of (item.ItemChargeAdjustmentList || [])) {
+              // Refund amounts are typically negative in the API, we want positive
+              const amount = Math.abs(safeFloat(charge.ChargeAmount?.CurrencyAmount))
+              refundAmount += amount
+            }
+
+            if (refundAmount > 0) {
+              const key = `${orderId}|${sku}`
+              const existing = refundsBatch.get(key) || 0
+              refundsBatch.set(key, existing + refundAmount)
+              syncStatus.refundsProcessed++
+            }
+          }
+        }
+
         syncStatus.pagesProcessed++
-        syncStatus.message = `Batch ${batch}/${totalBatches}: Page ${pageCount}, ${feesBatch.size} items`
+        syncStatus.message = `Batch ${batch}/${totalBatches}: Page ${pageCount}, ${feesBatch.size} fees, ${refundsBatch.size} refunds`
 
         if (pageCount % 10 === 0) {
           console.log(`   Page ${pageCount}: ${feesBatch.size} items`)
@@ -300,12 +376,18 @@ export async function POST(request: NextRequest) {
 
       } while (nextToken && syncStatus.isRunning)
 
-      // Save this batch's fees to database
+      // Save this batch's fees and refunds to database
       if (feesBatch.size > 0) {
-        console.log(`   Saving ${feesBatch.size} items to database...`)
+        console.log(`   Saving ${feesBatch.size} fee items to database...`)
         const updated = await updateFeesInDb(feesBatch)
         syncStatus.itemsUpdated += updated
-        console.log(`   ✓ Batch ${batch}: ${updated} items updated`)
+        console.log(`   ✓ Batch ${batch}: ${updated} fee items updated`)
+      }
+      if (refundsBatch.size > 0) {
+        console.log(`   Saving ${refundsBatch.size} refunds to database...`)
+        const updated = await updateRefundsInDb(refundsBatch)
+        syncStatus.refundsUpdated += updated
+        console.log(`   ✓ Batch ${batch}: ${updated} refunds updated`)
       }
 
       // Wait between batches to avoid rate limits
@@ -318,13 +400,15 @@ export async function POST(request: NextRequest) {
     const elapsed = ((Date.now() - syncStatus.startTime) / 1000 / 60).toFixed(1)
     syncStatus.phase = 'complete'
     syncStatus.isRunning = false
-    syncStatus.message = `✅ Done in ${elapsed} min! ${syncStatus.itemsUpdated} items updated`
+    syncStatus.message = `✅ Done in ${elapsed} min! ${syncStatus.itemsUpdated} fees, ${syncStatus.refundsUpdated} refunds updated`
 
     console.log('\n' + '='.repeat(60))
     console.log('✅ SYNC COMPLETE')
     console.log(`   Pages: ${syncStatus.pagesProcessed}`)
-    console.log(`   Items processed: ${syncStatus.itemsProcessed}`)
-    console.log(`   Items updated: ${syncStatus.itemsUpdated}`)
+    console.log(`   Fee items processed: ${syncStatus.itemsProcessed}`)
+    console.log(`   Fee items updated: ${syncStatus.itemsUpdated}`)
+    console.log(`   Refunds processed: ${syncStatus.refundsProcessed}`)
+    console.log(`   Refunds updated: ${syncStatus.refundsUpdated}`)
     console.log(`   Time: ${elapsed} min`)
     console.log('='.repeat(60))
 
@@ -334,17 +418,24 @@ export async function POST(request: NextRequest) {
         status: 'success',
         startedAt: new Date(syncStatus.startTime),
         completedAt: new Date(),
-        recordsProcessed: syncStatus.itemsProcessed,
-        recordsUpdated: syncStatus.itemsUpdated,
-        metadata: { days: totalDays, pages: syncStatus.pagesProcessed },
+        recordsProcessed: syncStatus.itemsProcessed + syncStatus.refundsProcessed,
+        recordsUpdated: syncStatus.itemsUpdated + syncStatus.refundsUpdated,
+        metadata: {
+          days: totalDays,
+          pages: syncStatus.pagesProcessed,
+          feesUpdated: syncStatus.itemsUpdated,
+          refundsUpdated: syncStatus.refundsUpdated,
+        },
       },
     })
 
     return NextResponse.json({
       success: true,
       pagesProcessed: syncStatus.pagesProcessed,
-      itemsProcessed: syncStatus.itemsProcessed,
-      itemsUpdated: syncStatus.itemsUpdated,
+      feesProcessed: syncStatus.itemsProcessed,
+      feesUpdated: syncStatus.itemsUpdated,
+      refundsProcessed: syncStatus.refundsProcessed,
+      refundsUpdated: syncStatus.refundsUpdated,
       elapsed: `${elapsed} min`,
     })
 
