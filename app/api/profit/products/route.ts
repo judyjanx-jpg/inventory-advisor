@@ -103,10 +103,12 @@ export async function GET(request: NextRequest) {
     // Get product-level data with fees directly using pg
     // Dynamic grouping based on groupBy parameter
     // Joins with suppliers table to get supplier names
+    // Joins with parent product (parent_p) to get display_name for parent grouping
     const salesByProduct = await query<{
       sku: string
       asin: string | null
       title: string | null
+      display_name: string | null
       brand: string | null
       supplier_name: string | null
       parent_sku: string | null
@@ -121,6 +123,7 @@ export async function GET(request: NextRequest) {
         ${groupByColumn} as sku,
         MAX(COALESCE(p.asin, oi.asin)) as asin,
         MAX(COALESCE(p.title, oi.master_sku)) as title,
+        MAX(COALESCE(parent_p.display_name, p.display_name)) as display_name,
         MAX(p.brand) as brand,
         MAX(s.name) as supplier_name,
         MAX(p.parent_sku) as parent_sku,
@@ -133,6 +136,7 @@ export async function GET(request: NextRequest) {
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
       LEFT JOIN products p ON oi.master_sku = p.sku
+      LEFT JOIN products parent_p ON p.parent_sku = parent_p.sku
       LEFT JOIN suppliers s ON p.supplier_id = s.id
       WHERE o.purchase_date >= $1
         AND o.purchase_date <= $2
@@ -202,7 +206,8 @@ export async function GET(request: NextRequest) {
         sku: sale.sku,
         asin: sale.asin || '',
         parentAsin: sale.parent_sku || undefined,
-        title: sale.title || sale.sku,
+        // Use display_name if set (custom internal name), otherwise fall back to title or sku
+        title: sale.display_name || sale.title || sale.sku,
         imageUrl: undefined, // No image_url column in products table
         brand: sale.brand || undefined,
         supplier: sale.supplier_name || undefined,
