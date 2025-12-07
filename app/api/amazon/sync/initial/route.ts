@@ -552,10 +552,13 @@ async function syncFees(client: any, marketplaceId: string, startDate: Date, end
             // promoDiscount is stored separately and subtracted in profit calculations, not from revenue
             const grossRevenue = itemPrice + shippingPrice + giftWrapPrice
             
-            // Update order item with fees
+            // Update order item with fees ONLY
+            // DO NOT update itemPrice/shippingPrice/giftWrapPrice from Financial Events!
+            // Financial Events returns NET prices (after promos), but we need GROSS prices
+            // from the Order Reports which are synced separately
             try {
               const result = await prisma.orderItem.updateMany({
-                where: { 
+                where: {
                   orderId,
                   masterSku: sku,
                 },
@@ -564,11 +567,8 @@ async function syncFees(client: any, marketplaceId: string, startDate: Date, end
                   fbaFee: fbaFulfillmentFee + fbaWeightHandling,
                   otherFees: variableClosingFee + otherFees,
                   amazonFees: totalFees,
-                  itemPrice: itemPrice > 0 ? itemPrice : undefined,
-                  shippingPrice: shippingPrice > 0 ? shippingPrice : undefined,
-                  giftWrapPrice: giftWrapPrice > 0 ? giftWrapPrice : undefined,
+                  // Only update promoDiscount from Financial Events (this is accurate)
                   promoDiscount: promoDiscount > 0 ? promoDiscount : undefined,
-                  grossRevenue: grossRevenue > 0 ? grossRevenue : undefined,
                 },
               })
               
