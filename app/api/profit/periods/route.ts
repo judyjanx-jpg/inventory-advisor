@@ -115,8 +115,8 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     const quantity = parseInt(item.quantity || '1', 10)
     const amazonFees = parseFloat(item.amazon_fees || '0')
 
-    // Sales = item_price + shipping_price - promo_discount
-    totalSales += itemPrice + shippingPrice - promoDiscount
+    // Sales = item_price + shipping_price (full sales, promos deducted later in profit calc)
+    totalSales += itemPrice + shippingPrice
     totalUnits += quantity
     totalPromo += promoDiscount
 
@@ -333,11 +333,13 @@ export async function GET(request: NextRequest) {
 
     const periodsData = await Promise.all(periodPromises)
 
-    // Calculate derived metrics
+    // Calculate derived metrics (matching Sellerboard's approach)
+    // Gross profit = Sales - Promos - Amazon fees - COGS
+    // Net profit = Gross profit - Ad cost - Refunds
     const calculateMetrics = (data: any) => {
-      const grossProfit = data.sales - data.amazonFees - data.cogs
+      const grossProfit = data.sales - data.promos - data.amazonFees - data.cogs
       const netProfit = grossProfit - data.adCost - data.refunds
-      const estPayout = data.sales - data.amazonFees - data.refunds
+      const estPayout = data.sales - data.promos - data.amazonFees - data.refunds
       const margin = data.sales > 0 ? (netProfit / data.sales) * 100 : 0
       const roi = data.cogs > 0 ? (netProfit / data.cogs) * 100 : 0
       const acos = data.adCost > 0 && data.sales > 0 ? (data.adCost / data.sales) * 100 : null
