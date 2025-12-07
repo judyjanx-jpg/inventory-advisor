@@ -82,7 +82,7 @@ function getGroupByColumn(groupBy: string): { column: string; label: string } {
     case 'brand':
       return { column: "COALESCE(p.brand, 'Unknown')", label: 'Brand' }
     case 'supplier':
-      return { column: "COALESCE(p.supplier_id::text, 'Unknown')", label: 'Supplier' }
+      return { column: "COALESCE(s.name, 'Unknown')", label: 'Supplier' }
     case 'channel':
       return { column: "'Amazon'", label: 'Channel' } // Only Amazon for now
     case 'sku':
@@ -102,12 +102,13 @@ export async function GET(request: NextRequest) {
 
     // Get product-level data with fees directly using pg
     // Dynamic grouping based on groupBy parameter
+    // Joins with suppliers table to get supplier names
     const salesByProduct = await query<{
       sku: string
       asin: string | null
       title: string | null
       brand: string | null
-      supplier_id: string | null
+      supplier_name: string | null
       parent_sku: string | null
       cost: string | null
       units_sold: string
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
         MAX(COALESCE(p.asin, oi.asin)) as asin,
         MAX(COALESCE(p.title, oi.master_sku)) as title,
         MAX(p.brand) as brand,
-        MAX(p.supplier_id::text) as supplier_id,
+        MAX(s.name) as supplier_name,
         MAX(p.parent_sku) as parent_sku,
         COALESCE(AVG(p.cost), 0)::text as cost,
         COALESCE(SUM(oi.quantity), 0)::text as units_sold,
@@ -132,6 +133,7 @@ export async function GET(request: NextRequest) {
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
       LEFT JOIN products p ON oi.master_sku = p.sku
+      LEFT JOIN suppliers s ON p.supplier_id = s.id
       WHERE o.purchase_date >= $1
         AND o.purchase_date <= $2
         AND o.status != 'Cancelled'
@@ -203,7 +205,7 @@ export async function GET(request: NextRequest) {
         title: sale.title || sale.sku,
         imageUrl: undefined, // No image_url column in products table
         brand: sale.brand || undefined,
-        supplier: sale.supplier_id || undefined,
+        supplier: sale.supplier_name || undefined,
         channel: 'Amazon',
         unitsSold,
         refunds: refundCount,
