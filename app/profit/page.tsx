@@ -71,7 +71,8 @@ export interface ProductProfit {
   sku: string
   asin: string
   parentAsin?: string
-  title: string
+  displayName?: string  // Internal SKU/name set by user
+  title: string         // Amazon product title
   imageUrl?: string
   brand?: string
   supplier?: string

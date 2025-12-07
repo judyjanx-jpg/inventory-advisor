@@ -20,7 +20,8 @@ interface ProductProfit {
   sku: string
   asin: string
   parentAsin?: string
-  title: string
+  displayName?: string  // Internal SKU/name set by user
+  title: string         // Amazon product title
   imageUrl?: string
   brand?: string
   supplier?: string
@@ -206,8 +207,9 @@ export async function GET(request: NextRequest) {
         sku: sale.sku,
         asin: sale.asin || '',
         parentAsin: sale.parent_sku || undefined,
-        // Use display_name if set (custom internal name), otherwise fall back to title or sku
-        title: sale.display_name || sale.title || sale.sku,
+        // display_name is internal SKU, title is Amazon product title
+        displayName: sale.display_name || undefined,
+        title: sale.title || sale.sku,
         imageUrl: undefined, // No image_url column in products table
         brand: sale.brand || undefined,
         supplier: sale.supplier_name || undefined,
