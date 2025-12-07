@@ -89,27 +89,33 @@ function parseReturnsReport(reportContent: string): ReturnItem[] {
   const lines = reportContent.split('\n')
   if (lines.length < 2) return []
 
-  const header = lines[0].split('\t').map(h => h.toLowerCase().trim())
+  // Log the actual header for debugging
+  console.log(`  Report header: ${lines[0].substring(0, 500)}`)
+
+  const header = lines[0].split('\t').map(h => h.toLowerCase().trim().replace(/-/g, '').replace(/_/g, ''))
 
   const findCol = (patterns: string[]) => {
     for (const p of patterns) {
-      const idx = header.findIndex(h => h === p || h.includes(p))
+      const normalizedPattern = p.toLowerCase().replace(/-/g, '').replace(/_/g, '')
+      const idx = header.findIndex(h => h === normalizedPattern || h.includes(normalizedPattern))
       if (idx >= 0) return idx
     }
     return -1
   }
 
-  const returnIdIdx = findCol(['return-id', 'returnid', 'license-plate-number'])
-  const orderIdIdx = findCol(['order-id', 'amazon-order-id'])
-  const skuIdx = findCol(['sku', 'seller-sku', 'merchant-sku'])
+  // More flexible column matching - Amazon uses various naming conventions
+  const returnIdIdx = findCol(['returnrequestid', 'returnid', 'licenseplate', 'licenseplatenumber', 'lpn'])
+  const orderIdIdx = findCol(['orderid', 'amazonorderid', 'order'])
+  const skuIdx = findCol(['sku', 'sellersku', 'merchantsku'])
   const asinIdx = findCol(['asin'])
   const fnskuIdx = findCol(['fnsku'])
-  const dateIdx = findCol(['return-date', 'return-request-date'])
-  const qtyIdx = findCol(['quantity', 'returned-quantity'])
-  const reasonIdx = findCol(['reason', 'return-reason', 'detailed-disposition'])
-  const dispositionIdx = findCol(['disposition', 'status'])
+  const dateIdx = findCol(['returnrequestdate', 'returndate', 'requestdate', 'date'])
+  const qtyIdx = findCol(['quantity', 'returnedquantity', 'qty'])
+  const reasonIdx = findCol(['reason', 'returnreason', 'detaileddisposition', 'customercomments'])
+  const dispositionIdx = findCol(['disposition', 'status', 'detaileddisposition'])
 
-  console.log(`  Report columns: returnId=${returnIdIdx}, orderId=${orderIdIdx}, sku=${skuIdx}, date=${dateIdx}`)
+  console.log(`  Normalized header sample: ${header.slice(0, 10).join(', ')}`)
+  console.log(`  Report columns: returnId=${returnIdIdx}, orderId=${orderIdIdx}, sku=${skuIdx}, date=${dateIdx}, fnsku=${fnskuIdx}`)
 
   const items: ReturnItem[] = []
 
@@ -202,6 +208,7 @@ export async function POST(request: NextRequest) {
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - daysBack)
     const endDate = new Date()
+    endDate.setMinutes(endDate.getMinutes() - 5) // Amazon requires end date to be at least 2 min in past
 
     // Build SKU lookup maps
     syncStatus.phase = 'loading products'
