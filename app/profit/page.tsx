@@ -50,6 +50,7 @@ export interface PeriodData {
   salesChange?: number
   orders: number
   units: number
+  promos: number
   refunds: number
   refundCount: number
   adCost: number

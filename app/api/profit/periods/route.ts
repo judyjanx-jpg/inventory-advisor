@@ -43,6 +43,7 @@ interface PeriodSummary {
   salesChange?: number
   orders: number
   units: number
+  promos: number
   refunds: number
   refundCount: number
   adCost: number
@@ -66,6 +67,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   sales: number
   orders: number
   units: number
+  promos: number
   refunds: number
   refundCount: number
   adCost: number
@@ -99,6 +101,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   // Calculate fees with estimation for items missing actual fees
   let totalSales = 0
   let totalUnits = 0
+  let totalPromo = 0
   let actualFees = 0
   let estimatedFees = 0
   let itemsWithActualFees = 0
@@ -115,6 +118,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     // Sales = item_price + shipping_price - promo_discount
     totalSales += itemPrice + shippingPrice - promoDiscount
     totalUnits += quantity
+    totalPromo += promoDiscount
 
     let itemEstimatedFees = 0
     if (amazonFees > 0) {
@@ -167,16 +171,20 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   `, [startDate, endDate])
   const orderCount = parseInt(orderCountResult?.count || '0', 10)
 
-  // Get refund data
+  // Get refund data - both count and dollar amount
   let refundCount = 0
+  let refundAmount = 0
   try {
-    const refundData = await queryOne<{ total_quantity: string }>(`
-      SELECT COALESCE(SUM(quantity), 0)::text as total_quantity
+    const refundData = await queryOne<{ total_quantity: string; total_amount: string }>(`
+      SELECT
+        COALESCE(SUM(quantity), 0)::text as total_quantity,
+        COALESCE(SUM(refund_amount), 0)::text as total_amount
       FROM returns
       WHERE return_date >= $1
         AND return_date <= $2
     `, [startDate, endDate])
     refundCount = parseInt(refundData?.total_quantity || '0', 10)
+    refundAmount = parseFloat(refundData?.total_amount || '0')
   } catch (e) {
     // Returns table might not have data
   }
@@ -216,7 +224,8 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     sales: totalSales,
     orders: orderCount,
     units: totalUnits,
-    refunds: 0,
+    promos: totalPromo,
+    refunds: refundAmount,
     refundCount,
     adCost,
     amazonFees: actualFees + estimatedFees,
@@ -302,6 +311,7 @@ export async function GET(request: NextRequest) {
           sales: mtdData.sales * forecastMultiplier,
           orders: Math.round(mtdData.orders * forecastMultiplier),
           units: Math.round(mtdData.units * forecastMultiplier),
+          promos: mtdData.promos * forecastMultiplier,
           refunds: mtdData.refunds * forecastMultiplier,
           refundCount: Math.round(mtdData.refundCount * forecastMultiplier),
           adCost: mtdData.adCost * forecastMultiplier,
@@ -374,6 +384,7 @@ export async function GET(request: NextRequest) {
         sales: periodData.sales,
         orders: periodData.orders,
         units: periodData.units,
+        promos: periodData.promos || 0,
         refunds: periodData.refunds || 0,
         refundCount: periodData.refundCount,
         adCost: periodData.adCost,

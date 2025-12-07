@@ -134,7 +134,7 @@ export function PeriodDetailsModal({ data, isOpen, onClose }: PeriodDetailsModal
           </ExpandableRow>
 
           {/* Promo */}
-          <ExpandableRow label="Promo" value={formatCurrency(0)} />
+          <ExpandableRow label="Promo" value={formatCurrency(data.promos || 0)} />
 
           <Divider />
 
