@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
           path += `&NextToken=${encodeURIComponent(nextToken)}`
         }
 
-        const response = await client.callAPI({
+        const apiResult = await client.callAPI({
           operation: 'listFinancialEvents',
           endpoint: 'finances',
           query: {
@@ -375,6 +375,7 @@ export async function POST(request: NextRequest) {
             ...(nextToken ? { NextToken: nextToken } : {}),
           },
         })
+        const response = apiResult as any
 
         const events = response?.payload?.FinancialEvents || response?.FinancialEvents || {}
         nextToken = response?.payload?.NextToken || response?.NextToken || null
