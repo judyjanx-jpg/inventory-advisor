@@ -341,6 +341,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Debug: Log date ranges being used (check server logs)
+    if (includeDebug) {
+      console.log('=== Period Date Ranges (PST) ===')
+      console.log('Current time PST:', format(nowInPST, 'yyyy-MM-dd HH:mm:ss'))
+      periodsToFetch.forEach(period => {
+        const range = getDateRangeForPeriod(period, nowInPST)
+        console.log(`${period}: ${format(toZonedTime(range.start, AMAZON_TIMEZONE), 'yyyy-MM-dd HH:mm:ss')} to ${format(toZonedTime(range.end, AMAZON_TIMEZONE), 'yyyy-MM-dd HH:mm:ss')} PST`)
+      })
+    }
+
     // Build the final periods array with metrics
     const periods: PeriodSummary[] = periodsData.map((periodData, index) => {
       const metrics = calculateMetrics(periodData)
@@ -371,8 +381,23 @@ export async function GET(request: NextRequest) {
     const response: any = { periods, preset }
 
     if (includeDebug) {
+      // Build date range info for each period
+      const dateRanges: Record<string, { start: string; end: string; startPST: string; endPST: string }> = {}
+      periodsToFetch.forEach(period => {
+        const range = getDateRangeForPeriod(period, nowInPST)
+        dateRanges[period] = {
+          start: range.start.toISOString(),
+          end: range.end.toISOString(),
+          startPST: format(toZonedTime(range.start, AMAZON_TIMEZONE), 'yyyy-MM-dd HH:mm:ss'),
+          endPST: format(toZonedTime(range.end, AMAZON_TIMEZONE), 'yyyy-MM-dd HH:mm:ss'),
+        }
+      })
+
       response.debug = {
-        serverTime: format(now, 'yyyy-MM-dd HH:mm:ss'),
+        serverTimeUTC: nowUTC.toISOString(),
+        serverTimePST: format(nowInPST, 'yyyy-MM-dd HH:mm:ss'),
+        timezone: AMAZON_TIMEZONE,
+        dateRanges,
         periodDebug: periodsData.reduce((acc: any, p) => {
           acc[p.period] = p.debug
           return acc
