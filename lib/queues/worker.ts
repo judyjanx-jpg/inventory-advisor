@@ -442,19 +442,270 @@ async function processProductsSync(job: any) {
 }
 
 /**
- * Reports sync processor
+ * Helper: wait for Amazon report to complete
+ */
+async function waitForReport(client: any, reportId: string, maxWaitMinutes = 60): Promise<string | null> {
+  const maxAttempts = maxWaitMinutes * 2 // Check every 30 seconds
+  let attempts = 0
+
+  while (attempts < maxAttempts) {
+    attempts++
+
+    const reportResponse = await client.callAPI({
+      operation: 'getReport',
+      endpoint: 'reports',
+      path: { reportId },
+    })
+
+    const status = reportResponse?.processingStatus
+
+    if (status === 'DONE') {
+      return reportResponse?.reportDocumentId || null
+    }
+
+    if (status === 'CANCELLED' || status === 'FATAL') {
+      throw new Error(`Report failed with status: ${status}`)
+    }
+
+    // Wait 30 seconds before next check
+    await sleep(30000)
+  }
+
+  throw new Error(`Report timed out after ${maxWaitMinutes} minutes`)
+}
+
+/**
+ * Helper: download report content
+ */
+async function downloadReport(client: any, documentId: string): Promise<string> {
+  const docResponse = await client.callAPI({
+    operation: 'getReportDocument',
+    endpoint: 'reports',
+    path: { reportDocumentId: documentId },
+  })
+
+  const url = docResponse?.url
+  if (!url) {
+    throw new Error('No download URL in report document')
+  }
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to download report: ${response.status}`)
+  }
+
+  return await response.text()
+}
+
+/**
+ * Parse returns report from Amazon
+ */
+interface ReturnItem {
+  returnId: string
+  orderId: string
+  sku: string
+  returnDate: string
+  quantity: number
+  reason: string
+  disposition: string
+  asin: string
+  fnsku: string
+}
+
+function parseReturnsReport(reportContent: string): ReturnItem[] {
+  const lines = reportContent.split('\n')
+  if (lines.length < 2) return []
+
+  const header = lines[0].split('\t').map(h => h.toLowerCase().trim())
+
+  const findCol = (patterns: string[]) => {
+    for (const p of patterns) {
+      const idx = header.findIndex(h => h === p || h.includes(p))
+      if (idx >= 0) return idx
+    }
+    return -1
+  }
+
+  const returnIdIdx = findCol(['return-id', 'returnid', 'license-plate-number'])
+  const orderIdIdx = findCol(['order-id', 'amazon-order-id'])
+  const skuIdx = findCol(['sku', 'seller-sku', 'merchant-sku'])
+  const asinIdx = findCol(['asin'])
+  const fnskuIdx = findCol(['fnsku'])
+  const dateIdx = findCol(['return-date', 'return-request-date'])
+  const qtyIdx = findCol(['quantity', 'returned-quantity'])
+  const reasonIdx = findCol(['reason', 'return-reason', 'detailed-disposition'])
+  const dispositionIdx = findCol(['disposition', 'status'])
+
+  const items: ReturnItem[] = []
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const cols = line.split('\t')
+
+    const returnId = returnIdIdx >= 0 ? cols[returnIdIdx]?.trim() : `RET-${i}`
+    const orderId = orderIdIdx >= 0 ? cols[orderIdIdx]?.trim() : ''
+    const sku = skuIdx >= 0 ? cols[skuIdx]?.trim() : ''
+    const asin = asinIdx >= 0 ? cols[asinIdx]?.trim() : ''
+    const fnsku = fnskuIdx >= 0 ? cols[fnskuIdx]?.trim() : ''
+    const returnDate = dateIdx >= 0 ? cols[dateIdx]?.trim() : ''
+    const quantity = qtyIdx >= 0 ? parseInt(cols[qtyIdx]) || 1 : 1
+    const reason = reasonIdx >= 0 ? cols[reasonIdx]?.trim() : ''
+    const disposition = dispositionIdx >= 0 ? cols[dispositionIdx]?.trim() : 'unknown'
+
+    if (!sku && !asin) continue
+
+    items.push({
+      returnId,
+      orderId,
+      sku,
+      returnDate,
+      quantity,
+      reason,
+      disposition,
+      asin,
+      fnsku
+    })
+  }
+
+  return items
+}
+
+/**
+ * Reports sync processor - syncs returns data from Amazon
  */
 async function processReportsSync(job: any) {
   const startTime = Date.now()
   console.log(`\n[daily-reports] Starting job ${job.id}...`)
 
   try {
-    // Placeholder - add report sync logic here
+    const credentials = await getAmazonCredentials()
+    if (!credentials) throw new Error('Amazon credentials not configured')
+
+    const client = await createSpApiClient()
+    if (!client) throw new Error('Failed to create SP-API client')
+
+    const daysBack = job.data.daysBack || 90 // Sync last 90 days of returns
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - daysBack)
+    const endDate = new Date()
+
+    let returnsCreated = 0
+    let returnsUpdated = 0
+
+    // Build SKU lookup maps for matching by ASIN/FNSKU
+    const existingProducts = await prisma.product.findMany({
+      select: { sku: true, asin: true, fnsku: true }
+    })
+    const existingSkuSet = new Set(existingProducts.map(p => p.sku))
+    const productsByAsin = new Map<string, string>()
+    const productsByFnsku = new Map<string, string>()
+    for (const p of existingProducts) {
+      if (p.asin) productsByAsin.set(p.asin, p.sku)
+      if (p.fnsku) productsByFnsku.set(p.fnsku, p.sku)
+    }
+
+    // Helper to find SKU from various identifiers
+    const findSku = (sku: string, asin: string, fnsku: string): string | null => {
+      if (sku && existingSkuSet.has(sku)) return sku
+      if (asin && productsByAsin.has(asin)) return productsByAsin.get(asin)!
+      if (fnsku && productsByFnsku.has(fnsku)) return productsByFnsku.get(fnsku)!
+      return null
+    }
+
+    // Request returns report
+    console.log(`  Requesting returns report for last ${daysBack} days...`)
+
+    const reportTypes = [
+      'GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA',
+      'GET_FBA_CUSTOMER_RETURNS_DATA',
+    ]
+
+    for (const reportType of reportTypes) {
+      console.log(`  Trying: ${reportType}`)
+      try {
+        const reportResponse = await client.callAPI({
+          operation: 'createReport',
+          endpoint: 'reports',
+          body: {
+            reportType,
+            marketplaceIds: [credentials.marketplaceId],
+            dataStartTime: startDate.toISOString(),
+            dataEndTime: endDate.toISOString(),
+          },
+        })
+
+        const reportId = reportResponse?.reportId
+        if (!reportId) {
+          console.log(`    No report ID returned`)
+          continue
+        }
+
+        console.log(`    Report ID: ${reportId}`)
+        console.log(`    Waiting for report to complete...`)
+
+        const docId = await waitForReport(client, reportId, 60) // 60 minute timeout
+        if (!docId) {
+          console.log(`    Report completed but no document ID`)
+          continue
+        }
+
+        console.log(`    Downloading report...`)
+        const content = await downloadReport(client, docId)
+        const returns = parseReturnsReport(content)
+        console.log(`    Parsed ${returns.length} returns`)
+
+        // Save returns to database
+        for (const ret of returns) {
+          const masterSku = findSku(ret.sku, ret.asin, ret.fnsku)
+          if (!masterSku) continue
+
+          try {
+            const existingReturn = await prisma.return.findUnique({
+              where: { returnId: ret.returnId },
+            })
+
+            if (existingReturn) {
+              // Update if we have more info
+              if (!existingReturn.reason && ret.reason) {
+                await prisma.return.update({
+                  where: { returnId: ret.returnId },
+                  data: { reason: ret.reason, disposition: ret.disposition },
+                })
+                returnsUpdated++
+              }
+            } else {
+              await prisma.return.create({
+                data: {
+                  returnId: ret.returnId,
+                  orderId: ret.orderId || 'UNKNOWN',
+                  masterSku,
+                  returnDate: new Date(ret.returnDate || new Date()),
+                  quantity: ret.quantity,
+                  reason: ret.reason || null,
+                  disposition: ret.disposition || 'unknown',
+                  refundAmount: 0, // Will be populated by finances sync
+                },
+              })
+              returnsCreated++
+            }
+          } catch (e) {
+            // Skip duplicates or FK errors
+          }
+        }
+
+        if (returns.length > 0) break // Got data, stop trying other report types
+      } catch (e: any) {
+        console.log(`    Failed: ${e.message?.substring(0, 80)}`)
+      }
+    }
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
-    console.log(`[daily-reports] Completed in ${duration}s`)
-    
-    await logSyncResult('reports', 'success', {}, null)
-    return { success: true }
+    console.log(`[daily-reports] Completed in ${duration}s - ${returnsCreated} created, ${returnsUpdated} updated`)
+
+    await logSyncResult('reports', 'success', { returnsCreated, returnsUpdated }, null)
+    return { returnsCreated, returnsUpdated }
   } catch (error: any) {
     console.error(`[daily-reports] Failed:`, error.message)
     await logSyncResult('reports', 'failed', null, error.message)
