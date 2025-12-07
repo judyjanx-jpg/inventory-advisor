@@ -99,9 +99,9 @@ export async function GET(request: NextRequest) {
       total_items: number
     }>>`
       SELECT
-        COALESCE(p.sku, oi.master_sku, oi.sku) as sku,
+        COALESCE(p.sku, oi.master_sku) as sku,
         COALESCE(p.asin, oi.asin) as asin,
-        COALESCE(p.title, oi.title) as title,
+        COALESCE(p.title, oi.master_sku) as title,
         p.image_url,
         p.brand,
         p.supplier_id,
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
       WHERE o.purchase_date >= ${startDate}
         AND o.purchase_date <= ${endDate}
         AND o.status != 'Cancelled'
-      GROUP BY COALESCE(p.sku, oi.master_sku, oi.sku), COALESCE(p.asin, oi.asin), COALESCE(p.title, oi.title),
+      GROUP BY COALESCE(p.sku, oi.master_sku), COALESCE(p.asin, oi.asin), COALESCE(p.title, oi.master_sku),
                p.image_url, p.brand, p.supplier_id, p.parent_sku, COALESCE(p.cost, 0)
       ORDER BY SUM(oi.item_price) DESC
     `
