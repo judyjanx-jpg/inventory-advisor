@@ -119,6 +119,7 @@ async function processOrdersSync(job: any) {
 
 /**
  * Financial events sync processor
+ * Processes both ShipmentEventList (for fees) and RefundEventList (for refund amounts)
  */
 async function processFinancesSync(job: any) {
   const startTime = Date.now()
@@ -137,6 +138,8 @@ async function processFinancesSync(job: any) {
 
     let eventsProcessed = 0
     let feesUpdated = 0
+    let refundsProcessed = 0
+    let refundsUpdated = 0
     let nextToken: string | null = null
 
     do {
@@ -153,6 +156,7 @@ async function processFinancesSync(job: any) {
       const events = response?.payload?.FinancialEvents || response?.FinancialEvents || {}
       nextToken = response?.payload?.NextToken || response?.NextToken || null
 
+      // Process ShipmentEventList for order fees
       for (const event of events.ShipmentEventList || []) {
         const orderId = event.AmazonOrderId
         if (!orderId) continue
@@ -188,14 +192,48 @@ async function processFinancesSync(job: any) {
         }
       }
 
+      // Process RefundEventList to get refund amounts for returns
+      for (const event of events.RefundEventList || []) {
+        const orderId = event.AmazonOrderId
+        if (!orderId) continue
+
+        for (const item of event.ShipmentItemAdjustmentList || []) {
+          const sku = item.SellerSKU
+          if (!sku) continue
+
+          // Calculate total refund from charge adjustments
+          let refundAmount = 0
+          for (const charge of (item.ItemChargeAdjustmentList || [])) {
+            const amount = Math.abs(parseFloat(charge.ChargeAmount?.CurrencyAmount || 0))
+            refundAmount += amount
+          }
+
+          if (refundAmount > 0) {
+            // Update existing return records that don't have refund amount set
+            const result = await prisma.return.updateMany({
+              where: {
+                orderId,
+                masterSku: sku,
+                refundAmount: 0,
+              },
+              data: {
+                refundAmount: refundAmount,
+              },
+            })
+            if (result.count > 0) refundsUpdated++
+            refundsProcessed++
+          }
+        }
+      }
+
       if (nextToken) await sleep(500)
     } while (nextToken)
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
-    console.log(`[finances-sync] Completed in ${duration}s - ${feesUpdated} fees updated`)
-    
-    await logSyncResult('finances', 'success', { eventsProcessed, feesUpdated }, null)
-    return { eventsProcessed, feesUpdated }
+    console.log(`[finances-sync] Completed in ${duration}s - ${feesUpdated} fees, ${refundsUpdated} refunds updated`)
+
+    await logSyncResult('finances', 'success', { eventsProcessed, feesUpdated, refundsProcessed, refundsUpdated }, null)
+    return { eventsProcessed, feesUpdated, refundsProcessed, refundsUpdated }
   } catch (error: any) {
     console.error(`[finances-sync] Failed:`, error.message)
     await logSyncResult('finances', 'failed', null, error.message)
