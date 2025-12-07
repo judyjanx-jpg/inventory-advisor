@@ -548,7 +548,9 @@ async function syncFees(client: any, marketplaceId: string, startDate: Date, end
             }
             
             const totalFees = referralFee + fbaFulfillmentFee + fbaWeightHandling + variableClosingFee + otherFees
-            const grossRevenue = itemPrice + shippingPrice + giftWrapPrice - promoDiscount
+            // grossRevenue should be GROSS (before promos) to match Amazon Seller Central's "Sales" number
+            // promoDiscount is stored separately and subtracted in profit calculations, not from revenue
+            const grossRevenue = itemPrice + shippingPrice + giftWrapPrice
             
             // Update order item with fees
             try {

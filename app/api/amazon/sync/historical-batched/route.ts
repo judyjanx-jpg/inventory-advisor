@@ -466,8 +466,9 @@ async function runBatchedSync(batchSize: number, totalDays: number, totalBatches
                 
                 const itemPrice = safeFloat(getField(itemRow, 'item-price'))
                 const shippingPrice = safeFloat(getField(itemRow, 'shipping-price'))
+                const giftWrapPrice = safeFloat(getField(itemRow, 'gift-wrap-price'))
                 const promoDiscount = Math.abs(safeFloat(getField(itemRow, 'item-promotion-discount')))
-                
+
                 await prisma.orderItem.upsert({
                   where: { orderId_masterSku: { orderId, masterSku: sku } },
                   create: {
@@ -479,16 +480,18 @@ async function runBatchedSync(batchSize: number, totalDays: number, totalBatches
                     itemTax: safeFloat(getField(itemRow, 'item-tax')),
                     shippingPrice,
                     shippingTax: safeFloat(getField(itemRow, 'shipping-tax')),
-                    giftWrapPrice: safeFloat(getField(itemRow, 'gift-wrap-price')),
+                    giftWrapPrice,
                     giftWrapTax: safeFloat(getField(itemRow, 'gift-wrap-tax')),
                     promoDiscount,
                     shipPromoDiscount: Math.abs(safeFloat(getField(itemRow, 'ship-promotion-discount'))),
-                    grossRevenue: itemPrice + shippingPrice - promoDiscount,
+                    // grossRevenue should be GROSS (before promos) to match Amazon Seller Central's "Sales" number
+                    grossRevenue: itemPrice + shippingPrice + giftWrapPrice,
                   },
                   update: {
                     quantity: safeInt(getField(itemRow, 'quantity', 'quantity-shipped')) || 1,
                     itemPrice,
-                    grossRevenue: itemPrice + shippingPrice - promoDiscount,
+                    // grossRevenue should be GROSS (before promos) to match Amazon Seller Central
+                    grossRevenue: itemPrice + shippingPrice + giftWrapPrice,
                   },
                 })
                 

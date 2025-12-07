@@ -155,6 +155,7 @@ export async function POST(request: NextRequest) {
       if (sku) {
         const itemPrice = safeFloat(getField(row, 'item-price', 'itemprice', 'price'))
         const shippingPrice = safeFloat(getField(row, 'shipping-price', 'shippingprice'))
+        const giftWrapPrice = safeFloat(getField(row, 'gift-wrap-price', 'giftwrapprice'))
         const promoDiscount = Math.abs(safeFloat(getField(row, 'item-promotion-discount', 'promo-discount')))
         const shipPromoDiscount = Math.abs(safeFloat(getField(row, 'ship-promotion-discount')))
 
@@ -167,11 +168,12 @@ export async function POST(request: NextRequest) {
           itemTax: safeFloat(getField(row, 'item-tax', 'itemtax')),
           shippingPrice,
           shippingTax: safeFloat(getField(row, 'shipping-tax', 'shippingtax')),
-          giftWrapPrice: safeFloat(getField(row, 'gift-wrap-price', 'giftwrapprice')),
+          giftWrapPrice,
           giftWrapTax: safeFloat(getField(row, 'gift-wrap-tax', 'giftwraptax')),
           promoDiscount,
           shipPromoDiscount,
-          grossRevenue: itemPrice + shippingPrice - promoDiscount - shipPromoDiscount,
+          // grossRevenue should be GROSS (before promos) to match Amazon Seller Central's "Sales" number
+          grossRevenue: itemPrice + shippingPrice + giftWrapPrice,
         })
       }
 

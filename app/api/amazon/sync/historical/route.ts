@@ -444,8 +444,9 @@ export async function POST(request: NextRequest) {
             const promoDiscount = Math.abs(safeFloat(getField(itemRow, 'item-promotion-discount', 'promo-discount', 'promotion-discount')))
             const shipPromoDiscount = Math.abs(safeFloat(getField(itemRow, 'ship-promotion-discount', 'ship-promo-discount')))
             
-            // Calculate gross revenue
-            const grossRevenue = itemPrice + shippingPrice + giftWrapPrice - promoDiscount - shipPromoDiscount
+            // grossRevenue should be GROSS (before promos) to match Amazon Seller Central's "Sales" number
+            // promoDiscount is stored separately and subtracted in profit calculations, not from revenue
+            const grossRevenue = itemPrice + shippingPrice + giftWrapPrice
             
             // Upsert order item
             const existingItem = await prisma.orderItem.findUnique({

@@ -81,6 +81,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   const orderItems = await query<{
     item_price: string
     shipping_price: string
+    gift_wrap_price: string
     promo_discount: string
     quantity: string
     amazon_fees: string
@@ -88,6 +89,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     SELECT
       oi.item_price::text,
       COALESCE(oi.shipping_price, 0)::text as shipping_price,
+      COALESCE(oi.gift_wrap_price, 0)::text as gift_wrap_price,
       COALESCE(oi.promo_discount, 0)::text as promo_discount,
       oi.quantity::text,
       oi.amazon_fees::text
@@ -111,12 +113,15 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   for (const item of orderItems) {
     const itemPrice = parseFloat(item.item_price || '0')
     const shippingPrice = parseFloat(item.shipping_price || '0')
+    const giftWrapPrice = parseFloat(item.gift_wrap_price || '0')
     const promoDiscount = parseFloat(item.promo_discount || '0')
     const quantity = parseInt(item.quantity || '1', 10)
     const amazonFees = parseFloat(item.amazon_fees || '0')
 
-    // Sales = item_price + shipping_price (full sales, promos deducted later in profit calc)
-    totalSales += itemPrice + shippingPrice
+    // Sales = item_price + shipping_price + gift_wrap_price (GROSS sales before promos)
+    // This matches Amazon Seller Central's "Sales" number
+    // Promos are deducted later in profit calculation, not from revenue
+    totalSales += itemPrice + shippingPrice + giftWrapPrice
     totalUnits += quantity
     totalPromo += promoDiscount
 
