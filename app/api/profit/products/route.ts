@@ -81,8 +81,7 @@ export async function GET(request: NextRequest) {
     const { startDate, endDate } = getDateRange(period)
 
     // Get product-level data with fees directly from OrderItem table
-    // This is where financial-events sync stores the actual fees
-    // Use LEFT JOIN on products to include order_items that don't have matching products
+    // Simplified query - group by master_sku which always exists
     const salesByProduct = await prisma.$queryRaw<Array<{
       sku: string
       asin: string | null
@@ -99,14 +98,14 @@ export async function GET(request: NextRequest) {
       total_items: number
     }>>`
       SELECT
-        COALESCE(p.sku, oi.master_sku) as sku,
-        COALESCE(p.asin, oi.asin) as asin,
-        COALESCE(p.title, oi.master_sku) as title,
-        p.image_url,
-        p.brand,
-        p.supplier_id,
-        p.parent_sku,
-        COALESCE(p.cost, 0)::text as cost,
+        oi.master_sku as sku,
+        MAX(COALESCE(p.asin, oi.asin)) as asin,
+        MAX(COALESCE(p.title, oi.master_sku)) as title,
+        MAX(p.image_url) as image_url,
+        MAX(p.brand) as brand,
+        MAX(p.supplier_id::text) as supplier_id,
+        MAX(p.parent_sku) as parent_sku,
+        COALESCE(MAX(p.cost), 0)::text as cost,
         COALESCE(SUM(oi.quantity), 0)::int as units_sold,
         COALESCE(SUM(oi.item_price), 0)::text as total_sales,
         COALESCE(SUM(oi.amazon_fees), 0)::text as actual_fees,
@@ -118,8 +117,7 @@ export async function GET(request: NextRequest) {
       WHERE o.purchase_date >= ${startDate}
         AND o.purchase_date <= ${endDate}
         AND o.status != 'Cancelled'
-      GROUP BY COALESCE(p.sku, oi.master_sku), COALESCE(p.asin, oi.asin), COALESCE(p.title, oi.master_sku),
-               p.image_url, p.brand, p.supplier_id, p.parent_sku, COALESCE(p.cost, 0)
+      GROUP BY oi.master_sku
       ORDER BY SUM(oi.item_price) DESC
     `
 
