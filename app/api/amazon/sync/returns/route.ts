@@ -67,8 +67,19 @@ async function downloadReport(client: any, documentId: string): Promise<string> 
   const url = docResponse?.url
   if (!url) throw new Error('No download URL in report document')
 
+  const compressionAlgorithm = docResponse?.compressionAlgorithm
+  console.log(`    Compression: ${compressionAlgorithm || 'none'}`)
+
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Failed to download report: ${response.status}`)
+
+  // Handle gzip compression
+  if (compressionAlgorithm === 'GZIP') {
+    const arrayBuffer = await response.arrayBuffer()
+    const { gunzipSync } = await import('zlib')
+    const decompressed = gunzipSync(Buffer.from(arrayBuffer))
+    return decompressed.toString('utf-8')
+  }
 
   return await response.text()
 }
