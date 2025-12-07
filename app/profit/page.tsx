@@ -89,11 +89,16 @@ export default function ProfitDashboard() {
 
   // Fetch periods when preset changes
   useEffect(() => {
+    console.log('useEffect triggered - selectedPreset changed to:', selectedPreset)
+
     const fetchPeriodsForPreset = async (preset: PresetType) => {
+      console.log('fetchPeriodsForPreset called with:', preset)
       setLoading(true)
       setInitialLoadDone(false)
       try {
+        console.log('Fetching periods from API...')
         const periodsRes = await fetch(`/api/profit/periods?preset=${preset}`)
+        console.log('Periods API response status:', periodsRes.status)
         if (periodsRes.ok) {
           const data = await periodsRes.json()
           const periods = data.periods || []
@@ -199,7 +204,10 @@ export default function ProfitDashboard() {
           <div className="flex items-center gap-3">
             <PeriodSelector
               selectedPreset={selectedPreset}
-              onPresetChange={(preset) => setSelectedPreset(preset as PresetType)}
+              onPresetChange={(preset) => {
+                console.log('PeriodSelector onPresetChange called with:', preset)
+                setSelectedPreset(preset as PresetType)
+              }}
               compareMode={compareMode}
               onCompareModeChange={setCompareMode}
             />
