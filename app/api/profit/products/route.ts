@@ -2,7 +2,7 @@
 // Returns product-level profit data for the selected period
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { query } from '@/lib/db'
 import { getQuickFeeEstimate } from '@/lib/fee-estimation'
 import {
   startOfDay,
@@ -80,9 +80,8 @@ export async function GET(request: NextRequest) {
 
     const { startDate, endDate } = getDateRange(period)
 
-    // Get product-level data with fees directly from OrderItem table
-    // Simplified query - group by master_sku which always exists
-    const salesByProduct = await prisma.$queryRaw<Array<{
+    // Get product-level data with fees directly using pg
+    const salesByProduct = await query<{
       sku: string
       asin: string | null
       title: string | null
@@ -90,12 +89,12 @@ export async function GET(request: NextRequest) {
       supplier_id: string | null
       parent_sku: string | null
       cost: string | null
-      units_sold: number
+      units_sold: string
       total_sales: string
       actual_fees: string
-      items_with_fees: number
-      total_items: number
-    }>>`
+      items_with_fees: string
+      total_items: string
+    }>(`
       SELECT
         oi.master_sku as sku,
         MAX(COALESCE(p.asin, oi.asin)) as asin,
@@ -104,36 +103,36 @@ export async function GET(request: NextRequest) {
         MAX(p.supplier_id::text) as supplier_id,
         MAX(p.parent_sku) as parent_sku,
         COALESCE(MAX(p.cost), 0)::text as cost,
-        COALESCE(SUM(oi.quantity), 0)::int as units_sold,
+        COALESCE(SUM(oi.quantity), 0)::text as units_sold,
         COALESCE(SUM(oi.item_price), 0)::text as total_sales,
         COALESCE(SUM(oi.amazon_fees), 0)::text as actual_fees,
-        COUNT(CASE WHEN oi.amazon_fees > 0 THEN 1 END)::int as items_with_fees,
-        COUNT(oi.id)::int as total_items
+        COUNT(CASE WHEN oi.amazon_fees > 0 THEN 1 END)::text as items_with_fees,
+        COUNT(oi.id)::text as total_items
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
       LEFT JOIN products p ON oi.master_sku = p.sku
-      WHERE o.purchase_date >= ${startDate}
-        AND o.purchase_date <= ${endDate}
+      WHERE o.purchase_date >= $1
+        AND o.purchase_date <= $2
         AND o.status != 'Cancelled'
       GROUP BY oi.master_sku
       ORDER BY SUM(oi.item_price) DESC
-    `
+    `, [startDate, endDate])
 
     // Get refunds by product
-    let refundsByProduct: Array<{ sku: string; refund_count: number }> = []
+    let refundsByProduct: Array<{ sku: string; refund_count: string }> = []
     try {
-      refundsByProduct = await prisma.$queryRaw<Array<{
+      refundsByProduct = await query<{
         sku: string
-        refund_count: number
-      }>>`
+        refund_count: string
+      }>(`
         SELECT
           master_sku as sku,
-          COALESCE(SUM(quantity), 0)::int as refund_count
+          COALESCE(SUM(quantity), 0)::text as refund_count
         FROM returns
-        WHERE return_date >= ${startDate}
-          AND return_date <= ${endDate}
+        WHERE return_date >= $1
+          AND return_date <= $2
         GROUP BY master_sku
-      `
+      `, [startDate, endDate])
     } catch (e) {
       // Returns table might not have data
     }
@@ -142,15 +141,15 @@ export async function GET(request: NextRequest) {
     const refundsMap = new Map(refundsByProduct.map(r => [r.sku, r]))
 
     // Build product profit data with fee estimation
-    const products: ProductProfit[] = salesByProduct.map((sale: any) => {
+    const products: ProductProfit[] = salesByProduct.map((sale) => {
       const refund = refundsMap.get(sale.sku)
 
-      const unitsSold = Number(sale.units_sold)
+      const unitsSold = parseInt(sale.units_sold || '0', 10)
       const totalSales = parseFloat(sale.total_sales || '0')
-      const refundCount = Number(refund?.refund_count || 0)
+      const refundCount = parseInt(refund?.refund_count || '0', 10)
       const actualFees = parseFloat(sale.actual_fees || '0')
-      const itemsWithFees = Number(sale.items_with_fees || 0)
-      const totalItems = Number(sale.total_items || 0)
+      const itemsWithFees = parseInt(sale.items_with_fees || '0', 10)
+      const totalItems = parseInt(sale.total_items || '0', 10)
       const adSpend = 0 // Will be populated when Ads API is connected
       const cogs = parseFloat(sale.cost || '0')
       const cogsTotal = cogs * unitsSold
@@ -229,7 +228,14 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Error fetching product profit data:', error)
     return NextResponse.json(
-      { error: error.message, products: [] },
+      {
+        error: error.message,
+        products: [],
+        // Include more details for debugging
+        errorCode: error.code,
+        errorMeta: error.meta,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     )
   }

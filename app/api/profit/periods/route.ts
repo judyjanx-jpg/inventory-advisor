@@ -2,7 +2,7 @@
 // Returns profit summaries for each time period (Today, Yesterday, MTD, etc.)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { query, queryOne } from '@/lib/db'
 import { getQuickFeeEstimate } from '@/lib/fee-estimation'
 import {
   startOfDay,
@@ -71,23 +71,22 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   feeEstimationRate: number
   debug?: DebugInfo
 }> {
-  // Get order items with fee data directly from OrderItem table
-  // This is where the financial-events sync stores the fees
-  const orderItems = await prisma.$queryRaw<Array<{
+  // Get order items with fee data directly using pg
+  const orderItems = await query<{
     item_price: string
-    quantity: number
+    quantity: string
     amazon_fees: string
-  }>>`
+  }>(`
     SELECT
       oi.item_price::text,
-      oi.quantity,
+      oi.quantity::text,
       oi.amazon_fees::text
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.id
-    WHERE o.purchase_date >= ${startDate}
-      AND o.purchase_date <= ${endDate}
+    WHERE o.purchase_date >= $1
+      AND o.purchase_date <= $2
       AND o.status != 'Cancelled'
-  `
+  `, [startDate, endDate])
 
   // Calculate fees with estimation for items missing actual fees
   let totalSales = 0
@@ -100,7 +99,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
 
   for (const item of orderItems) {
     const itemPrice = parseFloat(item.item_price || '0')
-    const quantity = item.quantity || 1
+    const quantity = parseInt(item.quantity || '1', 10)
     const amazonFees = parseFloat(item.amazon_fees || '0')
 
     totalSales += itemPrice
@@ -148,34 +147,25 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   } : undefined
 
   // Get unique order count
-  const orderCount = await prisma.order.count({
-    where: {
-      purchaseDate: {
-        gte: startDate,
-        lte: endDate,
-      },
-      status: {
-        not: 'Cancelled',
-      },
-    },
-  })
+  const orderCountResult = await queryOne<{ count: string }>(`
+    SELECT COUNT(*)::text as count
+    FROM orders
+    WHERE purchase_date >= $1
+      AND purchase_date <= $2
+      AND status != 'Cancelled'
+  `, [startDate, endDate])
+  const orderCount = parseInt(orderCountResult?.count || '0', 10)
 
   // Get refund data
   let refundCount = 0
   try {
-    const refundData = await prisma.return.aggregate({
-      where: {
-        returnDate: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      _sum: {
-        quantity: true,
-      },
-      _count: true,
-    })
-    refundCount = Number(refundData._sum.quantity || 0)
+    const refundData = await queryOne<{ total_quantity: string }>(`
+      SELECT COALESCE(SUM(quantity), 0)::text as total_quantity
+      FROM returns
+      WHERE return_date >= $1
+        AND return_date <= $2
+    `, [startDate, endDate])
+    refundCount = parseInt(refundData?.total_quantity || '0', 10)
   } catch (e) {
     // Returns table might not have data
   }
@@ -183,18 +173,13 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   // Get ad spend from advertising_daily (if connected)
   let adCost = 0
   try {
-    const adData = await prisma.advertisingDaily.aggregate({
-      where: {
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      _sum: {
-        spend: true,
-      },
-    })
-    adCost = Number(adData._sum.spend || 0)
+    const adData = await queryOne<{ total_spend: string }>(`
+      SELECT COALESCE(SUM(spend), 0)::text as total_spend
+      FROM advertising_daily
+      WHERE date >= $1
+        AND date <= $2
+    `, [startDate, endDate])
+    adCost = parseFloat(adData?.total_spend || '0')
   } catch {
     // Ads table might not exist yet
   }
@@ -202,16 +187,16 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   // Calculate COGS - use 'cost' column from products table
   let cogs = 0
   try {
-    const cogsData = await prisma.$queryRaw<{ total_cogs: number }[]>`
-      SELECT COALESCE(SUM(oi.quantity * COALESCE(p.cost, 0)), 0) as total_cogs
+    const cogsData = await queryOne<{ total_cogs: string }>(`
+      SELECT COALESCE(SUM(oi.quantity * COALESCE(p.cost, 0)), 0)::text as total_cogs
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       LEFT JOIN products p ON oi.master_sku = p.sku
-      WHERE o.purchase_date >= ${startDate}
-      AND o.purchase_date <= ${endDate}
+      WHERE o.purchase_date >= $1
+      AND o.purchase_date <= $2
       AND o.status != 'Cancelled'
-    `
-    cogs = Number(cogsData[0]?.total_cogs || 0)
+    `, [startDate, endDate])
+    cogs = parseFloat(cogsData?.total_cogs || '0')
   } catch (e) {
     console.log('COGS query error:', e)
   }
