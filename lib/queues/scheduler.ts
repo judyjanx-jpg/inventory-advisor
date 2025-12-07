@@ -27,6 +27,7 @@ interface ScheduleConfig {
   cron: string
   description: string
   enabled: boolean
+  data?: Record<string, any> // Optional job data like daysBack
 }
 
 const schedules: ScheduleConfig[] = [
@@ -42,14 +43,15 @@ const schedules: ScheduleConfig[] = [
     name: 'orders-sync',
     cron: '*/15 * * * *',  // Every 15 minutes
     description: 'Sync recent orders from SP-API',
-    enabled: true,
+    enabled: false, // Disabled - using orders-report-sync instead
   },
   {
     queue: financesQueue,
     name: 'finances-sync',
-    cron: '0 */2 * * *',   // Every 2 hours
+    cron: '0 */4 * * *',   // Every 4 hours (reduced frequency to avoid rate limits)
     description: 'Sync financial events (fees, refunds)',
     enabled: true,
+    data: { daysBack: 14 }, // Sync 14 days to catch any missed data
   },
   {
     queue: inventoryQueue,
@@ -69,8 +71,9 @@ const schedules: ScheduleConfig[] = [
     queue: reportsQueue,
     name: 'daily-reports',
     cron: '0 7 * * *',     // Daily at 7am
-    description: 'Generate daily reports (storage fees, returns, etc)',
+    description: 'Sync returns data from Amazon reports',
     enabled: true,
+    data: { daysBack: 30 }, // Sync 30 days of returns daily
   },
   {
     queue: aggregationQueue,
@@ -105,7 +108,7 @@ export async function initializeScheduler() {
       // Add the scheduled job
       await schedule.queue.add(
         schedule.name,
-        { scheduled: true, createdAt: new Date().toISOString() },
+        { scheduled: true, createdAt: new Date().toISOString(), ...schedule.data },
         {
           repeat: { cron: schedule.cron },
           jobId: schedule.name,

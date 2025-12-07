@@ -120,6 +120,7 @@ async function processOrdersSync(job: any) {
 /**
  * Financial events sync processor
  * Processes both ShipmentEventList (for fees) and RefundEventList (for refund amounts)
+ * Includes rate limit handling with exponential backoff
  */
 async function processFinancesSync(job: any) {
   const startTime = Date.now()
@@ -132,101 +133,128 @@ async function processFinancesSync(job: any) {
     const client = await createSpApiClient()
     if (!client) throw new Error('Failed to create SP-API client')
 
-    const daysBack = job.data.daysBack || 7
+    const daysBack = job.data.daysBack || 14
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - daysBack)
+    const endDate = new Date()
+    endDate.setMinutes(endDate.getMinutes() - 5) // Amazon requires end date in past
 
     let eventsProcessed = 0
     let feesUpdated = 0
     let refundsProcessed = 0
     let refundsUpdated = 0
     let nextToken: string | null = null
+    let retryCount = 0
+    const maxRetries = 3
+
+    console.log(`  Syncing ${daysBack} days of financial events...`)
 
     do {
-      const response: any = await client.callAPI({
-        operation: 'listFinancialEvents',
-        endpoint: 'finances',
-        query: {
-          PostedAfter: startDate.toISOString(),
-          MaxResultsPerPage: 100,
-          ...(nextToken ? { NextToken: nextToken } : {}),
-        },
-      })
+      try {
+        const response: any = await client.callAPI({
+          operation: 'listFinancialEvents',
+          endpoint: 'finances',
+          query: {
+            PostedAfter: startDate.toISOString(),
+            PostedBefore: endDate.toISOString(),
+            MaxResultsPerPage: 100,
+            ...(nextToken ? { NextToken: nextToken } : {}),
+          },
+        })
 
-      const events = response?.payload?.FinancialEvents || response?.FinancialEvents || {}
-      nextToken = response?.payload?.NextToken || response?.NextToken || null
+        // Reset retry count on success
+        retryCount = 0
 
-      // Process ShipmentEventList for order fees
-      for (const event of events.ShipmentEventList || []) {
-        const orderId = event.AmazonOrderId
-        if (!orderId) continue
+        const events = response?.payload?.FinancialEvents || response?.FinancialEvents || {}
+        nextToken = response?.payload?.NextToken || response?.NextToken || null
 
-        for (const item of event.ShipmentItemList || []) {
-          const sku = item.SellerSKU
-          if (!sku) continue
+        // Process ShipmentEventList for order fees
+        for (const event of events.ShipmentEventList || []) {
+          const orderId = event.AmazonOrderId
+          if (!orderId) continue
 
-          let referralFee = 0, fbaFee = 0, otherFees = 0
+          for (const item of event.ShipmentItemList || []) {
+            const sku = item.SellerSKU
+            if (!sku) continue
 
-          for (const fee of (item.ItemFeeList || [])) {
-            const feeType = fee.FeeType || ''
-            const amount = Math.abs(parseFloat(fee.FeeAmount?.CurrencyAmount || 0))
+            let referralFee = 0, fbaFee = 0, otherFees = 0
 
-            if (feeType.includes('Commission') || feeType.includes('Referral')) {
-              referralFee += amount
-            } else if (feeType.includes('FBA')) {
-              fbaFee += amount
-            } else if (feeType.includes('Fee')) {
-              otherFees += amount
+            for (const fee of (item.ItemFeeList || [])) {
+              const feeType = fee.FeeType || ''
+              const amount = Math.abs(parseFloat(fee.FeeAmount?.CurrencyAmount || 0))
+
+              if (feeType.includes('Commission') || feeType.includes('Referral')) {
+                referralFee += amount
+              } else if (feeType.includes('FBA')) {
+                fbaFee += amount
+              } else if (feeType.includes('Fee')) {
+                otherFees += amount
+              }
+            }
+
+            const totalFees = referralFee + fbaFee + otherFees
+            if (totalFees > 0) {
+              const result = await prisma.orderItem.updateMany({
+                where: { orderId, masterSku: sku },
+                data: { referralFee, fbaFee, otherFees, amazonFees: totalFees },
+              })
+              if (result.count > 0) feesUpdated++
+            }
+            eventsProcessed++
+          }
+        }
+
+        // Process RefundEventList to get refund amounts for returns
+        for (const event of events.RefundEventList || []) {
+          const orderId = event.AmazonOrderId
+          if (!orderId) continue
+
+          for (const item of event.ShipmentItemAdjustmentList || []) {
+            const sku = item.SellerSKU
+            if (!sku) continue
+
+            let refundAmount = 0
+            for (const charge of (item.ItemChargeAdjustmentList || [])) {
+              const amount = Math.abs(parseFloat(charge.ChargeAmount?.CurrencyAmount || 0))
+              refundAmount += amount
+            }
+
+            if (refundAmount > 0) {
+              const result = await prisma.return.updateMany({
+                where: {
+                  orderId,
+                  masterSku: sku,
+                  refundAmount: 0,
+                },
+                data: {
+                  refundAmount: refundAmount,
+                },
+              })
+              if (result.count > 0) refundsUpdated++
+              refundsProcessed++
             }
           }
-
-          const totalFees = referralFee + fbaFee + otherFees
-          if (totalFees > 0) {
-            const result = await prisma.orderItem.updateMany({
-              where: { orderId, masterSku: sku },
-              data: { referralFee, fbaFee, otherFees, amazonFees: totalFees },
-            })
-            if (result.count > 0) feesUpdated++
-          }
-          eventsProcessed++
         }
-      }
 
-      // Process RefundEventList to get refund amounts for returns
-      for (const event of events.RefundEventList || []) {
-        const orderId = event.AmazonOrderId
-        if (!orderId) continue
+        // Longer delay between requests to avoid rate limiting
+        if (nextToken) await sleep(1000)
 
-        for (const item of event.ShipmentItemAdjustmentList || []) {
-          const sku = item.SellerSKU
-          if (!sku) continue
-
-          // Calculate total refund from charge adjustments
-          let refundAmount = 0
-          for (const charge of (item.ItemChargeAdjustmentList || [])) {
-            const amount = Math.abs(parseFloat(charge.ChargeAmount?.CurrencyAmount || 0))
-            refundAmount += amount
-          }
-
-          if (refundAmount > 0) {
-            // Update existing return records that don't have refund amount set
-            const result = await prisma.return.updateMany({
-              where: {
-                orderId,
-                masterSku: sku,
-                refundAmount: 0,
-              },
-              data: {
-                refundAmount: refundAmount,
-              },
-            })
-            if (result.count > 0) refundsUpdated++
-            refundsProcessed++
+      } catch (apiError: any) {
+        // Handle rate limiting with exponential backoff
+        if (apiError.message?.includes('429') || apiError.message?.includes('rate') || apiError.message?.includes('QuotaExceeded')) {
+          retryCount++
+          if (retryCount <= maxRetries) {
+            const backoffMs = Math.pow(2, retryCount) * 2000 // 4s, 8s, 16s
+            console.log(`  ⚠️ Rate limited, waiting ${backoffMs/1000}s before retry ${retryCount}/${maxRetries}...`)
+            await sleep(backoffMs)
+            continue // Retry the same request
+          } else {
+            console.log(`  ⚠️ Max retries exceeded, moving on...`)
+            break // Stop pagination
           }
         }
+        throw apiError // Re-throw non-rate-limit errors
       }
-
-      if (nextToken) await sleep(500)
     } while (nextToken)
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
@@ -475,7 +503,7 @@ async function waitForReport(client: any, reportId: string, maxWaitMinutes = 60)
 }
 
 /**
- * Helper: download report content
+ * Helper: download report content (with gzip decompression)
  */
 async function downloadReport(client: any, documentId: string): Promise<string> {
   const docResponse = await client.callAPI({
@@ -489,9 +517,19 @@ async function downloadReport(client: any, documentId: string): Promise<string> 
     throw new Error('No download URL in report document')
   }
 
+  const compressionAlgorithm = docResponse?.compressionAlgorithm
+
   const response = await fetch(url)
   if (!response.ok) {
     throw new Error(`Failed to download report: ${response.status}`)
+  }
+
+  // Handle gzip compression
+  if (compressionAlgorithm === 'GZIP') {
+    const arrayBuffer = await response.arrayBuffer()
+    const { gunzipSync } = await import('zlib')
+    const decompressed = gunzipSync(Buffer.from(arrayBuffer))
+    return decompressed.toString('utf-8')
   }
 
   return await response.text()
