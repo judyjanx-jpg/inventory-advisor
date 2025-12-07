@@ -86,7 +86,6 @@ export async function GET(request: NextRequest) {
       sku: string
       asin: string | null
       title: string | null
-      image_url: string | null
       brand: string | null
       supplier_id: string | null
       parent_sku: string | null
@@ -101,7 +100,6 @@ export async function GET(request: NextRequest) {
         oi.master_sku as sku,
         MAX(COALESCE(p.asin, oi.asin)) as asin,
         MAX(COALESCE(p.title, oi.master_sku)) as title,
-        MAX(p.image_url) as image_url,
         MAX(p.brand) as brand,
         MAX(p.supplier_id::text) as supplier_id,
         MAX(p.parent_sku) as parent_sku,
@@ -183,7 +181,7 @@ export async function GET(request: NextRequest) {
         asin: sale.asin || '',
         parentAsin: sale.parent_sku || undefined,
         title: sale.title || sale.sku,
-        imageUrl: sale.image_url || undefined,
+        imageUrl: undefined, // No image_url column in products table
         brand: sale.brand || undefined,
         supplier: sale.supplier_id || undefined,
         channel: 'Amazon',
