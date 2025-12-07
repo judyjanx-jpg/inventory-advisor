@@ -87,38 +87,69 @@ export default function ProfitDashboard() {
   const [compareMode, setCompareMode] = useState<'none' | 'previous' | 'lastYear'>('none')
   const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products')
 
+  // Fetch periods when preset changes
   useEffect(() => {
-    fetchDashboardData()
-  }, [selectedPeriod, groupBy, selectedPreset])
+    setInitialLoadDone(false)  // Reset so fetchPeriods handles product fetch
+    fetchPeriods()
+  }, [selectedPreset])
 
-  const fetchDashboardData = async () => {
+  // Fetch products when period or groupBy changes (but not on initial load - fetchPeriods handles that)
+  const [initialLoadDone, setInitialLoadDone] = useState(false)
+
+  useEffect(() => {
+    if (initialLoadDone && periodData.length > 0) {
+      fetchProducts()
+    }
+  }, [selectedPeriod, groupBy])
+
+  const fetchPeriods = async () => {
     setLoading(true)
     try {
-      // Fetch period summaries with preset
       const periodsRes = await fetch(`/api/profit/periods?preset=${selectedPreset}`)
       if (periodsRes.ok) {
         const data = await periodsRes.json()
-        setPeriodData(data.periods || [])
-        // If selected period is not in the new preset, select the first one
-        if (data.periods?.length > 0) {
-          const periodExists = data.periods.some((p: PeriodData) => p.period === selectedPeriod)
+        const periods = data.periods || []
+        setPeriodData(periods)
+
+        // Determine which period to use for products
+        if (periods.length > 0) {
+          const periodExists = periods.some((p: PeriodData) => p.period === selectedPeriod)
+          const periodToUse = periodExists ? selectedPeriod : periods[0].period as PeriodType
+
           if (!periodExists) {
-            setSelectedPeriod(data.periods[0].period as PeriodType)
+            setSelectedPeriod(periodToUse)
           }
+
+          // Fetch products for the correct period
+          await fetchProductsForPeriod(periodToUse)
         }
       }
+    } catch (error) {
+      console.error('Error fetching periods:', error)
+    } finally {
+      setLoading(false)
+      setInitialLoadDone(true)
+    }
+  }
 
-      // Fetch product-level data
-      const productsRes = await fetch(`/api/profit/products?period=${selectedPeriod}&groupBy=${groupBy}`)
+  const fetchProducts = async () => {
+    await fetchProductsForPeriod(selectedPeriod)
+  }
+
+  const fetchProductsForPeriod = async (period: PeriodType) => {
+    try {
+      const productsRes = await fetch(`/api/profit/products?period=${period}&groupBy=${groupBy}`)
       if (productsRes.ok) {
         const data = await productsRes.json()
         setProducts(data.products || [])
       }
     } catch (error) {
-      console.error('Error fetching dashboard data:', error)
-    } finally {
-      setLoading(false)
+      console.error('Error fetching products:', error)
     }
+  }
+
+  const fetchDashboardData = async () => {
+    await fetchPeriods()
   }
 
   const handleExport = () => {
