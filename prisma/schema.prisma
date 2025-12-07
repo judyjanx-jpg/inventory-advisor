@@ -354,7 +354,6 @@ model Order {
 
   // Relations
   orderItems OrderItem[]
-  returns    Return[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -461,8 +460,7 @@ model FeeEstimate {
 model Return {
   id       Int    @id @default(autoincrement())
   returnId String @unique @map("return_id")
-  orderId  String @map("order_id")
-  order    Order  @relation(fields: [orderId], references: [id])
+  orderId  String @map("order_id") // Not a FK - order may not exist in our DB
 
   masterSku String  @map("master_sku")
   product   Product @relation(fields: [masterSku], references: [sku])
