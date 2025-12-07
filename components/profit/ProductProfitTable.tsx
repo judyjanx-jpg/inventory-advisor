@@ -1,7 +1,7 @@
 // components/profit/ProductProfitTable.tsx
 'use client'
 
-import { ProductProfit, GroupByType } from '@/app/profit/page'
+import { ProductProfit, GroupByType } from '@/types/profit'
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 

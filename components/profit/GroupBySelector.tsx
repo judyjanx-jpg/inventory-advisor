@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
-import { GroupByType } from '@/app/profit/page'
+import { GroupByType } from '@/types/profit'
 
 interface GroupBySelectorProps {
   value: GroupByType

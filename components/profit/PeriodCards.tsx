@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PeriodData, PeriodType } from '@/app/profit/page'
+import { PeriodData, PeriodType } from '@/types/profit'
 import { PeriodDetailsModal } from './PeriodDetailsModal'
 
 interface PeriodCardsProps {

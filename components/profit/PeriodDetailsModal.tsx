@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import { X, ChevronDown, ChevronRight } from 'lucide-react'
-import { PeriodData } from '@/app/profit/page'
+import { PeriodData } from '@/types/profit'
 
 interface PeriodDetailsModalProps {
   data: PeriodData
