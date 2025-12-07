@@ -173,9 +173,10 @@ function ProductRow({
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <p className="font-medium text-white">{product.sku}</p>
+              {/* Show title (display_name) as main text, fall back to SKU */}
+              <p className="font-medium text-white">{product.title || product.sku}</p>
               {product.asin && (
-                <a 
+                <a
                   href={`https://www.amazon.com/dp/${product.asin}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -185,7 +186,10 @@ function ProductRow({
                 </a>
               )}
             </div>
-            <p className="text-sm text-slate-400 truncate max-w-[300px]">{product.title}</p>
+            {/* Show SKU as subtitle when title is different from SKU */}
+            {product.title && product.title !== product.sku && (
+              <p className="text-sm text-slate-400 truncate max-w-[300px]">{product.sku}</p>
+            )}
           </div>
         </div>
       </td>
