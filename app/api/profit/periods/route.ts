@@ -1,7 +1,7 @@
 // app/api/profit/periods/route.ts
 // Returns profit summaries for each time period (Today, Yesterday, MTD, etc.)
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getQuickFeeEstimate } from '@/lib/fee-estimation'
 import {
@@ -15,6 +15,22 @@ import {
 } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
+
+// Debug info for tracing fee calculation issues
+interface DebugInfo {
+  dateRange: { start: string; end: string }
+  orderItemCount: number
+  itemsWithActualFees: number
+  itemsWithEstimatedFees: number
+  totalActualFees: number
+  totalEstimatedFees: number
+  sampleItems?: Array<{
+    itemPrice: number
+    quantity: number
+    amazonFees: number
+    estimatedFees: number
+  }>
+}
 
 interface PeriodSummary {
   period: string
@@ -39,9 +55,10 @@ interface PeriodSummary {
   tacos: number | null
   realAcos: number | null
   feeEstimationRate: number  // % of items that used estimated fees
+  debug?: DebugInfo  // Optional debug info
 }
 
-async function getPeriodData(startDate: Date, endDate: Date): Promise<{
+async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boolean = false): Promise<{
   sales: number
   orders: number
   units: number
@@ -52,6 +69,7 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
   amazonFeesEstimated: number
   cogs: number
   feeEstimationRate: number
+  debug?: DebugInfo
 }> {
   // Get order items with fee data directly from OrderItem table
   // This is where the financial-events sync stores the fees
@@ -78,6 +96,7 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
   let estimatedFees = 0
   let itemsWithActualFees = 0
   let itemsWithEstimatedFees = 0
+  const sampleItems: DebugInfo['sampleItems'] = []
 
   for (const item of orderItems) {
     const itemPrice = parseFloat(item.item_price || '0')
@@ -87,6 +106,7 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
     totalSales += itemPrice
     totalUnits += quantity
 
+    let itemEstimatedFees = 0
     if (amazonFees > 0) {
       // Use actual fees from synced financial events
       actualFees += amazonFees
@@ -95,12 +115,37 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
       // Estimate fees for items that haven't synced yet
       const estimate = getQuickFeeEstimate(itemPrice, quantity)
       estimatedFees += estimate.totalFees
+      itemEstimatedFees = estimate.totalFees
       itemsWithEstimatedFees++
+    }
+
+    // Collect sample items for debugging (first 5)
+    if (includeDebug && sampleItems.length < 5) {
+      sampleItems.push({
+        itemPrice,
+        quantity,
+        amazonFees,
+        estimatedFees: itemEstimatedFees,
+      })
     }
   }
 
   const totalItems = orderItems.length
   const feeEstimationRate = totalItems > 0 ? (itemsWithEstimatedFees / totalItems) * 100 : 0
+
+  // Build debug info if requested
+  const debug: DebugInfo | undefined = includeDebug ? {
+    dateRange: {
+      start: format(startDate, 'yyyy-MM-dd HH:mm:ss'),
+      end: format(endDate, 'yyyy-MM-dd HH:mm:ss'),
+    },
+    orderItemCount: totalItems,
+    itemsWithActualFees,
+    itemsWithEstimatedFees,
+    totalActualFees: Number(actualFees.toFixed(2)),
+    totalEstimatedFees: Number(estimatedFees.toFixed(2)),
+    sampleItems,
+  } : undefined
 
   // Get unique order count
   const orderCount = await prisma.order.count({
@@ -182,11 +227,15 @@ async function getPeriodData(startDate: Date, endDate: Date): Promise<{
     amazonFeesEstimated: estimatedFees,
     cogs,
     feeEstimationRate,
+    debug,
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const searchParams = request.nextUrl.searchParams
+    const includeDebug = searchParams.get('debug') === 'true'
+
     const now = new Date()
     const today = startOfDay(now)
     const yesterday = startOfDay(subDays(now, 1))
@@ -196,10 +245,10 @@ export async function GET() {
 
     // Fetch data for each period
     const [todayData, yesterdayData, mtdData, lastMonthData] = await Promise.all([
-      getPeriodData(today, endOfDay(now)),
-      getPeriodData(yesterday, endOfDay(subDays(now, 1))),
-      getPeriodData(monthStart, endOfDay(now)),
-      getPeriodData(lastMonthStart, lastMonthEnd),
+      getPeriodData(today, endOfDay(now), includeDebug),
+      getPeriodData(yesterday, endOfDay(subDays(now, 1)), includeDebug),
+      getPeriodData(monthStart, endOfDay(now), includeDebug),
+      getPeriodData(lastMonthStart, lastMonthEnd, includeDebug),
     ])
 
     // Calculate derived metrics
@@ -296,7 +345,22 @@ export async function GET() {
       },
     ]
 
-    return NextResponse.json({ periods })
+    // Build response with optional debug info
+    const response: any = { periods }
+
+    if (includeDebug) {
+      response.debug = {
+        serverTime: format(now, 'yyyy-MM-dd HH:mm:ss'),
+        periodDebug: {
+          today: todayData.debug,
+          yesterday: yesterdayData.debug,
+          mtd: mtdData.debug,
+          lastMonth: lastMonthData.debug,
+        },
+      }
+    }
+
+    return NextResponse.json(response)
 
   } catch (error: any) {
     console.error('Error fetching period data:', error)

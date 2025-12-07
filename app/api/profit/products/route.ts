@@ -72,6 +72,8 @@ export async function GET(request: NextRequest) {
 
     // Get product-level data with fees directly from OrderItem table
     // This is where financial-events sync stores the actual fees
+    // IMPORTANT: Use INNER JOINs with WHERE clause for date filtering
+    // (not LEFT JOIN with date in ON clause, which would include ALL order_items)
     const salesByProduct = await prisma.$queryRaw<Array<{
       sku: string
       asin: string | null
@@ -101,15 +103,14 @@ export async function GET(request: NextRequest) {
         COALESCE(SUM(oi.amazon_fees), 0)::text as actual_fees,
         COUNT(CASE WHEN oi.amazon_fees > 0 THEN 1 END)::int as items_with_fees,
         COUNT(oi.id)::int as total_items
-      FROM products p
-      LEFT JOIN order_items oi ON p.sku = oi.master_sku
-      LEFT JOIN orders o ON oi.order_id = o.id
-        AND o.purchase_date >= ${startDate}
+      FROM order_items oi
+      INNER JOIN orders o ON oi.order_id = o.id
+      INNER JOIN products p ON oi.master_sku = p.sku
+      WHERE o.purchase_date >= ${startDate}
         AND o.purchase_date <= ${endDate}
         AND o.status != 'Cancelled'
       GROUP BY p.sku, p.asin, p.title, p.image_url, p.brand, p.supplier_id, p.parent_sku, p.cost
-      HAVING COALESCE(SUM(oi.quantity), 0) > 0
-      ORDER BY COALESCE(SUM(oi.item_price), 0) DESC
+      ORDER BY SUM(oi.item_price) DESC
     `
 
     // Get refunds by product
