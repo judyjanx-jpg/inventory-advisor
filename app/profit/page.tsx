@@ -89,67 +89,86 @@ export default function ProfitDashboard() {
 
   // Fetch periods when preset changes
   useEffect(() => {
-    setInitialLoadDone(false)  // Reset so fetchPeriods handles product fetch
-    fetchPeriods()
+    const fetchPeriodsForPreset = async (preset: PresetType) => {
+      setLoading(true)
+      setInitialLoadDone(false)
+      try {
+        const periodsRes = await fetch(`/api/profit/periods?preset=${preset}`)
+        if (periodsRes.ok) {
+          const data = await periodsRes.json()
+          const periods = data.periods || []
+          setPeriodData(periods)
+
+          // Determine which period to use for products
+          if (periods.length > 0) {
+            const periodExists = periods.some((p: PeriodData) => p.period === selectedPeriod)
+            const periodToUse = periodExists ? selectedPeriod : periods[0].period as PeriodType
+
+            if (!periodExists) {
+              setSelectedPeriod(periodToUse)
+            }
+
+            // Fetch products for the correct period
+            const productsRes = await fetch(`/api/profit/products?period=${periodToUse}&groupBy=${groupBy}`)
+            if (productsRes.ok) {
+              const prodData = await productsRes.json()
+              setProducts(prodData.products || [])
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching periods:', error)
+      } finally {
+        setLoading(false)
+        setInitialLoadDone(true)
+      }
+    }
+
+    fetchPeriodsForPreset(selectedPreset)
   }, [selectedPreset])
 
-  // Fetch products when period or groupBy changes (but not on initial load - fetchPeriods handles that)
+  // Fetch products when period or groupBy changes (but not on initial load - useEffect above handles that)
   const [initialLoadDone, setInitialLoadDone] = useState(false)
 
   useEffect(() => {
-    if (initialLoadDone && periodData.length > 0) {
-      fetchProducts()
-    }
-  }, [selectedPeriod, groupBy])
+    const fetchProductsForCurrentPeriod = async () => {
+      if (!initialLoadDone || periodData.length === 0) return
 
-  const fetchPeriods = async () => {
+      try {
+        const productsRes = await fetch(`/api/profit/products?period=${selectedPeriod}&groupBy=${groupBy}`)
+        if (productsRes.ok) {
+          const data = await productsRes.json()
+          setProducts(data.products || [])
+        }
+      } catch (error) {
+        console.error('Error fetching products:', error)
+      }
+    }
+
+    fetchProductsForCurrentPeriod()
+  }, [selectedPeriod, groupBy, initialLoadDone, periodData.length])
+
+  const fetchDashboardData = async () => {
+    // Trigger a refresh by resetting and re-fetching
+    setInitialLoadDone(false)
     setLoading(true)
     try {
       const periodsRes = await fetch(`/api/profit/periods?preset=${selectedPreset}`)
       if (periodsRes.ok) {
         const data = await periodsRes.json()
-        const periods = data.periods || []
-        setPeriodData(periods)
-
-        // Determine which period to use for products
-        if (periods.length > 0) {
-          const periodExists = periods.some((p: PeriodData) => p.period === selectedPeriod)
-          const periodToUse = periodExists ? selectedPeriod : periods[0].period as PeriodType
-
-          if (!periodExists) {
-            setSelectedPeriod(periodToUse)
-          }
-
-          // Fetch products for the correct period
-          await fetchProductsForPeriod(periodToUse)
-        }
+        setPeriodData(data.periods || [])
       }
-    } catch (error) {
-      console.error('Error fetching periods:', error)
-    } finally {
-      setLoading(false)
-      setInitialLoadDone(true)
-    }
-  }
-
-  const fetchProducts = async () => {
-    await fetchProductsForPeriod(selectedPeriod)
-  }
-
-  const fetchProductsForPeriod = async (period: PeriodType) => {
-    try {
-      const productsRes = await fetch(`/api/profit/products?period=${period}&groupBy=${groupBy}`)
+      const productsRes = await fetch(`/api/profit/products?period=${selectedPeriod}&groupBy=${groupBy}`)
       if (productsRes.ok) {
         const data = await productsRes.json()
         setProducts(data.products || [])
       }
     } catch (error) {
-      console.error('Error fetching products:', error)
+      console.error('Error refreshing data:', error)
+    } finally {
+      setLoading(false)
+      setInitialLoadDone(true)
     }
-  }
-
-  const fetchDashboardData = async () => {
-    await fetchPeriods()
   }
 
   const handleExport = () => {
