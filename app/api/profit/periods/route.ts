@@ -172,8 +172,11 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   const orderCount = parseInt(orderCountResult?.count || '0', 10)
 
   // Get refund data - both count and dollar amount
+  // Try multiple sources: returns table, daily_summary, daily_profit
   let refundCount = 0
   let refundAmount = 0
+
+  // First try returns table
   try {
     const refundData = await queryOne<{ total_quantity: string; total_amount: string }>(`
       SELECT
@@ -187,6 +190,36 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     refundAmount = parseFloat(refundData?.total_amount || '0')
   } catch (e) {
     // Returns table might not have data
+  }
+
+  // If refund_amount is 0, try daily_summary table
+  if (refundAmount === 0) {
+    try {
+      const summaryRefunds = await queryOne<{ total: string }>(`
+        SELECT COALESCE(SUM(total_refunds), 0)::text as total
+        FROM daily_summary
+        WHERE date >= $1::date
+          AND date <= $2::date
+      `, [startDate, endDate])
+      refundAmount = parseFloat(summaryRefunds?.total || '0')
+    } catch (e) {
+      // daily_summary might not exist
+    }
+  }
+
+  // If still 0, try daily_profit table
+  if (refundAmount === 0) {
+    try {
+      const profitRefunds = await queryOne<{ total: string }>(`
+        SELECT COALESCE(SUM(refunds), 0)::text as total
+        FROM daily_profit
+        WHERE date >= $1::date
+          AND date <= $2::date
+      `, [startDate, endDate])
+      refundAmount = parseFloat(profitRefunds?.total || '0')
+    } catch (e) {
+      // daily_profit might not exist
+    }
   }
 
   // Get ad spend from advertising_daily (if connected)
