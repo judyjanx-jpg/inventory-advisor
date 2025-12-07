@@ -12,6 +12,10 @@ import {
   subDays,
   subMonths
 } from 'date-fns'
+import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+
+// Amazon uses PST/PDT (America/Los_Angeles) for their day boundaries
+const AMAZON_TIMEZONE = 'America/Los_Angeles'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,31 +49,67 @@ interface ProductProfit {
   bsrChange?: number
 }
 
+// Helper to get date range in Amazon's timezone (PST/PDT)
 function getDateRange(period: string): { startDate: Date; endDate: Date } {
   const now = new Date()
+  // Convert current UTC time to PST for day boundary calculations
+  const nowInPST = toZonedTime(now, AMAZON_TIMEZONE)
+
+  // Helper to convert PST time back to UTC for database queries
+  const toUTC = (date: Date) => fromZonedTime(date, AMAZON_TIMEZONE)
 
   switch (period) {
     case 'today':
-      return { startDate: startOfDay(now), endDate: endOfDay(now) }
+      return {
+        startDate: toUTC(startOfDay(nowInPST)),
+        endDate: toUTC(endOfDay(nowInPST))
+      }
     case 'yesterday':
-      return { startDate: startOfDay(subDays(now, 1)), endDate: endOfDay(subDays(now, 1)) }
+      return {
+        startDate: toUTC(startOfDay(subDays(nowInPST, 1))),
+        endDate: toUTC(endOfDay(subDays(nowInPST, 1)))
+      }
     case '2daysAgo':
-      return { startDate: startOfDay(subDays(now, 2)), endDate: endOfDay(subDays(now, 2)) }
+      return {
+        startDate: toUTC(startOfDay(subDays(nowInPST, 2))),
+        endDate: toUTC(endOfDay(subDays(nowInPST, 2)))
+      }
     case '3daysAgo':
-      return { startDate: startOfDay(subDays(now, 3)), endDate: endOfDay(subDays(now, 3)) }
+      return {
+        startDate: toUTC(startOfDay(subDays(nowInPST, 3))),
+        endDate: toUTC(endOfDay(subDays(nowInPST, 3)))
+      }
     case '7days':
-      return { startDate: startOfDay(subDays(now, 6)), endDate: endOfDay(now) }
+      return {
+        startDate: toUTC(startOfDay(subDays(nowInPST, 6))),
+        endDate: toUTC(endOfDay(nowInPST))
+      }
     case '14days':
-      return { startDate: startOfDay(subDays(now, 13)), endDate: endOfDay(now) }
+      return {
+        startDate: toUTC(startOfDay(subDays(nowInPST, 13))),
+        endDate: toUTC(endOfDay(nowInPST))
+      }
     case '30days':
-      return { startDate: startOfDay(subDays(now, 29)), endDate: endOfDay(now) }
+      return {
+        startDate: toUTC(startOfDay(subDays(nowInPST, 29))),
+        endDate: toUTC(endOfDay(nowInPST))
+      }
     case 'mtd':
     case 'forecast':
-      return { startDate: startOfMonth(now), endDate: endOfDay(now) }
+      return {
+        startDate: toUTC(startOfMonth(nowInPST)),
+        endDate: toUTC(endOfDay(nowInPST))
+      }
     case 'lastMonth':
-      return { startDate: startOfMonth(subMonths(now, 1)), endDate: endOfMonth(subMonths(now, 1)) }
+      return {
+        startDate: toUTC(startOfMonth(subMonths(nowInPST, 1))),
+        endDate: toUTC(endOfMonth(subMonths(nowInPST, 1)))
+      }
     default:
-      return { startDate: startOfDay(subDays(now, 1)), endDate: endOfDay(subDays(now, 1)) }
+      return {
+        startDate: toUTC(startOfDay(subDays(nowInPST, 1))),
+        endDate: toUTC(endOfDay(subDays(nowInPST, 1)))
+      }
   }
 }
 

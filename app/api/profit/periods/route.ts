@@ -13,6 +13,10 @@ import {
   subMonths,
   format,
 } from 'date-fns'
+import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+
+// Amazon uses PST/PDT (America/Los_Angeles) for their day boundaries
+const AMAZON_TIMEZONE = 'America/Los_Angeles'
 
 export const dynamic = 'force-dynamic'
 
@@ -217,28 +221,32 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
 }
 
 // Helper to get date range for a period type
-function getDateRangeForPeriod(period: string, now: Date): { start: Date; end: Date; label: string } {
+// Takes nowInPST (current time in PST) and returns start/end in UTC for database queries
+function getDateRangeForPeriod(period: string, nowInPST: Date): { start: Date; end: Date; label: string } {
+  // Helper to convert PST time to UTC for database queries
+  const toUTC = (date: Date) => fromZonedTime(date, AMAZON_TIMEZONE)
+
   switch (period) {
     case 'today':
-      return { start: startOfDay(now), end: endOfDay(now), label: format(now, 'd MMMM yyyy') }
+      return { start: toUTC(startOfDay(nowInPST)), end: toUTC(endOfDay(nowInPST)), label: format(nowInPST, 'd MMMM yyyy') }
     case 'yesterday':
-      return { start: startOfDay(subDays(now, 1)), end: endOfDay(subDays(now, 1)), label: format(subDays(now, 1), 'd MMMM yyyy') }
+      return { start: toUTC(startOfDay(subDays(nowInPST, 1))), end: toUTC(endOfDay(subDays(nowInPST, 1))), label: format(subDays(nowInPST, 1), 'd MMMM yyyy') }
     case '2daysAgo':
-      return { start: startOfDay(subDays(now, 2)), end: endOfDay(subDays(now, 2)), label: format(subDays(now, 2), 'd MMMM yyyy') }
+      return { start: toUTC(startOfDay(subDays(nowInPST, 2))), end: toUTC(endOfDay(subDays(nowInPST, 2))), label: format(subDays(nowInPST, 2), 'd MMMM yyyy') }
     case '3daysAgo':
-      return { start: startOfDay(subDays(now, 3)), end: endOfDay(subDays(now, 3)), label: format(subDays(now, 3), 'd MMMM yyyy') }
+      return { start: toUTC(startOfDay(subDays(nowInPST, 3))), end: toUTC(endOfDay(subDays(nowInPST, 3))), label: format(subDays(nowInPST, 3), 'd MMMM yyyy') }
     case '7days':
-      return { start: startOfDay(subDays(now, 6)), end: endOfDay(now), label: `${format(subDays(now, 6), 'd')}-${format(now, 'd MMMM yyyy')}` }
+      return { start: toUTC(startOfDay(subDays(nowInPST, 6))), end: toUTC(endOfDay(nowInPST)), label: `${format(subDays(nowInPST, 6), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
     case '14days':
-      return { start: startOfDay(subDays(now, 13)), end: endOfDay(now), label: `${format(subDays(now, 13), 'd')}-${format(now, 'd MMMM yyyy')}` }
+      return { start: toUTC(startOfDay(subDays(nowInPST, 13))), end: toUTC(endOfDay(nowInPST)), label: `${format(subDays(nowInPST, 13), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
     case '30days':
-      return { start: startOfDay(subDays(now, 29)), end: endOfDay(now), label: `${format(subDays(now, 29), 'd')}-${format(now, 'd MMMM yyyy')}` }
+      return { start: toUTC(startOfDay(subDays(nowInPST, 29))), end: toUTC(endOfDay(nowInPST)), label: `${format(subDays(nowInPST, 29), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
     case 'mtd':
-      return { start: startOfMonth(now), end: endOfDay(now), label: `${format(startOfMonth(now), 'd')}-${format(now, 'd MMMM yyyy')}` }
+      return { start: toUTC(startOfMonth(nowInPST)), end: toUTC(endOfDay(nowInPST)), label: `${format(startOfMonth(nowInPST), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
     case 'lastMonth':
-      return { start: startOfMonth(subMonths(now, 1)), end: endOfMonth(subMonths(now, 1)), label: `${format(startOfMonth(subMonths(now, 1)), 'd')}-${format(endOfMonth(subMonths(now, 1)), 'd MMMM yyyy')}` }
+      return { start: toUTC(startOfMonth(subMonths(nowInPST, 1))), end: toUTC(endOfMonth(subMonths(nowInPST, 1))), label: `${format(startOfMonth(subMonths(nowInPST, 1)), 'd')}-${format(endOfMonth(subMonths(nowInPST, 1)), 'd MMMM yyyy')}` }
     default:
-      return { start: startOfDay(subDays(now, 1)), end: endOfDay(subDays(now, 1)), label: format(subDays(now, 1), 'd MMMM yyyy') }
+      return { start: toUTC(startOfDay(subDays(nowInPST, 1))), end: toUTC(endOfDay(subDays(nowInPST, 1))), label: format(subDays(nowInPST, 1), 'd MMMM yyyy') }
   }
 }
 
@@ -257,26 +265,33 @@ export async function GET(request: NextRequest) {
     const includeDebug = searchParams.get('debug') === 'true'
     const preset = searchParams.get('preset') || 'default'
 
-    const now = new Date()
-    const monthStart = startOfMonth(now)  // Needed for forecast calculation
+    // Convert current time to PST for Amazon day boundary calculations
+    const nowUTC = new Date()
+    const nowInPST = toZonedTime(nowUTC, AMAZON_TIMEZONE)
+
+    // Helper to convert PST time to UTC for database queries
+    const toUTC = (date: Date) => fromZonedTime(date, AMAZON_TIMEZONE)
+
+    const monthStartPST = startOfMonth(nowInPST)
+    const monthStartUTC = toUTC(monthStartPST)  // For forecast calculation
 
     // Get which periods to fetch based on preset
     const periodsToFetch = periodPresets[preset] || periodPresets.default
 
     // Build period data for each requested period
     const periodPromises = periodsToFetch.map(async (period) => {
-      const range = getDateRangeForPeriod(period, now)
+      const range = getDateRangeForPeriod(period, nowInPST)
 
       // Special handling for forecast - it's based on MTD extrapolated
       if (period === 'forecast') {
-        const mtdData = await getPeriodData(monthStart, endOfDay(now), includeDebug)
-        const daysInMonth = endOfMonth(now).getDate()
-        const dayOfMonth = now.getDate()
+        const mtdData = await getPeriodData(monthStartUTC, toUTC(endOfDay(nowInPST)), includeDebug)
+        const daysInMonth = endOfMonth(nowInPST).getDate()
+        const dayOfMonth = nowInPST.getDate()
         const forecastMultiplier = daysInMonth / dayOfMonth
 
         return {
           period: 'forecast',
-          dateRange: `${format(monthStart, 'd')}-${format(endOfMonth(now), 'd MMMM yyyy')}`,
+          dateRange: `${format(monthStartPST, 'd')}-${format(endOfMonth(nowInPST), 'd MMMM yyyy')}`,
           sales: mtdData.sales * forecastMultiplier,
           orders: Math.round(mtdData.orders * forecastMultiplier),
           units: Math.round(mtdData.units * forecastMultiplier),
