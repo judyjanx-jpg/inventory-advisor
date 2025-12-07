@@ -72,6 +72,25 @@ function getDateRange(period: string): { startDate: Date; endDate: Date } {
   }
 }
 
+// Build the GROUP BY column based on the groupBy parameter
+function getGroupByColumn(groupBy: string): { column: string; label: string } {
+  switch (groupBy) {
+    case 'asin':
+      return { column: 'COALESCE(p.asin, oi.asin)', label: 'ASIN' }
+    case 'parent':
+      return { column: 'COALESCE(p.parent_sku, oi.master_sku)', label: 'Parent' }
+    case 'brand':
+      return { column: "COALESCE(p.brand, 'Unknown')", label: 'Brand' }
+    case 'supplier':
+      return { column: "COALESCE(p.supplier_id::text, 'Unknown')", label: 'Supplier' }
+    case 'channel':
+      return { column: "'Amazon'", label: 'Channel' } // Only Amazon for now
+    case 'sku':
+    default:
+      return { column: 'oi.master_sku', label: 'SKU' }
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
@@ -79,8 +98,10 @@ export async function GET(request: NextRequest) {
     const groupBy = searchParams.get('groupBy') || 'sku'
 
     const { startDate, endDate } = getDateRange(period)
+    const { column: groupByColumn } = getGroupByColumn(groupBy)
 
     // Get product-level data with fees directly using pg
+    // Dynamic grouping based on groupBy parameter
     const salesByProduct = await query<{
       sku: string
       asin: string | null
@@ -96,13 +117,13 @@ export async function GET(request: NextRequest) {
       total_items: string
     }>(`
       SELECT
-        oi.master_sku as sku,
+        ${groupByColumn} as sku,
         MAX(COALESCE(p.asin, oi.asin)) as asin,
         MAX(COALESCE(p.title, oi.master_sku)) as title,
         MAX(p.brand) as brand,
         MAX(p.supplier_id::text) as supplier_id,
         MAX(p.parent_sku) as parent_sku,
-        COALESCE(MAX(p.cost), 0)::text as cost,
+        COALESCE(AVG(p.cost), 0)::text as cost,
         COALESCE(SUM(oi.quantity), 0)::text as units_sold,
         COALESCE(SUM(oi.item_price), 0)::text as total_sales,
         COALESCE(SUM(oi.amazon_fees), 0)::text as actual_fees,
@@ -114,7 +135,7 @@ export async function GET(request: NextRequest) {
       WHERE o.purchase_date >= $1
         AND o.purchase_date <= $2
         AND o.status != 'Cancelled'
-      GROUP BY oi.master_sku
+      GROUP BY ${groupByColumn}
       ORDER BY SUM(oi.item_price) DESC
     `, [startDate, endDate])
 

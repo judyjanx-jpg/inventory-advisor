@@ -1,7 +1,7 @@
 // app/profit/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import { PeriodCards } from '@/components/profit/PeriodCards'
 import { ProductProfitTable } from '@/components/profit/ProductProfitTable'
@@ -13,6 +13,35 @@ import { Download, RefreshCw, FileText, Package } from 'lucide-react'
 export type PeriodType = 'today' | 'yesterday' | '2daysAgo' | '3daysAgo' | '7days' | '14days' | '30days' | 'mtd' | 'forecast' | 'lastMonth'
 export type GroupByType = 'sku' | 'asin' | 'parent' | 'brand' | 'supplier' | 'channel'
 export type PresetType = 'default' | 'simple' | 'days' | 'recent' | 'months'
+
+// LocalStorage keys for persisting user preferences
+const STORAGE_KEYS = {
+  preset: 'profit-dashboard-preset',
+  groupBy: 'profit-dashboard-groupBy',
+  period: 'profit-dashboard-period',
+  columns: 'profit-dashboard-columns',
+}
+
+// Helper to safely read from localStorage (handles SSR)
+function getStoredValue<T>(key: string, defaultValue: T): T {
+  if (typeof window === 'undefined') return defaultValue
+  try {
+    const stored = localStorage.getItem(key)
+    return stored ? JSON.parse(stored) : defaultValue
+  } catch {
+    return defaultValue
+  }
+}
+
+// Helper to safely write to localStorage
+function setStoredValue<T>(key: string, value: T): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Ignore storage errors (e.g., quota exceeded)
+  }
+}
 
 export interface PeriodData {
   period: string
@@ -86,9 +115,55 @@ export default function ProfitDashboard() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS)
   const [compareMode, setCompareMode] = useState<'none' | 'previous' | 'lastYear'>('none')
   const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products')
+  const [isHydrated, setIsHydrated] = useState(false)
 
-  // Fetch periods when preset changes
+  // Load persisted preferences from localStorage on mount
   useEffect(() => {
+    const storedPreset = getStoredValue<PresetType>(STORAGE_KEYS.preset, 'default')
+    const storedGroupBy = getStoredValue<GroupByType>(STORAGE_KEYS.groupBy, 'sku')
+    const storedPeriod = getStoredValue<PeriodType>(STORAGE_KEYS.period, 'yesterday')
+    const storedColumns = getStoredValue<string[]>(STORAGE_KEYS.columns, DEFAULT_COLUMNS)
+
+    setSelectedPreset(storedPreset)
+    setGroupBy(storedGroupBy)
+    setSelectedPeriod(storedPeriod)
+    setVisibleColumns(storedColumns)
+    setIsHydrated(true)
+  }, [])
+
+  // Persist preset to localStorage when it changes
+  useEffect(() => {
+    if (isHydrated) {
+      setStoredValue(STORAGE_KEYS.preset, selectedPreset)
+    }
+  }, [selectedPreset, isHydrated])
+
+  // Persist groupBy to localStorage when it changes
+  useEffect(() => {
+    if (isHydrated) {
+      setStoredValue(STORAGE_KEYS.groupBy, groupBy)
+    }
+  }, [groupBy, isHydrated])
+
+  // Persist period to localStorage when it changes
+  useEffect(() => {
+    if (isHydrated) {
+      setStoredValue(STORAGE_KEYS.period, selectedPeriod)
+    }
+  }, [selectedPeriod, isHydrated])
+
+  // Persist visible columns to localStorage when they change
+  useEffect(() => {
+    if (isHydrated) {
+      setStoredValue(STORAGE_KEYS.columns, visibleColumns)
+    }
+  }, [visibleColumns, isHydrated])
+
+  // Fetch periods when preset changes (only after hydration)
+  useEffect(() => {
+    // Wait for hydration to complete before fetching
+    if (!isHydrated) return
+
     console.log('useEffect triggered - selectedPreset changed to:', selectedPreset)
 
     const fetchPeriodsForPreset = async (preset: PresetType) => {
@@ -130,7 +205,7 @@ export default function ProfitDashboard() {
     }
 
     fetchPeriodsForPreset(selectedPreset)
-  }, [selectedPreset])
+  }, [selectedPreset, isHydrated])
 
   // Fetch products when period or groupBy changes (but not on initial load - useEffect above handles that)
   const [initialLoadDone, setInitialLoadDone] = useState(false)
