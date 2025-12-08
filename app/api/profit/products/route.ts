@@ -95,26 +95,26 @@ function getDateRange(period: string): { startDate: Date; endDate: Date } {
     }
     case '7days': {
       const sevenDaysAgoStart = startOfDay(subDays(nowInPST, 6))
-      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
+      const todayStart = startOfDay(nowInPST)
       return {
         startDate: toUTC(sevenDaysAgoStart),
-        endDate: toUTC(tomorrowStart)
+        endDate: toUTC(todayStart)
       }
     }
     case '14days': {
       const fourteenDaysAgoStart = startOfDay(subDays(nowInPST, 13))
-      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
+      const todayStart = startOfDay(nowInPST)
       return {
         startDate: toUTC(fourteenDaysAgoStart),
-        endDate: toUTC(tomorrowStart)
+        endDate: toUTC(todayStart)
       }
     }
     case '30days': {
-      const thirtyDaysAgoStart = startOfDay(subDays(nowInPST, 29))
-      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
+      const thirtyDaysAgoStart = startOfDay(subDays(nowInPST, 30))
+      const todayStart = startOfDay(nowInPST)
       return {
         startDate: toUTC(thirtyDaysAgoStart),
-        endDate: toUTC(tomorrowStart)
+        endDate: toUTC(todayStart)
       }
     }
     case 'mtd':

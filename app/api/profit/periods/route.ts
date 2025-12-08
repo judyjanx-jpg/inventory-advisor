@@ -332,18 +332,19 @@ function getDateRangeForPeriod(period: string, nowInPST: Date): { start: Date; e
     }
     case '7days': {
       const sevenDaysAgoStart = startOfDay(subDays(nowInPST, 6))
-      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
-      return { start: toUTC(sevenDaysAgoStart), end: toUTC(tomorrowStart), label: `${format(subDays(nowInPST, 6), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
+      const todayStart = startOfDay(nowInPST)
+      return { start: toUTC(sevenDaysAgoStart), end: toUTC(todayStart), label: `${format(subDays(nowInPST, 6), 'd MMM')} - ${format(subDays(nowInPST, 1), 'd MMMM yyyy')}` }
     }
     case '14days': {
       const fourteenDaysAgoStart = startOfDay(subDays(nowInPST, 13))
-      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
-      return { start: toUTC(fourteenDaysAgoStart), end: toUTC(tomorrowStart), label: `${format(subDays(nowInPST, 13), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
+      const todayStart = startOfDay(nowInPST)
+      return { start: toUTC(fourteenDaysAgoStart), end: toUTC(todayStart), label: `${format(subDays(nowInPST, 13), 'd MMM')} - ${format(subDays(nowInPST, 1), 'd MMMM yyyy')}` }
     }
     case '30days': {
-      const thirtyDaysAgoStart = startOfDay(subDays(nowInPST, 29))
-      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
-      return { start: toUTC(thirtyDaysAgoStart), end: toUTC(tomorrowStart), label: `${format(subDays(nowInPST, 29), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
+      const thirtyDaysAgoStart = startOfDay(subDays(nowInPST, 30))
+      const todayStart = startOfDay(nowInPST)
+      const yesterday = subDays(nowInPST, 1)
+      return { start: toUTC(thirtyDaysAgoStart), end: toUTC(todayStart), label: `${format(thirtyDaysAgoStart, 'd MMMM')} - ${format(yesterday, 'd MMMM yyyy')}` }
     }
     case 'mtd': {
       const monthStart = startOfMonth(nowInPST)
