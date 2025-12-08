@@ -78,79 +78,81 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   feeEstimationRate: number
   debug?: DebugInfo
 }> {
-  // Get order items with fee data directly using pg
-  const orderItems = await query<{
-    item_price: string
-    shipping_price: string
-    gift_wrap_price: string
-    promo_discount: string
-    quantity: string
-    amazon_fees: string
+  // Get aggregated order items data using SQL for accuracy and performance
+  // Use gross_revenue field which is already calculated and stored
+  const summaryData = await queryOne<{
+    total_sales: string
+    total_units: string
+    total_promo: string
+    total_actual_fees: string
+    items_with_fees: string
+    total_items: string
   }>(`
     SELECT
-      oi.item_price::text,
-      COALESCE(oi.shipping_price, 0)::text as shipping_price,
-      COALESCE(oi.gift_wrap_price, 0)::text as gift_wrap_price,
-      COALESCE(oi.promo_discount, 0)::text as promo_discount,
-      oi.quantity::text,
-      oi.amazon_fees::text
+      COALESCE(SUM(COALESCE(oi.gross_revenue, oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0))), 0)::text as total_sales,
+      COALESCE(SUM(oi.quantity), 0)::text as total_units,
+      COALESCE(SUM(COALESCE(oi.promo_discount, 0)), 0)::text as total_promo,
+      COALESCE(SUM(COALESCE(oi.amazon_fees, 0)), 0)::text as total_actual_fees,
+      COALESCE(SUM(CASE WHEN COALESCE(oi.amazon_fees, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_fees,
+      COUNT(*)::text as total_items
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.id
-        WHERE o.purchase_date >= $1
-          AND o.purchase_date < $2
+    WHERE o.purchase_date >= $1
+      AND o.purchase_date < $2
       AND o.status NOT IN ('Cancelled', 'Canceled')
   `, [startDate, endDate])
 
-  // Calculate fees with estimation for items missing actual fees
-  let totalSales = 0
-  let totalUnits = 0
-  let totalPromo = 0
-  let actualFees = 0
+  const totalSales = parseFloat(summaryData?.total_sales || '0')
+  const totalUnits = parseInt(summaryData?.total_units || '0', 10)
+  const totalPromo = parseFloat(summaryData?.total_promo || '0')
+  const actualFees = parseFloat(summaryData?.total_actual_fees || '0')
+  const itemsWithActualFees = parseInt(summaryData?.items_with_fees || '0', 10)
+  const totalItems = parseInt(summaryData?.total_items || '0', 10)
+  const itemsWithEstimatedFees = totalItems - itemsWithActualFees
+
+  // Calculate estimated fees for items without actual fees
   let estimatedFees = 0
-  let itemsWithActualFees = 0
-  let itemsWithEstimatedFees = 0
   const sampleItems: DebugInfo['sampleItems'] = []
 
-  for (const item of orderItems) {
-    const itemPrice = parseFloat(item.item_price || '0')
-    const shippingPrice = parseFloat(item.shipping_price || '0')
-    const giftWrapPrice = parseFloat(item.gift_wrap_price || '0')
-    const promoDiscount = parseFloat(item.promo_discount || '0')
-    const quantity = parseInt(item.quantity || '1', 10)
-    const amazonFees = parseFloat(item.amazon_fees || '0')
+  if (itemsWithEstimatedFees > 0) {
+    // Get items without fees for accurate estimation
+    const itemsWithoutFees = await query<{
+      item_price: string
+      quantity: string
+    }>(`
+      SELECT
+        oi.item_price::text,
+        oi.quantity::text
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      WHERE o.purchase_date >= $1
+        AND o.purchase_date < $2
+        AND o.status NOT IN ('Cancelled', 'Canceled')
+        AND COALESCE(oi.amazon_fees, 0) = 0
+        AND oi.item_price > 0
+      ORDER BY oi.id
+    `, [startDate, endDate])
 
-    // Sales = item_price + shipping_price + gift_wrap_price (GROSS sales before promos)
-    // This matches Amazon Seller Central's "Sales" number
-    // Promos are deducted later in profit calculation, not from revenue
-    totalSales += itemPrice + shippingPrice + giftWrapPrice
-    totalUnits += quantity
-    totalPromo += promoDiscount
+    for (const item of itemsWithoutFees) {
+      const itemPrice = parseFloat(item.item_price || '0')
+      const quantity = parseInt(item.quantity || '1', 10)
+      if (itemPrice > 0) {
+        const estimate = getQuickFeeEstimate(itemPrice, quantity)
+        estimatedFees += estimate.totalFees
 
-    let itemEstimatedFees = 0
-    if (amazonFees > 0) {
-      // Use actual fees from synced financial events
-      actualFees += amazonFees
-      itemsWithActualFees++
-    } else if (itemPrice > 0) {
-      // Estimate fees for items that haven't synced yet
-      const estimate = getQuickFeeEstimate(itemPrice, quantity)
-      estimatedFees += estimate.totalFees
-      itemEstimatedFees = estimate.totalFees
-      itemsWithEstimatedFees++
-    }
-
-    // Collect sample items for debugging (first 5)
-    if (includeDebug && sampleItems.length < 5) {
-      sampleItems.push({
-        itemPrice,
-        quantity,
-        amazonFees,
-        estimatedFees: itemEstimatedFees,
-      })
+        // Collect sample items for debugging (first 5)
+        if (includeDebug && sampleItems.length < 5) {
+          sampleItems.push({
+            itemPrice,
+            quantity,
+            amazonFees: 0,
+            estimatedFees: estimate.totalFees,
+          })
+        }
+      }
     }
   }
 
-  const totalItems = orderItems.length
   const feeEstimationRate = totalItems > 0 ? (itemsWithEstimatedFees / totalItems) * 100 : 0
 
   // Build debug info if requested
