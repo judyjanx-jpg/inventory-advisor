@@ -257,6 +257,57 @@ export async function GET() {
       asin: row.asin
     }))
 
+    // Query 12: Compare distinct orders vs order line items for yesterday
+    const yesterdayOrderComparison = await prisma.$queryRaw<Array<{
+      unique_orders: bigint;
+      unique_amazon_orders: bigint;
+      order_line_items: bigint;
+      total_units: bigint | null;
+    }>>`
+      SELECT 
+        COUNT(DISTINCT o.id)::bigint as unique_orders,
+        COUNT(DISTINCT o.amazon_order_id)::bigint as unique_amazon_orders,
+        COUNT(oi.id)::bigint as order_line_items,
+        SUM(oi.quantity)::bigint as total_units
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.purchase_date >= CURRENT_DATE - INTERVAL '1 day'
+        AND o.purchase_date < CURRENT_DATE
+        AND o.status NOT IN ('Cancelled', 'Canceled')
+    `
+    const yesterdayComp = yesterdayOrderComparison[0]
+    results.yesterdayOrderComparison = yesterdayComp ? {
+      unique_orders: Number(yesterdayComp.unique_orders),
+      unique_amazon_orders: Number(yesterdayComp.unique_amazon_orders),
+      order_line_items: Number(yesterdayComp.order_line_items),
+      total_units: Number(yesterdayComp.total_units || 0),
+      note: 'SellerBoard counts order_line_items (line items), not unique_orders'
+    } : {}
+
+    // Query 13: Compare distinct orders vs order line items for 30 days
+    const thirtyDayOrderComparison = await prisma.$queryRaw<Array<{
+      unique_orders: bigint;
+      order_line_items: bigint;
+      total_units: bigint | null;
+    }>>`
+      SELECT 
+        COUNT(DISTINCT o.id)::bigint as unique_orders,
+        COUNT(oi.id)::bigint as order_line_items,
+        SUM(oi.quantity)::bigint as total_units
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.purchase_date >= CURRENT_DATE - INTERVAL '30 days'
+        AND o.purchase_date < CURRENT_DATE
+        AND o.status NOT IN ('Cancelled', 'Canceled')
+    `
+    const thirtyDayComp = thirtyDayOrderComparison[0]
+    results.thirtyDayOrderComparison = thirtyDayComp ? {
+      unique_orders: Number(thirtyDayComp.unique_orders),
+      order_line_items: Number(thirtyDayComp.order_line_items),
+      total_units: Number(thirtyDayComp.total_units || 0),
+      note: 'SellerBoard counts order_line_items (line items), not unique_orders'
+    } : {}
+
     return NextResponse.json(results, { status: 200 })
   } catch (error: any) {
     console.error('Error running diagnostics:', error)
