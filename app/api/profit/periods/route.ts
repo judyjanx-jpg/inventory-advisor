@@ -97,7 +97,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     JOIN orders o ON oi.order_id = o.id
     WHERE o.purchase_date >= $1
       AND o.purchase_date <= $2
-      AND o.status != 'Cancelled'
+      AND o.status IN ('Shipped', 'PartiallyShipped')
   `, [startDate, endDate])
 
   // Calculate fees with estimation for items missing actual fees
@@ -166,13 +166,13 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     sampleItems,
   } : undefined
 
-  // Get unique order count
+  // Get unique order count (shipped orders only to match Amazon Business Reports)
   const orderCountResult = await queryOne<{ count: string }>(`
     SELECT COUNT(*)::text as count
     FROM orders
     WHERE purchase_date >= $1
       AND purchase_date <= $2
-      AND status != 'Cancelled'
+      AND status IN ('Shipped', 'PartiallyShipped')
   `, [startDate, endDate])
   const orderCount = parseInt(orderCountResult?.count || '0', 10)
 
@@ -268,7 +268,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       LEFT JOIN products p ON oi.master_sku = p.sku
       WHERE o.purchase_date >= $1
       AND o.purchase_date <= $2
-      AND o.status != 'Cancelled'
+      AND o.status IN ('Shipped', 'PartiallyShipped')
     `, [startDate, endDate])
     cogs = parseFloat(cogsData?.total_cogs || '0')
   } catch (e) {
@@ -468,10 +468,32 @@ export async function GET(request: NextRequest) {
         }
       })
 
+      // Get order status breakdown for today (helps verify shipped-only filter is working)
+      const todayRange = getDateRangeForPeriod('today', nowInPST)
+      const statusBreakdown = await query<{ status: string; order_count: string; unit_count: string }>(`
+        SELECT
+          o.status,
+          COUNT(DISTINCT o.id)::text as order_count,
+          COALESCE(SUM(oi.quantity), 0)::text as unit_count
+        FROM orders o
+        LEFT JOIN order_items oi ON o.id = oi.order_id
+        WHERE o.purchase_date >= $1
+          AND o.purchase_date <= $2
+        GROUP BY o.status
+        ORDER BY o.status
+      `, [todayRange.start, todayRange.end])
+
       response.debug = {
         serverTimeUTC: nowUTC.toISOString(),
         serverTimePST: format(nowInPST, 'yyyy-MM-dd HH:mm:ss'),
         timezone: AMAZON_TIMEZONE,
+        note: 'Profit calculations include only Shipped and PartiallyShipped orders to match Amazon Business Reports',
+        todayOrderStatusBreakdown: statusBreakdown.map(s => ({
+          status: s.status,
+          orders: parseInt(s.order_count),
+          units: parseInt(s.unit_count),
+          includedInProfit: s.status === 'Shipped' || s.status === 'PartiallyShipped',
+        })),
         dateRanges,
         periodDebug: periodsData.reduce((acc: any, p) => {
           acc[p.period] = p.debug

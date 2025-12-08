@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN suppliers s ON p.supplier_id = s.id
       WHERE o.purchase_date >= $1
         AND o.purchase_date <= $2
-        AND o.status != 'Cancelled'
+        AND o.status IN ('Shipped', 'PartiallyShipped')
       GROUP BY ${groupByColumn}
       ORDER BY SUM(oi.item_price) DESC
     `, [startDate, endDate])

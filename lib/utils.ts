@@ -12,7 +12,8 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
   }).format(amount)
 }
 
-export function formatDate(date: Date | string, timezone: string = 'America/New_York'): string {
+// Use Pacific Time by default to match Amazon's day boundaries
+export function formatDate(date: Date | string, timezone: string = 'America/Los_Angeles'): string {
   let dateObj: Date
   if (typeof date === 'string') {
     dateObj = new Date(date)
