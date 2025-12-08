@@ -97,7 +97,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     JOIN orders o ON oi.order_id = o.id
     WHERE o.purchase_date >= $1
       AND o.purchase_date <= $2
-      AND o.status != 'Cancelled'
+      AND o.status NOT IN ('Cancelled', 'Canceled')
   `, [startDate, endDate])
 
   // Calculate fees with estimation for items missing actual fees
@@ -172,7 +172,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     FROM orders
     WHERE purchase_date >= $1
       AND purchase_date <= $2
-      AND status != 'Cancelled'
+      AND status NOT IN ('Cancelled', 'Canceled')
   `, [startDate, endDate])
   const orderCount = parseInt(orderCountResult?.count || '0', 10)
 
@@ -268,7 +268,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       LEFT JOIN products p ON oi.master_sku = p.sku
       WHERE o.purchase_date >= $1
       AND o.purchase_date <= $2
-      AND o.status != 'Cancelled'
+      AND o.status NOT IN ('Cancelled', 'Canceled')
     `, [startDate, endDate])
     cogs = parseFloat(cogsData?.total_cogs || '0')
   } catch (e) {
@@ -487,12 +487,12 @@ export async function GET(request: NextRequest) {
         serverTimeUTC: nowUTC.toISOString(),
         serverTimePST: format(nowInPST, 'yyyy-MM-dd HH:mm:ss'),
         timezone: AMAZON_TIMEZONE,
-        note: 'Profit calculations include only Shipped and PartiallyShipped orders to match Amazon Business Reports',
+        note: 'Profit calculations exclude Cancelled/Canceled orders',
         todayOrderStatusBreakdown: statusBreakdown.map(s => ({
           status: s.status,
           orders: parseInt(s.order_count),
           units: parseInt(s.unit_count),
-          includedInProfit: s.status === 'Shipped' || s.status === 'PartiallyShipped',
+          includedInProfit: s.status !== 'Cancelled' && s.status !== 'Canceled',
         })),
         dateRanges,
         periodDebug: periodsData.reduce((acc: any, p) => {
