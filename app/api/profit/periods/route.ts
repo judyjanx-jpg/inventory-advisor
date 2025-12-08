@@ -97,7 +97,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     JOIN orders o ON oi.order_id = o.id
     WHERE o.purchase_date >= $1
       AND o.purchase_date <= $2
-      AND o.status IN ('Shipped', 'PartiallyShipped')
+      AND o.status != 'Cancelled'
   `, [startDate, endDate])
 
   // Calculate fees with estimation for items missing actual fees
@@ -166,13 +166,13 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     sampleItems,
   } : undefined
 
-  // Get unique order count (shipped orders only to match Amazon Business Reports)
+  // Get unique order count (excludes cancelled orders)
   const orderCountResult = await queryOne<{ count: string }>(`
     SELECT COUNT(*)::text as count
     FROM orders
     WHERE purchase_date >= $1
       AND purchase_date <= $2
-      AND status IN ('Shipped', 'PartiallyShipped')
+      AND status != 'Cancelled'
   `, [startDate, endDate])
   const orderCount = parseInt(orderCountResult?.count || '0', 10)
 
@@ -268,7 +268,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       LEFT JOIN products p ON oi.master_sku = p.sku
       WHERE o.purchase_date >= $1
       AND o.purchase_date <= $2
-      AND o.status IN ('Shipped', 'PartiallyShipped')
+      AND o.status != 'Cancelled'
     `, [startDate, endDate])
     cogs = parseFloat(cogsData?.total_cogs || '0')
   } catch (e) {
