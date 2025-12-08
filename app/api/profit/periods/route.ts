@@ -80,11 +80,14 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
 }> {
   // Get aggregated order items data using SQL for accuracy and performance
   // Use gross_revenue field which is already calculated and stored
+  // Calculate estimated fees in SQL for deterministic results
+  // Fee estimation: 15% referral fee + $3.50 FBA fee per unit
   const summaryData = await queryOne<{
     total_sales: string
     total_units: string
     total_promo: string
     total_actual_fees: string
+    total_estimated_fees: string
     items_with_fees: string
     total_items: string
   }>(`
@@ -93,6 +96,13 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       COALESCE(SUM(oi.quantity), 0)::text as total_units,
       COALESCE(SUM(COALESCE(oi.promo_discount, 0)), 0)::text as total_promo,
       COALESCE(SUM(COALESCE(oi.amazon_fees, 0)), 0)::text as total_actual_fees,
+      COALESCE(SUM(
+        CASE 
+          WHEN COALESCE(oi.amazon_fees, 0) = 0 AND oi.item_price > 0 
+          THEN ROUND((oi.item_price * 0.15) + (3.50 * oi.quantity), 2)
+          ELSE 0 
+        END
+      ), 0)::text as total_estimated_fees,
       COALESCE(SUM(CASE WHEN COALESCE(oi.amazon_fees, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_fees,
       COUNT(*)::text as total_items
     FROM order_items oi
@@ -106,17 +116,15 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   const totalUnits = parseInt(summaryData?.total_units || '0', 10)
   const totalPromo = parseFloat(summaryData?.total_promo || '0')
   const actualFees = parseFloat(summaryData?.total_actual_fees || '0')
+  const estimatedFees = parseFloat(summaryData?.total_estimated_fees || '0')
   const itemsWithActualFees = parseInt(summaryData?.items_with_fees || '0', 10)
   const totalItems = parseInt(summaryData?.total_items || '0', 10)
   const itemsWithEstimatedFees = totalItems - itemsWithActualFees
 
-  // Calculate estimated fees for items without actual fees
-  let estimatedFees = 0
+  // Collect sample items for debugging if needed
   const sampleItems: DebugInfo['sampleItems'] = []
-
-  if (itemsWithEstimatedFees > 0) {
-    // Get items without fees for accurate estimation
-    const itemsWithoutFees = await query<{
+  if (includeDebug && itemsWithEstimatedFees > 0) {
+    const sampleItemsData = await query<{
       item_price: string
       quantity: string
     }>(`
@@ -131,24 +139,20 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
         AND COALESCE(oi.amazon_fees, 0) = 0
         AND oi.item_price > 0
       ORDER BY oi.id
+      LIMIT 5
     `, [startDate, endDate])
 
-    for (const item of itemsWithoutFees) {
+    for (const item of sampleItemsData) {
       const itemPrice = parseFloat(item.item_price || '0')
       const quantity = parseInt(item.quantity || '1', 10)
       if (itemPrice > 0) {
         const estimate = getQuickFeeEstimate(itemPrice, quantity)
-        estimatedFees += estimate.totalFees
-
-        // Collect sample items for debugging (first 5)
-        if (includeDebug && sampleItems.length < 5) {
-          sampleItems.push({
-            itemPrice,
-            quantity,
-            amazonFees: 0,
-            estimatedFees: estimate.totalFees,
-          })
-        }
+        sampleItems.push({
+          itemPrice,
+          quantity,
+          amazonFees: 0,
+          estimatedFees: estimate.totalFees,
+        })
       }
     }
   }
@@ -278,18 +282,19 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     console.log('COGS query error:', e)
   }
 
+  // Round all monetary values to 2 decimal places for consistency
   return {
-    sales: totalSales,
+    sales: Number(totalSales.toFixed(2)),
     orders: orderCount,
     units: totalUnits,
-    promos: totalPromo,
-    refunds: refundAmount,
+    promos: Number(totalPromo.toFixed(2)),
+    refunds: Number(refundAmount.toFixed(2)),
     refundCount,
-    adCost,
-    amazonFees: actualFees + estimatedFees,
-    amazonFeesEstimated: estimatedFees,
-    cogs,
-    feeEstimationRate,
+    adCost: Number(adCost.toFixed(2)),
+    amazonFees: Number((actualFees + estimatedFees).toFixed(2)),
+    amazonFeesEstimated: Number(estimatedFees.toFixed(2)),
+    cogs: Number(cogs.toFixed(2)),
+    feeEstimationRate: Number(feeEstimationRate.toFixed(1)),
     debug,
   }
 }
