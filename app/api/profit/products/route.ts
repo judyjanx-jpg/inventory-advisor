@@ -10,6 +10,7 @@ import {
   startOfMonth,
   endOfMonth,
   subDays,
+  addDays,
   subMonths
 } from 'date-fns'
 import { toZonedTime, fromZonedTime } from 'date-fns-tz'
@@ -50,6 +51,7 @@ interface ProductProfit {
 }
 
 // Helper to get date range in Amazon's timezone (PST/PDT)
+// Uses startOfNextDay with < comparison for more reliable date range queries
 function getDateRange(period: string): { startDate: Date; endDate: Date } {
   const now = new Date()
   // Convert current UTC time to PST for day boundary calculations
@@ -59,57 +61,87 @@ function getDateRange(period: string): { startDate: Date; endDate: Date } {
   const toUTC = (date: Date) => fromZonedTime(date, AMAZON_TIMEZONE)
 
   switch (period) {
-    case 'today':
+    case 'today': {
+      const todayStart = startOfDay(nowInPST)
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
       return {
-        startDate: toUTC(startOfDay(nowInPST)),
-        endDate: toUTC(endOfDay(nowInPST))
+        startDate: toUTC(todayStart),
+        endDate: toUTC(tomorrowStart)
       }
-    case 'yesterday':
+    }
+    case 'yesterday': {
+      const yesterdayStart = startOfDay(subDays(nowInPST, 1))
+      const todayStart = startOfDay(nowInPST)
       return {
-        startDate: toUTC(startOfDay(subDays(nowInPST, 1))),
-        endDate: toUTC(endOfDay(subDays(nowInPST, 1)))
+        startDate: toUTC(yesterdayStart),
+        endDate: toUTC(todayStart)
       }
-    case '2daysAgo':
+    }
+    case '2daysAgo': {
+      const twoDaysAgoStart = startOfDay(subDays(nowInPST, 2))
+      const yesterdayStart = startOfDay(subDays(nowInPST, 1))
       return {
-        startDate: toUTC(startOfDay(subDays(nowInPST, 2))),
-        endDate: toUTC(endOfDay(subDays(nowInPST, 2)))
+        startDate: toUTC(twoDaysAgoStart),
+        endDate: toUTC(yesterdayStart)
       }
-    case '3daysAgo':
+    }
+    case '3daysAgo': {
+      const threeDaysAgoStart = startOfDay(subDays(nowInPST, 3))
+      const twoDaysAgoStart = startOfDay(subDays(nowInPST, 2))
       return {
-        startDate: toUTC(startOfDay(subDays(nowInPST, 3))),
-        endDate: toUTC(endOfDay(subDays(nowInPST, 3)))
+        startDate: toUTC(threeDaysAgoStart),
+        endDate: toUTC(twoDaysAgoStart)
       }
-    case '7days':
+    }
+    case '7days': {
+      const sevenDaysAgoStart = startOfDay(subDays(nowInPST, 6))
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
       return {
-        startDate: toUTC(startOfDay(subDays(nowInPST, 6))),
-        endDate: toUTC(endOfDay(nowInPST))
+        startDate: toUTC(sevenDaysAgoStart),
+        endDate: toUTC(tomorrowStart)
       }
-    case '14days':
+    }
+    case '14days': {
+      const fourteenDaysAgoStart = startOfDay(subDays(nowInPST, 13))
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
       return {
-        startDate: toUTC(startOfDay(subDays(nowInPST, 13))),
-        endDate: toUTC(endOfDay(nowInPST))
+        startDate: toUTC(fourteenDaysAgoStart),
+        endDate: toUTC(tomorrowStart)
       }
-    case '30days':
+    }
+    case '30days': {
+      const thirtyDaysAgoStart = startOfDay(subDays(nowInPST, 29))
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
       return {
-        startDate: toUTC(startOfDay(subDays(nowInPST, 29))),
-        endDate: toUTC(endOfDay(nowInPST))
+        startDate: toUTC(thirtyDaysAgoStart),
+        endDate: toUTC(tomorrowStart)
       }
+    }
     case 'mtd':
-    case 'forecast':
+    case 'forecast': {
+      const monthStart = startOfMonth(nowInPST)
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
       return {
-        startDate: toUTC(startOfMonth(nowInPST)),
-        endDate: toUTC(endOfDay(nowInPST))
+        startDate: toUTC(monthStart),
+        endDate: toUTC(tomorrowStart)
       }
-    case 'lastMonth':
+    }
+    case 'lastMonth': {
+      const lastMonthStart = startOfMonth(subMonths(nowInPST, 1))
+      const thisMonthStart = startOfMonth(nowInPST)
       return {
-        startDate: toUTC(startOfMonth(subMonths(nowInPST, 1))),
-        endDate: toUTC(endOfMonth(subMonths(nowInPST, 1)))
+        startDate: toUTC(lastMonthStart),
+        endDate: toUTC(thisMonthStart)
       }
-    default:
+    }
+    default: {
+      const yesterdayStart = startOfDay(subDays(nowInPST, 1))
+      const todayStart = startOfDay(nowInPST)
       return {
-        startDate: toUTC(startOfDay(subDays(nowInPST, 1))),
-        endDate: toUTC(endOfDay(subDays(nowInPST, 1)))
+        startDate: toUTC(yesterdayStart),
+        endDate: toUTC(todayStart)
       }
+    }
   }
 }
 
@@ -180,7 +212,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN products parent_p ON p.parent_sku = parent_p.sku
       LEFT JOIN suppliers s ON p.supplier_id = s.id
       WHERE o.purchase_date >= $1
-        AND o.purchase_date <= $2
+        AND o.purchase_date < $2
         AND o.status NOT IN ('Cancelled', 'Canceled')
       GROUP BY ${groupByColumn}
       ORDER BY SUM(oi.item_price) DESC
@@ -198,7 +230,7 @@ export async function GET(request: NextRequest) {
           COALESCE(SUM(quantity), 0)::text as refund_count
         FROM returns
         WHERE return_date >= $1
-          AND return_date <= $2
+          AND return_date < $2
         GROUP BY master_sku
       `, [startDate, endDate])
     } catch (e) {

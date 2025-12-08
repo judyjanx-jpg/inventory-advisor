@@ -10,6 +10,7 @@ import {
   startOfMonth,
   endOfMonth,
   subDays,
+  addDays,
   subMonths,
   format,
 } from 'date-fns'
@@ -95,8 +96,8 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       oi.amazon_fees::text
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.id
-    WHERE o.purchase_date >= $1
-      AND o.purchase_date <= $2
+        WHERE o.purchase_date >= $1
+          AND o.purchase_date < $2
       AND o.status NOT IN ('Cancelled', 'Canceled')
   `, [startDate, endDate])
 
@@ -171,7 +172,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     SELECT COUNT(*)::text as count
     FROM orders
     WHERE purchase_date >= $1
-      AND purchase_date <= $2
+      AND purchase_date < $2
       AND status NOT IN ('Cancelled', 'Canceled')
   `, [startDate, endDate])
   const orderCount = parseInt(orderCountResult?.count || '0', 10)
@@ -188,8 +189,8 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
         COALESCE(SUM(quantity), 0)::text as total_quantity,
         COALESCE(SUM(refund_amount), 0)::text as total_amount
       FROM returns
-      WHERE return_date >= $1
-        AND return_date <= $2
+        WHERE return_date >= $1
+        AND return_date < $2
     `, [startDate, endDate])
     refundCount = parseInt(refundData?.total_quantity || '0', 10)
     refundAmount = parseFloat(refundData?.total_amount || '0')
@@ -206,7 +207,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
         FROM returns r
         JOIN order_items oi ON r.order_id = oi.order_id AND r.master_sku = oi.master_sku
         WHERE r.return_date >= $1
-          AND r.return_date <= $2
+          AND r.return_date < $2
       `, [startDate, endDate])
       refundAmount = parseFloat(estimatedRefunds?.total || '0')
     } catch (e) {
@@ -221,7 +222,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
         SELECT COALESCE(SUM(total_refunds), 0)::text as total
         FROM daily_summary
         WHERE date >= $1::date
-          AND date <= $2::date
+          AND date < $2::date
       `, [startDate, endDate])
       refundAmount = parseFloat(summaryRefunds?.total || '0')
     } catch (e) {
@@ -236,7 +237,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
         SELECT COALESCE(SUM(refunds), 0)::text as total
         FROM daily_profit
         WHERE date >= $1::date
-          AND date <= $2::date
+          AND date < $2::date
       `, [startDate, endDate])
       refundAmount = parseFloat(profitRefunds?.total || '0')
     } catch (e) {
@@ -251,7 +252,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       SELECT COALESCE(SUM(spend), 0)::text as total_spend
       FROM advertising_daily
       WHERE date >= $1
-        AND date <= $2
+        AND date < $2
     `, [startDate, endDate])
     adCost = parseFloat(adData?.total_spend || '0')
   } catch {
@@ -267,7 +268,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       JOIN orders o ON oi.order_id = o.id
       LEFT JOIN products p ON oi.master_sku = p.sku
       WHERE o.purchase_date >= $1
-      AND o.purchase_date <= $2
+      AND o.purchase_date < $2
       AND o.status NOT IN ('Cancelled', 'Canceled')
     `, [startDate, endDate])
     cogs = parseFloat(cogsData?.total_cogs || '0')
@@ -293,31 +294,62 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
 
 // Helper to get date range for a period type
 // Takes nowInPST (current time in PST) and returns start/end in UTC for database queries
+// Uses startOfNextDay with < comparison for more reliable date range queries
 function getDateRangeForPeriod(period: string, nowInPST: Date): { start: Date; end: Date; label: string } {
   // Helper to convert PST time to UTC for database queries
   const toUTC = (date: Date) => fromZonedTime(date, AMAZON_TIMEZONE)
 
   switch (period) {
-    case 'today':
-      return { start: toUTC(startOfDay(nowInPST)), end: toUTC(endOfDay(nowInPST)), label: format(nowInPST, 'd MMMM yyyy') }
-    case 'yesterday':
-      return { start: toUTC(startOfDay(subDays(nowInPST, 1))), end: toUTC(endOfDay(subDays(nowInPST, 1))), label: format(subDays(nowInPST, 1), 'd MMMM yyyy') }
-    case '2daysAgo':
-      return { start: toUTC(startOfDay(subDays(nowInPST, 2))), end: toUTC(endOfDay(subDays(nowInPST, 2))), label: format(subDays(nowInPST, 2), 'd MMMM yyyy') }
-    case '3daysAgo':
-      return { start: toUTC(startOfDay(subDays(nowInPST, 3))), end: toUTC(endOfDay(subDays(nowInPST, 3))), label: format(subDays(nowInPST, 3), 'd MMMM yyyy') }
-    case '7days':
-      return { start: toUTC(startOfDay(subDays(nowInPST, 6))), end: toUTC(endOfDay(nowInPST)), label: `${format(subDays(nowInPST, 6), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
-    case '14days':
-      return { start: toUTC(startOfDay(subDays(nowInPST, 13))), end: toUTC(endOfDay(nowInPST)), label: `${format(subDays(nowInPST, 13), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
-    case '30days':
-      return { start: toUTC(startOfDay(subDays(nowInPST, 29))), end: toUTC(endOfDay(nowInPST)), label: `${format(subDays(nowInPST, 29), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
-    case 'mtd':
-      return { start: toUTC(startOfMonth(nowInPST)), end: toUTC(endOfDay(nowInPST)), label: `${format(startOfMonth(nowInPST), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
-    case 'lastMonth':
-      return { start: toUTC(startOfMonth(subMonths(nowInPST, 1))), end: toUTC(endOfMonth(subMonths(nowInPST, 1))), label: `${format(startOfMonth(subMonths(nowInPST, 1)), 'd')}-${format(endOfMonth(subMonths(nowInPST, 1)), 'd MMMM yyyy')}` }
-    default:
-      return { start: toUTC(startOfDay(subDays(nowInPST, 1))), end: toUTC(endOfDay(subDays(nowInPST, 1))), label: format(subDays(nowInPST, 1), 'd MMMM yyyy') }
+    case 'today': {
+      const todayStart = startOfDay(nowInPST)
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
+      return { start: toUTC(todayStart), end: toUTC(tomorrowStart), label: format(nowInPST, 'd MMMM yyyy') }
+    }
+    case 'yesterday': {
+      const yesterdayStart = startOfDay(subDays(nowInPST, 1))
+      const todayStart = startOfDay(nowInPST)
+      return { start: toUTC(yesterdayStart), end: toUTC(todayStart), label: format(subDays(nowInPST, 1), 'd MMMM yyyy') }
+    }
+    case '2daysAgo': {
+      const twoDaysAgoStart = startOfDay(subDays(nowInPST, 2))
+      const yesterdayStart = startOfDay(subDays(nowInPST, 1))
+      return { start: toUTC(twoDaysAgoStart), end: toUTC(yesterdayStart), label: format(subDays(nowInPST, 2), 'd MMMM yyyy') }
+    }
+    case '3daysAgo': {
+      const threeDaysAgoStart = startOfDay(subDays(nowInPST, 3))
+      const twoDaysAgoStart = startOfDay(subDays(nowInPST, 2))
+      return { start: toUTC(threeDaysAgoStart), end: toUTC(twoDaysAgoStart), label: format(subDays(nowInPST, 3), 'd MMMM yyyy') }
+    }
+    case '7days': {
+      const sevenDaysAgoStart = startOfDay(subDays(nowInPST, 6))
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
+      return { start: toUTC(sevenDaysAgoStart), end: toUTC(tomorrowStart), label: `${format(subDays(nowInPST, 6), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
+    }
+    case '14days': {
+      const fourteenDaysAgoStart = startOfDay(subDays(nowInPST, 13))
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
+      return { start: toUTC(fourteenDaysAgoStart), end: toUTC(tomorrowStart), label: `${format(subDays(nowInPST, 13), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
+    }
+    case '30days': {
+      const thirtyDaysAgoStart = startOfDay(subDays(nowInPST, 29))
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
+      return { start: toUTC(thirtyDaysAgoStart), end: toUTC(tomorrowStart), label: `${format(subDays(nowInPST, 29), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
+    }
+    case 'mtd': {
+      const monthStart = startOfMonth(nowInPST)
+      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
+      return { start: toUTC(monthStart), end: toUTC(tomorrowStart), label: `${format(startOfMonth(nowInPST), 'd')}-${format(nowInPST, 'd MMMM yyyy')}` }
+    }
+    case 'lastMonth': {
+      const lastMonthStart = startOfMonth(subMonths(nowInPST, 1))
+      const thisMonthStart = startOfMonth(nowInPST)
+      return { start: toUTC(lastMonthStart), end: toUTC(thisMonthStart), label: `${format(startOfMonth(subMonths(nowInPST, 1)), 'd')}-${format(endOfMonth(subMonths(nowInPST, 1)), 'd MMMM yyyy')}` }
+    }
+    default: {
+      const yesterdayStart = startOfDay(subDays(nowInPST, 1))
+      const todayStart = startOfDay(nowInPST)
+      return { start: toUTC(yesterdayStart), end: toUTC(todayStart), label: format(subDays(nowInPST, 1), 'd MMMM yyyy') }
+    }
   }
 }
 
@@ -478,7 +510,7 @@ export async function GET(request: NextRequest) {
         FROM orders o
         LEFT JOIN order_items oi ON o.id = oi.order_id
         WHERE o.purchase_date >= $1
-          AND o.purchase_date <= $2
+          AND o.purchase_date < $2
         GROUP BY o.status
         ORDER BY o.status
       `, [todayRange.start, todayRange.end])
