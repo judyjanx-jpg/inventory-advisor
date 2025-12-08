@@ -73,23 +73,65 @@ export function PeriodSelector({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50">
-          {selectedPreset === 'custom' ? (
-            <div className="w-[700px]">
-              {/* Custom Date Range Calendar */}
-              <div className="p-4 border-b border-slate-700">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-white">Custom Date Range</h3>
-                  <button
-                    onClick={() => {
-                      onPresetChange('default')
+        <div className="absolute right-0 mt-2 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 flex">
+          {/* Period Presets - Always visible */}
+          <div className="w-80 border-r border-slate-700">
+            <div className="p-2 border-b border-slate-700">
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2">
+                Period Presets
+              </h3>
+              {periodPresets.map((preset) => (
+                <button
+                  key={preset.value}
+                  onClick={() => {
+                    onPresetChange(preset.value)
+                    if (preset.value !== 'custom') {
                       setIsOpen(false)
-                    }}
-                    className="text-xs text-slate-400 hover:text-white"
-                  >
-                    Back to presets
-                  </button>
-                </div>
+                    }
+                  }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
+                    selectedPreset === preset.value ? 'text-cyan-400' : 'text-slate-300'
+                  }`}
+                >
+                  {selectedPreset === preset.value && (
+                    <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                  )}
+                  <span className={selectedPreset !== preset.value ? 'ml-6' : ''}>
+                    {preset.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Compare Mode */}
+            <div className="p-2">
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2">
+                Comparison
+              </h3>
+              {compareModes.map((mode) => (
+                <button
+                  key={mode.value}
+                  onClick={() => onCompareModeChange(mode.value as any)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
+                    compareMode === mode.value ? 'text-cyan-400' : 'text-slate-300'
+                  }`}
+                >
+                  {compareMode === mode.value && (
+                    <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                  )}
+                  <span className={compareMode !== mode.value ? 'ml-6' : ''}>
+                    {mode.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Date Range Calendar - Only shown when custom is selected */}
+          {selectedPreset === 'custom' && (
+            <div className="w-[700px]">
+              <div className="p-4">
+                <h3 className="text-sm font-semibold text-white mb-4">Custom Date Range</h3>
                 <CalendarDatePicker
                   startDate={localStartDate}
                   endDate={localEndDate}
@@ -126,53 +168,6 @@ export function PeriodSelector({
                     Apply
                   </button>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="w-96">
-              {/* Period Presets */}
-              <div className="p-2 border-b border-slate-700">
-                {periodPresets.map((preset) => (
-                  <button
-                    key={preset.value}
-                    onClick={() => {
-                      onPresetChange(preset.value)
-                      if (preset.value !== 'custom') {
-                        setIsOpen(false)
-                      }
-                    }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
-                      selectedPreset === preset.value ? 'text-cyan-400' : 'text-slate-300'
-                    }`}
-                  >
-                    {selectedPreset === preset.value && (
-                      <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                    )}
-                    <span className={selectedPreset !== preset.value ? 'ml-6' : ''}>
-                      {preset.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Compare Mode */}
-              <div className="p-2">
-                {compareModes.map((mode) => (
-                  <button
-                    key={mode.value}
-                    onClick={() => onCompareModeChange(mode.value as any)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
-                      compareMode === mode.value ? 'text-cyan-400' : 'text-slate-300'
-                    }`}
-                  >
-                    {compareMode === mode.value && (
-                      <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                    )}
-                    <span className={compareMode !== mode.value ? 'ml-6' : ''}>
-                      {mode.label}
-                    </span>
-                  </button>
-                ))}
               </div>
             </div>
           )}
