@@ -211,7 +211,11 @@ export async function adsApiRequest<T>(
     'Authorization': `Bearer ${accessToken}`,
     'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
     'Content-Type': 'application/json',
-    'Accept': 'application/vnd.createasyncreport.v3+json',  // V3 API accept header
+  }
+
+  // Only add V3 Accept header for reporting endpoints
+  if (endpoint.startsWith('/reporting/')) {
+    headers['Accept'] = 'application/vnd.createasyncreport.v3+json'
   }
 
   // Profile ID is required for most endpoints
