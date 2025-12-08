@@ -192,6 +192,18 @@ export async function GET(request: NextRequest) {
       items_with_fees: string
       total_items: string
     }>(`
+      WITH recent_avg_prices AS (
+        SELECT 
+          oi.master_sku,
+          AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.purchase_date >= NOW() - INTERVAL '30 days'
+          AND oi.item_price > 0
+          AND oi.quantity > 0
+          AND o.status NOT IN ('Cancelled', 'Canceled')
+        GROUP BY oi.master_sku
+      )
       SELECT
         ${groupByColumn} as sku,
         MAX(COALESCE(p.asin, oi.asin)) as asin,
@@ -206,7 +218,8 @@ export async function GET(request: NextRequest) {
           CASE 
             WHEN oi.item_price > 0 
             THEN oi.item_price + COALESCE(oi.shipping_price, 0)
-            ELSE COALESCE(p.price * oi.quantity, 0) + COALESCE(oi.shipping_price, 0)
+            -- Use average selling price from recent orders (last 30 days) for more accurate estimation
+            ELSE COALESCE((rap.avg_unit_price * oi.quantity), 0) + COALESCE(oi.shipping_price, 0)
           END
         ), 0)::text as total_sales,
         COALESCE(SUM(oi.amazon_fees), 0)::text as actual_fees,
@@ -214,6 +227,7 @@ export async function GET(request: NextRequest) {
         COUNT(oi.id)::text as total_items
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
+      LEFT JOIN recent_avg_prices rap ON oi.master_sku = rap.master_sku
       LEFT JOIN products p ON oi.master_sku = p.sku
       LEFT JOIN products parent_p ON p.parent_sku = parent_p.sku
       LEFT JOIN suppliers s ON p.supplier_id = s.id
@@ -221,7 +235,13 @@ export async function GET(request: NextRequest) {
         AND o.purchase_date < $2
         AND o.status NOT IN ('Cancelled', 'Canceled')
       GROUP BY ${groupByColumn}
-      ORDER BY SUM(oi.item_price) DESC
+      ORDER BY SUM(
+        CASE 
+          WHEN oi.item_price > 0 
+          THEN oi.item_price
+          ELSE COALESCE(rap.avg_unit_price * oi.quantity, 0)
+        END
+      ) DESC
     `, [startDate, endDate])
 
     // Get refunds by product

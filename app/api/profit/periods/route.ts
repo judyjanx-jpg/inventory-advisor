@@ -29,6 +29,8 @@ interface DebugInfo {
   itemsWithEstimatedFees: number
   totalActualFees: number
   totalEstimatedFees: number
+  estimatedItemsCount?: number  // Items with $0 price that used estimated sales price
+  estimatedSalesAmount?: number  // Total sales amount that was estimated
   sampleItems?: Array<{
     itemPrice: number
     quantity: number
@@ -92,7 +94,21 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     items_with_fees: string
     total_items: string
     total_orders: string
+    estimated_items_count: string
+    estimated_sales_amount: string
   }>(`
+    WITH recent_avg_prices AS (
+      SELECT 
+        oi.master_sku,
+        AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      WHERE o.purchase_date >= NOW() - INTERVAL '30 days'
+        AND oi.item_price > 0
+        AND oi.quantity > 0
+        AND o.status NOT IN ('Cancelled', 'Canceled')
+      GROUP BY oi.master_sku
+    )
     SELECT
       ROUND(COALESCE(SUM(
         CASE 
@@ -100,7 +116,8 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
           THEN oi.gross_revenue
           WHEN oi.item_price > 0
           THEN oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
-          ELSE COALESCE(p.price * oi.quantity, 0) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          -- Use average selling price from recent orders (last 30 days) for more accurate estimation
+          ELSE COALESCE((rap.avg_unit_price * oi.quantity), 0) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
         END
       ), 0), 2)::text as total_sales,
       COALESCE(SUM(oi.quantity), 0)::text as total_units,
@@ -112,8 +129,9 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
           THEN CASE
             WHEN oi.item_price > 0 
             THEN ROUND((oi.item_price * 0.15) + (3.50 * oi.quantity), 2)
-            WHEN COALESCE(p.price, 0) > 0
-            THEN ROUND((p.price * oi.quantity * 0.15) + (3.50 * oi.quantity), 2)
+            -- Use average selling price for fee estimation to match sales calculation
+            WHEN COALESCE(rap.avg_unit_price, 0) > 0
+            THEN ROUND((rap.avg_unit_price * oi.quantity * 0.15) + (3.50 * oi.quantity), 2)
             ELSE 0
           END
           ELSE 0 
@@ -121,10 +139,19 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       ), 0), 2)::text as total_estimated_fees,
       COALESCE(SUM(CASE WHEN COALESCE(oi.amazon_fees, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_fees,
       COUNT(*)::text as total_items,
-      COUNT(DISTINCT o.id)::text as total_orders
+      COUNT(DISTINCT o.id)::text as total_orders,
+      -- Track estimated items for transparency
+      COALESCE(SUM(CASE WHEN COALESCE(oi.item_price, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0 THEN 1 ELSE 0 END), 0)::text as estimated_items_count,
+      ROUND(COALESCE(SUM(
+        CASE 
+          WHEN COALESCE(oi.item_price, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0
+          THEN COALESCE((rap.avg_unit_price * oi.quantity), 0) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          ELSE 0
+        END
+      ), 0), 2)::text as estimated_sales_amount
     FROM order_items oi
     INNER JOIN orders o ON oi.order_id = o.id
-    LEFT JOIN products p ON oi.master_sku = p.sku
+    LEFT JOIN recent_avg_prices rap ON oi.master_sku = rap.master_sku
     WHERE o.purchase_date >= $1::timestamp
       AND o.purchase_date < $2::timestamp
       AND o.status NOT IN ('Cancelled', 'Canceled')
@@ -139,6 +166,8 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   const totalItems = parseInt(summaryData?.total_items || '0', 10)
   const orderCount = parseInt(summaryData?.total_orders || '0', 10)
   const itemsWithEstimatedFees = totalItems - itemsWithActualFees
+  const estimatedItemsCount = parseInt(summaryData?.estimated_items_count || '0', 10)
+  const estimatedSalesAmount = parseFloat(summaryData?.estimated_sales_amount || '0')
 
   // Collect sample items for debugging if needed
   const sampleItems: DebugInfo['sampleItems'] = []
@@ -189,6 +218,8 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     itemsWithEstimatedFees,
     totalActualFees: Number(actualFees.toFixed(2)),
     totalEstimatedFees: Number(estimatedFees.toFixed(2)),
+    estimatedItemsCount,
+    estimatedSalesAmount: Number(estimatedSalesAmount.toFixed(2)),
     sampleItems,
   } : undefined
 
