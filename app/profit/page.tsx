@@ -65,6 +65,8 @@ export default function ProfitDashboard() {
   const [compareMode, setCompareMode] = useState<'none' | 'previous' | 'lastYear'>('none')
   const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products')
   const [isHydrated, setIsHydrated] = useState(false)
+  const [customStartDate, setCustomStartDate] = useState<Date | null>(null)
+  const [customEndDate, setCustomEndDate] = useState<Date | null>(null)
 
   // Load persisted preferences from localStorage on mount
   useEffect(() => {
@@ -121,7 +123,11 @@ export default function ProfitDashboard() {
       setInitialLoadDone(false)
       try {
         console.log('Fetching periods from API...')
-        const periodsRes = await fetch(`/api/profit/periods?preset=${preset}`)
+        let url = `/api/profit/periods?preset=${preset}`
+        if (preset === 'custom' && customStartDate && customEndDate) {
+          url += `&startDate=${customStartDate.toISOString().split('T')[0]}&endDate=${customEndDate.toISOString().split('T')[0]}`
+        }
+        const periodsRes = await fetch(url)
         console.log('Periods API response status:', periodsRes.status)
         if (periodsRes.ok) {
           const data = await periodsRes.json()
@@ -138,7 +144,11 @@ export default function ProfitDashboard() {
             }
 
             // Fetch products for the correct period
-            const productsRes = await fetch(`/api/profit/products?period=${periodToUse}&groupBy=${groupBy}`)
+            let productsUrl = `/api/profit/products?period=${periodToUse}&groupBy=${groupBy}`
+            if (preset === 'custom' && customStartDate && customEndDate) {
+              productsUrl += `&startDate=${customStartDate.toISOString().split('T')[0]}&endDate=${customEndDate.toISOString().split('T')[0]}`
+            }
+            const productsRes = await fetch(productsUrl)
             if (productsRes.ok) {
               const prodData = await productsRes.json()
               setProducts(prodData.products || [])
@@ -154,7 +164,7 @@ export default function ProfitDashboard() {
     }
 
     fetchPeriodsForPreset(selectedPreset)
-  }, [selectedPreset, isHydrated])
+  }, [selectedPreset, isHydrated, customStartDate, customEndDate])
 
   // Fetch products when period or groupBy changes (but not on initial load - useEffect above handles that)
   const [initialLoadDone, setInitialLoadDone] = useState(false)
@@ -164,7 +174,11 @@ export default function ProfitDashboard() {
       if (!initialLoadDone || periodData.length === 0) return
 
       try {
-        const productsRes = await fetch(`/api/profit/products?period=${selectedPeriod}&groupBy=${groupBy}`)
+        let url = `/api/profit/products?period=${selectedPeriod}&groupBy=${groupBy}`
+        if (selectedPreset === 'custom' && customStartDate && customEndDate) {
+          url += `&startDate=${customStartDate.toISOString().split('T')[0]}&endDate=${customEndDate.toISOString().split('T')[0]}`
+        }
+        const productsRes = await fetch(url)
         if (productsRes.ok) {
           const data = await productsRes.json()
           setProducts(data.products || [])
@@ -175,19 +189,27 @@ export default function ProfitDashboard() {
     }
 
     fetchProductsForCurrentPeriod()
-  }, [selectedPeriod, groupBy, initialLoadDone, periodData.length])
+  }, [selectedPeriod, groupBy, initialLoadDone, periodData.length, selectedPreset, customStartDate, customEndDate])
 
   const fetchDashboardData = async () => {
     // Trigger a refresh by resetting and re-fetching
     setInitialLoadDone(false)
     setLoading(true)
     try {
-      const periodsRes = await fetch(`/api/profit/periods?preset=${selectedPreset}`)
+      let periodsUrl = `/api/profit/periods?preset=${selectedPreset}`
+      if (selectedPreset === 'custom' && customStartDate && customEndDate) {
+        periodsUrl += `&startDate=${customStartDate.toISOString().split('T')[0]}&endDate=${customEndDate.toISOString().split('T')[0]}`
+      }
+      const periodsRes = await fetch(periodsUrl)
       if (periodsRes.ok) {
         const data = await periodsRes.json()
         setPeriodData(data.periods || [])
       }
-      const productsRes = await fetch(`/api/profit/products?period=${selectedPeriod}&groupBy=${groupBy}`)
+      let productsUrl = `/api/profit/products?period=${selectedPeriod}&groupBy=${groupBy}`
+      if (selectedPreset === 'custom' && customStartDate && customEndDate) {
+        productsUrl += `&startDate=${customStartDate.toISOString().split('T')[0]}&endDate=${customEndDate.toISOString().split('T')[0]}`
+      }
+      const productsRes = await fetch(productsUrl)
       if (productsRes.ok) {
         const data = await productsRes.json()
         setProducts(data.products || [])
@@ -231,9 +253,23 @@ export default function ProfitDashboard() {
               onPresetChange={(preset) => {
                 console.log('PeriodSelector onPresetChange called with:', preset)
                 setSelectedPreset(preset as PresetType)
+                if (preset === 'custom') {
+                  setSelectedPeriod('custom')
+                }
               }}
               compareMode={compareMode}
               onCompareModeChange={setCompareMode}
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
+              onCustomDateChange={(startDate, endDate) => {
+                setCustomStartDate(startDate)
+                setCustomEndDate(endDate)
+                if (startDate && endDate) {
+                  // Trigger fetch when custom dates are set
+                  setSelectedPreset('custom')
+                  setSelectedPeriod('custom')
+                }
+              }}
             />
             <button
               onClick={fetchDashboardData}

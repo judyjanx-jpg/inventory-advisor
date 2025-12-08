@@ -1,9 +1,9 @@
 // types/profit.ts
 // Shared types for profit dashboard to avoid circular imports
 
-export type PeriodType = 'today' | 'yesterday' | '2daysAgo' | '3daysAgo' | '7days' | '14days' | '30days' | 'mtd' | 'forecast' | 'lastMonth'
+export type PeriodType = 'today' | 'yesterday' | '2daysAgo' | '3daysAgo' | '7days' | '14days' | '30days' | 'mtd' | 'forecast' | 'lastMonth' | 'custom'
 export type GroupByType = 'sku' | 'asin' | 'parent' | 'brand' | 'supplier' | 'channel'
-export type PresetType = 'default' | 'simple' | 'days' | 'recent' | 'months'
+export type PresetType = 'default' | 'simple' | 'days' | 'recent' | 'months' | 'custom'
 
 export interface PeriodData {
   period: string

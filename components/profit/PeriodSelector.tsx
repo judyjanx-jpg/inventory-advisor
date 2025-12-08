@@ -3,12 +3,17 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Calendar, ChevronDown, Check } from 'lucide-react'
+import { CalendarDatePicker } from './CalendarDatePicker'
+import { startOfDay, subDays } from 'date-fns'
 
 interface PeriodSelectorProps {
   selectedPreset: string
   onPresetChange: (preset: string) => void
   compareMode: 'none' | 'previous' | 'lastYear'
   onCompareModeChange: (mode: 'none' | 'previous' | 'lastYear') => void
+  customStartDate?: Date | null
+  customEndDate?: Date | null
+  onCustomDateChange?: (startDate: Date | null, endDate: Date | null) => void
 }
 
 const periodPresets = [
@@ -17,6 +22,7 @@ const periodPresets = [
   { label: 'Today / Yesterday / 7 days / 14 days / 30 days', value: 'days' },
   { label: 'Today / Yesterday / 2 days ago / 3 days ago', value: 'recent' },
   { label: 'Month to date / Last month / 2 months ago / 3 months ago', value: 'months' },
+  { label: 'Custom range', value: 'custom' },
 ]
 
 const compareModes = [
@@ -25,9 +31,25 @@ const compareModes = [
   { label: 'Compare with same period last year', value: 'lastYear' },
 ]
 
-export function PeriodSelector({ selectedPreset, onPresetChange, compareMode, onCompareModeChange }: PeriodSelectorProps) {
+export function PeriodSelector({ 
+  selectedPreset, 
+  onPresetChange, 
+  compareMode, 
+  onCompareModeChange,
+  customStartDate,
+  customEndDate,
+  onCustomDateChange
+}: PeriodSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  
+  // Initialize custom dates if not provided
+  const [localStartDate, setLocalStartDate] = useState<Date | null>(
+    customStartDate || startOfDay(subDays(new Date(), 30))
+  )
+  const [localEndDate, setLocalEndDate] = useState<Date | null>(
+    customEndDate || startOfDay(subDays(new Date(), 1))
+  )
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -51,49 +73,109 @@ export function PeriodSelector({ selectedPreset, onPresetChange, compareMode, on
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50">
-          {/* Period Presets */}
-          <div className="p-2 border-b border-slate-700">
-            {periodPresets.map((preset) => (
-              <button
-                key={preset.value}
-                onClick={() => {
-                  onPresetChange(preset.value)
-                  setIsOpen(false)
-                }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
-                  selectedPreset === preset.value ? 'text-cyan-400' : 'text-slate-300'
-                }`}
-              >
-                {selectedPreset === preset.value && (
-                  <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                )}
-                <span className={selectedPreset !== preset.value ? 'ml-6' : ''}>
-                  {preset.label}
-                </span>
-              </button>
-            ))}
-          </div>
+        <div className="absolute right-0 mt-2 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50">
+          {selectedPreset === 'custom' ? (
+            <div className="w-[700px]">
+              {/* Custom Date Range Calendar */}
+              <div className="p-4 border-b border-slate-700">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-white">Custom Date Range</h3>
+                  <button
+                    onClick={() => {
+                      onPresetChange('default')
+                      setIsOpen(false)
+                    }}
+                    className="text-xs text-slate-400 hover:text-white"
+                  >
+                    Back to presets
+                  </button>
+                </div>
+                <CalendarDatePicker
+                  startDate={localStartDate}
+                  endDate={localEndDate}
+                  onStartDateChange={(date) => {
+                    setLocalStartDate(date)
+                    if (onCustomDateChange) {
+                      onCustomDateChange(date, localEndDate)
+                    }
+                  }}
+                  onEndDateChange={(date) => {
+                    setLocalEndDate(date)
+                    if (onCustomDateChange) {
+                      onCustomDateChange(localStartDate, date)
+                    }
+                  }}
+                />
+                <div className="flex justify-end gap-2 mt-4">
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="px-4 py-2 text-sm text-slate-300 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (localStartDate && localEndDate && onCustomDateChange) {
+                        onCustomDateChange(localStartDate, localEndDate)
+                      }
+                      setIsOpen(false)
+                    }}
+                    disabled={!localStartDate || !localEndDate}
+                    className="px-4 py-2 text-sm bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 disabled:text-slate-500 text-white rounded-lg transition-colors"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="w-96">
+              {/* Period Presets */}
+              <div className="p-2 border-b border-slate-700">
+                {periodPresets.map((preset) => (
+                  <button
+                    key={preset.value}
+                    onClick={() => {
+                      onPresetChange(preset.value)
+                      if (preset.value !== 'custom') {
+                        setIsOpen(false)
+                      }
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
+                      selectedPreset === preset.value ? 'text-cyan-400' : 'text-slate-300'
+                    }`}
+                  >
+                    {selectedPreset === preset.value && (
+                      <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                    )}
+                    <span className={selectedPreset !== preset.value ? 'ml-6' : ''}>
+                      {preset.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
 
-          {/* Compare Mode */}
-          <div className="p-2">
-            {compareModes.map((mode) => (
-              <button
-                key={mode.value}
-                onClick={() => onCompareModeChange(mode.value as any)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
-                  compareMode === mode.value ? 'text-cyan-400' : 'text-slate-300'
-                }`}
-              >
-                {compareMode === mode.value && (
-                  <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                )}
-                <span className={compareMode !== mode.value ? 'ml-6' : ''}>
-                  {mode.label}
-                </span>
-              </button>
-            ))}
-          </div>
+              {/* Compare Mode */}
+              <div className="p-2">
+                {compareModes.map((mode) => (
+                  <button
+                    key={mode.value}
+                    onClick={() => onCompareModeChange(mode.value as any)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
+                      compareMode === mode.value ? 'text-cyan-400' : 'text-slate-300'
+                    }`}
+                  >
+                    {compareMode === mode.value && (
+                      <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                    )}
+                    <span className={compareMode !== mode.value ? 'ml-6' : ''}>
+                      {mode.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

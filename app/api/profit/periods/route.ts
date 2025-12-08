@@ -429,6 +429,68 @@ export async function GET(request: NextRequest) {
     const monthStartPST = startOfMonth(nowInPST)
     const monthStartUTC = toUTC(monthStartPST)  // For forecast calculation
 
+    // Handle custom date range
+    if (preset === 'custom') {
+      const startDateParam = searchParams.get('startDate')
+      const endDateParam = searchParams.get('endDate')
+      
+      if (!startDateParam || !endDateParam) {
+        return NextResponse.json(
+          { error: 'startDate and endDate are required for custom preset', periods: [] },
+          { status: 400 }
+        )
+      }
+
+      // Parse dates and convert to PST, then to UTC for queries
+      const startDatePST = toZonedTime(new Date(startDateParam), AMAZON_TIMEZONE)
+      const endDatePST = toZonedTime(new Date(endDateParam), AMAZON_TIMEZONE)
+      
+      // Set to start of day for start, start of next day for end (to match other periods)
+      const startDateUTC = toUTC(startOfDay(startDatePST))
+      const endDateUTC = toUTC(startOfDay(addDays(endDatePST, 1)))
+
+      const data = await getPeriodData(startDateUTC, endDateUTC, includeDebug)
+      
+      // Calculate derived metrics (matching Sellerboard's approach)
+      const grossProfit = data.sales - data.promos - data.amazonFees - data.cogs
+      const netProfit = grossProfit - data.adCost - data.refunds
+      const estPayout = data.sales - data.promos - data.amazonFees - data.refunds
+      const margin = data.sales > 0 ? (netProfit / data.sales) * 100 : 0
+      const roi = data.cogs > 0 ? (netProfit / data.cogs) * 100 : 0
+      const acos = data.adCost > 0 && data.sales > 0 ? (data.adCost / data.sales) * 100 : null
+      const tacos = data.sales > 0 ? (data.adCost / data.sales) * 100 : null
+      const realAcos = netProfit > 0 && data.adCost > 0 ? (data.adCost / netProfit) * 100 : null
+      
+      const dateRangeLabel = `${format(startDatePST, 'd MMMM')} - ${format(endDatePST, 'd MMMM yyyy')}`
+      
+      return NextResponse.json({
+        periods: [{
+          period: 'custom',
+          dateRange: dateRangeLabel,
+          sales: data.sales,
+          orders: data.orders,
+          units: data.units,
+          promos: data.promos || 0,
+          refunds: data.refunds || 0,
+          refundCount: data.refundCount,
+          adCost: data.adCost,
+          amazonFees: data.amazonFees,
+          cogs: data.cogs,
+          grossProfit,
+          netProfit,
+          estPayout,
+          margin,
+          roi,
+          acos,
+          tacos,
+          realAcos,
+          amazonFeesEstimated: data.amazonFeesEstimated,
+          feeEstimationRate: data.feeEstimationRate,
+        }],
+        preset: 'custom',
+      })
+    }
+
     // Get which periods to fetch based on preset
     const periodsToFetch = periodPresets[preset] || periodPresets.default
 

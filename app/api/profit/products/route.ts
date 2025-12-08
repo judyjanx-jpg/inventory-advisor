@@ -52,13 +52,23 @@ interface ProductProfit {
 
 // Helper to get date range in Amazon's timezone (PST/PDT)
 // Uses startOfNextDay with < comparison for more reliable date range queries
-function getDateRange(period: string): { startDate: Date; endDate: Date } {
+function getDateRange(period: string, startDateParam?: string, endDateParam?: string): { startDate: Date; endDate: Date } {
   const now = new Date()
   // Convert current UTC time to PST for day boundary calculations
   const nowInPST = toZonedTime(now, AMAZON_TIMEZONE)
 
   // Helper to convert PST time back to UTC for database queries
   const toUTC = (date: Date) => fromZonedTime(date, AMAZON_TIMEZONE)
+
+  // Handle custom date range
+  if (period === 'custom' && startDateParam && endDateParam) {
+    const startDatePST = toZonedTime(new Date(startDateParam), AMAZON_TIMEZONE)
+    const endDatePST = toZonedTime(new Date(endDateParam), AMAZON_TIMEZONE)
+    return {
+      startDate: toUTC(startOfDay(startDatePST)),
+      endDate: toUTC(startOfDay(addDays(endDatePST, 1)))
+    }
+  }
 
   switch (period) {
     case 'today': {
@@ -169,8 +179,10 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const period = searchParams.get('period') || 'yesterday'
     const groupBy = searchParams.get('groupBy') || 'sku'
+    const startDateParam = searchParams.get('startDate')
+    const endDateParam = searchParams.get('endDate')
 
-    const { startDate, endDate } = getDateRange(period)
+    const { startDate, endDate } = getDateRange(period, startDateParam || undefined, endDateParam || undefined)
     const { column: groupByColumn } = getGroupByColumn(groupBy)
 
     // Get product-level data with fees directly using pg
