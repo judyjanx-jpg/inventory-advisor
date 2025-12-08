@@ -80,6 +80,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
 }> {
   // Get aggregated order items data using SQL for accuracy and performance
   // Use gross_revenue field which is already calculated and stored
+  // If gross_revenue is NULL or 0, calculate from item_price + shipping_price + gift_wrap_price
   // Calculate estimated fees in SQL for deterministic results
   // Fee estimation: 15% referral fee + $3.50 FBA fee per unit
   const summaryData = await queryOne<{
@@ -90,25 +91,33 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     total_estimated_fees: string
     items_with_fees: string
     total_items: string
+    total_orders: string
   }>(`
     SELECT
-      COALESCE(SUM(COALESCE(oi.gross_revenue, oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0))), 0)::text as total_sales,
+      ROUND(COALESCE(SUM(
+        CASE 
+          WHEN COALESCE(oi.gross_revenue, 0) > 0 
+          THEN oi.gross_revenue
+          ELSE oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+        END
+      ), 0), 2)::text as total_sales,
       COALESCE(SUM(oi.quantity), 0)::text as total_units,
-      COALESCE(SUM(COALESCE(oi.promo_discount, 0)), 0)::text as total_promo,
-      COALESCE(SUM(COALESCE(oi.amazon_fees, 0)), 0)::text as total_actual_fees,
-      COALESCE(SUM(
+      ROUND(COALESCE(SUM(COALESCE(oi.promo_discount, 0)), 0), 2)::text as total_promo,
+      ROUND(COALESCE(SUM(COALESCE(oi.amazon_fees, 0)), 0), 2)::text as total_actual_fees,
+      ROUND(COALESCE(SUM(
         CASE 
           WHEN COALESCE(oi.amazon_fees, 0) = 0 AND oi.item_price > 0 
           THEN ROUND((oi.item_price * 0.15) + (3.50 * oi.quantity), 2)
           ELSE 0 
         END
-      ), 0)::text as total_estimated_fees,
+      ), 0), 2)::text as total_estimated_fees,
       COALESCE(SUM(CASE WHEN COALESCE(oi.amazon_fees, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_fees,
-      COUNT(*)::text as total_items
+      COUNT(*)::text as total_items,
+      COUNT(DISTINCT o.id)::text as total_orders
     FROM order_items oi
-    JOIN orders o ON oi.order_id = o.id
-    WHERE o.purchase_date >= $1
-      AND o.purchase_date < $2
+    INNER JOIN orders o ON oi.order_id = o.id
+    WHERE o.purchase_date >= $1::timestamp
+      AND o.purchase_date < $2::timestamp
       AND o.status NOT IN ('Cancelled', 'Canceled')
   `, [startDate, endDate])
 
@@ -119,6 +128,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   const estimatedFees = parseFloat(summaryData?.total_estimated_fees || '0')
   const itemsWithActualFees = parseInt(summaryData?.items_with_fees || '0', 10)
   const totalItems = parseInt(summaryData?.total_items || '0', 10)
+  const orderCount = parseInt(summaryData?.total_orders || '0', 10)
   const itemsWithEstimatedFees = totalItems - itemsWithActualFees
 
   // Collect sample items for debugging if needed
@@ -173,15 +183,8 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     sampleItems,
   } : undefined
 
-  // Get unique order count (excludes cancelled orders)
-  const orderCountResult = await queryOne<{ count: string }>(`
-    SELECT COUNT(*)::text as count
-    FROM orders
-    WHERE purchase_date >= $1
-      AND purchase_date < $2
-      AND status NOT IN ('Cancelled', 'Canceled')
-  `, [startDate, endDate])
-  const orderCount = parseInt(orderCountResult?.count || '0', 10)
+  // Order count is now calculated in the main query above using COUNT(DISTINCT o.id)
+  // This ensures consistency - we only count orders that have items
 
   // Get refund data - both count and dollar amount
   // Try multiple sources: returns table, daily_summary, daily_profit
