@@ -269,44 +269,74 @@ export async function getSdCampaigns(profileId: string): Promise<Campaign[]> {
 }
 
 // ============================================================
-// Report Generation (Async Process)
+// Report Generation (V3 Reporting API)
 // ============================================================
 
-interface ReportRequest {
-  reportDate: string  // YYYY-MM-DD
-  metrics: string[]
+interface V3ReportConfiguration {
+  adProduct: 'SPONSORED_PRODUCTS' | 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY'
+  groupBy: string[]
+  columns: string[]
+  reportTypeId: string
+  timeUnit: 'SUMMARY' | 'DAILY'
+  format: 'GZIP_JSON' | 'JSON'
 }
 
-interface ReportResponse {
+interface V3ReportRequest {
+  name?: string
+  startDate: string
+  endDate: string
+  configuration: V3ReportConfiguration
+}
+
+interface V3ReportResponse {
   reportId: string
-  status: string
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
   statusDetails?: string
-  location?: string  // Download URL when ready
+  url?: string  // Download URL when ready
+  createdAt?: string
+  updatedAt?: string
+  failureReason?: string
 }
 
-// Request a Sponsored Products report
-export async function requestSpReport(
+// Request a Sponsored Products report using V3 API
+export async function requestSpReportV3(
   profileId: string,
-  reportDate: string,
-  recordType: 'campaigns' | 'adGroups' | 'keywords' | 'productAds' = 'campaigns',
-  metrics: string[] = [
-    'impressions', 'clicks', 'cost', 'attributedConversions14d',
-    'attributedSales14d', 'attributedUnitsOrdered14d'
-  ]
-): Promise<ReportResponse> {
-  return adsApiRequest<ReportResponse>(`/v2/sp/${recordType}/report`, {
+  startDate: string,
+  endDate: string
+): Promise<V3ReportResponse> {
+  const reportConfig: V3ReportRequest = {
+    name: `SP Campaign Report ${startDate}`,
+    startDate,
+    endDate,
+    configuration: {
+      adProduct: 'SPONSORED_PRODUCTS',
+      groupBy: ['campaign'],
+      columns: [
+        'campaignName',
+        'campaignId',
+        'impressions',
+        'clicks',
+        'cost',
+        'purchases14d',
+        'sales14d',
+        'unitsSold14d'
+      ],
+      reportTypeId: 'spCampaigns',
+      timeUnit: 'DAILY',
+      format: 'GZIP_JSON'
+    }
+  }
+
+  return adsApiRequest<V3ReportResponse>('/reporting/reports', {
     method: 'POST',
     profileId,
-    body: {
-      reportDate,
-      metrics,
-    },
+    body: reportConfig,
   })
 }
 
-// Check report status
-export async function getReportStatus(reportId: string, profileId: string): Promise<ReportResponse> {
-  return adsApiRequest<ReportResponse>(`/v2/reports/${reportId}`, { profileId })
+// Check report status (V3 API)
+export async function getReportStatusV3(reportId: string, profileId: string): Promise<V3ReportResponse> {
+  return adsApiRequest<V3ReportResponse>(`/reporting/reports/${reportId}`, { profileId })
 }
 
 // Download report (returns gzipped JSON)
@@ -319,7 +349,7 @@ export async function downloadReport(location: string): Promise<any[]> {
 
   // Report is gzipped JSON - need to decompress
   const buffer = await response.arrayBuffer()
-  
+
   // Use built-in decompression if available, otherwise return raw
   try {
     const { gunzipSync } = await import('zlib')
@@ -332,8 +362,8 @@ export async function downloadReport(location: string): Promise<any[]> {
   }
 }
 
-// Wait for report to complete and download
-export async function waitForReportAndDownload(
+// Wait for report to complete and download (V3 API)
+export async function waitForReportAndDownloadV3(
   reportId: string,
   profileId: string,
   maxWaitMs: number = 300000  // 5 minutes
@@ -341,14 +371,14 @@ export async function waitForReportAndDownload(
   const startTime = Date.now()
 
   while (Date.now() - startTime < maxWaitMs) {
-    const status = await getReportStatus(reportId, profileId)
+    const status = await getReportStatusV3(reportId, profileId)
 
-    if (status.status === 'SUCCESS' && status.location) {
-      return downloadReport(status.location)
+    if (status.status === 'COMPLETED' && status.url) {
+      return downloadReport(status.url)
     }
 
-    if (status.status === 'FAILURE') {
-      throw new Error(`Report failed: ${status.statusDetails}`)
+    if (status.status === 'FAILED') {
+      throw new Error(`Report failed: ${status.failureReason || status.statusDetails || 'Unknown error'}`)
     }
 
     // Wait 5 seconds before checking again
@@ -356,6 +386,47 @@ export async function waitForReportAndDownload(
   }
 
   throw new Error('Report timed out')
+}
+
+// Legacy v2 functions - kept for backwards compatibility but deprecated
+// Request a Sponsored Products report
+export async function requestSpReport(
+  profileId: string,
+  reportDate: string,
+  recordType: 'campaigns' | 'adGroups' | 'keywords' | 'productAds' = 'campaigns',
+  metrics: string[] = [
+    'impressions', 'clicks', 'cost', 'attributedConversions14d',
+    'attributedSales14d', 'attributedUnitsOrdered14d'
+  ]
+): Promise<{ reportId: string }> {
+  // Redirect to V3 API
+  const result = await requestSpReportV3(profileId, reportDate, reportDate)
+  return { reportId: result.reportId }
+}
+
+// Check report status - wrapper for V3
+export async function getReportStatus(reportId: string, profileId: string): Promise<{
+  reportId: string
+  status: string
+  statusDetails?: string
+  location?: string
+}> {
+  const v3Status = await getReportStatusV3(reportId, profileId)
+  return {
+    reportId: v3Status.reportId,
+    status: v3Status.status === 'COMPLETED' ? 'SUCCESS' : v3Status.status,
+    statusDetails: v3Status.failureReason,
+    location: v3Status.url,
+  }
+}
+
+// Wait for report to complete and download - wrapper for V3
+export async function waitForReportAndDownload(
+  reportId: string,
+  profileId: string,
+  maxWaitMs: number = 300000
+): Promise<any[]> {
+  return waitForReportAndDownloadV3(reportId, profileId, maxWaitMs)
 }
 
 // ============================================================

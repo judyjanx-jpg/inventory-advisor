@@ -1,12 +1,12 @@
 // app/api/amazon-ads/sync/route.ts
-// Sync advertising data from Amazon Ads API
+// Sync advertising data from Amazon Ads API (V3 Reporting API)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
   getAdsCredentials,
-  requestSpReport,
-  waitForReportAndDownload,
+  requestSpReportV3,
+  waitForReportAndDownloadV3,
 } from '@/lib/amazon-ads-api'
 
 export async function POST(request: NextRequest) {
@@ -30,53 +30,67 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate date range
-    const dates: string[] = []
     const endDate = new Date()
     endDate.setDate(endDate.getDate() - 1)  // Yesterday (today's data not ready)
 
-    for (let i = 0; i < days; i++) {
-      const date = new Date(endDate)
-      date.setDate(date.getDate() - i)
-      dates.push(date.toISOString().split('T')[0])
-    }
+    const startDate = new Date(endDate)
+    startDate.setDate(startDate.getDate() - days + 1)
 
-    console.log(`Syncing ${dates.length} days of ad data...`)
+    const startDateStr = startDate.toISOString().split('T')[0]
+    const endDateStr = endDate.toISOString().split('T')[0]
 
-    for (const date of dates) {
-      try {
-        console.log(`Processing ${date}...`)
+    console.log(`Syncing ad data from ${startDateStr} to ${endDateStr} (${days} days)...`)
 
-        // Request Sponsored Products campaign report
-        const reportRequest = await requestSpReport(profileId, date, 'campaigns', [
-          'impressions',
-          'clicks',
-          'cost',
-          'attributedConversions14d',
-          'attributedSales14d',
-          'attributedUnitsOrdered14d',
-        ])
+    try {
+      // Request a single report for the entire date range (more efficient)
+      console.log('Requesting Sponsored Products report...')
+      const reportRequest = await requestSpReportV3(profileId, startDateStr, endDateStr)
+      console.log(`Report requested: ${reportRequest.reportId}`)
 
-        // Wait for report and download
-        const reportData = await waitForReportAndDownload(reportRequest.reportId, profileId)
+      // Wait for report and download
+      console.log('Waiting for report to complete...')
+      const reportData = await waitForReportAndDownloadV3(reportRequest.reportId, profileId)
+      console.log(`Report downloaded: ${reportData.length} rows`)
 
-        // Aggregate data for the day
-        let totalImpressions = 0
-        let totalClicks = 0
-        let totalCost = 0
-        let totalSales = 0
-        let totalOrders = 0
-        let totalUnits = 0
+      // Group data by date
+      const dataByDate: Record<string, {
+        impressions: number
+        clicks: number
+        cost: number
+        sales: number
+        orders: number
+        units: number
+        campaigns: number
+      }> = {}
 
-        for (const row of reportData) {
-          totalImpressions += row.impressions || 0
-          totalClicks += row.clicks || 0
-          totalCost += row.cost || 0
-          totalSales += row.attributedSales14d || 0
-          totalOrders += row.attributedConversions14d || 0
-          totalUnits += row.attributedUnitsOrdered14d || 0
+      for (const row of reportData) {
+        // V3 API returns data with 'date' field
+        const rowDate = row.date || startDateStr
+
+        if (!dataByDate[rowDate]) {
+          dataByDate[rowDate] = {
+            impressions: 0,
+            clicks: 0,
+            cost: 0,
+            sales: 0,
+            orders: 0,
+            units: 0,
+            campaigns: 0,
+          }
         }
 
-        // Upsert daily advertising summary
+        // V3 API field names
+        dataByDate[rowDate].impressions += Number(row.impressions) || 0
+        dataByDate[rowDate].clicks += Number(row.clicks) || 0
+        dataByDate[rowDate].cost += Number(row.cost) || 0
+        dataByDate[rowDate].sales += Number(row.sales14d) || 0
+        dataByDate[rowDate].orders += Number(row.purchases14d) || 0
+        dataByDate[rowDate].units += Number(row.unitsSold14d) || 0
+        dataByDate[rowDate].campaigns++
+      }
+
+      // Upsert each day's data
+      for (const [date, data] of Object.entries(dataByDate)) {
         await prisma.advertisingDaily.upsert({
           where: {
             date_campaignType: {
@@ -87,36 +101,33 @@ export async function POST(request: NextRequest) {
           create: {
             date: new Date(date),
             campaignType: 'SP',
-            impressions: totalImpressions,
-            clicks: totalClicks,
-            spend: totalCost,
-            sales14d: totalSales,
-            orders14d: totalOrders,
-            unitsSold14d: totalUnits,
+            impressions: data.impressions,
+            clicks: data.clicks,
+            spend: data.cost,
+            sales14d: data.sales,
+            orders14d: data.orders,
+            unitsSold14d: data.units,
           },
           update: {
-            impressions: totalImpressions,
-            clicks: totalClicks,
-            spend: totalCost,
-            sales14d: totalSales,
-            orders14d: totalOrders,
-            unitsSold14d: totalUnits,
+            impressions: data.impressions,
+            clicks: data.clicks,
+            spend: data.cost,
+            sales14d: data.sales,
+            orders14d: data.orders,
+            unitsSold14d: data.units,
             updatedAt: new Date(),
           },
         })
 
         results.daysProcessed++
-        results.recordsSynced += reportData.length
-
-        console.log(`  ✓ ${date}: ${reportData.length} campaigns, $${totalCost.toFixed(2)} spend`)
-
-      } catch (error: any) {
-        console.error(`  ✗ ${date}: ${error.message}`)
-        results.errors.push(`${date}: ${error.message}`)
+        console.log(`  ✓ ${date}: ${data.campaigns} campaigns, $${data.cost.toFixed(2)} spend`)
       }
 
-      // Rate limiting - 1 second between requests
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      results.recordsSynced = reportData.length
+
+    } catch (error: any) {
+      console.error(`Sync error: ${error.message}`)
+      results.errors.push(error.message)
     }
 
     // Update sync status
