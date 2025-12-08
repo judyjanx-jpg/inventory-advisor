@@ -213,9 +213,13 @@ export async function adsApiRequest<T>(
     'Content-Type': 'application/json',
   }
 
-  // Only add V3 Accept header for reporting endpoints
+  // Add appropriate Accept header based on endpoint
   if (endpoint.startsWith('/reporting/')) {
     headers['Accept'] = 'application/vnd.createasyncreport.v3+json'
+  } else if (endpoint.startsWith('/sp/campaigns')) {
+    headers['Accept'] = 'application/vnd.spcampaign.v3+json'
+  } else if (endpoint.startsWith('/sp/')) {
+    headers['Accept'] = 'application/vnd.spCampaign.v3+json'
   }
 
   // Profile ID is required for most endpoints

@@ -61,7 +61,7 @@ export async function GET() {
             columns: ['impressions', 'clicks', 'spend'],
             reportTypeId: 'spCampaigns',
             timeUnit: 'SUMMARY',
-            format: 'JSON'  // Try JSON instead of GZIP_JSON
+            format: 'GZIP_JSON'
           }
         }
       })
@@ -69,7 +69,7 @@ export async function GET() {
       results.testReport = {
         reportId: reportResponse.reportId,
         status: reportResponse.status,
-        message: 'Report created - check /api/amazon-ads/test?reportId=' + reportResponse.reportId
+        message: 'Report created successfully'
       }
     } catch (e: any) {
       results.testReport = { error: e.message }
