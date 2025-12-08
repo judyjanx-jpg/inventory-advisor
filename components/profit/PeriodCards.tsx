@@ -126,7 +126,7 @@ function PeriodCard({
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-3">
           <div>
             <p className="text-white/60">Orders / Units</p>
-            <p className="font-medium">{formatNumber(data.orders)} / {formatNumber(data.units)}</p>
+            <p className="font-medium">{formatNumber(data.lineItems)} / {formatNumber(data.units)}</p>
           </div>
           <div>
             <p className="text-white/60">Refunds</p>

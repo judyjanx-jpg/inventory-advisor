@@ -200,9 +200,12 @@ export async function GET(request: NextRequest) {
       cost: string | null
       units_sold: string
       total_sales: string
+      sales_estimated: string
       actual_fees: string
       items_with_fees: string
       total_items: string
+      unique_orders: string
+      line_items: string
     }>(`
       WITH recent_avg_prices AS (
         SELECT 
@@ -230,13 +233,33 @@ export async function GET(request: NextRequest) {
           CASE 
             WHEN oi.item_price > 0 
             THEN oi.item_price + COALESCE(oi.shipping_price, 0)
-            -- Use average selling price from recent orders (last 30 days) for more accurate estimation
-            ELSE COALESCE((rap.avg_unit_price * oi.quantity), 0) + COALESCE(oi.shipping_price, 0)
+            -- Price estimation fallback chain: avg price → catalog × 0.95 → 0
+            WHEN COALESCE(rap.avg_unit_price, 0) > 0
+            THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0)
+            WHEN COALESCE(p.price, 0) > 0
+            THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0)
+            ELSE COALESCE(oi.shipping_price, 0)
           END
         ), 0)::text as total_sales,
+        -- Track estimated sales amount
+        ROUND(COALESCE(SUM(
+          CASE 
+            WHEN oi.item_price = 0 OR oi.item_price IS NULL
+            THEN CASE
+              WHEN COALESCE(rap.avg_unit_price, 0) > 0
+              THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0)
+              WHEN COALESCE(p.price, 0) > 0
+              THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0)
+              ELSE COALESCE(oi.shipping_price, 0)
+            END
+            ELSE 0
+          END
+        ), 0), 2)::text as sales_estimated,
         COALESCE(SUM(oi.amazon_fees), 0)::text as actual_fees,
         COUNT(CASE WHEN oi.amazon_fees > 0 THEN 1 END)::text as items_with_fees,
-        COUNT(oi.id)::text as total_items
+        COUNT(oi.id)::text as total_items,
+        COUNT(DISTINCT o.id)::text as unique_orders,
+        COUNT(oi.id)::text as line_items
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
       LEFT JOIN recent_avg_prices rap ON oi.master_sku = rap.master_sku
@@ -251,7 +274,11 @@ export async function GET(request: NextRequest) {
         CASE 
           WHEN oi.item_price > 0 
           THEN oi.item_price
-          ELSE COALESCE(rap.avg_unit_price * oi.quantity, 0)
+          WHEN COALESCE(rap.avg_unit_price, 0) > 0
+          THEN rap.avg_unit_price * oi.quantity
+          WHEN COALESCE(p.price, 0) > 0
+          THEN p.price * oi.quantity * 0.95
+          ELSE 0
         END
       ) DESC
     `, [startDate, endDate])
@@ -284,6 +311,7 @@ export async function GET(request: NextRequest) {
 
       const unitsSold = parseInt(sale.units_sold || '0', 10)
       const totalSales = parseFloat(sale.total_sales || '0')
+      const salesEstimated = parseFloat(sale.sales_estimated || '0')
       const refundCount = parseInt(refund?.refund_count || '0', 10)
       const actualFees = parseFloat(sale.actual_fees || '0')
       const itemsWithFees = parseInt(sale.items_with_fees || '0', 10)
@@ -352,6 +380,11 @@ export async function GET(request: NextRequest) {
     const totalActualFees = products.reduce((sum, p) => sum + (p.amazonFees - p.amazonFeesEstimated), 0)
     const totalFees = totalEstimatedFees + totalActualFees
     const feeEstimationRate = totalFees > 0 ? (totalEstimatedFees / totalFees) * 100 : 0
+    
+    // Calculate total estimated sales and order counts
+    const totalSalesEstimated = salesByProduct.reduce((sum, s) => sum + parseFloat(s.sales_estimated || '0'), 0)
+    const totalUniqueOrders = salesByProduct.reduce((sum, s) => sum + parseInt(s.unique_orders || '0', 10), 0)
+    const totalLineItems = salesByProduct.reduce((sum, s) => sum + parseInt(s.line_items || '0', 10), 0)
 
     return NextResponse.json({
       products,
@@ -359,6 +392,9 @@ export async function GET(request: NextRequest) {
         totalActualFees: Number(totalActualFees.toFixed(2)),
         totalEstimatedFees: Number(totalEstimatedFees.toFixed(2)),
         feeEstimationRate: Number(feeEstimationRate.toFixed(1)),
+        salesEstimated: Number(totalSalesEstimated.toFixed(2)),
+        uniqueOrders: totalUniqueOrders,
+        lineItems: totalLineItems,
         note: feeEstimationRate > 10
           ? 'Some fees are estimated. Run financial-events sync for actual fees.'
           : undefined,

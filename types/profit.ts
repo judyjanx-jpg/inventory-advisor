@@ -10,7 +10,8 @@ export interface PeriodData {
   dateRange: string
   sales: number
   salesChange?: number
-  orders: number
+  orders: number  // Unique orders (COUNT DISTINCT)
+  lineItems: number  // Order line items (COUNT) - matches SellerBoard
   units: number
   promos: number
   refunds: number

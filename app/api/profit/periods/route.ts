@@ -44,7 +44,8 @@ interface PeriodSummary {
   dateRange: string
   sales: number
   salesChange?: number
-  orders: number
+  orders: number  // Unique orders (COUNT DISTINCT)
+  lineItems: number  // Order line items (COUNT) - matches SellerBoard
   units: number
   promos: number
   refunds: number
@@ -69,6 +70,7 @@ interface PeriodSummary {
 async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boolean = false): Promise<{
   sales: number
   orders: number
+  lineItems: number
   units: number
   promos: number
   refunds: number
@@ -94,6 +96,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     items_with_fees: string
     total_items: string
     total_orders: string
+    line_items: string
     estimated_items_count: string
     estimated_sales_amount: string
   }>(`
@@ -116,8 +119,12 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
           THEN oi.gross_revenue
           WHEN oi.item_price > 0
           THEN oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
-          -- Use average selling price from recent orders (last 30 days) for more accurate estimation
-          ELSE COALESCE((rap.avg_unit_price * oi.quantity), 0) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          -- Price estimation fallback chain: avg price → catalog × 0.95 → 0
+          WHEN COALESCE(rap.avg_unit_price, 0) > 0
+          THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          WHEN COALESCE(p.price, 0) > 0
+          THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          ELSE COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
         END
       ), 0), 2)::text as total_sales,
       COALESCE(SUM(oi.quantity), 0)::text as total_units,
@@ -129,9 +136,11 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
           THEN CASE
             WHEN oi.item_price > 0 
             THEN ROUND((oi.item_price * 0.15) + (3.50 * oi.quantity), 2)
-            -- Use average selling price for fee estimation to match sales calculation
+            -- Fee estimation fallback chain: avg price → catalog × 0.95 → 0
             WHEN COALESCE(rap.avg_unit_price, 0) > 0
             THEN ROUND((rap.avg_unit_price * oi.quantity * 0.15) + (3.50 * oi.quantity), 2)
+            WHEN COALESCE(p.price, 0) > 0
+            THEN ROUND((p.price * oi.quantity * 0.95 * 0.15) + (3.50 * oi.quantity), 2)
             ELSE 0
           END
           ELSE 0 
@@ -140,18 +149,26 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       COALESCE(SUM(CASE WHEN COALESCE(oi.amazon_fees, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_fees,
       COUNT(*)::text as total_items,
       COUNT(DISTINCT o.id)::text as total_orders,
+      COUNT(oi.id)::text as line_items,
       -- Track estimated items for transparency
       COALESCE(SUM(CASE WHEN COALESCE(oi.item_price, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0 THEN 1 ELSE 0 END), 0)::text as estimated_items_count,
       ROUND(COALESCE(SUM(
         CASE 
           WHEN COALESCE(oi.item_price, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0
-          THEN COALESCE((rap.avg_unit_price * oi.quantity), 0) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          THEN CASE
+            WHEN COALESCE(rap.avg_unit_price, 0) > 0
+            THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+            WHEN COALESCE(p.price, 0) > 0
+            THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+            ELSE COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          END
           ELSE 0
         END
       ), 0), 2)::text as estimated_sales_amount
     FROM order_items oi
     INNER JOIN orders o ON oi.order_id = o.id
     LEFT JOIN recent_avg_prices rap ON oi.master_sku = rap.master_sku
+    LEFT JOIN products p ON oi.master_sku = p.sku
     WHERE o.purchase_date >= $1::timestamp
       AND o.purchase_date < $2::timestamp
       AND o.status NOT IN ('Cancelled', 'Canceled')
@@ -165,6 +182,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   const itemsWithActualFees = parseInt(summaryData?.items_with_fees || '0', 10)
   const totalItems = parseInt(summaryData?.total_items || '0', 10)
   const orderCount = parseInt(summaryData?.total_orders || '0', 10)
+  const lineItemsCount = parseInt(summaryData?.line_items || '0', 10)
   const itemsWithEstimatedFees = totalItems - itemsWithActualFees
   const estimatedItemsCount = parseInt(summaryData?.estimated_items_count || '0', 10)
   const estimatedSalesAmount = parseFloat(summaryData?.estimated_sales_amount || '0')
@@ -329,6 +347,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   return {
     sales: Number(totalSales.toFixed(2)),
     orders: orderCount,
+    lineItems: lineItemsCount,
     units: totalUnits,
     promos: Number(totalPromo.toFixed(2)),
     refunds: Number(refundAmount.toFixed(2)),
@@ -469,6 +488,7 @@ export async function GET(request: NextRequest) {
           dateRange: dateRangeLabel,
           sales: data.sales,
           orders: data.orders,
+          lineItems: data.lineItems,
           units: data.units,
           promos: data.promos || 0,
           refunds: data.refunds || 0,
@@ -510,6 +530,7 @@ export async function GET(request: NextRequest) {
           dateRange: `${format(monthStartPST, 'd')}-${format(endOfMonth(nowInPST), 'd MMMM yyyy')}`,
           sales: mtdData.sales * forecastMultiplier,
           orders: Math.round(mtdData.orders * forecastMultiplier),
+          lineItems: Math.round(mtdData.lineItems * forecastMultiplier),
           units: Math.round(mtdData.units * forecastMultiplier),
           promos: mtdData.promos * forecastMultiplier,
           refunds: mtdData.refunds * forecastMultiplier,
@@ -585,6 +606,7 @@ export async function GET(request: NextRequest) {
         dateRange: periodData.dateRange,
         sales: periodData.sales,
         orders: periodData.orders,
+        lineItems: periodData.lineItems,
         units: periodData.units,
         promos: periodData.promos || 0,
         refunds: periodData.refunds || 0,
