@@ -2,13 +2,30 @@
 // Handles the OAuth callback from Amazon Ads API
 
 import { NextRequest, NextResponse } from 'next/server'
-import { 
-  exchangeCodeForTokens, 
-  saveAdsCredentials, 
-  getAdsProfiles 
+import {
+  exchangeCodeForTokens,
+  saveAdsCredentials,
+  getAdsProfiles
 } from '@/lib/amazon-ads-api'
 
+// Get base URL for redirects
+function getBaseUrl(): string {
+  // Use NEXTAUTH_URL or NEXT_PUBLIC_APP_URL if set, otherwise derive from redirect URI
+  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
+
+  // Extract base URL from the redirect URI
+  const redirectUri = process.env.AMAZON_ADS_REDIRECT_URI
+  if (redirectUri) {
+    const url = new URL(redirectUri)
+    return `${url.protocol}//${url.host}`
+  }
+
+  return 'http://localhost:3000'
+}
+
 export async function GET(request: NextRequest) {
+  const baseUrl = getBaseUrl()
   const searchParams = request.nextUrl.searchParams
   const code = searchParams.get('code')
   const error = searchParams.get('error')
@@ -18,13 +35,13 @@ export async function GET(request: NextRequest) {
   if (error) {
     console.error('Amazon Ads OAuth error:', error, errorDescription)
     return NextResponse.redirect(
-      new URL(`/settings?error=${encodeURIComponent(errorDescription || error)}`, request.url)
+      `${baseUrl}/settings?error=${encodeURIComponent(errorDescription || error)}`
     )
   }
 
   if (!code) {
     return NextResponse.redirect(
-      new URL('/settings?error=No authorization code received', request.url)
+      `${baseUrl}/settings?error=No authorization code received`
     )
   }
 
@@ -48,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     if (profiles.length === 0) {
       return NextResponse.redirect(
-        new URL('/settings?error=No advertising profiles found for this account', request.url)
+        `${baseUrl}/settings?error=No advertising profiles found for this account`
       )
     }
 
@@ -71,13 +88,13 @@ export async function GET(request: NextRequest) {
 
     // Redirect to settings with success message
     return NextResponse.redirect(
-      new URL('/settings?success=Amazon Ads API connected successfully', request.url)
+      `${baseUrl}/settings?success=Amazon Ads API connected successfully`
     )
 
   } catch (error: any) {
     console.error('Amazon Ads OAuth callback error:', error)
     return NextResponse.redirect(
-      new URL(`/settings?error=${encodeURIComponent(error.message)}`, request.url)
+      `${baseUrl}/settings?error=${encodeURIComponent(error.message)}`
     )
   }
 }
