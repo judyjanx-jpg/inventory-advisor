@@ -1,8 +1,8 @@
 // app/api/amazon-ads/status/route.ts
 // Check Amazon Ads API connection status and campaign info
 
-import { NextResponse } from 'next/server'
-import { getAdsCredentials, getAdsProfiles, adsApiRequest } from '@/lib/amazon-ads-api'
+import { NextRequest, NextResponse } from 'next/server'
+import { getAdsCredentials, getAdsProfiles, saveAdsCredentials } from '@/lib/amazon-ads-api'
 
 export async function GET() {
   try {
@@ -20,28 +20,15 @@ export async function GET() {
       const profiles = await getAdsProfiles()
       const activeProfile = profiles.find(p => p.profileId.toString() === credentials.profileId)
 
-      // Try to get campaign count
-      let campaignInfo = null
-      try {
-        // Use the campaigns endpoint to check if there are any campaigns
-        const campaigns = await adsApiRequest<any[]>('/sp/campaigns/list', {
-          method: 'POST',
-          profileId: credentials.profileId,
-          body: {
-            maxResults: 100,
-          }
-        })
-        campaignInfo = {
-          totalCampaigns: campaigns?.length || 0,
-          campaigns: campaigns?.slice(0, 5).map((c: any) => ({
-            name: c.name,
-            state: c.state,
-            budget: c.budget?.budget,
-          })) || []
-        }
-      } catch (campError: any) {
-        campaignInfo = { error: campError.message }
-      }
+      // List all profiles for user to see
+      const allProfiles = profiles.map(p => ({
+        profileId: p.profileId.toString(),
+        name: p.accountInfo.name,
+        type: p.accountInfo.type,
+        countryCode: p.countryCode,
+        marketplace: p.accountInfo.marketplaceStringId,
+        isActive: p.profileId.toString() === credentials.profileId,
+      }))
 
       return NextResponse.json({
         connected: true,
@@ -51,7 +38,7 @@ export async function GET() {
         marketplace: activeProfile?.accountInfo.marketplaceStringId || 'Unknown',
         countryCode: activeProfile?.countryCode || 'Unknown',
         totalProfiles: profiles.length,
-        campaignInfo,
+        allProfiles,
       })
     } catch (apiError: any) {
       // Token might be expired or invalid
@@ -67,5 +54,47 @@ export async function GET() {
       { connected: false, error: error.message },
       { status: 500 }
     )
+  }
+}
+
+// POST - Switch to a different profile
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { profileId } = body
+
+    if (!profileId) {
+      return NextResponse.json({ error: 'profileId is required' }, { status: 400 })
+    }
+
+    const credentials = await getAdsCredentials()
+    if (!credentials) {
+      return NextResponse.json({ error: 'Not connected to Amazon Ads' }, { status: 400 })
+    }
+
+    // Verify the profile exists
+    const profiles = await getAdsProfiles()
+    const targetProfile = profiles.find(p => p.profileId.toString() === profileId)
+
+    if (!targetProfile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+    }
+
+    // Update credentials with new profile ID
+    credentials.profileId = profileId
+    await saveAdsCredentials(credentials)
+
+    return NextResponse.json({
+      success: true,
+      message: `Switched to profile: ${targetProfile.accountInfo.name} (${targetProfile.countryCode})`,
+      profile: {
+        profileId: targetProfile.profileId.toString(),
+        name: targetProfile.accountInfo.name,
+        countryCode: targetProfile.countryCode,
+      }
+    })
+
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
