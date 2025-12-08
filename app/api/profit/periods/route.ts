@@ -98,7 +98,9 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
         CASE 
           WHEN COALESCE(oi.gross_revenue, 0) > 0 
           THEN oi.gross_revenue
-          ELSE oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          WHEN oi.item_price > 0
+          THEN oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          ELSE COALESCE(p.price * oi.quantity, 0) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
         END
       ), 0), 2)::text as total_sales,
       COALESCE(SUM(oi.quantity), 0)::text as total_units,
@@ -106,8 +108,14 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       ROUND(COALESCE(SUM(COALESCE(oi.amazon_fees, 0)), 0), 2)::text as total_actual_fees,
       ROUND(COALESCE(SUM(
         CASE 
-          WHEN COALESCE(oi.amazon_fees, 0) = 0 AND oi.item_price > 0 
-          THEN ROUND((oi.item_price * 0.15) + (3.50 * oi.quantity), 2)
+          WHEN COALESCE(oi.amazon_fees, 0) = 0 
+          THEN CASE
+            WHEN oi.item_price > 0 
+            THEN ROUND((oi.item_price * 0.15) + (3.50 * oi.quantity), 2)
+            WHEN COALESCE(p.price, 0) > 0
+            THEN ROUND((p.price * oi.quantity * 0.15) + (3.50 * oi.quantity), 2)
+            ELSE 0
+          END
           ELSE 0 
         END
       ), 0), 2)::text as total_estimated_fees,
@@ -116,6 +124,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       COUNT(DISTINCT o.id)::text as total_orders
     FROM order_items oi
     INNER JOIN orders o ON oi.order_id = o.id
+    LEFT JOIN products p ON oi.master_sku = p.sku
     WHERE o.purchase_date >= $1::timestamp
       AND o.purchase_date < $2::timestamp
       AND o.status NOT IN ('Cancelled', 'Canceled')

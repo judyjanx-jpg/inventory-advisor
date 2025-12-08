@@ -202,7 +202,13 @@ export async function GET(request: NextRequest) {
         MAX(p.parent_sku) as parent_sku,
         COALESCE(AVG(p.cost), 0)::text as cost,
         COALESCE(SUM(oi.quantity), 0)::text as units_sold,
-        COALESCE(SUM(oi.item_price + oi.shipping_price), 0)::text as total_sales,
+        COALESCE(SUM(
+          CASE 
+            WHEN oi.item_price > 0 
+            THEN oi.item_price + COALESCE(oi.shipping_price, 0)
+            ELSE COALESCE(p.price * oi.quantity, 0) + COALESCE(oi.shipping_price, 0)
+          END
+        ), 0)::text as total_sales,
         COALESCE(SUM(oi.amazon_fees), 0)::text as actual_fees,
         COUNT(CASE WHEN oi.amazon_fees > 0 THEN 1 END)::text as items_with_fees,
         COUNT(oi.id)::text as total_items

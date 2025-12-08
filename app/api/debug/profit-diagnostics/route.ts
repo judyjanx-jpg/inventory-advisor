@@ -169,7 +169,56 @@ export async function GET() {
     `
     results.ordersWithoutAnyItems = Number(ordersWithoutAnyItems[0]?.orders_without_items || 0)
 
-    // Query 9: Sample of Pending orders with $0 items
+    // Query 9: Total orders in database vs orders with items (yesterday)
+    const orderComparison = await prisma.$queryRaw<Array<{
+      total_orders_in_db: bigint;
+      orders_with_items: bigint;
+      orders_without_items: bigint;
+    }>>`
+      SELECT 
+        COUNT(DISTINCT o.id)::bigint as total_orders_in_db,
+        COUNT(DISTINCT CASE WHEN oi.id IS NOT NULL THEN o.id END)::bigint as orders_with_items,
+        COUNT(DISTINCT CASE WHEN oi.id IS NULL THEN o.id END)::bigint as orders_without_items
+      FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.purchase_date >= CURRENT_DATE - INTERVAL '1 day'
+        AND o.purchase_date < CURRENT_DATE
+        AND o.status NOT IN ('Cancelled', 'Canceled')
+    `
+    const orderComp = orderComparison[0]
+    results.orderComparison = orderComp ? {
+      total_orders_in_db: Number(orderComp.total_orders_in_db),
+      orders_with_items: Number(orderComp.orders_with_items),
+      orders_without_items: Number(orderComp.orders_without_items)
+    } : {}
+
+    // Query 10: Orders by status breakdown (yesterday) - to see which statuses are missing
+    const ordersByStatus = await prisma.$queryRaw<Array<{
+      status: string | null;
+      order_count: bigint;
+      orders_with_items: bigint;
+      orders_without_items: bigint;
+    }>>`
+      SELECT 
+        o.status,
+        COUNT(DISTINCT o.id)::bigint as order_count,
+        COUNT(DISTINCT CASE WHEN oi.id IS NOT NULL THEN o.id END)::bigint as orders_with_items,
+        COUNT(DISTINCT CASE WHEN oi.id IS NULL THEN o.id END)::bigint as orders_without_items
+      FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.purchase_date >= CURRENT_DATE - INTERVAL '1 day'
+        AND o.purchase_date < CURRENT_DATE
+      GROUP BY o.status
+      ORDER BY order_count DESC
+    `
+    results.ordersByStatusBreakdown = ordersByStatus.map(row => ({
+      status: row.status,
+      order_count: Number(row.order_count),
+      orders_with_items: Number(row.orders_with_items),
+      orders_without_items: Number(row.orders_without_items)
+    }))
+
+    // Query 11: Sample of Pending orders with $0 items
     const pendingZeroPriceOrders = await prisma.$queryRaw<Array<{
       amazon_order_id: string;
       purchase_date: Date;
