@@ -312,14 +312,16 @@ export async function requestSpReportV3(
       adProduct: 'SPONSORED_PRODUCTS',
       groupBy: ['campaign'],
       columns: [
+        'date',
         'campaignName',
         'campaignId',
         'impressions',
         'clicks',
         'cost',
+        'spend',
         'purchases14d',
         'sales14d',
-        'unitsSold14d'
+        'unitsSoldClicks14d'  // Correct V3 API column name
       ],
       reportTypeId: 'spCampaigns',
       timeUnit: 'DAILY',

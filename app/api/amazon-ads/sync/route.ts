@@ -79,13 +79,13 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // V3 API field names
+        // V3 API field names (use spend or cost, whichever is available)
         dataByDate[rowDate].impressions += Number(row.impressions) || 0
         dataByDate[rowDate].clicks += Number(row.clicks) || 0
-        dataByDate[rowDate].cost += Number(row.cost) || 0
+        dataByDate[rowDate].cost += Number(row.spend) || Number(row.cost) || 0
         dataByDate[rowDate].sales += Number(row.sales14d) || 0
         dataByDate[rowDate].orders += Number(row.purchases14d) || 0
-        dataByDate[rowDate].units += Number(row.unitsSold14d) || 0
+        dataByDate[rowDate].units += Number(row.unitsSoldClicks14d) || 0
         dataByDate[rowDate].campaigns++
       }
 
