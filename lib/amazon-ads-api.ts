@@ -213,13 +213,16 @@ export async function adsApiRequest<T>(
     'Content-Type': 'application/json',
   }
 
-  // Add appropriate Accept header based on endpoint
+  // Add appropriate Accept/Content-Type headers based on endpoint
   if (endpoint.startsWith('/reporting/')) {
     headers['Accept'] = 'application/vnd.createasyncreport.v3+json'
   } else if (endpoint.startsWith('/sp/campaigns')) {
+    // SP Campaigns API requires specific Content-Type
     headers['Accept'] = 'application/vnd.spcampaign.v3+json'
+    headers['Content-Type'] = 'application/vnd.spcampaign.v3+json'
   } else if (endpoint.startsWith('/sp/')) {
     headers['Accept'] = 'application/vnd.spCampaign.v3+json'
+    headers['Content-Type'] = 'application/vnd.spCampaign.v3+json'
   }
 
   // Profile ID is required for most endpoints
