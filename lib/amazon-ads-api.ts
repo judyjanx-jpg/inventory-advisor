@@ -211,6 +211,7 @@ export async function adsApiRequest<T>(
     'Authorization': `Bearer ${accessToken}`,
     'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
     'Content-Type': 'application/json',
+    'Accept': 'application/vnd.createasyncreport.v3+json',  // V3 API accept header
   }
 
   // Profile ID is required for most endpoints
@@ -338,7 +339,10 @@ export async function requestSpReportV3(
 
 // Check report status (V3 API)
 export async function getReportStatusV3(reportId: string, profileId: string): Promise<V3ReportResponse> {
-  return adsApiRequest<V3ReportResponse>(`/reporting/reports/${reportId}`, { profileId })
+  const response = await adsApiRequest<V3ReportResponse>(`/reporting/reports/${reportId}`, { profileId })
+  // Log the full response for debugging
+  console.log(`  Raw status response: ${JSON.stringify(response)}`)
+  return response
 }
 
 // Download report (returns gzipped JSON)
@@ -368,26 +372,39 @@ export async function downloadReport(location: string): Promise<any[]> {
 export async function waitForReportAndDownloadV3(
   reportId: string,
   profileId: string,
-  maxWaitMs: number = 300000  // 5 minutes
+  maxWaitMs: number = 600000  // 10 minutes (reports can take a while)
 ): Promise<any[]> {
   const startTime = Date.now()
+  let attempts = 0
 
   while (Date.now() - startTime < maxWaitMs) {
-    const status = await getReportStatusV3(reportId, profileId)
+    attempts++
+    try {
+      const status = await getReportStatusV3(reportId, profileId)
+      console.log(`  Report status check #${attempts}: ${status.status}`)
 
-    if (status.status === 'COMPLETED' && status.url) {
-      return downloadReport(status.url)
+      if (status.status === 'COMPLETED' && status.url) {
+        console.log('  Report completed, downloading...')
+        return downloadReport(status.url)
+      }
+
+      if (status.status === 'FAILED') {
+        throw new Error(`Report failed: ${status.failureReason || status.statusDetails || 'Unknown error'}`)
+      }
+
+      // Wait 10 seconds before checking again (Amazon recommends not polling too frequently)
+      await new Promise(resolve => setTimeout(resolve, 10000))
+    } catch (error: any) {
+      console.error(`  Status check error: ${error.message}`)
+      // Continue trying unless it's a definitive failure
+      if (error.message.includes('Report failed')) {
+        throw error
+      }
+      await new Promise(resolve => setTimeout(resolve, 10000))
     }
-
-    if (status.status === 'FAILED') {
-      throw new Error(`Report failed: ${status.failureReason || status.statusDetails || 'Unknown error'}`)
-    }
-
-    // Wait 5 seconds before checking again
-    await new Promise(resolve => setTimeout(resolve, 5000))
   }
 
-  throw new Error('Report timed out')
+  throw new Error(`Report timed out after ${Math.round(maxWaitMs / 1000)} seconds (${attempts} status checks)`)
 }
 
 // Legacy v2 functions - kept for backwards compatibility but deprecated
