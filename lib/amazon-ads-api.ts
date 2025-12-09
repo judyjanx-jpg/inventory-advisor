@@ -284,6 +284,11 @@ export async function getSdCampaigns(profileId: string): Promise<Campaign[]> {
 // Report Generation (V3 Reporting API)
 // ============================================================
 
+interface V3ReportFilter {
+  field: string
+  values: string[]
+}
+
 interface V3ReportConfiguration {
   adProduct: 'SPONSORED_PRODUCTS' | 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY'
   groupBy: string[]
@@ -291,6 +296,7 @@ interface V3ReportConfiguration {
   reportTypeId: string
   timeUnit: 'SUMMARY' | 'DAILY'
   format: 'GZIP_JSON' | 'JSON'
+  filters?: V3ReportFilter[]
 }
 
 interface V3ReportRequest {
@@ -338,7 +344,14 @@ export async function requestSpReportV3(
       ],
       reportTypeId: 'spCampaigns',
       timeUnit: 'DAILY',
-      format: 'GZIP_JSON'
+      format: 'GZIP_JSON',
+      // Only retrieve data for ENABLED campaigns, exclude PAUSED and ARCHIVED
+      filters: [
+        {
+          field: 'campaignStatus',
+          values: ['ENABLED']
+        }
+      ]
     }
   }
 
