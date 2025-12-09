@@ -453,3 +453,4 @@ export async function DELETE() {
   syncStatus.message = 'Stopped'
   return NextResponse.json({ success: true })
 }
+

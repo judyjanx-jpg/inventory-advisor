@@ -914,3 +914,4 @@ aggregationQueue.process('daily-aggregation', processAggregation)
   console.log('\n✅ Worker started and listening for jobs!')
   console.log('   Waiting for jobs to process...\n')
 }
+
