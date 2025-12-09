@@ -141,19 +141,23 @@ export default function ProfitDashboard() {
           }
 
           // Determine which period to use for products
+          // Always ensure we have a valid period selected from the fetched periods
           if (periods.length > 0) {
             const periodExists = periods.some((p: PeriodData) => p.period === selectedPeriod)
             const periodToUse = periodExists ? selectedPeriod : periods[0].period as PeriodType
 
+            // Update selected period if it doesn't exist in fetched periods
             if (!periodExists) {
+              console.log(`Selected period "${selectedPeriod}" not found in fetched periods, using "${periodToUse}"`)
               setSelectedPeriod(periodToUse)
             }
 
-            // Fetch products for the correct period
+            // Always fetch products for the selected/fallback period
             let productsUrl = `/api/profit/products?period=${periodToUse}&groupBy=${groupBy}`
             if (preset === 'custom' && customStartDate && customEndDate) {
               productsUrl += `&startDate=${customStartDate.toISOString().split('T')[0]}&endDate=${customEndDate.toISOString().split('T')[0]}`
             }
+            console.log('Fetching products for period:', periodToUse)
             const productsRes = await fetch(productsUrl)
             if (productsRes.ok) {
               const prodData = await productsRes.json()
@@ -165,6 +169,8 @@ export default function ProfitDashboard() {
             }
           } else {
             console.warn('No periods available, cannot fetch products')
+            // Clear products if no periods available
+            setProducts([])
           }
         } else {
           const errorText = await periodsRes.text()
@@ -192,17 +198,36 @@ export default function ProfitDashboard() {
 
   useEffect(() => {
     const fetchProductsForCurrentPeriod = async () => {
-      if (!initialLoadDone || periodData.length === 0) return
+      // Only fetch if initial load is done AND we have period data
+      if (!initialLoadDone || periodData.length === 0) {
+        console.log('Skipping product fetch - initialLoadDone:', initialLoadDone, 'periodData.length:', periodData.length)
+        return
+      }
+
+      // Verify the selected period exists in the fetched periods
+      const periodExists = periodData.some((p: PeriodData) => p.period === selectedPeriod)
+      if (!periodExists && periodData.length > 0) {
+        // If selected period doesn't exist, use the first available period
+        const firstPeriod = periodData[0].period as PeriodType
+        console.log(`Selected period "${selectedPeriod}" not in periodData, using "${firstPeriod}"`)
+        setSelectedPeriod(firstPeriod)
+        return // Will trigger this effect again with the new period
+      }
 
       try {
         let url = `/api/profit/products?period=${selectedPeriod}&groupBy=${groupBy}`
         if (selectedPreset === 'custom' && customStartDate && customEndDate) {
           url += `&startDate=${customStartDate.toISOString().split('T')[0]}&endDate=${customEndDate.toISOString().split('T')[0]}`
         }
+        console.log('Fetching products for period:', selectedPeriod)
         const productsRes = await fetch(url)
         if (productsRes.ok) {
           const data = await productsRes.json()
+          console.log('Products fetched:', data.products?.length || 0, 'products')
           setProducts(data.products || [])
+        } else {
+          const errorText = await productsRes.text()
+          console.error('Products API error:', productsRes.status, errorText)
         }
       } catch (error) {
         console.error('Error fetching products:', error)
@@ -210,7 +235,7 @@ export default function ProfitDashboard() {
     }
 
     fetchProductsForCurrentPeriod()
-  }, [selectedPeriod, groupBy, initialLoadDone, periodData.length, selectedPreset, customStartDate, customEndDate])
+  }, [selectedPeriod, groupBy, initialLoadDone, periodData, selectedPreset, customStartDate, customEndDate])
 
   const fetchDashboardData = async () => {
     // Trigger a refresh by resetting and re-fetching
