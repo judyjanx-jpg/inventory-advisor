@@ -214,7 +214,11 @@ export async function adsApiRequest<T>(
   }
 
   // Add appropriate Accept/Content-Type headers based on endpoint
-  if (endpoint.startsWith('/reporting/')) {
+  if (endpoint.startsWith('/v2/')) {
+    // V2 API uses standard JSON headers
+    headers['Accept'] = 'application/json'
+  } else if (endpoint.startsWith('/reporting/')) {
+    // V3 Reporting API
     headers['Accept'] = 'application/vnd.createasyncreport.v3+json'
   } else if (endpoint.startsWith('/sp/campaigns')) {
     // SP Campaigns API requires specific Content-Type
