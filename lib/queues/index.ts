@@ -57,6 +57,14 @@ export const ordersReportQueue = new Queue('orders-report-sync', REDIS_URL, {
   },
 })
 
+export const adsReportsQueue = new Queue('ads-reports-sync', REDIS_URL, {
+  defaultJobOptions: {
+    ...defaultJobOptions,
+    attempts: 5,
+    timeout: 7200000, // 2 hour timeout (Amazon reports can take 1+ hour)
+  },
+})
+
 // All queues for easy iteration
 export const allQueues = [
   ordersQueue,
@@ -66,6 +74,7 @@ export const allQueues = [
   productsQueue,
   reportsQueue,
   aggregationQueue,
+  adsReportsQueue,
 ]
 
 // Queue name to queue map
@@ -77,6 +86,7 @@ export const queueMap: Record<string, Queue.Queue> = {
   products: productsQueue,
   reports: reportsQueue,
   aggregation: aggregationQueue,
+  'ads-reports': adsReportsQueue,
 }
 
 // Graceful shutdown

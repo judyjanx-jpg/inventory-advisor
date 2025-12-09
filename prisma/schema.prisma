@@ -1832,3 +1832,60 @@ model AdvertisingDaily {
   @@unique([date, campaignType], name: "date_campaignType")
   @@map("advertising_daily")
 }
+
+// ============================================
+// Amazon Ads - Pending Reports Tracking
+// ============================================
+model AdsPendingReport {
+  id            String   @id @default(uuid())
+  reportId      String   @unique @map("report_id")
+  profileId     String   @map("profile_id")
+  reportType    String   @map("report_type")  // SP_CAMPAIGNS, SD_CAMPAIGNS, etc.
+  status        String   @default("PENDING")  // PENDING, COMPLETED, FAILED, EXPIRED
+  dateRange     String?  @map("date_range")   // The date(s) the report covers
+  failureReason String?  @map("failure_reason")
+  completedAt   DateTime? @map("completed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  @@index([status])
+  @@index([createdAt])
+  @@map("ads_pending_reports")
+}
+
+// ============================================
+// Amazon Ads - Campaign Level Data
+// ============================================
+model AdCampaign {
+  id            String   @id @default(uuid())
+  campaignId    String   @unique @map("campaign_id")
+  campaignName  String   @map("campaign_name")
+  campaignType  String   @map("campaign_type")   // SP, SB, SD
+  campaignStatus String  @map("campaign_status") // ENABLED, PAUSED, ARCHIVED
+  
+  // Budget
+  budgetAmount  Decimal  @default(0) @map("budget_amount") @db.Decimal(12, 2)
+  budgetType    String?  @map("budget_type")  // DAILY, LIFETIME
+  
+  // Performance metrics (from last report)
+  impressions   Int      @default(0)
+  clicks        Int      @default(0)
+  spend         Decimal  @default(0) @db.Decimal(12, 2)
+  
+  // Conversion metrics (14-day attribution)
+  sales14d      Decimal  @default(0) @map("sales_14d") @db.Decimal(12, 2)
+  orders14d     Int      @default(0) @map("orders_14d")
+  units14d      Int      @default(0) @map("units_14d")
+  
+  // Calculated metrics
+  acos          Decimal? @db.Decimal(6, 2)
+  roas          Decimal? @db.Decimal(6, 2)
+  
+  // Tracking
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+  
+  @@index([campaignStatus])
+  @@index([campaignType])
+  @@map("ad_campaigns")
+}

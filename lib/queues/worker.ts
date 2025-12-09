@@ -11,10 +11,13 @@ import {
   productsQueue,
   reportsQueue,
   aggregationQueue,
+  adsReportsQueue,
   allQueues,
 } from './index'
 import { prisma } from '@/lib/prisma'
 import { createSpApiClient, getAmazonCredentials } from '@/lib/amazon-sp-api'
+import { getAdsCredentials } from '@/lib/amazon-ads-api'
+import { gunzipSync } from 'zlib'
 
 /**
  * Log sync result to database
@@ -844,6 +847,268 @@ async function processAggregation(job: any) {
   }
 }
 
+// ============================================================
+// Amazon Ads Reports Sync
+// ============================================================
+
+const ADS_API_BASE = 'https://advertising-api.amazon.com'
+
+interface PendingAdsReport {
+  reportId: string
+  profileId: string
+  createdAt: Date
+  reportType: string
+}
+
+/**
+ * Amazon Ads Reports sync processor
+ * 
+ * 1. Check any pending reports and download completed ones
+ * 2. Request new reports for recent data
+ * 3. Store campaign data in database
+ */
+async function processAdsReportsSync(job: any) {
+  const startTime = Date.now()
+  console.log(`\n[ads-reports-sync] Starting job ${job.id}...`)
+
+  try {
+    const credentials = await getAdsCredentials()
+    if (!credentials?.profileId || !credentials.accessToken) {
+      console.log('  ⚠️ Amazon Ads not connected, skipping')
+      return { skipped: true, reason: 'Not connected' }
+    }
+
+    const profileId = credentials.profileId
+    let reportsChecked = 0
+    let reportsCompleted = 0
+    let campaignsUpdated = 0
+    let newReportRequested = false
+
+    // Step 1: Check pending reports from database
+    console.log('  Checking pending reports...')
+    const pendingReports = await prisma.adsPendingReport.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    for (const report of pendingReports) {
+      reportsChecked++
+      try {
+        // Refresh token if needed
+        const freshCreds = await getAdsCredentials()
+        if (!freshCreds?.accessToken) continue
+
+        const statusResponse = await fetch(`${ADS_API_BASE}/reporting/reports/${report.reportId}`, {
+          headers: {
+            'Authorization': `Bearer ${freshCreds.accessToken}`,
+            'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
+            'Amazon-Advertising-API-Scope': profileId,
+            'Accept': 'application/json',
+          },
+        })
+
+        if (!statusResponse.ok) {
+          console.log(`    Report ${report.reportId.substring(0, 8)}... check failed: ${statusResponse.status}`)
+          continue
+        }
+
+        const status = await statusResponse.json()
+
+        if (status.status === 'COMPLETED' && status.url) {
+          console.log(`    Report ${report.reportId.substring(0, 8)}... COMPLETED - downloading`)
+          
+          // Download and process the report
+          const downloadResponse = await fetch(status.url)
+          const gzipBuffer = await downloadResponse.arrayBuffer()
+          const jsonBuffer = gunzipSync(Buffer.from(gzipBuffer))
+          const campaigns = JSON.parse(jsonBuffer.toString('utf-8'))
+
+          // Store campaign data
+          if (Array.isArray(campaigns)) {
+            for (const campaign of campaigns) {
+              const campaignId = campaign.campaignId?.toString()
+              if (!campaignId) continue
+
+              await prisma.adCampaign.upsert({
+                where: { campaignId },
+                update: {
+                  campaignName: campaign.campaignName || 'Unknown',
+                  campaignStatus: campaign.campaignStatus || 'UNKNOWN',
+                  campaignType: 'SP',
+                  budgetAmount: parseFloat(campaign.campaignBudgetAmount) || 0,
+                  budgetType: campaign.campaignBudgetType || 'DAILY',
+                  impressions: campaign.impressions || 0,
+                  clicks: campaign.clicks || 0,
+                  spend: parseFloat(campaign.cost) || 0,
+                  sales14d: parseFloat(campaign.sales14d) || 0,
+                  orders14d: campaign.purchases14d || 0,
+                  units14d: campaign.unitsSoldClicks14d || 0,
+                  lastSyncedAt: new Date(),
+                  updatedAt: new Date(),
+                },
+                create: {
+                  campaignId,
+                  campaignName: campaign.campaignName || 'Unknown',
+                  campaignStatus: campaign.campaignStatus || 'UNKNOWN',
+                  campaignType: 'SP',
+                  budgetAmount: parseFloat(campaign.campaignBudgetAmount) || 0,
+                  budgetType: campaign.campaignBudgetType || 'DAILY',
+                  impressions: campaign.impressions || 0,
+                  clicks: campaign.clicks || 0,
+                  spend: parseFloat(campaign.cost) || 0,
+                  sales14d: parseFloat(campaign.sales14d) || 0,
+                  orders14d: campaign.purchases14d || 0,
+                  units14d: campaign.unitsSoldClicks14d || 0,
+                  lastSyncedAt: new Date(),
+                },
+              })
+              campaignsUpdated++
+            }
+          }
+
+          // Mark report as completed
+          await prisma.adsPendingReport.update({
+            where: { id: report.id },
+            data: { status: 'COMPLETED', completedAt: new Date() },
+          })
+          reportsCompleted++
+
+        } else if (status.status === 'FAILED') {
+          console.log(`    Report ${report.reportId.substring(0, 8)}... FAILED: ${status.failureReason}`)
+          await prisma.adsPendingReport.update({
+            where: { id: report.id },
+            data: { status: 'FAILED', failureReason: status.failureReason },
+          })
+        } else {
+          // Still pending - check if it's been too long (> 3 hours)
+          const ageMs = Date.now() - new Date(report.createdAt).getTime()
+          if (ageMs > 3 * 60 * 60 * 1000) {
+            console.log(`    Report ${report.reportId.substring(0, 8)}... expired (${Math.round(ageMs / 60000)} min old)`)
+            await prisma.adsPendingReport.update({
+              where: { id: report.id },
+              data: { status: 'EXPIRED' },
+            })
+          }
+        }
+      } catch (e: any) {
+        console.log(`    Report ${report.reportId.substring(0, 8)}... error: ${e.message}`)
+      }
+
+      // Small delay between checks
+      await sleep(500)
+    }
+
+    // Step 2: Request new report if no pending reports or all are old
+    const activePending = await prisma.adsPendingReport.count({
+      where: { 
+        status: 'PENDING',
+        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } // Less than 1 hour old
+      },
+    })
+
+    if (activePending === 0) {
+      console.log('  Requesting new SP report...')
+      
+      const freshCreds = await getAdsCredentials()
+      if (freshCreds?.accessToken) {
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        const dateStr = yesterday.toISOString().split('T')[0]
+
+        const reportConfig = {
+          name: `Worker_SP_${Date.now()}`,
+          startDate: dateStr,
+          endDate: dateStr,
+          configuration: {
+            adProduct: 'SPONSORED_PRODUCTS',
+            groupBy: ['campaign'],
+            columns: [
+              'campaignName',
+              'campaignId',
+              'campaignStatus',
+              'campaignBudgetAmount',
+              'campaignBudgetType',
+              'impressions',
+              'clicks',
+              'cost',
+              'purchases14d',
+              'sales14d',
+              'unitsSoldClicks14d',
+            ],
+            reportTypeId: 'spCampaigns',
+            timeUnit: 'SUMMARY',
+            format: 'GZIP_JSON',
+          },
+        }
+
+        try {
+          const response = await fetch(`${ADS_API_BASE}/reporting/reports`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${freshCreds.accessToken}`,
+              'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
+              'Amazon-Advertising-API-Scope': profileId,
+              'Content-Type': 'application/json',
+              'Accept': 'application/vnd.createasyncreport.v3+json',
+            },
+            body: JSON.stringify(reportConfig),
+          })
+
+          const responseText = await response.text()
+          
+          let reportId: string | null = null
+          
+          if (response.status === 425) {
+            // Duplicate - extract existing report ID
+            const match = responseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
+            if (match) reportId = match[1]
+          } else if (response.ok) {
+            const data = JSON.parse(responseText)
+            reportId = data.reportId
+          }
+
+          if (reportId) {
+            // Check if we already have this report tracked
+            const existing = await prisma.adsPendingReport.findUnique({
+              where: { reportId },
+            })
+
+            if (!existing) {
+              await prisma.adsPendingReport.create({
+                data: {
+                  reportId,
+                  profileId,
+                  reportType: 'SP_CAMPAIGNS',
+                  status: 'PENDING',
+                  dateRange: dateStr,
+                },
+              })
+              newReportRequested = true
+              console.log(`    New report requested: ${reportId.substring(0, 8)}...`)
+            } else {
+              console.log(`    Report ${reportId.substring(0, 8)}... already tracked`)
+            }
+          }
+        } catch (e: any) {
+          console.log(`    Failed to request report: ${e.message}`)
+        }
+      }
+    } else {
+      console.log(`  ${activePending} active pending report(s), skipping new request`)
+    }
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1)
+    console.log(`[ads-reports-sync] Completed in ${duration}s - ${reportsChecked} checked, ${reportsCompleted} completed, ${campaignsUpdated} campaigns updated`)
+
+    await logSyncResult('ads-reports', 'success', { reportsChecked, reportsCompleted, campaignsUpdated, newReportRequested }, null)
+    return { reportsChecked, reportsCompleted, campaignsUpdated, newReportRequested }
+  } catch (error: any) {
+    console.error(`[ads-reports-sync] Failed:`, error.message)
+    await logSyncResult('ads-reports', 'failed', null, error.message)
+    throw error
+  }
+}
+
 /**
  * Start processing jobs
  * 
@@ -862,14 +1127,15 @@ inventoryQueue.process('inventory-sync', processInventorySync)
 productsQueue.process('products-sync', processProductsSync)
 reportsQueue.process('daily-reports', processReportsSync)
 aggregationQueue.process('daily-aggregation', processAggregation)
+adsReportsQueue.process('ads-reports-sync', processAdsReportsSync)
 
-  console.log('  ✓ Registered catch-all handler for orders-sync queue')
-  console.log('  ✓ Registered catch-all handler for finances-sync queue')
-  console.log('  ✓ Registered catch-all handler for inventory-sync queue')
-  console.log('  ✓ Registered catch-all handler for products-sync queue')
-  console.log('  ✓ Registered catch-all handler for reports-sync queue')
-  console.log('  ✓ Registered catch-all handler for aggregation queue')
-  console.log('  ℹ️  Catch-all handlers process ALL jobs regardless of job name')
+  console.log('  ✓ Registered handler for orders-sync queue')
+  console.log('  ✓ Registered handler for finances-sync queue')
+  console.log('  ✓ Registered handler for inventory-sync queue')
+  console.log('  ✓ Registered handler for products-sync queue')
+  console.log('  ✓ Registered handler for reports-sync queue')
+  console.log('  ✓ Registered handler for aggregation queue')
+  console.log('  ✓ Registered handler for ads-reports-sync queue')
 
   // Global event handlers
   allQueues.forEach(queue => {

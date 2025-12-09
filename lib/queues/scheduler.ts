@@ -18,6 +18,7 @@ import {
   productsQueue,
   reportsQueue,
   aggregationQueue,
+  adsReportsQueue,
   queueMap,
 } from './index'
 
@@ -82,6 +83,13 @@ const schedules: ScheduleConfig[] = [
     description: 'Calculate daily profit summaries',
     enabled: true,
   },
+  {
+    queue: adsReportsQueue,
+    name: 'ads-reports-sync',
+    cron: '*/30 * * * *',   // Every 30 minutes (to check pending reports and request new ones)
+    description: 'Sync Amazon Ads campaign data (SP reports)',
+    enabled: true,
+  },
 ]
 
 /**
@@ -144,6 +152,7 @@ export async function triggerSync(syncType: string, data?: any) {
     products: 'products-sync',
     reports: 'daily-reports',
     aggregation: 'daily-aggregation',
+    'ads-reports': 'ads-reports-sync',
   }
 
   const jobName = jobNameMap[syncType] || `${syncType}-sync`
