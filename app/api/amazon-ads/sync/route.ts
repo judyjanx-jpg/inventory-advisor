@@ -1,18 +1,56 @@
 // app/api/amazon-ads/sync/route.ts
-// Sync advertising data from Amazon Ads API (V3 Reporting API)
+// Async sync for advertising data - handles serverless timeouts
+// Call POST multiple times: first creates report, subsequent calls check/download
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
   getAdsCredentials,
   requestSpReportV3,
-  waitForReportAndDownloadV3,
+  getReportStatusV3,
+  downloadReport,
 } from '@/lib/amazon-ads-api'
+
+// Store pending report info in the API connection's metadata
+interface PendingReport {
+  reportId: string
+  profileId: string
+  startDate: string
+  endDate: string
+  requestedAt: string
+}
+
+async function getPendingReport(): Promise<PendingReport | null> {
+  const connection = await prisma.apiConnection.findFirst({
+    where: { platform: 'amazon_ads' },
+  })
+  
+  if (!connection?.lastSyncError?.startsWith('PENDING:')) {
+    return null
+  }
+  
+  try {
+    return JSON.parse(connection.lastSyncError.replace('PENDING:', ''))
+  } catch {
+    return null
+  }
+}
+
+async function savePendingReport(report: PendingReport | null): Promise<void> {
+  await prisma.apiConnection.updateMany({
+    where: { platform: 'amazon_ads' },
+    data: {
+      lastSyncError: report ? `PENDING:${JSON.stringify(report)}` : null,
+      lastSyncStatus: report ? 'pending' : undefined,
+    },
+  })
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}))
-    const days = body.days || 30  // Default to last 30 days
+    const days = body.days || 30
+    const forceNew = body.forceNew || false  // Force new report even if one is pending
 
     const credentials = await getAdsCredentials()
     if (!credentials?.profileId) {
@@ -23,126 +61,115 @@ export async function POST(request: NextRequest) {
     }
 
     const profileId = credentials.profileId
-    const results = {
-      daysProcessed: 0,
-      recordsSynced: 0,
-      errors: [] as string[],
+
+    // Check for pending report first
+    const pendingReport = await getPendingReport()
+    
+    if (pendingReport && !forceNew) {
+      console.log(`Checking pending report: ${pendingReport.reportId}`)
+      
+      try {
+        const status = await getReportStatusV3(pendingReport.reportId, pendingReport.profileId)
+        console.log(`Report status: ${status.status}`)
+        
+        if (status.status === 'COMPLETED' && status.url) {
+          // Download and process the report
+          console.log('Report ready, downloading...')
+          const reportData = await downloadReport(status.url)
+          console.log(`Downloaded ${reportData.length} rows`)
+          
+          // Process the data
+          const result = await processReportData(reportData, pendingReport.startDate)
+          
+          // Clear pending report
+          await savePendingReport(null)
+          
+          // Update sync status
+          await prisma.apiConnection.updateMany({
+            where: { platform: 'amazon_ads' },
+            data: {
+              lastSyncAt: new Date(),
+              lastSyncStatus: 'success',
+              lastSyncError: null,
+            },
+          })
+          
+          return NextResponse.json({
+            success: true,
+            status: 'completed',
+            ...result,
+          })
+        }
+        
+        if (status.status === 'FAILED') {
+          await savePendingReport(null)
+          
+          await prisma.apiConnection.updateMany({
+            where: { platform: 'amazon_ads' },
+            data: {
+              lastSyncAt: new Date(),
+              lastSyncStatus: 'failed',
+              lastSyncError: status.failureReason || 'Report generation failed',
+            },
+          })
+          
+          return NextResponse.json({
+            success: false,
+            status: 'failed',
+            error: status.failureReason || 'Report generation failed',
+          })
+        }
+        
+        // Still pending
+        const elapsedMs = Date.now() - new Date(pendingReport.requestedAt).getTime()
+        const elapsedMin = Math.round(elapsedMs / 60000)
+        
+        return NextResponse.json({
+          success: true,
+          status: 'pending',
+          reportId: pendingReport.reportId,
+          reportStatus: status.status,
+          elapsedMinutes: elapsedMin,
+          message: `Report is ${status.status}. Call this endpoint again to check status. (${elapsedMin} min elapsed)`,
+        })
+        
+      } catch (error: any) {
+        console.error('Error checking report status:', error.message)
+        // If we can't check status, clear pending and try new report
+        await savePendingReport(null)
+      }
     }
 
-    // Generate date range
+    // Request a new report
     const endDate = new Date()
-    endDate.setDate(endDate.getDate() - 1)  // Yesterday (today's data not ready)
-
+    endDate.setDate(endDate.getDate() - 1)  // Yesterday
+    
     const startDate = new Date(endDate)
     startDate.setDate(startDate.getDate() - days + 1)
-
+    
     const startDateStr = startDate.toISOString().split('T')[0]
     const endDateStr = endDate.toISOString().split('T')[0]
-
-    console.log(`Syncing ad data from ${startDateStr} to ${endDateStr} (${days} days)...`)
-
-    try {
-      // Request a single report for the entire date range (more efficient)
-      console.log('Requesting Sponsored Products report...')
-      const reportRequest = await requestSpReportV3(profileId, startDateStr, endDateStr)
-      console.log(`Report requested: ${reportRequest.reportId}`)
-
-      // Wait for report and download
-      console.log('Waiting for report to complete...')
-      const reportData = await waitForReportAndDownloadV3(reportRequest.reportId, profileId)
-      console.log(`Report downloaded: ${reportData.length} rows`)
-
-      // Group data by date
-      const dataByDate: Record<string, {
-        impressions: number
-        clicks: number
-        cost: number
-        sales: number
-        orders: number
-        units: number
-        campaigns: number
-      }> = {}
-
-      for (const row of reportData) {
-        // V3 API returns data with 'date' field
-        const rowDate = row.date || startDateStr
-
-        if (!dataByDate[rowDate]) {
-          dataByDate[rowDate] = {
-            impressions: 0,
-            clicks: 0,
-            cost: 0,
-            sales: 0,
-            orders: 0,
-            units: 0,
-            campaigns: 0,
-          }
-        }
-
-        // V3 API field names (use spend or cost, whichever is available)
-        dataByDate[rowDate].impressions += Number(row.impressions) || 0
-        dataByDate[rowDate].clicks += Number(row.clicks) || 0
-        dataByDate[rowDate].cost += Number(row.spend) || Number(row.cost) || 0
-        dataByDate[rowDate].sales += Number(row.sales14d) || 0
-        dataByDate[rowDate].orders += Number(row.purchases14d) || 0
-        dataByDate[rowDate].units += Number(row.unitsSoldClicks14d) || 0
-        dataByDate[rowDate].campaigns++
-      }
-
-      // Upsert each day's data
-      for (const [date, data] of Object.entries(dataByDate)) {
-        await prisma.advertisingDaily.upsert({
-          where: {
-            date_campaignType: {
-              date: new Date(date),
-              campaignType: 'SP',  // Sponsored Products
-            },
-          },
-          create: {
-            date: new Date(date),
-            campaignType: 'SP',
-            impressions: data.impressions,
-            clicks: data.clicks,
-            spend: data.cost,
-            sales14d: data.sales,
-            orders14d: data.orders,
-            unitsSold14d: data.units,
-          },
-          update: {
-            impressions: data.impressions,
-            clicks: data.clicks,
-            spend: data.cost,
-            sales14d: data.sales,
-            orders14d: data.orders,
-            unitsSold14d: data.units,
-            updatedAt: new Date(),
-          },
-        })
-
-        results.daysProcessed++
-        console.log(`  ✓ ${date}: ${data.campaigns} campaigns, $${data.cost.toFixed(2)} spend`)
-      }
-
-      results.recordsSynced = reportData.length
-
-    } catch (error: any) {
-      console.error(`Sync error: ${error.message}`)
-      results.errors.push(error.message)
-    }
-
-    // Update sync status
-    await prisma.apiConnection.updateMany({
-      where: { platform: 'amazon_ads' },
-      data: {
-        lastSyncAt: new Date(),
-        lastSyncStatus: results.errors.length === 0 ? 'success' : 'partial',
-        lastSyncError: results.errors.length > 0 ? results.errors.join('; ') : null,
-      },
+    
+    console.log(`Requesting new report: ${startDateStr} to ${endDateStr}`)
+    
+    const reportRequest = await requestSpReportV3(profileId, startDateStr, endDateStr)
+    console.log(`Report requested: ${reportRequest.reportId}`)
+    
+    // Save pending report
+    await savePendingReport({
+      reportId: reportRequest.reportId,
+      profileId,
+      startDate: startDateStr,
+      endDate: endDateStr,
+      requestedAt: new Date().toISOString(),
     })
-
+    
     return NextResponse.json({
       success: true,
-      ...results,
+      status: 'requested',
+      reportId: reportRequest.reportId,
+      dateRange: `${startDateStr} to ${endDateStr}`,
+      message: 'Report requested. Call this endpoint again in ~30 seconds to check status.',
     })
 
   } catch (error: any) {
@@ -151,6 +178,85 @@ export async function POST(request: NextRequest) {
       { error: error.message },
       { status: 500 }
     )
+  }
+}
+
+// Process downloaded report data and save to database
+async function processReportData(reportData: any[], fallbackDate: string): Promise<{
+  daysProcessed: number
+  recordsSynced: number
+}> {
+  const dataByDate: Record<string, {
+    impressions: number
+    clicks: number
+    cost: number
+    sales: number
+    orders: number
+    units: number
+    campaigns: number
+  }> = {}
+
+  for (const row of reportData) {
+    const rowDate = row.date || fallbackDate
+
+    if (!dataByDate[rowDate]) {
+      dataByDate[rowDate] = {
+        impressions: 0,
+        clicks: 0,
+        cost: 0,
+        sales: 0,
+        orders: 0,
+        units: 0,
+        campaigns: 0,
+      }
+    }
+
+    dataByDate[rowDate].impressions += Number(row.impressions) || 0
+    dataByDate[rowDate].clicks += Number(row.clicks) || 0
+    dataByDate[rowDate].cost += Number(row.spend) || Number(row.cost) || 0
+    dataByDate[rowDate].sales += Number(row.sales14d) || 0
+    dataByDate[rowDate].orders += Number(row.purchases14d) || 0
+    dataByDate[rowDate].units += Number(row.unitsSoldClicks14d) || 0
+    dataByDate[rowDate].campaigns++
+  }
+
+  let daysProcessed = 0
+  for (const [date, data] of Object.entries(dataByDate)) {
+    await prisma.advertisingDaily.upsert({
+      where: {
+        date_campaignType: {
+          date: new Date(date),
+          campaignType: 'SP',
+        },
+      },
+      create: {
+        date: new Date(date),
+        campaignType: 'SP',
+        impressions: data.impressions,
+        clicks: data.clicks,
+        spend: data.cost,
+        sales14d: data.sales,
+        orders14d: data.orders,
+        unitsSold14d: data.units,
+      },
+      update: {
+        impressions: data.impressions,
+        clicks: data.clicks,
+        spend: data.cost,
+        sales14d: data.sales,
+        orders14d: data.orders,
+        unitsSold14d: data.units,
+        updatedAt: new Date(),
+      },
+    })
+    
+    console.log(`  ✓ ${date}: ${data.campaigns} campaigns, $${data.cost.toFixed(2)} spend`)
+    daysProcessed++
+  }
+
+  return {
+    daysProcessed,
+    recordsSynced: reportData.length,
   }
 }
 
@@ -166,6 +272,9 @@ export async function GET() {
       },
     })
 
+    // Check if there's a pending report
+    const pendingReport = await getPendingReport()
+
     // Get latest data date
     const latestData = await prisma.advertisingDaily.findFirst({
       orderBy: { date: 'desc' },
@@ -174,12 +283,24 @@ export async function GET() {
 
     // Get total records
     const totalRecords = await prisma.advertisingDaily.count()
+    
+    // Get date range of data
+    const oldestData = await prisma.advertisingDaily.findFirst({
+      orderBy: { date: 'asc' },
+      select: { date: true },
+    })
 
     return NextResponse.json({
       lastSync: connection?.lastSyncAt,
-      lastStatus: connection?.lastSyncStatus,
-      lastError: connection?.lastSyncError,
+      lastStatus: pendingReport ? 'pending' : connection?.lastSyncStatus,
+      lastError: pendingReport ? null : connection?.lastSyncError,
+      pendingReport: pendingReport ? {
+        reportId: pendingReport.reportId,
+        dateRange: `${pendingReport.startDate} to ${pendingReport.endDate}`,
+        requestedAt: pendingReport.requestedAt,
+      } : null,
       latestDataDate: latestData?.date,
+      oldestDataDate: oldestData?.date,
       totalRecords,
     })
 
