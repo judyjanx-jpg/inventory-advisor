@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -80,6 +81,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }>
 }
 
 export default function PurchaseOrdersPage() {
+  const router = useRouter()
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([])
   const [backorders, setBackorders] = useState<any[]>([])
   const [suppliers, setSuppliers] = useState<any[]>([])
@@ -87,7 +89,6 @@ export default function PurchaseOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [expandedPO, setExpandedPO] = useState<number | null>(null)
   
   // Modal states
   const [showCreatePO, setShowCreatePO] = useState(false)
@@ -809,14 +810,10 @@ export default function PurchaseOrdersPage() {
                       {/* PO Row */}
                       <div 
                         className="flex items-center px-6 py-4 hover:bg-slate-800/30 cursor-pointer"
-                        onClick={() => setExpandedPO(expandedPO === po.id ? null : po.id)}
+                        onClick={() => router.push(`/purchase-orders/${po.id}`)}
                       >
                         <div className="mr-3">
-                          {expandedPO === po.id ? (
-                            <ChevronDown className="w-5 h-5 text-slate-400" />
-                          ) : (
-                            <ChevronRight className="w-5 h-5 text-slate-400" />
-                          )}
+                          <ArrowRight className="w-5 h-5 text-slate-400" />
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -913,8 +910,8 @@ export default function PurchaseOrdersPage() {
                         </div>
                       </div>
 
-                      {/* Expanded PO Items */}
-                      {expandedPO === po.id && (
+                      {/* Expanded PO Items - Removed, now using detail page */}
+                      {false && expandedPO === po.id && (
                         <div className="px-6 py-4 bg-slate-900/30 border-t border-slate-700/50">
                           <div className="ml-8">
                             {/* Date Summary */}

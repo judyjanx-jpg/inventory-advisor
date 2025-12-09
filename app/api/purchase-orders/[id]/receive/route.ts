@@ -73,6 +73,7 @@ export async function POST(
       )
 
       // Update inventory (add received goods to warehouse)
+      // This updates warehouseAvailable which is used by the forecasting tool
       if (received > 0) {
         inventoryUpdates.push(
           prisma.inventoryLevel.upsert({
