@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      reportId,
+      requestedReportId: reportId,
       ...status,
       sampleData,
     })
