@@ -20,6 +20,7 @@ import {
   Sparkles,
   LineChart,
   RefreshCw,
+  ClipboardCheck,
 } from 'lucide-react'
 
 const navigation = [
@@ -33,6 +34,7 @@ const navigation = [
   { name: 'FBA Shipments', href: '/fba-shipments', icon: Truck },
   { name: 'Suppliers', href: '/suppliers', icon: Users },
   { name: 'Profit', href: '/profit', icon: TrendingUp },
+  { name: 'Audit', href: '/audit', icon: ClipboardCheck },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
