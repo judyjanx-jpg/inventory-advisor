@@ -22,10 +22,33 @@ export default function AuditSetupPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'custom'>('asc')
   const [showCustomOrderModal, setShowCustomOrderModal] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [hasActiveSession, setHasActiveSession] = useState(false)
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
 
   useEffect(() => {
     fetchWarehouses()
     checkCurrentSession()
+  }, [])
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const res = await fetch('/api/audit/current')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.session) {
+            setHasActiveSession(true)
+            setActiveSessionId(data.session.id)
+          } else {
+            setHasActiveSession(false)
+            setActiveSessionId(null)
+          }
+        }
+      } catch (error) {
+        console.error('Error checking current session:', error)
+      }
+    }
+    checkSession()
   }, [])
 
   const fetchWarehouses = async () => {
@@ -49,14 +72,35 @@ export default function AuditSetupPage() {
       if (res.ok) {
         const data = await res.json()
         if (data.session) {
-          // Redirect to active session
-          router.push(`/audit/session/${data.session.id}`)
+          // Show option to resume instead of auto-redirecting
+          // User can choose to resume or start new
         }
       }
     } catch (error) {
       console.error('Error checking current session:', error)
     }
   }
+
+  const [hasActiveSession, setHasActiveSession] = useState(false)
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const res = await fetch('/api/audit/current')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.session) {
+            setHasActiveSession(true)
+            setActiveSessionId(data.session.id)
+          }
+        }
+      } catch (error) {
+        console.error('Error checking current session:', error)
+      }
+    }
+    checkSession()
+  }, [])
 
   const startAudit = async () => {
     if (!selectedWarehouse) {
@@ -98,6 +142,44 @@ export default function AuditSetupPage() {
           <h1 className="text-3xl font-bold text-white">Start New Audit</h1>
           <p className="text-slate-400 mt-1">Perform physical warehouse inventory count</p>
         </div>
+
+        {/* Active Session Alert */}
+        {hasActiveSession && activeSessionId && (
+          <Card className="border-amber-500/30 bg-amber-900/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-semibold mb-1">Active Audit Session Found</h3>
+                  <p className="text-sm text-slate-400">You have an audit in progress. Would you like to resume it?</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push(`/audit/session/${activeSessionId}`)}
+                  >
+                    Resume Audit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={async () => {
+                      // Delete the session to start fresh
+                      try {
+                        await fetch(`/api/audit/${activeSessionId}`, { method: 'DELETE' })
+                        setHasActiveSession(false)
+                        setActiveSessionId(null)
+                      } catch (error) {
+                        console.error('Error deleting session:', error)
+                        alert('Failed to cancel session')
+                      }
+                    }}
+                  >
+                    Cancel & Start New
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

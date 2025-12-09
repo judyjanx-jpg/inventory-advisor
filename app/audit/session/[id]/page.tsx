@@ -257,7 +257,18 @@ export default function AuditSessionPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => router.push('/audit')}>
+            <Button 
+              variant="ghost" 
+              onClick={async () => {
+                // Pause the session before exiting
+                try {
+                  await fetch(`/api/audit/${sessionId}/pause`, { method: 'PUT' })
+                } catch (error) {
+                  console.error('Error pausing session:', error)
+                }
+                router.push('/audit')
+              }}
+            >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Exit Audit
             </Button>
