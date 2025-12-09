@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
     const existingProducts = await prisma.product.findMany({
       select: { sku: true, asin: true, fnsku: true }
     })
-    const existingSkuSet = new Set(existingProducts.map(p => p.sku))
+    const existingSkuSet = new Set(existingProducts.map((p: any) => p.sku))
     const productsByAsin = new Map<string, string>()
     const productsByFnsku = new Map<string, string>()
     for (const p of existingProducts) {
