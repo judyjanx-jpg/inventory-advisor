@@ -6,7 +6,7 @@ import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import CustomOrderModal from '@/components/audit/CustomOrderModal'
-import { Warehouse, Package, ArrowRight } from 'lucide-react'
+import { Warehouse, Package, ArrowRight, Layers, List, ArrowUpAZ, ArrowDownZA, LayoutGrid, CheckCircle2 } from 'lucide-react'
 
 interface Warehouse {
   id: number
@@ -149,7 +149,8 @@ export default function AuditSetupPage() {
           <CardContent className="space-y-6">
             {/* Select Warehouse */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
+                <Warehouse className="w-4 h-4" />
                 SELECT WAREHOUSE
               </label>
               <select
@@ -166,94 +167,173 @@ export default function AuditSetupPage() {
               </select>
             </div>
 
-            {/* Audit Mode */}
+            {/* Audit Mode - Card Style */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-3">
                 AUDIT MODE
               </label>
-              <div className="space-y-2">
-                <label className="flex items-center p-4 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className={`relative p-5 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                  auditMode === 'parent' 
+                    ? 'border-cyan-500 bg-cyan-500/10' 
+                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                }`}>
                   <input
                     type="radio"
                     name="auditMode"
                     value="parent"
                     checked={auditMode === 'parent'}
                     onChange={(e) => setAuditMode(e.target.value as 'parent')}
-                    className="mr-3 w-4 h-4 text-cyan-500"
+                    className="sr-only"
                   />
-                  <div>
-                    <div className="text-white font-medium">Parent Listing (all variants)</div>
-                    <div className="text-sm text-slate-400">Audit all SKU variants of a parent together</div>
+                  <div className="flex items-start gap-3">
+                    <div className={`p-2 rounded-lg ${
+                      auditMode === 'parent' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                    }`}>
+                      <Layers className={`w-6 h-6 ${
+                        auditMode === 'parent' ? 'text-cyan-400' : 'text-slate-400'
+                      }`} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-white font-semibold mb-1">Parent Listing</div>
+                      <div className="text-sm text-slate-400">Audit all SKU variants of a parent together</div>
+                    </div>
+                    {auditMode === 'parent' && (
+                      <CheckCircle2 className="w-5 h-5 text-cyan-400 flex-shrink-0" />
+                    )}
                   </div>
                 </label>
-                <label className="flex items-center p-4 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50">
+                <label className={`relative p-5 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                  auditMode === 'single_sku' 
+                    ? 'border-cyan-500 bg-cyan-500/10' 
+                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                }`}>
                   <input
                     type="radio"
                     name="auditMode"
                     value="single_sku"
                     checked={auditMode === 'single_sku'}
                     onChange={(e) => setAuditMode(e.target.value as 'single_sku')}
-                    className="mr-3 w-4 h-4 text-cyan-500"
+                    className="sr-only"
                   />
-                  <div>
-                    <div className="text-white font-medium">One SKU at a Time</div>
-                    <div className="text-sm text-slate-400">Audit individual SKUs sequentially</div>
+                  <div className="flex items-start gap-3">
+                    <div className={`p-2 rounded-lg ${
+                      auditMode === 'single_sku' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                    }`}>
+                      <List className={`w-6 h-6 ${
+                        auditMode === 'single_sku' ? 'text-cyan-400' : 'text-slate-400'
+                      }`} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-white font-semibold mb-1">One SKU at a Time</div>
+                      <div className="text-sm text-slate-400">Audit individual SKUs sequentially</div>
+                    </div>
+                    {auditMode === 'single_sku' && (
+                      <CheckCircle2 className="w-5 h-5 text-cyan-400 flex-shrink-0" />
+                    )}
                   </div>
                 </label>
               </div>
             </div>
 
-            {/* Sort Order */}
+            {/* Sort Order - Card Style */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-3">
-                AUDIT BY
+                SORT ORDER
               </label>
-              <div className="space-y-2">
-                <label className="flex items-center p-4 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label className={`relative p-4 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                  sortOrder === 'asc' 
+                    ? 'border-cyan-500 bg-cyan-500/10' 
+                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                }`}>
                   <input
                     type="radio"
                     name="sortOrder"
                     value="asc"
                     checked={sortOrder === 'asc'}
                     onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc' | 'custom')}
-                    className="mr-3 w-4 h-4 text-cyan-500"
+                    className="sr-only"
                   />
-                  <div className="text-white font-medium">Sort A-Z</div>
+                  <div className="flex flex-col items-center text-center gap-2">
+                    <div className={`p-2 rounded-lg ${
+                      sortOrder === 'asc' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                    }`}>
+                      <ArrowUpAZ className={`w-5 h-5 ${
+                        sortOrder === 'asc' ? 'text-cyan-400' : 'text-slate-400'
+                      }`} />
+                    </div>
+                    <div className="text-white font-medium text-sm">A-Z</div>
+                    {sortOrder === 'asc' && (
+                      <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                    )}
+                  </div>
                 </label>
-                <label className="flex items-center p-4 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50">
+                <label className={`relative p-4 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                  sortOrder === 'desc' 
+                    ? 'border-cyan-500 bg-cyan-500/10' 
+                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                }`}>
                   <input
                     type="radio"
                     name="sortOrder"
                     value="desc"
                     checked={sortOrder === 'desc'}
                     onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc' | 'custom')}
-                    className="mr-3 w-4 h-4 text-cyan-500"
+                    className="sr-only"
                   />
-                  <div className="text-white font-medium">Sort Z-A</div>
+                  <div className="flex flex-col items-center text-center gap-2">
+                    <div className={`p-2 rounded-lg ${
+                      sortOrder === 'desc' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                    }`}>
+                      <ArrowDownZA className={`w-5 h-5 ${
+                        sortOrder === 'desc' ? 'text-cyan-400' : 'text-slate-400'
+                      }`} />
+                    </div>
+                    <div className="text-white font-medium text-sm">Z-A</div>
+                    {sortOrder === 'desc' && (
+                      <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                    )}
+                  </div>
                 </label>
-                <label className="flex items-center p-4 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50">
+                <label className={`relative p-4 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                  sortOrder === 'custom' 
+                    ? 'border-cyan-500 bg-cyan-500/10' 
+                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                }`}>
                   <input
                     type="radio"
                     name="sortOrder"
                     value="custom"
                     checked={sortOrder === 'custom'}
                     onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc' | 'custom')}
-                    className="mr-3 w-4 h-4 text-cyan-500"
+                    className="sr-only"
                   />
-                  <div className="flex-1">
-                    <div className="text-white font-medium">Custom Order (Warehouse Bins)</div>
-                    <div className="text-sm text-slate-400">Follow physical warehouse layout</div>
+                  <div className="flex flex-col items-center text-center gap-2">
+                    <div className={`p-2 rounded-lg ${
+                      sortOrder === 'custom' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                    }`}>
+                      <LayoutGrid className={`w-5 h-5 ${
+                        sortOrder === 'custom' ? 'text-cyan-400' : 'text-slate-400'
+                      }`} />
+                    </div>
+                    <div className="text-white font-medium text-sm">Custom</div>
+                    {sortOrder === 'custom' && (
+                      <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setShowCustomOrderModal(true)
+                      }}
+                      className="mt-1 text-xs"
+                    >
+                      Manage
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      setShowCustomOrderModal(true)
-                    }}
-                  >
-                    Manage
-                  </Button>
                 </label>
               </div>
             </div>

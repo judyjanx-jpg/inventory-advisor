@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Modal, { ModalFooter } from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
-import { GripVertical, Save, X } from 'lucide-react'
+import { GripVertical, Save, X, Layers } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -86,9 +86,11 @@ export default function CustomOrderModal({
   warehouseName,
 }: CustomOrderModalProps) {
   const [skus, setSkus] = useState<SKU[]>([])
+  const [groupedSkus, setGroupedSkus] = useState<Map<string, SKU[]>>(new Map())
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
+  const [groupByParent, setGroupByParent] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -136,12 +138,31 @@ export default function CustomOrderModal({
       }
 
       setSkus(skusList)
+      updateGroupedSkus(skusList)
     } catch (error) {
       console.error('Error fetching SKUs:', error)
     } finally {
       setLoading(false)
     }
   }
+
+  const updateGroupedSkus = (skuList: SKU[]) => {
+    const grouped = new Map<string, SKU[]>()
+    skuList.forEach(sku => {
+      const parentKey = sku.parentSku || sku.sku
+      if (!grouped.has(parentKey)) {
+        grouped.set(parentKey, [])
+      }
+      grouped.get(parentKey)!.push(sku)
+    })
+    setGroupedSkus(grouped)
+  }
+
+  useEffect(() => {
+    if (skus.length > 0) {
+      updateGroupedSkus(skus)
+    }
+  }, [skus])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -200,7 +221,9 @@ export default function CustomOrderModal({
         const res = await fetch(`/api/audit/skus?warehouseId=${warehouseId}&sort=asc`)
         if (res.ok) {
           const data = await res.json()
-          setSkus(data.skus || [])
+          const skusList = data.skus || []
+          setSkus(skusList)
+          updateGroupedSkus(skusList)
           setHasChanges(true)
         }
       } catch (error) {
@@ -230,6 +253,23 @@ export default function CustomOrderModal({
           )}
         </div>
 
+        {/* Group by Parent Toggle */}
+        <div className="flex items-center justify-between p-3 bg-slate-800/50 border border-slate-700 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-slate-400" />
+            <span className="text-sm text-slate-300">Group by Parent SKU</span>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={groupByParent}
+              onChange={(e) => setGroupByParent(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-cyan-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+          </label>
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-cyan-500"></div>
@@ -237,6 +277,32 @@ export default function CustomOrderModal({
         ) : skus.length === 0 ? (
           <div className="text-center py-8 text-slate-400">
             No SKUs found for this warehouse
+          </div>
+        ) : groupByParent ? (
+          <div className="space-y-4 max-h-[500px] overflow-y-auto">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              {Array.from(groupedSkus.entries()).map(([parentSku, items]) => (
+                <div key={parentSku} className="space-y-2">
+                  <div className="text-sm font-semibold text-cyan-400 px-2 py-1 bg-cyan-500/10 rounded">
+                    {parentSku === items[0]?.sku ? 'Standalone SKU' : `Parent: ${parentSku}`} ({items.length} variant{items.length !== 1 ? 's' : ''})
+                  </div>
+                  <SortableContext
+                    items={items.map(sku => sku.sku)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2 pl-4 border-l-2 border-slate-700">
+                      {items.map((sku) => (
+                        <SortableItem key={sku.sku} {...sku} />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </div>
+              ))}
+            </DndContext>
           </div>
         ) : (
           <div className="space-y-2 max-h-[500px] overflow-y-auto">
