@@ -129,7 +129,7 @@ export async function POST(
         select: { available: true },
       })
       const totalWarehouseAvailable = allWarehouseInventory.reduce(
-        (sum, inv) => sum + inv.available,
+        (sum: number, inv: any) => sum + inv.available,
         0
       )
 
