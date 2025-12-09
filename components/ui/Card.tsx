@@ -5,15 +5,20 @@ interface CardProps {
   children: ReactNode
   className?: string
   hover?: boolean
+  onClick?: () => void
 }
 
-export function Card({ children, className, hover = false }: CardProps) {
+export function Card({ children, className, hover = false, onClick }: CardProps) {
   return (
-    <div className={cn(
-      "bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden",
-      hover && "card-hover cursor-pointer",
-      className
-    )}>
+    <div 
+      className={cn(
+        "bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden",
+        hover && "card-hover cursor-pointer",
+        onClick && "cursor-pointer",
+        className
+      )}
+      onClick={onClick}
+    >
       {children}
     </div>
   )

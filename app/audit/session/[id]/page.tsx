@@ -410,6 +410,7 @@ function ParentAuditView({
                 min="0"
                 value={qty}
                 onChange={(e) => onQtyChange(item.sku, parseInt(e.target.value) || 0)}
+                onFocus={(e) => e.target.select()}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-lg font-bold mb-2"
                 placeholder="0"
               />
@@ -478,6 +479,7 @@ function SingleSkuAuditView({
           min="0"
           value={currentQty}
           onChange={(e) => onQtyChange(parseInt(e.target.value) || 0)}
+          onFocus={(e) => e.target.select()}
           className="w-48 px-6 py-4 text-5xl font-bold text-center bg-slate-900 border-2 border-slate-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
         />
         {variance !== 0 && (

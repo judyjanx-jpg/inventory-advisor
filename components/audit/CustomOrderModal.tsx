@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, ChangeEvent } from 'react'
 import Modal, { ModalFooter } from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
-import { GripVertical, Save, X, Layers } from 'lucide-react'
+import { GripVertical, Save, X, Layers, Upload } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -79,6 +79,53 @@ function SortableItem({ sku, title, parentSku, available }: SKU) {
   )
 }
 
+function SortableParentItem({ parentSku, items }: { parentSku: string; items: SKU[] }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: parentSku })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  const isStandalone = items.length === 1 && items[0].sku === parentSku
+  const totalQty = items.reduce((sum, item) => sum + item.available, 0)
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700/50"
+    >
+      <div className="flex items-center gap-3 p-3">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-300"
+        >
+          <GripVertical className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-semibold">{parentSku}</div>
+          <div className="text-sm text-slate-400">
+            {isStandalone ? 'Standalone SKU' : `${items.length} variant${items.length !== 1 ? 's' : ''}`}
+          </div>
+        </div>
+        <div className="text-sm text-slate-400">
+          Total Qty: {totalQty}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function CustomOrderModal({
   isOpen,
   onClose,
@@ -87,10 +134,12 @@ export default function CustomOrderModal({
 }: CustomOrderModalProps) {
   const [skus, setSkus] = useState<SKU[]>([])
   const [groupedSkus, setGroupedSkus] = useState<Map<string, SKU[]>>(new Map())
+  const [parentOrder, setParentOrder] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [groupByParent, setGroupByParent] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -156,6 +205,17 @@ export default function CustomOrderModal({
       grouped.get(parentKey)!.push(sku)
     })
     setGroupedSkus(grouped)
+    // Set parent order based on current SKU order
+    const order: string[] = []
+    const seen = new Set<string>()
+    skuList.forEach(sku => {
+      const parentKey = sku.parentSku || sku.sku
+      if (!seen.has(parentKey)) {
+        order.push(parentKey)
+        seen.add(parentKey)
+      }
+    })
+    setParentOrder(order)
   }
 
   useEffect(() => {
@@ -167,7 +227,28 @@ export default function CustomOrderModal({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
 
-    if (over && active.id !== over.id) {
+    if (!over || active.id === over.id) return
+
+    if (groupByParent) {
+      // Drag parent SKUs - reorder all children of each parent
+      const oldIndex = parentOrder.findIndex(p => p === active.id)
+      const newIndex = parentOrder.findIndex(p => p === over.id)
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newParentOrder = arrayMove(parentOrder, oldIndex, newIndex)
+        setParentOrder(newParentOrder)
+        
+        // Reorder SKUs based on new parent order
+        const reorderedSkus: SKU[] = []
+        newParentOrder.forEach(parentKey => {
+          const children = groupedSkus.get(parentKey) || []
+          reorderedSkus.push(...children)
+        })
+        setSkus(reorderedSkus)
+        setHasChanges(true)
+      }
+    } else {
+      // Drag individual SKUs
       setSkus((items) => {
         const oldIndex = items.findIndex(item => item.sku === active.id)
         const newIndex = items.findIndex(item => item.sku === over.id)
@@ -234,6 +315,72 @@ export default function CustomOrderModal({
     }
   }
 
+  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const XLSX = await import('xlsx')
+      const arrayBuffer = await file.arrayBuffer()
+      
+      let skuList: string[] = []
+      
+      if (file.name.endsWith('.csv')) {
+        // Parse CSV
+        const text = await file.text()
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line)
+        skuList = lines.map(line => {
+          // Handle quoted CSV values
+          const match = line.match(/^"?(.+?)"?$/)?.[1]
+          return match || line.split(',')[0].trim()
+        }).filter(sku => sku)
+      } else {
+        // Parse Excel
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][]
+        
+        // Extract SKUs from first column
+        skuList = jsonData
+          .map(row => row[0]?.toString().trim())
+          .filter(sku => sku && sku !== 'SKU' && sku !== 'sku')
+      }
+
+      if (skuList.length === 0) {
+        alert('No SKUs found in file. Please ensure the first column contains SKU values.')
+        return
+      }
+
+      // Create order map from imported list
+      const orderMap = new Map<string, number>()
+      skuList.forEach((sku, index) => {
+        orderMap.set(sku, index)
+      })
+
+      // Reorder SKUs based on imported order
+      const reorderedSkus = [...skus].sort((a, b) => {
+        const posA = orderMap.get(a.sku) ?? orderMap.get(a.parentSku || '') ?? 999999
+        const posB = orderMap.get(b.sku) ?? orderMap.get(b.parentSku || '') ?? 999999
+        return posA - posB
+      })
+
+      setSkus(reorderedSkus)
+      updateGroupedSkus(reorderedSkus)
+      setHasChanges(true)
+      
+      alert(`Successfully imported ${skuList.length} SKUs from file.`)
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (error) {
+      console.error('Error importing file:', error)
+      alert('Failed to import file. Please ensure it is a valid CSV or Excel file with SKUs in the first column.')
+    }
+  }
+
   return (
     <Modal
       isOpen={isOpen}
@@ -279,29 +426,21 @@ export default function CustomOrderModal({
             No SKUs found for this warehouse
           </div>
         ) : groupByParent ? (
-          <div className="space-y-4 max-h-[500px] overflow-y-auto">
+          <div className="space-y-3 max-h-[500px] overflow-y-auto">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
             >
-              {Array.from(groupedSkus.entries()).map(([parentSku, items]) => (
-                <div key={parentSku} className="space-y-2">
-                  <div className="text-sm font-semibold text-cyan-400 px-2 py-1 bg-cyan-500/10 rounded">
-                    {parentSku === items[0]?.sku ? 'Standalone SKU' : `Parent: ${parentSku}`} ({items.length} variant{items.length !== 1 ? 's' : ''})
-                  </div>
-                  <SortableContext
-                    items={items.map(sku => sku.sku)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="space-y-2 pl-4 border-l-2 border-slate-700">
-                      {items.map((sku) => (
-                        <SortableItem key={sku.sku} {...sku} />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </div>
-              ))}
+              <SortableContext
+                items={parentOrder}
+                strategy={verticalListSortingStrategy}
+              >
+                {parentOrder.map((parentSku) => {
+                  const items = groupedSkus.get(parentSku) || []
+                  return <SortableParentItem key={parentSku} parentSku={parentSku} items={items} />
+                })}
+              </SortableContext>
             </DndContext>
           </div>
         ) : (
@@ -326,13 +465,30 @@ export default function CustomOrderModal({
 
       <ModalFooter>
         <div className="flex items-center justify-between w-full">
-          <Button
-            variant="ghost"
-            onClick={handleReset}
-            disabled={loading || skus.length === 0}
-          >
-            Reset to A-Z
-          </Button>
+          <div className="flex gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={handleImport}
+              className="hidden"
+            />
+            <Button
+              variant="ghost"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading || skus.length === 0}
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Import Order
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={handleReset}
+              disabled={loading || skus.length === 0}
+            >
+              Reset to A-Z
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onClose}>
               Cancel

@@ -28,6 +28,14 @@ import {
   Plus,
   Minus
 } from 'lucide-react'
+import StatusButton from '@/components/purchase-orders/StatusButton'
+import ProgressTimeline from '@/components/purchase-orders/ProgressTimeline'
+import EditableField from '@/components/purchase-orders/EditableField'
+import SKUSearchModal from '@/components/purchase-orders/SKUSearchModal'
+import ImportModal from '@/components/purchase-orders/ImportModal'
+import ExportDropdown from '@/components/purchase-orders/ExportDropdown'
+import AdditionalCostsSection from '@/components/purchase-orders/AdditionalCostsSection'
+import EmailComposerModal from '@/components/purchase-orders/EmailComposerModal'
 
 interface PurchaseOrderItem {
   id: number
@@ -100,6 +108,8 @@ export default function PurchaseOrderDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showReceive, setShowReceive] = useState(false)
   const [showUploadChanges, setShowUploadChanges] = useState(false)
+  const [showSKUSearch, setShowSKUSearch] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   
   // Edit forms
   const [costsForm, setCostsForm] = useState({
@@ -147,10 +157,22 @@ export default function PurchaseOrderDetailPage() {
     if (!po) return
     
     try {
+      const today = new Date().toISOString().split('T')[0]
+      const updateData: any = { status: newStatus }
+      
+      // Auto-set dates based on status
+      if (newStatus === 'confirmed' && !po.confirmedDate) {
+        updateData.confirmedDate = today
+      } else if (newStatus === 'shipped' && !po.actualShipDate) {
+        updateData.actualShipDate = today
+      } else if (newStatus === 'received' && !po.actualArrivalDate) {
+        updateData.actualArrivalDate = today
+      }
+      
       const res = await fetch(`/api/purchase-orders/${poId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify(updateData),
       })
       
       if (res.ok) {
@@ -158,6 +180,45 @@ export default function PurchaseOrderDetailPage() {
       }
     } catch (error) {
       console.error('Error updating PO status:', error)
+    }
+  }
+
+  const calculateLeadTime = () => {
+    if (!po || !po.orderDate || !po.expectedArrivalDate) return null
+    const order = new Date(po.orderDate)
+    const expected = new Date(po.expectedArrivalDate)
+    return Math.ceil((expected.getTime() - order.getTime()) / (1000 * 60 * 60 * 24))
+  }
+
+  const handleFieldUpdate = async (field: string, value: any) => {
+    if (!po) return
+    
+    try {
+      const updateData: any = { [field]: value }
+      
+      // Handle date/lead time sync
+      if (field === 'expectedArrivalDate') {
+        const leadTime = calculateLeadTime()
+        if (leadTime !== null) {
+          // Lead time will be recalculated
+        }
+      } else if (field === 'leadTimeDays') {
+        if (po.orderDate) {
+          const orderDate = new Date(po.orderDate)
+          orderDate.setDate(orderDate.getDate() + Number(value))
+          updateData.expectedArrivalDate = orderDate.toISOString().split('T')[0]
+        }
+      }
+      
+      await fetch(`/api/purchase-orders/${poId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      })
+      
+      await fetchPO()
+    } catch (error) {
+      console.error(`Error updating ${field}:`, error)
     }
   }
 
@@ -266,8 +327,81 @@ export default function PurchaseOrderDetailPage() {
   const deleteSelectedItems = async () => {
     if (selectedItems.size === 0 || !po) return
     
-    // TODO: Implement delete items API endpoint
-    console.log('Delete items:', Array.from(selectedItems))
+    if (!confirm(`Delete ${selectedItems.size} item(s)?`)) return
+    
+    try {
+      const res = await fetch(`/api/purchase-orders/${poId}/items`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds: Array.from(selectedItems) }),
+      })
+      
+      if (res.ok) {
+        await fetchPO()
+        setSelectedItems(new Set())
+      } else {
+        alert('Failed to delete items')
+      }
+    } catch (error) {
+      console.error('Error deleting items:', error)
+      alert('Failed to delete items')
+    }
+  }
+
+  const handleAddItem = async (sku: { sku: string; title: string; cost: number }) => {
+    if (!po) return
+    
+    try {
+      const res = await fetch(`/api/purchase-orders/${poId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          masterSku: sku.sku,
+          quantityOrdered: 0,
+          unitCost: Number(sku.cost) || 0,
+          lineTotal: 0,
+        }),
+      })
+      
+      if (res.ok) {
+        await fetchPO()
+      } else {
+        alert('Failed to add item')
+      }
+    } catch (error) {
+      console.error('Error adding item:', error)
+      alert('Failed to add item')
+    }
+  }
+
+  const handleItemUpdate = async (itemId: number, field: string, value: any) => {
+    if (!po) return
+    
+    try {
+      const item = po.items.find(i => i.id === itemId)
+      if (!item) return
+      
+      const updateData: any = { [field]: value }
+      
+      // Recalculate line total if quantity or cost changes
+      if (field === 'quantityOrdered' || field === 'unitCost') {
+        const qty = field === 'quantityOrdered' ? Number(value) : item.quantityOrdered
+        const cost = field === 'unitCost' ? Number(value) : Number(item.unitCost)
+        updateData.lineTotal = qty * cost
+      }
+      
+      const res = await fetch(`/api/purchase-orders/${poId}/items/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      })
+      
+      if (res.ok) {
+        await fetchPO()
+      }
+    } catch (error) {
+      console.error('Error updating item:', error)
+    }
   }
 
   const sortedAndFilteredItems = po?.items
@@ -337,91 +471,104 @@ export default function PurchaseOrderDetailPage() {
             Back to All POs
           </Button>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-white">Purchase Order {po.poNumber}</h1>
+            <h1 className="text-3xl font-bold text-white">{po.poNumber}</h1>
           </div>
-        </div>
-
-        {/* PO Info Card */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>PO Information</CardTitle>
-              <div className="flex items-center gap-2">
-                <span className={`px-3 py-1 text-sm rounded-full border flex items-center gap-2 ${statusConfig.color}`}>
-                  <StatusIcon className="w-4 h-4" />
-                  {statusConfig.label}
-                </span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Order Date</p>
-                <p className="text-white font-medium">{formatDate(new Date(po.orderDate || po.createdDate))}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Expected Date</p>
-                <p className="text-white font-medium">
-                  {po.expectedArrivalDate ? formatDate(new Date(po.expectedArrivalDate)) : 'Not set'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Supplier</p>
-                <p className="text-white font-medium">{po.supplier.name}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Receiving Warehouse</p>
-                <p className="text-white font-medium">Default Warehouse</p>
-              </div>
-            </div>
-
-            {po.notes && (
-              <div className="mt-4 pt-4 border-t border-slate-700">
-                <p className="text-sm text-slate-400 mb-1">Notes</p>
-                <p className="text-white">{po.notes}</p>
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 mt-6 pt-4 border-t border-slate-700">
+          <div className="flex items-center gap-2">
+            {(po.status === 'draft' || po.status === 'sent') && (
               <Button variant="primary" size="sm" onClick={() => setShowSendEmail(true)}>
                 <Send className="w-4 h-4 mr-2" />
                 Email PO
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowEditDates(true)}>
-                <Edit className="w-4 h-4 mr-2" />
-                Edit Dates
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowEditCosts(true)}>
-                <Edit className="w-4 h-4 mr-2" />
-                Edit Costs
-              </Button>
-              {po.status === 'sent' && (
-                <Button variant="secondary" size="sm" onClick={() => updatePOStatus('confirmed')}>
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Mark Confirmed
-                </Button>
-              )}
-              {po.status === 'confirmed' && (
-                <Button variant="secondary" size="sm" onClick={() => updatePOStatus('shipped')}>
-                  <Truck className="w-4 h-4 mr-2" />
-                  Mark Shipped
-                </Button>
-              )}
-              {po.status === 'shipped' && (
-                <Button variant="success" size="sm" onClick={() => {
-                  setReceiveItems({})
-                  setShowReceive(true)
-                }}>
-                  <PackageCheck className="w-4 h-4 mr-2" />
-                  Receive Items
-                </Button>
-              )}
-              <Button variant="ghost" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Export PDF
-              </Button>
+            )}
+            <div className="relative z-10">
+              <StatusButton
+                currentStatus={po.status}
+                onStatusChange={updatePOStatus}
+              />
             </div>
+          </div>
+        </div>
+
+        {/* Progress Timeline */}
+        <Card>
+          <CardContent className="p-6">
+            <ProgressTimeline
+              status={po.status}
+              createdDate={po.createdDate}
+              orderDate={po.orderDate || undefined}
+              confirmedDate={po.confirmedDate || undefined}
+              shippedDate={po.actualShipDate || undefined}
+              receivedDate={po.actualArrivalDate || undefined}
+              expectedDate={po.expectedArrivalDate || undefined}
+              compact={false}
+            />
+          </CardContent>
+        </Card>
+
+        {/* PO Info Grid */}
+        <Card>
+          <CardHeader>
+            <CardTitle>PO Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Supplier</p>
+                <EditableField
+                  value={po.supplier.name}
+                  onChange={(value) => {
+                    // TODO: Update supplier via API
+                    console.log('Update supplier:', value)
+                  }}
+                  type="text"
+                  className="text-white font-medium"
+                />
+              </div>
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Created Date</p>
+                <EditableField
+                  value={po.orderDate || po.createdDate}
+                  onChange={(value) => handleFieldUpdate('orderDate', value)}
+                  type="date"
+                  className="text-white font-medium"
+                  formatValue={(val) => formatDate(new Date(val as string))}
+                />
+              </div>
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Expected Date</p>
+                <EditableField
+                  value={po.expectedArrivalDate || ''}
+                  onChange={(value) => handleFieldUpdate('expectedArrivalDate', value)}
+                  type="date"
+                  className="text-white font-medium"
+                  formatValue={(val) => val ? formatDate(new Date(val as string)) : 'Not set'}
+                  placeholder="Not set"
+                />
+              </div>
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Lead Time</p>
+                <EditableField
+                  value={calculateLeadTime() || 0}
+                  onChange={(value) => handleFieldUpdate('leadTimeDays', value)}
+                  type="number"
+                  className="text-white font-medium"
+                  formatValue={(val) => `${val} days`}
+                  min={0}
+                />
+              </div>
+            </div>
+
+            {po.notes && (
+              <div className="mt-6 pt-6 border-t border-slate-700">
+                <p className="text-sm text-slate-400 mb-2">Notes</p>
+                <EditableField
+                  value={po.notes}
+                  onChange={(value) => handleFieldUpdate('notes', value)}
+                  type="text"
+                  className="text-white"
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -429,8 +576,17 @@ export default function PurchaseOrderDetailPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Items</CardTitle>
+              <div className="flex items-center gap-3">
+                <CardTitle>Items</CardTitle>
+                <span className="px-2 py-1 text-xs bg-slate-700 text-slate-300 rounded">
+                  {po.items.length} items
+                </span>
+              </div>
               <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setShowSKUSearch(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Item
+                </Button>
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                   <input
@@ -457,10 +613,6 @@ export default function PurchaseOrderDetailPage() {
                   onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
                 >
                   <SortAsc className={`w-4 h-4 ${sortOrder === 'desc' ? 'rotate-180' : ''}`} />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setShowUploadChanges(true)}>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Changes
                 </Button>
                 {selectedItems.size > 0 && (
                   <Button variant="ghost" size="sm" onClick={deleteSelectedItems}>
@@ -498,6 +650,7 @@ export default function PurchaseOrderDetailPage() {
                     <th className="text-right py-3 font-medium">Backorder</th>
                     <th className="text-right py-3 font-medium">Unit Cost</th>
                     <th className="text-right py-3 font-medium">Line Total</th>
+                    <th className="text-center py-3 font-medium w-16">Delete</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -513,7 +666,15 @@ export default function PurchaseOrderDetailPage() {
                       </td>
                       <td className="py-3 font-mono text-white">{item.masterSku}</td>
                       <td className="py-3 text-slate-300">{item.product?.title || 'Unknown'}</td>
-                      <td className="py-3 text-right text-white">{item.quantityOrdered}</td>
+                      <td className="py-3 text-right">
+                        <EditableField
+                          value={item.quantityOrdered}
+                          onChange={(value) => handleItemUpdate(item.id, 'quantityOrdered', value)}
+                          type="number"
+                          className="text-white inline-block"
+                          min={0}
+                        />
+                      </td>
                       <td className="py-3 text-right">
                         <span className={item.quantityReceived === item.quantityOrdered ? 'text-emerald-400' : 'text-amber-400'}>
                           {item.quantityReceived}
@@ -533,8 +694,44 @@ export default function PurchaseOrderDetailPage() {
                           <span className="text-slate-500">-</span>
                         )}
                       </td>
-                      <td className="py-3 text-right text-slate-300">{formatCurrency(item.unitCost)}</td>
+                      <td className="py-3 text-right">
+                        <EditableField
+                          value={Number(item.unitCost)}
+                          onChange={(value) => handleItemUpdate(item.id, 'unitCost', value)}
+                          type="number"
+                          className="text-slate-300 inline-block"
+                          formatValue={(val) => formatCurrency(val as number)}
+                          parseValue={(val) => parseFloat(val) || 0}
+                          min={0}
+                          step={0.01}
+                        />
+                      </td>
                       <td className="py-3 text-right text-white font-medium">{formatCurrency(item.lineTotal)}</td>
+                      <td className="py-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            if (confirm('Delete this item?')) {
+                              try {
+                                const res = await fetch(`/api/purchase-orders/${poId}/items/${item.id}`, {
+                                  method: 'DELETE',
+                                })
+                                if (res.ok) {
+                                  await fetchPO()
+                                } else {
+                                  alert('Failed to delete item')
+                                }
+                              } catch (error) {
+                                console.error('Error deleting item:', error)
+                                alert('Failed to delete item')
+                              }
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -543,38 +740,105 @@ export default function PurchaseOrderDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Other Costs & Total */}
+        {/* Items Subtotal */}
         <Card>
-          <CardHeader>
-            <CardTitle>Financial Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Subtotal</span>
-                <span className="text-white font-medium">{formatCurrency(po.subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Shipping</span>
-                <span className="text-white font-medium">{formatCurrency(po.shippingCost || 0)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Tax</span>
-                <span className="text-white font-medium">{formatCurrency(po.tax || 0)}</span>
-              </div>
-              {po.otherCosts && Number(po.otherCosts) > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Other Costs</span>
-                  <span className="text-white font-medium">{formatCurrency(po.otherCosts)}</span>
-                </div>
-              )}
-              <div className="flex justify-between pt-4 border-t border-slate-700">
-                <span className="text-white font-semibold text-lg">Total</span>
-                <span className="text-white font-bold text-xl">{formatCurrency(po.total)}</span>
-              </div>
+          <CardContent className="p-6">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Items Subtotal</span>
+              <span className="text-white font-medium">{formatCurrency(po.subtotal)}</span>
             </div>
           </CardContent>
         </Card>
+
+        {/* Additional Costs */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Additional Costs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AdditionalCostsSection
+              costs={[
+                { id: 1, description: 'Shipping', amount: Number(po.shippingCost || 0) },
+                { id: 2, description: 'Tax', amount: Number(po.tax || 0) },
+                ...(po.otherCosts && Number(po.otherCosts) > 0
+                  ? [{ id: 3, description: 'Other Costs', amount: Number(po.otherCosts) }]
+                  : []),
+              ]}
+              onAdd={() => {
+                // TODO: Add new cost via API
+                console.log('Add new cost')
+              }}
+              onUpdate={async (id, field, value) => {
+                const updateMap: Record<number, string> = {
+                  1: 'shippingCost',
+                  2: 'tax',
+                  3: 'otherCosts',
+                }
+                const fieldName = updateMap[id]
+                if (fieldName) {
+                  await handleFieldUpdate(fieldName, value)
+                }
+              }}
+              onDelete={(id) => {
+                const deleteMap: Record<number, string> = {
+                  1: 'shippingCost',
+                  2: 'tax',
+                  3: 'otherCosts',
+                }
+                const fieldName = deleteMap[id]
+                if (fieldName) {
+                  handleFieldUpdate(fieldName, 0)
+                }
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Grand Total */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex justify-between items-center">
+              <span className="text-white font-semibold text-lg">Grand Total</span>
+              <span className="text-white font-bold text-2xl">{formatCurrency(po.total)}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* SKU Search Modal */}
+        <SKUSearchModal
+          isOpen={showSKUSearch}
+          onClose={() => setShowSKUSearch(false)}
+          onSelect={handleAddItem}
+        />
+
+        {/* Import Modal */}
+        <ImportModal
+          isOpen={showImport}
+          onClose={() => setShowImport(false)}
+          onImport={async (items) => {
+            // Add all imported items
+            for (const item of items) {
+              try {
+                const res = await fetch(`/api/purchase-orders/${poId}/items`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    masterSku: item.sku,
+                    quantityOrdered: item.quantity,
+                    unitCost: item.unitCost || 0,
+                    lineTotal: item.quantity * (item.unitCost || 0),
+                  }),
+                })
+                if (!res.ok) {
+                  console.error('Failed to import item:', item.sku)
+                }
+              } catch (error) {
+                console.error('Error importing item:', error)
+              }
+            }
+            await fetchPO()
+          }}
+        />
       </div>
 
       {/* Edit Costs Modal */}
@@ -653,59 +917,20 @@ export default function PurchaseOrderDetailPage() {
         </ModalFooter>
       </Modal>
 
-      {/* Send Email Modal */}
-      <Modal
+      {/* Email Composer Modal */}
+      <EmailComposerModal
         isOpen={showSendEmail}
         onClose={() => setShowSendEmail(false)}
-        title="Email Purchase Order"
-        size="lg"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Email Template</label>
-            <select className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
-              <option>Standard PO Template</option>
-              <option>Urgent Order Template</option>
-              <option>Custom Template 1</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Recipient</label>
-            <input
-              type="email"
-              defaultValue={po.supplier.email || ''}
-              placeholder="supplier@example.com"
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Subject</label>
-            <input
-              type="text"
-              defaultValue={`Purchase Order ${po.poNumber}`}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Message</label>
-            <textarea
-              rows={6}
-              defaultValue={`Please find attached Purchase Order ${po.poNumber}.\n\nThank you for your business.`}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
-          </div>
-        </div>
-        <ModalFooter>
-          <Button variant="ghost" onClick={() => setShowSendEmail(false)}>Cancel</Button>
-          <Button variant="primary" onClick={() => {
-            // TODO: Implement email sending
-            setShowSendEmail(false)
-          }}>
-            <Send className="w-4 h-4 mr-2" />
-            Send Email
-          </Button>
-        </ModalFooter>
-      </Modal>
+        po={po}
+        onSend={async (emailData) => {
+          // TODO: Send email via API
+          console.log('Send email:', emailData)
+          // For now, open mailto link
+          const mailtoLink = `mailto:${emailData.to}${emailData.cc ? `?cc=${emailData.cc}` : ''}&subject=${encodeURIComponent(emailData.subject)}&body=${encodeURIComponent(emailData.body)}`
+          window.location.href = mailtoLink
+        }}
+      />
+
 
       {/* Receive Items Modal */}
       <Modal

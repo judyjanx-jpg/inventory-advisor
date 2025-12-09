@@ -30,6 +30,8 @@ import {
   Upload,
   FileSpreadsheet
 } from 'lucide-react'
+import StatusButton from '@/components/purchase-orders/StatusButton'
+import ProgressTimeline from '@/components/purchase-orders/ProgressTimeline'
 
 interface PurchaseOrderItem {
   id: number
@@ -300,10 +302,22 @@ export default function PurchaseOrdersPage() {
 
   const updatePOStatus = async (po: PurchaseOrder, newStatus: string) => {
     try {
+      const today = new Date().toISOString().split('T')[0]
+      const updateData: any = { status: newStatus }
+      
+      // Auto-set dates based on status
+      if (newStatus === 'confirmed' && !po.confirmedDate) {
+        updateData.confirmedDate = today
+      } else if (newStatus === 'shipped' && !po.actualShipDate) {
+        updateData.actualShipDate = today
+      } else if (newStatus === 'received' && !po.actualArrivalDate) {
+        updateData.actualArrivalDate = today
+      }
+      
       await fetch(`/api/purchase-orders/${po.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify(updateData),
       })
       fetchData()
     } catch (error) {
@@ -710,24 +724,31 @@ export default function PurchaseOrdersPage() {
           </Button>
         </div>
 
-        {/* Stats */}
+        {/* Status Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {Object.entries(STATUS_CONFIG).slice(0, 5).map(([status, config]) => {
             const count = purchaseOrders.filter(po => po.status === status).length
             const Icon = config.icon
+            const isActive = statusFilter === status
             return (
-              <div key={status} onClick={() => setStatusFilter(status === statusFilter ? 'all' : status)} className="cursor-pointer">
-              <Card hover>
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-2xl font-bold text-white">{count}</p>
-                      <p className="text-sm text-slate-400">{config.label}</p>
+              <div 
+                key={status} 
+                onClick={() => setStatusFilter(status === statusFilter ? 'all' : status)} 
+                className={`cursor-pointer transition-all ${
+                  isActive ? 'ring-2 ring-cyan-500' : ''
+                }`}
+              >
+                <Card hover>
+                  <CardContent className={`py-4 ${isActive ? 'bg-cyan-500/10' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-2xl font-bold text-white">{count}</p>
+                        <p className="text-sm text-slate-400">{config.label}</p>
+                      </div>
+                      <Icon className={`w-8 h-8 ${config.color.split(' ').find(c => c.startsWith('text-')) || 'text-slate-400'}`} />
                     </div>
-                    <Icon className={`w-8 h-8 ${config.color.split(' ').find(c => c.startsWith('text-')) || 'text-slate-400'}`} />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
               </div>
             )
           })}
@@ -797,105 +818,62 @@ export default function PurchaseOrdersPage() {
                 </Button>
               </div>
             ) : (
-              <div className="divide-y divide-slate-700/50">
+              <div className="space-y-4 p-6">
                 {filteredPOs.map((po) => {
                   const statusConfig = STATUS_CONFIG[po.status] || STATUS_CONFIG.draft
-                  const StatusIcon = statusConfig.icon
                   const progress = getReceiveProgress(po)
-                  const arrivalStatus = getArrivalStatus(po)
                   const daysUntil = getDaysUntilExpected(po)
                   
                   return (
-                    <div key={po.id}>
-                      {/* PO Row */}
-                      <div 
-                        className="flex items-center px-6 py-4 hover:bg-slate-800/30 cursor-pointer"
-                        onClick={() => router.push(`/purchase-orders/${po.id}`)}
-                      >
-                        <div className="mr-3">
-                          <ArrowRight className="w-5 h-5 text-slate-400" />
-                        </div>
-
-                        <div className="flex-1 min-w-0">
+                    <Card 
+                      key={po.id}
+                      className="hover:border-cyan-500/30 transition-all cursor-pointer"
+                      onClick={() => router.push(`/purchase-orders/${po.id}`)}
+                    >
+                      <CardContent className="p-5">
+                        {/* Header Row */}
+                        <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <p className="font-semibold text-white font-mono">{po.poNumber}</p>
-                            <span className={`px-2.5 py-1 text-xs rounded-full border ${statusConfig.color}`}>
-                              {statusConfig.label}
-                            </span>
+                            <p className="font-semibold text-white font-mono text-lg">{po.poNumber}</p>
+                            <div onClick={(e) => e.stopPropagation()} className="relative z-10">
+                              <StatusButton
+                                currentStatus={po.status}
+                                onStatusChange={(newStatus) => updatePOStatus(po, newStatus)}
+                              />
+                            </div>
                           </div>
-                          <div className="flex items-center gap-4 mt-1 text-sm text-slate-400">
+                          <div className="flex items-center gap-4 text-sm text-slate-400">
                             <span>{po.supplier.name}</span>
                             <span>•</span>
                             <span>{po.items.length} items</span>
-                            <span>•</span>
-                            <span className="flex items-center gap-1">
-                              <CalendarDays className="w-3 h-3" />
-                              Ordered: {formatDate(new Date(po.orderDate || po.createdDate))}
-                            </span>
-                            {po.expectedArrivalDate && !po.actualArrivalDate && (
-                              <>
-                                <span>•</span>
-                                <span className={`flex items-center gap-1 ${daysUntil !== null && daysUntil < 0 ? 'text-red-400' : daysUntil !== null && daysUntil <= 7 ? 'text-amber-400' : ''}`}>
-                                  <Clock className="w-3 h-3" />
-                                  ETA: {formatDate(new Date(po.expectedArrivalDate))}
-                                  {daysUntil !== null && (
-                                    <span>({daysUntil < 0 ? `${Math.abs(daysUntil)}d overdue` : `${daysUntil}d`})</span>
-                                  )}
-                                </span>
-                              </>
-                            )}
-                            {arrivalStatus && (
-                              <>
-                                <span>•</span>
-                                <span className={arrivalStatus.color}>{arrivalStatus.text}</span>
-                              </>
-                            )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-6">
-                          {/* Progress bar for receiving */}
-                          {['shipped', 'partial', 'received'].includes(po.status) && (
-                            <div className="w-32">
-                              <div className="flex items-center justify-between text-xs mb-1">
-                                <span className="text-slate-400">Received</span>
-                                <span className="text-white">{progress}%</span>
-                              </div>
-                              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full transition-all ${progress === 100 ? 'bg-emerald-500' : 'bg-cyan-500'}`}
-                                  style={{ width: `${progress}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
+                        {/* Progress Timeline */}
+                        <div className="mb-4" onClick={(e) => e.stopPropagation()}>
+                          <ProgressTimeline
+                            status={po.status}
+                            createdDate={po.createdDate}
+                            orderDate={po.orderDate || undefined}
+                            confirmedDate={po.confirmedDate || undefined}
+                            shippedDate={po.actualShipDate || undefined}
+                            receivedDate={po.actualArrivalDate || undefined}
+                            expectedDate={po.expectedArrivalDate || undefined}
+                            compact={true}
+                          />
+                        </div>
 
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-white">{formatCurrency(po.total)}</p>
-                            <p className="text-xs text-slate-500">{po.paymentStatus}</p>
+                        {/* Footer Row */}
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className="text-slate-400">
+                              {progress}% Received
+                            </span>
+                            <span className="text-slate-400">
+                              Total: <span className="text-white font-medium">{formatCurrency(po.total)}</span>
+                            </span>
                           </div>
-
-                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            {po.status === 'shipped' && (
-                              <Button 
-                                variant="success" 
-                                size="sm"
-                                onClick={() => openReceiveModal(po)}
-                              >
-                                <PackageCheck className="w-4 h-4 mr-1" />
-                                Receive
-                              </Button>
-                            )}
-                            {po.status === 'draft' && (
-                              <Button 
-                                variant="primary" 
-                                size="sm"
-                                onClick={() => updatePOStatus(po, 'sent')}
-                              >
-                                <Send className="w-4 h-4 mr-1" />
-                                Send
-                              </Button>
-                            )}
+                          <div onClick={(e) => e.stopPropagation()}>
                             <Button 
                               variant="ghost" 
                               size="sm"
@@ -908,8 +886,8 @@ export default function PurchaseOrdersPage() {
                             </Button>
                           </div>
                         </div>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
                   )
                 })}
               </div>

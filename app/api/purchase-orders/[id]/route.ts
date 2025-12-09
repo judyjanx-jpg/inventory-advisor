@@ -80,9 +80,33 @@ export async function PUT(
       }
     }
 
-    if (orderDate !== undefined) updateData.orderDate = new Date(orderDate)
+    // Handle leadTimeDays calculation
+    if (body.leadTimeDays !== undefined) {
+      const po = await prisma.purchaseOrder.findUnique({
+        where: { id: parseInt(params.id) },
+        select: { orderDate: true, createdDate: true },
+      })
+      if (po && (po.orderDate || po.createdDate)) {
+        const baseDate = po.orderDate || po.createdDate
+        const newExpectedDate = new Date(baseDate)
+        newExpectedDate.setDate(newExpectedDate.getDate() + Number(body.leadTimeDays))
+        updateData.expectedArrivalDate = newExpectedDate
+      }
+    }
+
+    if (orderDate !== undefined) {
+      updateData.orderDate = new Date(orderDate)
+      // Recalculate expected date if lead time should be maintained
+      if (body.leadTimeDays !== undefined) {
+        const newExpectedDate = new Date(orderDate)
+        newExpectedDate.setDate(newExpectedDate.getDate() + Number(body.leadTimeDays))
+        updateData.expectedArrivalDate = newExpectedDate
+      }
+    }
     if (expectedShipDate !== undefined) updateData.expectedShipDate = new Date(expectedShipDate)
-    if (expectedArrivalDate !== undefined) updateData.expectedArrivalDate = expectedArrivalDate ? new Date(expectedArrivalDate) : null
+    if (expectedArrivalDate !== undefined) {
+      updateData.expectedArrivalDate = expectedArrivalDate ? new Date(expectedArrivalDate) : null
+    }
     if (actualShipDate !== undefined) updateData.actualShipDate = new Date(actualShipDate)
     if (actualArrivalDate !== undefined) updateData.actualArrivalDate = new Date(actualArrivalDate)
     if (carrier !== undefined) updateData.carrier = carrier
@@ -95,7 +119,21 @@ export async function PUT(
     if (shippingCost !== undefined) updateData.shippingCost = shippingCost
     if (tax !== undefined) updateData.tax = tax
     if (otherCosts !== undefined) updateData.otherCosts = otherCosts
-    if (total !== undefined) updateData.total = total
+    
+    // Get current PO to recalculate total
+    const currentPO = await prisma.purchaseOrder.findUnique({
+      where: { id: parseInt(params.id) },
+      select: { subtotal: true, shippingCost: true, tax: true, otherCosts: true },
+    })
+
+    if (currentPO) {
+      const newShipping = shippingCost !== undefined ? shippingCost : Number(currentPO.shippingCost || 0)
+      const newTax = tax !== undefined ? tax : Number(currentPO.tax || 0)
+      const newOther = otherCosts !== undefined ? otherCosts : Number(currentPO.otherCosts || 0)
+      updateData.total = Number(currentPO.subtotal) + Number(newShipping) + Number(newTax) + Number(newOther)
+    } else if (total !== undefined) {
+      updateData.total = total
+    }
 
     const purchaseOrder = await prisma.purchaseOrder.update({
       where: { id: parseInt(params.id) },
