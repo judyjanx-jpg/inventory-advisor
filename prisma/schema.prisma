@@ -75,8 +75,8 @@ model Product {
   warehouseInventory WarehouseInventory[]
   orderItems         OrderItem[]
   purchaseOrderItems PurchaseOrderItem[]
-  fbaShipmentItems   FbaShipmentItem[] @relation("FbaShipmentItemProduct")
-  shipmentItems      ShipmentItem[]    @relation("ShipmentItemProduct")
+  fbaShipmentItems   FbaShipmentItem[]    @relation("FbaShipmentItemProduct")
+  shipmentItems      ShipmentItem[]       @relation("ShipmentItemProduct")
   salesVelocity      SalesVelocity?
   demandForecasts    DemandForecast[]
   dailyProfits       DailyProfit[]
@@ -196,11 +196,11 @@ model Warehouse {
   isDefault Boolean @default(false) @map("is_default") // Default warehouse for new inventory
 
   // Relations
-  inventory WarehouseInventory[]
-  shipmentsFrom Shipment[] @relation("ShipmentFrom")
-  shipmentsTo   Shipment[] @relation("ShipmentTo")
-  auditSessions AuditSession[] @relation("AuditSessions")
-  auditCustomOrders AuditCustomOrder[] @relation("AuditCustomOrders")
+  inventory         WarehouseInventory[]
+  shipmentsFrom     Shipment[]           @relation("ShipmentFrom")
+  shipmentsTo       Shipment[]           @relation("ShipmentTo")
+  auditSessions     AuditSession[]       @relation("AuditSessions")
+  auditCustomOrders AuditCustomOrder[]   @relation("AuditCustomOrders")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -231,19 +231,19 @@ model WarehouseInventory {
 // 2.6 LOCATIONS (Unified warehouse + FBA locations)
 // ============================================
 model Location {
-  id           Int     @id @default(autoincrement())
-  name         String
-  type         String  // 'warehouse', 'fba'
-  countryCode  String? @map("country_code")
+  id            Int     @id @default(autoincrement())
+  name          String
+  type          String // 'warehouse', 'fba'
+  countryCode   String? @map("country_code")
   marketplaceId String? @map("marketplace_id") // Amazon marketplace ID for FBA locations
-  
+
   // Address (for FBA locations, this is Amazon's address)
   addressLine1 String? @map("address_line1")
   addressLine2 String? @map("address_line2")
   city         String?
   state        String?
   postalCode   String? @map("postal_code")
-  
+
   isActive Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -351,8 +351,8 @@ model Order {
   orderType          String? @map("order_type") // StandardOrder, etc.
 
   // Totals
-  orderTotal Decimal  @default(0) @map("order_total") @db.Decimal(10, 2)
-  currency   String   @default("USD")
+  orderTotal Decimal @default(0) @map("order_total") @db.Decimal(10, 2)
+  currency   String  @default("USD")
 
   // Relations
   orderItems OrderItem[]
@@ -493,33 +493,33 @@ model Return {
 // 6b. REIMBURSEMENTS (from Amazon)
 // ============================================
 model Reimbursement {
-  id                Int      @id @default(autoincrement())
-  reimbursementId   String   @unique @map("reimbursement_id")
-  caseId            String?  @map("case_id")
-  
-  masterSku         String?  @map("master_sku")
-  product           Product? @relation(fields: [masterSku], references: [sku])
-  
+  id              Int     @id @default(autoincrement())
+  reimbursementId String  @unique @map("reimbursement_id")
+  caseId          String? @map("case_id")
+
+  masterSku String?  @map("master_sku")
+  product   Product? @relation(fields: [masterSku], references: [sku])
+
   // Timing
-  approvalDate      DateTime @map("approval_date")
-  
+  approvalDate DateTime @map("approval_date")
+
   // Details
-  reason            String?  // CUSTOMER_RETURN_COF, WAREHOUSE_DAMAGE, etc.
-  condition         String?  // Sellable, Unsellable, etc.
-  quantity          Int      @default(1)
-  
+  reason    String? // CUSTOMER_RETURN_COF, WAREHOUSE_DAMAGE, etc.
+  condition String? // Sellable, Unsellable, etc.
+  quantity  Int     @default(1)
+
   // Financial
-  amountPerUnit     Decimal  @map("amount_per_unit") @db.Decimal(10, 2)
-  amountTotal       Decimal  @map("amount_total") @db.Decimal(10, 2)
-  currencyCode      String   @default("USD") @map("currency_code")
-  
+  amountPerUnit Decimal @map("amount_per_unit") @db.Decimal(10, 2)
+  amountTotal   Decimal @map("amount_total") @db.Decimal(10, 2)
+  currencyCode  String  @default("USD") @map("currency_code")
+
   // ASIN/FNSKU for matching
-  asin              String?
-  fnsku             String?
-  
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  
+  asin  String?
+  fnsku String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@map("reimbursements")
 }
 
@@ -527,42 +527,42 @@ model Reimbursement {
 // 6c. REMOVAL ORDERS (FBA inventory removals)
 // ============================================
 model RemovalOrder {
-  id                Int      @id @default(autoincrement())
-  removalOrderId    String   @unique @map("removal_order_id")
-  
-  masterSku         String?  @map("master_sku")
-  product           Product? @relation(fields: [masterSku], references: [sku])
-  
+  id             Int    @id @default(autoincrement())
+  removalOrderId String @unique @map("removal_order_id")
+
+  masterSku String?  @map("master_sku")
+  product   Product? @relation(fields: [masterSku], references: [sku])
+
   // Timing
-  requestDate       DateTime @map("request_date")
-  lastUpdatedDate   DateTime? @map("last_updated_date")
-  
+  requestDate     DateTime  @map("request_date")
+  lastUpdatedDate DateTime? @map("last_updated_date")
+
   // Details
-  orderType         String   @map("order_type") // Return, Disposal
-  orderStatus       String   @map("order_status") // Pending, Processing, Completed, Cancelled
-  
+  orderType   String @map("order_type") // Return, Disposal
+  orderStatus String @map("order_status") // Pending, Processing, Completed, Cancelled
+
   // Quantities
-  requestedQuantity     Int  @map("requested_quantity")
-  cancelledQuantity     Int  @default(0) @map("cancelled_quantity")
-  disposedQuantity      Int  @default(0) @map("disposed_quantity")
-  shippedQuantity       Int  @default(0) @map("shipped_quantity")
-  inProcessQuantity     Int  @default(0) @map("in_process_quantity")
-  
+  requestedQuantity Int @map("requested_quantity")
+  cancelledQuantity Int @default(0) @map("cancelled_quantity")
+  disposedQuantity  Int @default(0) @map("disposed_quantity")
+  shippedQuantity   Int @default(0) @map("shipped_quantity")
+  inProcessQuantity Int @default(0) @map("in_process_quantity")
+
   // Financial
-  removalFee        Decimal? @map("removal_fee") @db.Decimal(10, 2)
-  
+  removalFee Decimal? @map("removal_fee") @db.Decimal(10, 2)
+
   // Shipping (for returns to seller)
   shipmentDestination String? @map("shipment_destination")
-  carrier           String?
-  trackingNumber    String?  @map("tracking_number")
-  
+  carrier             String?
+  trackingNumber      String? @map("tracking_number")
+
   // ASIN/FNSKU for matching
-  asin              String?
-  fnsku             String?
-  
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  
+  asin  String?
+  fnsku String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@map("removal_orders")
 }
 
@@ -570,35 +570,35 @@ model RemovalOrder {
 // 6d. LONG-TERM STORAGE FEES
 // ============================================
 model StorageFee {
-  id                Int      @id @default(autoincrement())
-  
-  masterSku         String?  @map("master_sku")
-  product           Product? @relation(fields: [masterSku], references: [sku])
-  
+  id Int @id @default(autoincrement())
+
+  masterSku String?  @map("master_sku")
+  product   Product? @relation(fields: [masterSku], references: [sku])
+
   // Period
-  snapshotDate      DateTime @map("snapshot_date")
-  
+  snapshotDate DateTime @map("snapshot_date")
+
   // Inventory at that time
-  asin              String?
-  fnsku             String?
-  condition         String?  // Sellable, Unsellable
-  quantityCharged   Int      @map("quantity_charged")
-  
+  asin            String?
+  fnsku           String?
+  condition       String? // Sellable, Unsellable
+  quantityCharged Int     @map("quantity_charged")
+
   // Age metrics
-  inventoryAge      Int?     @map("inventory_age") // days in warehouse
-  weeksOfCover12Mo  Decimal? @map("weeks_of_cover_12mo") @db.Decimal(10, 2)
-  
+  inventoryAge     Int?     @map("inventory_age") // days in warehouse
+  weeksOfCover12Mo Decimal? @map("weeks_of_cover_12mo") @db.Decimal(10, 2)
+
   // Fees
-  monthlyStorageFee     Decimal  @default(0) @map("monthly_storage_fee") @db.Decimal(10, 2)
-  longTermStorageFee    Decimal  @default(0) @map("long_term_storage_fee") @db.Decimal(10, 2)
-  surcharge             Decimal  @default(0) @db.Decimal(10, 2)
-  
+  monthlyStorageFee  Decimal @default(0) @map("monthly_storage_fee") @db.Decimal(10, 2)
+  longTermStorageFee Decimal @default(0) @map("long_term_storage_fee") @db.Decimal(10, 2)
+  surcharge          Decimal @default(0) @db.Decimal(10, 2)
+
   // Volume (for analytics)
-  volumeCubicFeet   Decimal? @map("volume_cubic_feet") @db.Decimal(10, 4)
-  
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  
+  volumeCubicFeet Decimal? @map("volume_cubic_feet") @db.Decimal(10, 4)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@unique([masterSku, snapshotDate])
   @@map("storage_fees")
 }
@@ -607,31 +607,31 @@ model StorageFee {
 // 6e. SETTLEMENT REPORTS (Payment summaries)
 // ============================================
 model Settlement {
-  id                  Int      @id @default(autoincrement())
-  settlementId        String   @unique @map("settlement_id")
-  settlementStartDate DateTime @map("settlement_start_date")
-  settlementEndDate   DateTime @map("settlement_end_date")
+  id                  Int       @id @default(autoincrement())
+  settlementId        String    @unique @map("settlement_id")
+  settlementStartDate DateTime  @map("settlement_start_date")
+  settlementEndDate   DateTime  @map("settlement_end_date")
   depositDate         DateTime? @map("deposit_date")
-  
-  totalAmount         Decimal  @default(0) @map("total_amount") @db.Decimal(12, 2)
-  currency            String   @default("USD")
-  
+
+  totalAmount Decimal @default(0) @map("total_amount") @db.Decimal(12, 2)
+  currency    String  @default("USD")
+
   // Breakdown
-  productCharges      Decimal  @default(0) @map("product_charges") @db.Decimal(12, 2)
-  productChargesTax   Decimal  @default(0) @map("product_charges_tax") @db.Decimal(12, 2)
-  shippingCharges     Decimal  @default(0) @map("shipping_charges") @db.Decimal(12, 2)
-  shippingChargesTax  Decimal  @default(0) @map("shipping_charges_tax") @db.Decimal(12, 2)
-  giftwrapCharges     Decimal  @default(0) @map("giftwrap_charges") @db.Decimal(12, 2)
-  giftwrapChargesTax  Decimal  @default(0) @map("giftwrap_charges_tax") @db.Decimal(12, 2)
-  promotionalRebates  Decimal  @default(0) @map("promotional_rebates") @db.Decimal(12, 2)
-  sellingFees         Decimal  @default(0) @map("selling_fees") @db.Decimal(12, 2)
-  fbaFees             Decimal  @default(0) @map("fba_fees") @db.Decimal(12, 2)
+  productCharges       Decimal @default(0) @map("product_charges") @db.Decimal(12, 2)
+  productChargesTax    Decimal @default(0) @map("product_charges_tax") @db.Decimal(12, 2)
+  shippingCharges      Decimal @default(0) @map("shipping_charges") @db.Decimal(12, 2)
+  shippingChargesTax   Decimal @default(0) @map("shipping_charges_tax") @db.Decimal(12, 2)
+  giftwrapCharges      Decimal @default(0) @map("giftwrap_charges") @db.Decimal(12, 2)
+  giftwrapChargesTax   Decimal @default(0) @map("giftwrap_charges_tax") @db.Decimal(12, 2)
+  promotionalRebates   Decimal @default(0) @map("promotional_rebates") @db.Decimal(12, 2)
+  sellingFees          Decimal @default(0) @map("selling_fees") @db.Decimal(12, 2)
+  fbaFees              Decimal @default(0) @map("fba_fees") @db.Decimal(12, 2)
   otherTransactionFees Decimal @default(0) @map("other_transaction_fees") @db.Decimal(12, 2)
-  otherAmount         Decimal  @default(0) @map("other_amount") @db.Decimal(12, 2)
-  
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
-  
+  otherAmount          Decimal @default(0) @map("other_amount") @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@index([settlementStartDate])
   @@index([depositDate])
   @@map("settlements")
@@ -641,23 +641,23 @@ model Settlement {
 // 6f. SYNC LOG (Track sync operations)
 // ============================================
 model SyncLog {
-  id          Int       @id @default(autoincrement())
-  syncType    String    @map("sync_type") // 'initial-orders', 'initial-returns', 'initial-full', etc.
-  status      String    // 'running', 'success', 'failed'
-  
+  id       Int    @id @default(autoincrement())
+  syncType String @map("sync_type") // 'initial-orders', 'initial-returns', 'initial-full', etc.
+  status   String // 'running', 'success', 'failed'
+
   startedAt   DateTime  @default(now()) @map("started_at")
   completedAt DateTime? @map("completed_at")
-  
-  recordsProcessed Int   @default(0) @map("records_processed")
-  recordsCreated   Int   @default(0) @map("records_created")
-  recordsUpdated   Int   @default(0) @map("records_updated")
-  recordsSkipped   Int   @default(0) @map("records_skipped")
-  
-  errorMessage String?  @map("error_message")
-  errorDetails String?  @map("error_details") @db.Text
-  
-  metadata    Json?     // Additional info about the sync
-  
+
+  recordsProcessed Int @default(0) @map("records_processed")
+  recordsCreated   Int @default(0) @map("records_created")
+  recordsUpdated   Int @default(0) @map("records_updated")
+  recordsSkipped   Int @default(0) @map("records_skipped")
+
+  errorMessage String? @map("error_message")
+  errorDetails String? @map("error_details") @db.Text
+
+  metadata Json? // Additional info about the sync
+
   @@index([syncType])
   @@index([status])
   @@index([startedAt])
@@ -776,13 +776,13 @@ model Backorder {
 // 8. FBA SHIPMENTS (Enhanced per spec)
 // ============================================
 model Shipment {
-  id        Int      @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   internalId String? @unique @map("internal_id") // Internal ID like "SHP-2025-001"
 
   // Locations
-  fromLocationId Int? @map("from_location_id")
+  fromLocationId Int?       @map("from_location_id")
   fromLocation   Warehouse? @relation("ShipmentFrom", fields: [fromLocationId], references: [id])
-  toLocationId   Int? @map("to_location_id")
+  toLocationId   Int?       @map("to_location_id")
   toLocation     Warehouse? @relation("ShipmentTo", fields: [toLocationId], references: [id])
 
   // Status
@@ -807,8 +807,8 @@ model Shipment {
   trackingNumber String? @map("tracking_number")
 
   // Relations
-  items ShipmentItem[]
-  boxes ShipmentBox[]
+  items             ShipmentItem[]
+  boxes             ShipmentBox[]
   transparencyCodes ShipmentTransparencyCode[]
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -822,18 +822,18 @@ model ShipmentItem {
   shipmentId Int      @map("shipment_id")
   shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
-  masterSku String  @map("master_sku")
-  product   Product @relation("ShipmentItemProduct", fields: [masterSku], references: [sku])
-  fnsku     String?
+  masterSku   String  @map("master_sku")
+  product     Product @relation("ShipmentItemProduct", fields: [masterSku], references: [sku])
+  fnsku       String?
   productName String? @map("product_name")
 
   requestedQty Int @map("requested_qty")
   adjustedQty  Int @map("adjusted_qty")
 
   // Picking
-  pickStatus String @default("pending") @map("pick_status") // pending, picked, skipped
+  pickStatus String    @default("pending") @map("pick_status") // pending, picked, skipped
   pickedAt   DateTime? @map("picked_at")
-  pickedBy   String? @map("picked_by")
+  pickedBy   String?   @map("picked_by")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -867,9 +867,9 @@ model ShipmentBox {
 }
 
 model ShipmentBoxItem {
-  id             Int          @id @default(autoincrement())
-  shipmentBoxId  Int          @map("shipment_box_id")
-  shipmentBox    ShipmentBox  @relation(fields: [shipmentBoxId], references: [id], onDelete: Cascade)
+  id            Int         @id @default(autoincrement())
+  shipmentBoxId Int         @map("shipment_box_id")
+  shipmentBox   ShipmentBox @relation(fields: [shipmentBoxId], references: [id], onDelete: Cascade)
 
   masterSku String @map("master_sku")
   quantity  Int
@@ -880,16 +880,16 @@ model ShipmentBoxItem {
 }
 
 model ShipmentTransparencyCode {
-  id             Int      @id @default(autoincrement())
-  shipmentId     Int      @map("shipment_id")
-  shipment       Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  id         Int      @id @default(autoincrement())
+  shipmentId Int      @map("shipment_id")
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
-  masterSku          String   @map("master_sku")
-  transparencyCode   String   @unique @map("transparency_code")
-  
+  masterSku        String @map("master_sku")
+  transparencyCode String @unique @map("transparency_code")
+
   requestedAt DateTime? @map("requested_at")
   printedAt   DateTime? @map("printed_at")
-  used        Boolean  @default(false)
+  used        Boolean   @default(false)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1756,33 +1756,33 @@ model BundleComponent {
 // ============================================
 
 model StockoutEvent {
-  id        Int      @id @default(autoincrement())
-  masterSku String   @map("master_sku")
-  
+  id        Int    @id @default(autoincrement())
+  masterSku String @map("master_sku")
+
   // When and how long
-  stockoutDate   DateTime @map("stockout_date")
+  stockoutDate   DateTime  @map("stockout_date")
   resolvedDate   DateTime? @map("resolved_date")
-  daysOutOfStock Int      @default(0) @map("days_out_of_stock")
-  
+  daysOutOfStock Int       @default(0) @map("days_out_of_stock")
+
   // Impact
   estimatedLostSales Decimal @default(0) @map("estimated_lost_sales") @db.Decimal(10, 2)
   estimatedLostUnits Int     @default(0) @map("estimated_lost_units")
-  
+
   // Root cause analysis
-  rootCause        String @map("root_cause") // 'forecast_low', 'supplier_delay', 'spike_missed', 'fba_delay', 'safety_stock_low', 'seasonal_miss'
+  rootCause        String  @map("root_cause") // 'forecast_low', 'supplier_delay', 'spike_missed', 'fba_delay', 'safety_stock_low', 'seasonal_miss'
   rootCauseDetails String? @map("root_cause_details") @db.Text
-  
+
   // What the system learned
   preventionAction String  @map("prevention_action") @db.Text
   actionTaken      Boolean @default(false) @map("action_taken")
-  
+
   // Parameters adjusted
   parametersAdjusted String? @map("parameters_adjusted") @db.Text // JSON: { "safetyStockDays": 14 -> 21, etc }
-  
+
   // Resolution
-  resolved   Boolean   @default(false)
-  resolvedBy String?   @map("resolved_by")
-  
+  resolved   Boolean @default(false)
+  resolvedBy String? @map("resolved_by")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -1798,38 +1798,38 @@ model StockoutEvent {
 
 // Daily advertising aggregates
 model AdvertisingDaily {
-  id            String   @id @default(uuid())
-  date          DateTime @db.Date
-  campaignType  String   @map("campaign_type")  // SP, SB, SD
-  
+  id           String   @id @default(uuid())
+  date         DateTime @db.Date
+  campaignType String   @map("campaign_type") // SP, SB, SD
+
   // Metrics
-  impressions   Int      @default(0)
-  clicks        Int      @default(0)
-  spend         Decimal  @default(0) @db.Decimal(12, 2)
-  
+  impressions Int     @default(0)
+  clicks      Int     @default(0)
+  spend       Decimal @default(0) @db.Decimal(12, 2)
+
   // 7-day attribution
-  sales7d       Decimal? @map("sales_7d") @db.Decimal(12, 2)
-  orders7d      Int?     @map("orders_7d")
-  unitsSold7d   Int?     @map("units_sold_7d")
-  
+  sales7d     Decimal? @map("sales_7d") @db.Decimal(12, 2)
+  orders7d    Int?     @map("orders_7d")
+  unitsSold7d Int?     @map("units_sold_7d")
+
   // 14-day attribution (most commonly used)
-  sales14d      Decimal? @map("sales_14d") @db.Decimal(12, 2)
-  orders14d     Int?     @map("orders_14d")
-  unitsSold14d  Int?     @map("units_sold_14d")
-  
+  sales14d     Decimal? @map("sales_14d") @db.Decimal(12, 2)
+  orders14d    Int?     @map("orders_14d")
+  unitsSold14d Int?     @map("units_sold_14d")
+
   // 30-day attribution
-  sales30d      Decimal? @map("sales_30d") @db.Decimal(12, 2)
-  orders30d     Int?     @map("orders_30d")
-  unitsSold30d  Int?     @map("units_sold_30d")
-  
+  sales30d     Decimal? @map("sales_30d") @db.Decimal(12, 2)
+  orders30d    Int?     @map("orders_30d")
+  unitsSold30d Int?     @map("units_sold_30d")
+
   // Calculated
-  acos          Decimal? @db.Decimal(6, 2)  // (spend/sales)*100
-  roas          Decimal? @db.Decimal(6, 2)  // sales/spend
-  ctr           Decimal? @db.Decimal(6, 4)  // (clicks/impressions)*100
-  cpc           Decimal? @db.Decimal(8, 4)  // spend/clicks
-  
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+  acos Decimal? @db.Decimal(6, 2) // (spend/sales)*100
+  roas Decimal? @db.Decimal(6, 2) // sales/spend
+  ctr  Decimal? @db.Decimal(6, 4) // (clicks/impressions)*100
+  cpc  Decimal? @db.Decimal(8, 4) // spend/clicks
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@unique([date, campaignType], name: "date_campaignType")
   @@map("advertising_daily")
@@ -1839,16 +1839,16 @@ model AdvertisingDaily {
 // Amazon Ads - Pending Reports Tracking
 // ============================================
 model AdsPendingReport {
-  id            String   @id @default(uuid())
-  reportId      String   @unique @map("report_id")
-  profileId     String   @map("profile_id")
-  reportType    String   @map("report_type")  // SP_CAMPAIGNS, SD_CAMPAIGNS, etc.
-  status        String   @default("PENDING")  // PENDING, COMPLETED, FAILED, EXPIRED
-  dateRange     String?  @map("date_range")   // The date(s) the report covers
-  failureReason String?  @map("failure_reason")
+  id            String    @id @default(uuid())
+  reportId      String    @unique @map("report_id")
+  profileId     String    @map("profile_id")
+  reportType    String    @map("report_type") // SP_CAMPAIGNS, SD_CAMPAIGNS, etc.
+  status        String    @default("PENDING") // PENDING, COMPLETED, FAILED, EXPIRED
+  dateRange     String?   @map("date_range") // The date(s) the report covers
+  failureReason String?   @map("failure_reason")
   completedAt   DateTime? @map("completed_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  
+  createdAt     DateTime  @default(now()) @map("created_at")
+
   @@index([status])
   @@index([createdAt])
   @@map("ads_pending_reports")
@@ -1858,35 +1858,35 @@ model AdsPendingReport {
 // Amazon Ads - Campaign Level Data
 // ============================================
 model AdCampaign {
-  id            String   @id @default(uuid())
-  campaignId    String   @unique @map("campaign_id")
-  campaignName  String   @map("campaign_name")
-  campaignType  String   @map("campaign_type")   // SP, SB, SD
-  campaignStatus String  @map("campaign_status") // ENABLED, PAUSED, ARCHIVED
-  
+  id             String @id @default(uuid())
+  campaignId     String @unique @map("campaign_id")
+  campaignName   String @map("campaign_name")
+  campaignType   String @map("campaign_type") // SP, SB, SD
+  campaignStatus String @map("campaign_status") // ENABLED, PAUSED, ARCHIVED
+
   // Budget
-  budgetAmount  Decimal  @default(0) @map("budget_amount") @db.Decimal(12, 2)
-  budgetType    String?  @map("budget_type")  // DAILY, LIFETIME
-  
+  budgetAmount Decimal @default(0) @map("budget_amount") @db.Decimal(12, 2)
+  budgetType   String? @map("budget_type") // DAILY, LIFETIME
+
   // Performance metrics (from last report)
-  impressions   Int      @default(0)
-  clicks        Int      @default(0)
-  spend         Decimal  @default(0) @db.Decimal(12, 2)
-  
+  impressions Int     @default(0)
+  clicks      Int     @default(0)
+  spend       Decimal @default(0) @db.Decimal(12, 2)
+
   // Conversion metrics (14-day attribution)
-  sales14d      Decimal  @default(0) @map("sales_14d") @db.Decimal(12, 2)
-  orders14d     Int      @default(0) @map("orders_14d")
-  units14d      Int      @default(0) @map("units_14d")
-  
+  sales14d  Decimal @default(0) @map("sales_14d") @db.Decimal(12, 2)
+  orders14d Int     @default(0) @map("orders_14d")
+  units14d  Int     @default(0) @map("units_14d")
+
   // Calculated metrics
-  acos          Decimal? @db.Decimal(6, 2)
-  roas          Decimal? @db.Decimal(6, 2)
-  
+  acos Decimal? @db.Decimal(6, 2)
+  roas Decimal? @db.Decimal(6, 2)
+
   // Tracking
-  lastSyncedAt  DateTime? @map("last_synced_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
-  
+  lastSyncedAt DateTime? @map("last_synced_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
   @@index([campaignStatus])
   @@index([campaignType])
   @@map("ad_campaigns")
@@ -1896,76 +1896,76 @@ model AdCampaign {
 // INVENTORY AUDIT SYSTEM
 // ============================================
 model AuditSession {
-  id          Int      @id @default(autoincrement())
-  warehouseId Int      @map("warehouse_id")
+  id          Int       @id @default(autoincrement())
+  warehouseId Int       @map("warehouse_id")
   warehouse   Warehouse @relation("AuditSessions", fields: [warehouseId], references: [id], onDelete: Cascade)
-  
-  status      String   @default("in_progress") // 'in_progress', 'paused', 'completed'
-  auditMode   String   @map("audit_mode") // 'parent' or 'single_sku'
-  sortOrder   String   @map("sort_order") // 'asc', 'desc', 'custom'
-  
-  startedAt   DateTime @default(now()) @map("started_at")
+
+  status    String @default("in_progress") // 'in_progress', 'paused', 'completed'
+  auditMode String @map("audit_mode") // 'parent' or 'single_sku'
+  sortOrder String @map("sort_order") // 'asc', 'desc', 'custom'
+
+  startedAt   DateTime  @default(now()) @map("started_at")
   completedAt DateTime? @map("completed_at")
-  
-  totalSkus   Int      @default(0) @map("total_skus")
-  auditedCount Int     @default(0) @map("audited_count")
-  
-  entries     AuditEntry[]
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  
+
+  totalSkus    Int @default(0) @map("total_skus")
+  auditedCount Int @default(0) @map("audited_count")
+
+  entries AuditEntry[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@index([warehouseId])
   @@index([status])
   @@map("audit_sessions")
 }
 
 model AuditEntry {
-  id            Int      @id @default(autoincrement())
-  auditSessionId Int     @map("audit_session_id")
+  id             Int          @id @default(autoincrement())
+  auditSessionId Int          @map("audit_session_id")
   auditSession   AuditSession @relation(fields: [auditSessionId], references: [id], onDelete: Cascade)
-  
-  sku           String
-  parentSku     String?  @map("parent_sku")
-  
-  previousQty   Int      @map("previous_qty")
-  newQty        Int      @map("new_qty")
-  variance      Int      // (new_qty - previous_qty)
-  
-  isFlagged     Boolean  @default(false) @map("is_flagged") // large discrepancy flag
-  notes         String?  @db.Text
-  
-  auditedAt     DateTime @default(now()) @map("audited_at")
-  
+
+  sku       String
+  parentSku String? @map("parent_sku")
+
+  previousQty Int @map("previous_qty")
+  newQty      Int @map("new_qty")
+  variance    Int // (new_qty - previous_qty)
+
+  isFlagged Boolean @default(false) @map("is_flagged") // large discrepancy flag
+  notes     String? @db.Text
+
+  auditedAt DateTime @default(now()) @map("audited_at")
+
   @@index([auditSessionId])
   @@index([sku])
   @@map("audit_entries")
 }
 
 model AuditCustomOrder {
-  id           Int      @id @default(autoincrement())
-  warehouseId  Int      @map("warehouse_id")
-  warehouse    Warehouse @relation("AuditCustomOrders", fields: [warehouseId], references: [id], onDelete: Cascade)
-  
+  id          Int       @id @default(autoincrement())
+  warehouseId Int       @map("warehouse_id")
+  warehouse   Warehouse @relation("AuditCustomOrders", fields: [warehouseId], references: [id], onDelete: Cascade)
+
   sku          String
-  sortPosition Int      @map("sort_position")
-  
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  
+  sortPosition Int    @map("sort_position")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@unique([warehouseId, sku])
   @@index([warehouseId, sortPosition])
   @@map("audit_custom_order")
 }
 
 model AuditThreshold {
-  id            Int      @id @default(autoincrement())
-  sku           String?  // NULL for global default
-  thresholdType String   @map("threshold_type") // 'absolute' or 'percentage'
-  thresholdValue Decimal  @map("threshold_value") @db.Decimal(10, 2)
-  
-  createdAt     DateTime @default(now()) @map("created_at")
-  
+  id             Int     @id @default(autoincrement())
+  sku            String? // NULL for global default
+  thresholdType  String  @map("threshold_type") // 'absolute' or 'percentage'
+  thresholdValue Decimal @map("threshold_value") @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
   @@index([sku])
   @@map("audit_thresholds")
 }
