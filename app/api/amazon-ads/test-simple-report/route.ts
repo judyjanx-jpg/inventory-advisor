@@ -18,7 +18,7 @@ export async function GET() {
     yesterday.setDate(yesterday.getDate() - 1)
     const dateStr = yesterday.toISOString().split('T')[0]
     
-    // Minimal report - just impressions, SUMMARY time unit
+    // Minimal report - just impressions, SUMMARY time unit, ENABLED campaigns only
     const minimalReport = {
       name: `Minimal Test ${Date.now()}`,
       startDate: dateStr,
@@ -29,7 +29,13 @@ export async function GET() {
         columns: ['impressions', 'clicks', 'spend'],
         reportTypeId: 'spCampaigns',
         timeUnit: 'SUMMARY',
-        format: 'GZIP_JSON'
+        format: 'GZIP_JSON',
+        filters: [
+          {
+            field: 'campaignStatus',
+            values: ['ENABLED']
+          }
+        ]
       }
     }
 
