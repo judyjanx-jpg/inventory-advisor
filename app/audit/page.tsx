@@ -25,32 +25,6 @@ export default function AuditSetupPage() {
   const [hasActiveSession, setHasActiveSession] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
 
-  useEffect(() => {
-    fetchWarehouses()
-    checkCurrentSession()
-  }, [])
-
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const res = await fetch('/api/audit/current')
-        if (res.ok) {
-          const data = await res.json()
-          if (data.session) {
-            setHasActiveSession(true)
-            setActiveSessionId(data.session.id)
-          } else {
-            setHasActiveSession(false)
-            setActiveSessionId(null)
-          }
-        }
-      } catch (error) {
-        console.error('Error checking current session:', error)
-      }
-    }
-    checkSession()
-  }, [])
-
   const fetchWarehouses = async () => {
     try {
       const res = await fetch('/api/warehouses')
@@ -72,8 +46,11 @@ export default function AuditSetupPage() {
       if (res.ok) {
         const data = await res.json()
         if (data.session) {
-          // Show option to resume instead of auto-redirecting
-          // User can choose to resume or start new
+          setHasActiveSession(true)
+          setActiveSessionId(data.session.id)
+        } else {
+          setHasActiveSession(false)
+          setActiveSessionId(null)
         }
       }
     } catch (error) {
@@ -81,25 +58,9 @@ export default function AuditSetupPage() {
     }
   }
 
-  const [hasActiveSession, setHasActiveSession] = useState(false)
-  const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
-
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const res = await fetch('/api/audit/current')
-        if (res.ok) {
-          const data = await res.json()
-          if (data.session) {
-            setHasActiveSession(true)
-            setActiveSessionId(data.session.id)
-          }
-        }
-      } catch (error) {
-        console.error('Error checking current session:', error)
-      }
-    }
-    checkSession()
+    fetchWarehouses()
+    checkCurrentSession()
   }, [])
 
   const startAudit = async () => {

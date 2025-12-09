@@ -262,11 +262,15 @@ export default function AuditSessionPage() {
               onClick={async () => {
                 // Pause the session before exiting
                 try {
-                  await fetch(`/api/audit/${sessionId}/pause`, { method: 'PUT' })
+                  const res = await fetch(`/api/audit/${sessionId}/pause`, { method: 'PUT' })
+                  if (!res.ok) {
+                    console.error('Failed to pause session')
+                  }
                 } catch (error) {
                   console.error('Error pausing session:', error)
                 }
-                router.push('/audit')
+                // Use window.location to ensure a full navigation
+                window.location.href = '/audit'
               }}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
