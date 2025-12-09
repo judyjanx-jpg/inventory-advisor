@@ -712,8 +712,13 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Error fetching period data:', error)
+    console.error('Error stack:', error.stack)
     return NextResponse.json(
-      { error: error.message, periods: [] },
+      { 
+        error: error.message || 'Unknown error',
+        errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        periods: [] 
+      },
       { status: 500 }
     )
   }

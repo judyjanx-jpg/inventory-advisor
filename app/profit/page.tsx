@@ -131,8 +131,14 @@ export default function ProfitDashboard() {
         console.log('Periods API response status:', periodsRes.status)
         if (periodsRes.ok) {
           const data = await periodsRes.json()
+          console.log('Periods API response data:', data)
           const periods = data.periods || []
+          console.log('Parsed periods:', periods)
           setPeriodData(periods)
+          
+          if (periods.length === 0) {
+            console.warn('No periods returned from API. Response:', data)
+          }
 
           // Determine which period to use for products
           if (periods.length > 0) {
@@ -151,8 +157,23 @@ export default function ProfitDashboard() {
             const productsRes = await fetch(productsUrl)
             if (productsRes.ok) {
               const prodData = await productsRes.json()
+              console.log('Products API response:', prodData)
               setProducts(prodData.products || [])
+            } else {
+              const errorText = await productsRes.text()
+              console.error('Products API error:', productsRes.status, errorText)
             }
+          } else {
+            console.warn('No periods available, cannot fetch products')
+          }
+        } else {
+          const errorText = await periodsRes.text()
+          console.error('Periods API error:', periodsRes.status, errorText)
+          try {
+            const errorData = JSON.parse(errorText)
+            console.error('Error details:', errorData)
+          } catch {
+            // Error text is not JSON
           }
         }
       } catch (error) {

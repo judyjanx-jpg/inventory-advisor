@@ -22,6 +22,7 @@ export interface PeriodData {
   adCostSB?: number   // Sponsored Brands
   adCostSD?: number   // Sponsored Display
   amazonFees: number
+  amazonFeesEstimated?: number  // Portion that was estimated
   cogs: number
   grossProfit: number
   netProfit: number
@@ -32,6 +33,7 @@ export interface PeriodData {
   acos: number | null
   tacos: number | null
   realAcos: number | null
+  feeEstimationRate?: number  // % of items that used estimated fees
 }
 
 export interface ProductProfit {
