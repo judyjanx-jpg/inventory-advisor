@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
-import Modal, { ModalFooter } from '@/components/ui/Modal'
+import CustomOrderModal from '@/components/audit/CustomOrderModal'
 import { Warehouse, Package, ArrowRight } from 'lucide-react'
 
 interface Warehouse {
@@ -274,24 +274,13 @@ export default function AuditSetupPage() {
           </CardContent>
         </Card>
 
-        {/* Custom Order Modal - Placeholder for now */}
-        <Modal
+        {/* Custom Order Modal */}
+        <CustomOrderModal
           isOpen={showCustomOrderModal}
           onClose={() => setShowCustomOrderModal(false)}
-          title="Manage Custom SKU Order"
-          size="lg"
-        >
-          <div className="p-4">
-            <p className="text-slate-400">
-              Custom order management will be available here. You can drag and drop SKUs to reorder them.
-            </p>
-          </div>
-          <ModalFooter>
-            <Button variant="ghost" onClick={() => setShowCustomOrderModal(false)}>
-              Close
-            </Button>
-          </ModalFooter>
-        </Modal>
+          warehouseId={selectedWarehouse}
+          warehouseName={warehouses.find(w => w.id === selectedWarehouse)?.name}
+        />
       </div>
     </MainLayout>
   )
