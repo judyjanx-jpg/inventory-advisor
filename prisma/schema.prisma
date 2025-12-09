@@ -199,6 +199,8 @@ model Warehouse {
   inventory WarehouseInventory[]
   shipmentsFrom Shipment[] @relation("ShipmentFrom")
   shipmentsTo   Shipment[] @relation("ShipmentTo")
+  auditSessions AuditSession[] @relation("AuditSessions")
+  auditCustomOrders AuditCustomOrder[] @relation("AuditCustomOrders")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1888,4 +1890,82 @@ model AdCampaign {
   @@index([campaignStatus])
   @@index([campaignType])
   @@map("ad_campaigns")
+}
+
+// ============================================
+// INVENTORY AUDIT SYSTEM
+// ============================================
+model AuditSession {
+  id          Int      @id @default(autoincrement())
+  warehouseId Int      @map("warehouse_id")
+  warehouse   Warehouse @relation("AuditSessions", fields: [warehouseId], references: [id], onDelete: Cascade)
+  
+  status      String   @default("in_progress") // 'in_progress', 'paused', 'completed'
+  auditMode   String   @map("audit_mode") // 'parent' or 'single_sku'
+  sortOrder   String   @map("sort_order") // 'asc', 'desc', 'custom'
+  
+  startedAt   DateTime @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  
+  totalSkus   Int      @default(0) @map("total_skus")
+  auditedCount Int     @default(0) @map("audited_count")
+  
+  entries     AuditEntry[]
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  @@index([warehouseId])
+  @@index([status])
+  @@map("audit_sessions")
+}
+
+model AuditEntry {
+  id            Int      @id @default(autoincrement())
+  auditSessionId Int     @map("audit_session_id")
+  auditSession   AuditSession @relation(fields: [auditSessionId], references: [id], onDelete: Cascade)
+  
+  sku           String
+  parentSku     String?  @map("parent_sku")
+  
+  previousQty   Int      @map("previous_qty")
+  newQty        Int      @map("new_qty")
+  variance      Int      // (new_qty - previous_qty)
+  
+  isFlagged     Boolean  @default(false) @map("is_flagged") // large discrepancy flag
+  notes         String?  @db.Text
+  
+  auditedAt     DateTime @default(now()) @map("audited_at")
+  
+  @@index([auditSessionId])
+  @@index([sku])
+  @@map("audit_entries")
+}
+
+model AuditCustomOrder {
+  id           Int      @id @default(autoincrement())
+  warehouseId  Int      @map("warehouse_id")
+  warehouse    Warehouse @relation("AuditCustomOrders", fields: [warehouseId], references: [id], onDelete: Cascade)
+  
+  sku          String
+  sortPosition Int      @map("sort_position")
+  
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  @@unique([warehouseId, sku])
+  @@index([warehouseId, sortPosition])
+  @@map("audit_custom_order")
+}
+
+model AuditThreshold {
+  id            Int      @id @default(autoincrement())
+  sku           String?  // NULL for global default
+  thresholdType String   @map("threshold_type") // 'absolute' or 'percentage'
+  thresholdValue Decimal  @map("threshold_value") @db.Decimal(10, 2)
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  @@index([sku])
+  @@map("audit_thresholds")
 }
