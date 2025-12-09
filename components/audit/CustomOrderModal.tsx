@@ -124,7 +124,9 @@ export default function CustomOrderModal({
         const orderData = await orderRes.json()
         if (orderData.order && orderData.order.length > 0) {
           // Reorder SKUs based on custom order
-          const orderMap = new Map(orderData.order.map((item: any) => [item.sku, item.sortPosition]))
+          const orderMap = new Map<string, number>(
+            orderData.order.map((item: any) => [item.sku, Number(item.sortPosition)])
+          )
           skusList = [...skusList].sort((a, b) => {
             const posA = orderMap.get(a.sku) ?? 999999
             const posB = orderMap.get(b.sku) ?? 999999
