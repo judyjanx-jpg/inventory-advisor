@@ -17,6 +17,10 @@ export interface PeriodData {
   refunds: number
   refundCount: number
   adCost: number
+  // Ad cost breakdown by campaign type
+  adCostSP?: number   // Sponsored Products
+  adCostSB?: number   // Sponsored Brands
+  adCostSD?: number   // Sponsored Display
   amazonFees: number
   cogs: number
   grossProfit: number

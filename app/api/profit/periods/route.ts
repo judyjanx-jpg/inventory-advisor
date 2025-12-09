@@ -51,6 +51,9 @@ interface PeriodSummary {
   refunds: number
   refundCount: number
   adCost: number
+  adCostSP: number  // Sponsored Products
+  adCostSB: number  // Sponsored Brands
+  adCostSD: number  // Sponsored Display
   amazonFees: number
   amazonFeesEstimated: number  // Portion that was estimated
   cogs: number
@@ -76,6 +79,9 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   refunds: number
   refundCount: number
   adCost: number
+  adCostSP: number
+  adCostSB: number
+  adCostSD: number
   amazonFees: number
   amazonFeesEstimated: number
   cogs: number
@@ -312,16 +318,37 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     }
   }
 
-  // Get ad spend from advertising_daily (if connected)
+  // Get ad spend from advertising_daily (if connected), broken down by campaign type
   let adCost = 0
+  let adCostSP = 0  // Sponsored Products
+  let adCostSB = 0  // Sponsored Brands
+  let adCostSD = 0  // Sponsored Display
   try {
-    const adData = await queryOne<{ total_spend: string }>(`
-      SELECT COALESCE(SUM(spend), 0)::text as total_spend
+    const adData = await query<{ campaign_type: string; total_spend: string }>(`
+      SELECT 
+        campaign_type,
+        COALESCE(SUM(spend), 0)::text as total_spend
       FROM advertising_daily
       WHERE date >= $1
         AND date < $2
+      GROUP BY campaign_type
     `, [startDate, endDate])
-    adCost = parseFloat(adData?.total_spend || '0')
+    
+    for (const row of adData) {
+      const spend = parseFloat(row.total_spend || '0')
+      adCost += spend
+      switch (row.campaign_type) {
+        case 'SP':
+          adCostSP = spend
+          break
+        case 'SB':
+          adCostSB = spend
+          break
+        case 'SD':
+          adCostSD = spend
+          break
+      }
+    }
   } catch {
     // Ads table might not exist yet
   }
@@ -353,6 +380,9 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     refunds: Number(refundAmount.toFixed(2)),
     refundCount,
     adCost: Number(adCost.toFixed(2)),
+    adCostSP: Number(adCostSP.toFixed(2)),
+    adCostSB: Number(adCostSB.toFixed(2)),
+    adCostSD: Number(adCostSD.toFixed(2)),
     amazonFees: Number((actualFees + estimatedFees).toFixed(2)),
     amazonFeesEstimated: Number(estimatedFees.toFixed(2)),
     cogs: Number(cogs.toFixed(2)),
@@ -494,6 +524,9 @@ export async function GET(request: NextRequest) {
           refunds: data.refunds || 0,
           refundCount: data.refundCount,
           adCost: data.adCost,
+          adCostSP: data.adCostSP,
+          adCostSB: data.adCostSB,
+          adCostSD: data.adCostSD,
           amazonFees: data.amazonFees,
           cogs: data.cogs,
           grossProfit,
@@ -536,6 +569,9 @@ export async function GET(request: NextRequest) {
           refunds: mtdData.refunds * forecastMultiplier,
           refundCount: Math.round(mtdData.refundCount * forecastMultiplier),
           adCost: mtdData.adCost * forecastMultiplier,
+          adCostSP: mtdData.adCostSP * forecastMultiplier,
+          adCostSB: mtdData.adCostSB * forecastMultiplier,
+          adCostSD: mtdData.adCostSD * forecastMultiplier,
           amazonFees: mtdData.amazonFees * forecastMultiplier,
           amazonFeesEstimated: mtdData.amazonFeesEstimated * forecastMultiplier,
           cogs: mtdData.cogs * forecastMultiplier,
@@ -612,6 +648,9 @@ export async function GET(request: NextRequest) {
         refunds: periodData.refunds || 0,
         refundCount: periodData.refundCount,
         adCost: periodData.adCost,
+        adCostSP: periodData.adCostSP || 0,
+        adCostSB: periodData.adCostSB || 0,
+        adCostSD: periodData.adCostSD || 0,
         amazonFees: periodData.amazonFees,
         cogs: periodData.cogs,
         ...metrics,

@@ -144,10 +144,21 @@ export function PeriodDetailsModal({ data, isOpen, onClose }: PeriodDetailsModal
             value={formatCurrency(-data.adCost)}
             valueColor="text-red-400"
           >
-            <DetailRow label="Sponsored Products" value="-" valueColor="text-red-400" />
-            <DetailRow label="Sponsored Brands Video" value="-" valueColor="text-red-400" />
-            <DetailRow label="Sponsored Display" value="-" valueColor="text-red-400" />
-            <DetailRow label="Sponsored Brands" value="-" valueColor="text-red-400" />
+            <DetailRow 
+              label="Sponsored Products" 
+              value={data.adCostSP ? formatCurrency(-data.adCostSP) : '-'} 
+              valueColor={data.adCostSP ? 'text-red-400' : 'text-slate-500'} 
+            />
+            <DetailRow 
+              label="Sponsored Brands" 
+              value={data.adCostSB ? formatCurrency(-data.adCostSB) : '-'} 
+              valueColor={data.adCostSB ? 'text-red-400' : 'text-slate-500'} 
+            />
+            <DetailRow 
+              label="Sponsored Display" 
+              value={data.adCostSD ? formatCurrency(-data.adCostSD) : '-'} 
+              valueColor={data.adCostSD ? 'text-red-400' : 'text-slate-500'} 
+            />
           </ExpandableRow>
 
           {/* Refund Cost */}
