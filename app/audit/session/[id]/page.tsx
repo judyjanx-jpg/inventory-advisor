@@ -150,11 +150,15 @@ export default function AuditSessionPage() {
     // Auto-save after a brief delay
     clearTimeout((window as any)[`saveTimeout_${sku}`])
     ;(window as any)[`saveTimeout_${sku}`] = setTimeout(() => {
-      if (qty === 0) {
+        if (qty === 0) {
         if (confirm(`Confirm zero count for ${sku}?`)) {
           saveEntry(sku, qty)
         } else {
-          setCurrentQty(prev => ({ ...prev, [sku]: undefined }))
+          setCurrentQty(prev => {
+            const newQty = { ...prev }
+            delete newQty[sku]
+            return newQty
+          })
         }
       } else {
         saveEntry(sku, qty)
