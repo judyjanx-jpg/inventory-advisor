@@ -311,6 +311,7 @@ interface V3ReportResponse {
 }
 
 // Request a Sponsored Products report using V3 API
+// Handles 425 "duplicate request" by extracting existing report ID
 export async function requestSpReportV3(
   profileId: string,
   startDate: string,
@@ -341,11 +342,27 @@ export async function requestSpReportV3(
     }
   }
 
-  return adsApiRequest<V3ReportResponse>('/reporting/reports', {
-    method: 'POST',
-    profileId,
-    body: reportConfig,
-  })
+  try {
+    return await adsApiRequest<V3ReportResponse>('/reporting/reports', {
+      method: 'POST',
+      profileId,
+      body: reportConfig,
+    })
+  } catch (error: any) {
+    // Handle 425 "duplicate request" - extract existing report ID
+    if (error.message.includes('425') && error.message.includes('duplicate')) {
+      const match = error.message.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
+      if (match) {
+        const existingReportId = match[1]
+        console.log(`  Using existing report ID from 425 response: ${existingReportId}`)
+        return {
+          reportId: existingReportId,
+          status: 'PENDING',
+        }
+      }
+    }
+    throw error
+  }
 }
 
 // Check report status (V3 API)
