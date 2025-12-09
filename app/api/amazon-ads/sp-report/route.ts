@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const startDateStr = startDate.toISOString().split('T')[0]
     const endDateStr = endDate.toISOString().split('T')[0]
 
-    // Minimal, fast-processing Sponsored Products config
+    // Sponsored Products campaign report with all key metrics
     const reportConfig = {
       name: `SP_Report_${Date.now()}`,
       startDate: startDateStr,
@@ -36,27 +36,25 @@ export async function GET(request: NextRequest) {
         adProduct: "SPONSORED_PRODUCTS",
         groupBy: ["campaign"],
         columns: [
-          "date",
+          // Identifiers
           "campaignName",
-          "campaignId", 
+          "campaignId",
           "campaignStatus",
           "campaignBudgetAmount",
+          "campaignBudgetType",
+          // Performance metrics
           "impressions",
           "clicks",
           "cost",
+          // Conversion metrics (14-day attribution)
           "purchases14d",
           "sales14d",
           "unitsSoldClicks14d"
         ],
         reportTypeId: "spCampaigns",
-        timeUnit: "DAILY",
-        format: "GZIP_JSON",
-        filters: [
-          {
-            field: "campaignStatus",
-            values: ["ENABLED"]
-          }
-        ]
+        timeUnit: "SUMMARY",  // Summary for the date range (faster processing)
+        format: "GZIP_JSON"
+        // No filter - get all campaigns to see full picture
       }
     }
 
@@ -192,22 +190,46 @@ export async function POST(request: NextRequest) {
 
     // Calculate summary stats
     const campaigns = Array.isArray(reportData) ? reportData : []
+    const totalCost = campaigns.reduce((sum: number, c: any) => sum + (parseFloat(c.cost) || 0), 0)
+    const totalSales = campaigns.reduce((sum: number, c: any) => sum + (parseFloat(c.sales14d) || 0), 0)
+    
     const summary = {
       totalCampaigns: campaigns.length,
       totalImpressions: campaigns.reduce((sum: number, c: any) => sum + (c.impressions || 0), 0),
       totalClicks: campaigns.reduce((sum: number, c: any) => sum + (c.clicks || 0), 0),
-      totalCost: campaigns.reduce((sum: number, c: any) => sum + (parseFloat(c.cost) || 0), 0),
-      totalSales: campaigns.reduce((sum: number, c: any) => sum + (parseFloat(c.sales14d) || 0), 0),
+      totalCost: Math.round(totalCost * 100) / 100,
+      totalSales: Math.round(totalSales * 100) / 100,
       totalUnits: campaigns.reduce((sum: number, c: any) => sum + (c.unitsSoldClicks14d || 0), 0),
+      totalOrders: campaigns.reduce((sum: number, c: any) => sum + (c.purchases14d || 0), 0),
+      acos: totalSales > 0 ? Math.round((totalCost / totalSales) * 10000) / 100 : null, // ACOS %
+      roas: totalCost > 0 ? Math.round((totalSales / totalCost) * 100) / 100 : null, // ROAS
     }
+
+    // Sort by cost descending to show top spenders first
+    const sortedCampaigns = campaigns
+      .map((c: any) => ({
+        campaignId: c.campaignId,
+        campaignName: c.campaignName,
+        status: c.campaignStatus,
+        budget: c.campaignBudgetAmount,
+        budgetType: c.campaignBudgetType,
+        impressions: c.impressions || 0,
+        clicks: c.clicks || 0,
+        cost: parseFloat(c.cost) || 0,
+        sales: parseFloat(c.sales14d) || 0,
+        orders: c.purchases14d || 0,
+        units: c.unitsSoldClicks14d || 0,
+        acos: c.sales14d > 0 ? Math.round((c.cost / c.sales14d) * 10000) / 100 : null,
+      }))
+      .sort((a: any, b: any) => b.cost - a.cost)
 
     return NextResponse.json({
       reportId,
       status: 'COMPLETED',
       summary,
-      data: campaigns.slice(0, 50), // Return first 50 rows
+      data: sortedCampaigns.slice(0, 100), // Return top 100 by spend
       totalRows: campaigns.length,
-      message: campaigns.length > 50 ? `Showing first 50 of ${campaigns.length} rows` : 'All data returned',
+      message: campaigns.length > 100 ? `Showing top 100 of ${campaigns.length} campaigns by spend` : 'All campaigns returned',
     })
 
   } catch (error: any) {
