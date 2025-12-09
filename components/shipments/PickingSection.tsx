@@ -45,6 +45,11 @@ export default function PickingSection({
   const [confirmedQty, setConfirmedQty] = useState(0)
   const [confirmedItem, setConfirmedItem] = useState<ShipmentItem | null>(null)
   
+  // Warehouse quantity update prompt
+  const [showWarehouseUpdatePrompt, setShowWarehouseUpdatePrompt] = useState(false)
+  const [showWarehouseUpdateModal, setShowWarehouseUpdateModal] = useState(false)
+  const [warehouseUpdateReason, setWarehouseUpdateReason] = useState('')
+  
   // Interactive pick adjustments
   const [showAdjustModal, setShowAdjustModal] = useState(false)
   const [adjustType, setAdjustType] = useState<'shipment' | 'inventory'>('shipment')
@@ -253,8 +258,17 @@ export default function PickingSection({
   }
 
   // Proceed to next item after confirmation
-  const proceedToNext = () => {
+  const proceedToNext = async () => {
     if (!confirmedItem) return
+    
+    // Check if quantity changed from original
+    const qtyChanged = confirmedQty !== confirmedItem.adjustedQty
+    
+    // If quantity changed, prompt to update warehouse
+    if (qtyChanged && onInventoryAdjust) {
+      setShowWarehouseUpdatePrompt(true)
+      return
+    }
     
     // Update qty if changed and mark as picked
     const updatedItems = items.map(item => 
@@ -268,6 +282,8 @@ export default function PickingSection({
     setShowConfirmation(false)
     setConfirmedItem(null)
     setScanResult(null)
+    setShowWarehouseUpdatePrompt(false)
+    setWarehouseUpdateReason('')
     
     // Check if there are more pending items after this one is picked
     // Since we marked this item as picked, pendingItems will shrink by 1
@@ -280,6 +296,68 @@ export default function PickingSection({
     // Otherwise, keep index at current position - next pending item will be there
     // Reset index to 0 to be safe in case of any edge cases
     setCurrentPickIndex(0)
+  }
+
+  // Handle warehouse update prompt response
+  const handleWarehouseUpdateResponse = async (shouldUpdate: boolean) => {
+    if (!confirmedItem) return
+    
+    if (shouldUpdate && onInventoryAdjust) {
+      // Update warehouse inventory
+      // The API expects the new absolute quantity, but we're adjusting based on the discrepancy
+      // We'll pass the confirmedQty as the new quantity - the API will handle the calculation
+      const reason = warehouseUpdateReason || 'count_error'
+      try {
+        await onInventoryAdjust(confirmedItem.masterSku, confirmedQty, reason)
+      } catch (error) {
+        console.error('Error updating warehouse inventory:', error)
+        alert('Failed to update warehouse inventory')
+      }
+    }
+    
+    // Update qty if changed and mark as picked
+    const updatedItems = items.map(item => 
+      item.id === confirmedItem.id 
+        ? { ...item, adjustedQty: confirmedQty, pickStatus: 'picked' }
+        : item
+    )
+    onItemsChange(updatedItems)
+    
+    // Reset confirmation state
+    setShowConfirmation(false)
+    setConfirmedItem(null)
+    setScanResult(null)
+    setShowWarehouseUpdatePrompt(false)
+    setWarehouseUpdateReason('')
+    
+    // Check if there are more pending items after this one is picked
+    const remainingPending = pendingItems.length - 1
+    if (remainingPending <= 0) {
+      setShowInteractivePick(false)
+    }
+    setCurrentPickIndex(0)
+  }
+
+  // Update warehouse quantity button (even if pick qty didn't change)
+  const handleUpdateWarehouseQty = () => {
+    if (!confirmedItem || !onInventoryAdjust) return
+    setShowWarehouseUpdateModal(true)
+  }
+
+  // Confirm warehouse update from modal
+  const confirmWarehouseUpdate = async () => {
+    if (!confirmedItem || !onInventoryAdjust) return
+    
+    const reason = warehouseUpdateReason || 'count_error'
+    try {
+      await onInventoryAdjust(confirmedItem.masterSku, confirmedQty, reason)
+      setShowWarehouseUpdateModal(false)
+      setWarehouseUpdateReason('')
+      alert(`Warehouse quantity updated to ${confirmedQty}`)
+    } catch (error) {
+      console.error('Error updating warehouse inventory:', error)
+      alert('Failed to update warehouse inventory')
+    }
   }
 
   const skipItem = () => {
@@ -479,22 +557,133 @@ export default function PickingSection({
 
           {/* Next Button */}
           <div className="p-6 bg-emerald-800 border-t border-emerald-700">
-            <div className="max-w-md mx-auto flex gap-4">
-              <Button 
-                variant="outline" 
-                onClick={skipItem}
-                className="flex-1 border-emerald-600 text-emerald-300 hover:bg-emerald-700"
-              >
-                Skip
-              </Button>
-              <Button 
-                onClick={proceedToNext}
-                className="flex-1 bg-white text-emerald-900 hover:bg-emerald-100 text-xl py-4"
-              >
-                Next <ArrowRight className="w-6 h-6 ml-2" />
-              </Button>
+            <div className="max-w-md mx-auto space-y-3">
+              {/* Update Warehouse Qty Button */}
+              {onInventoryAdjust && (
+                <Button 
+                  variant="outline" 
+                  onClick={handleUpdateWarehouseQty}
+                  className="w-full border-amber-500 text-amber-300 hover:bg-amber-700/20"
+                >
+                  Update Warehouse Qty
+                </Button>
+              )}
+              
+              <div className="flex gap-4">
+                <Button 
+                  variant="outline" 
+                  onClick={skipItem}
+                  className="flex-1 border-emerald-600 text-emerald-300 hover:bg-emerald-700"
+                >
+                  Skip
+                </Button>
+                <Button 
+                  onClick={proceedToNext}
+                  className="flex-1 bg-white text-emerald-900 hover:bg-emerald-100 text-xl py-4"
+                >
+                  Next <ArrowRight className="w-6 h-6 ml-2" />
+                </Button>
+              </div>
             </div>
           </div>
+          
+          {/* Warehouse Update Prompt Modal (when qty changed) */}
+          {showWarehouseUpdatePrompt && confirmedItem && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-60">
+              <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md mx-4">
+                <h2 className="text-xl font-bold text-white mb-2">Update Warehouse Quantity?</h2>
+                <p className="text-slate-400 mb-4">
+                  Pick quantity changed from {confirmedItem.adjustedQty} to {confirmedQty}. 
+                  Do you want to update the warehouse inventory to match?
+                </p>
+                
+                <div className="space-y-4 mb-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">Reason for discrepancy</label>
+                    <select
+                      value={warehouseUpdateReason}
+                      onChange={(e) => setWarehouseUpdateReason(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white"
+                    >
+                      <option value="">Select reason...</option>
+                      <option value="count_error">Count Error</option>
+                      <option value="damaged">Damaged/Defective</option>
+                      <option value="missing">Missing/Lost</option>
+                      <option value="theft">Theft/Shrinkage</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleWarehouseUpdateResponse(false)}
+                    className="flex-1"
+                  >
+                    Ignore
+                  </Button>
+                  <Button 
+                    onClick={() => handleWarehouseUpdateResponse(true)}
+                    className="flex-1"
+                    disabled={!warehouseUpdateReason}
+                  >
+                    Update Warehouse
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Warehouse Update Modal (manual button) */}
+          {showWarehouseUpdateModal && confirmedItem && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-60">
+              <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md mx-4">
+                <h2 className="text-xl font-bold text-white mb-2">Update Warehouse Quantity</h2>
+                <p className="text-slate-400 mb-4">
+                  Update warehouse inventory for {confirmedItem.masterSku} to {confirmedQty}?
+                </p>
+                
+                <div className="space-y-4 mb-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">Reason</label>
+                    <select
+                      value={warehouseUpdateReason}
+                      onChange={(e) => setWarehouseUpdateReason(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white"
+                    >
+                      <option value="">Select reason...</option>
+                      <option value="count_error">Count Error</option>
+                      <option value="damaged">Damaged/Defective</option>
+                      <option value="missing">Missing/Lost</option>
+                      <option value="theft">Theft/Shrinkage</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setShowWarehouseUpdateModal(false)
+                      setWarehouseUpdateReason('')
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={confirmWarehouseUpdate}
+                    className="flex-1"
+                    disabled={!warehouseUpdateReason}
+                  >
+                    Update Warehouse
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )
     }
