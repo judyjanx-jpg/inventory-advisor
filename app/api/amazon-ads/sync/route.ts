@@ -36,7 +36,7 @@ export async function GET() {
     return NextResponse.json({
       connected: !!credentials?.profileId,
       profileId: credentials?.profileId,
-      pendingReports: pendingReports.map(r => ({
+      pendingReports: pendingReports.map((r: any) => ({
         id: r.id,
         reportId: r.reportId,
         status: r.status,
