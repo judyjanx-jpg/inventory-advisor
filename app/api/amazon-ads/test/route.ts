@@ -18,28 +18,64 @@ export async function GET() {
       testReport: null,
     }
 
-    // Try to list SP campaigns using V3 API
+    // Try to list ENABLED SP campaigns using V3 API
     try {
-      const campaignsResponse = await adsApiRequest<any>('/sp/campaigns/list', {
+      const enabledResponse = await adsApiRequest<any>('/sp/campaigns/list', {
+        method: 'POST',
+        profileId,
+        body: {
+          stateFilter: {
+            include: ['ENABLED']
+          },
+          maxResults: 100
+        }
+      })
+
+      const campaigns = Array.isArray(enabledResponse) ? enabledResponse : 
+                        enabledResponse?.campaigns || []
+      
+      results.enabledCampaigns = {
+        count: campaigns.length,
+        sample: campaigns.slice(0, 5).map((c: any) => ({
+          id: c.campaignId,
+          name: c.name,
+          state: c.state,
+          budget: c.budget?.budget,
+          startDate: c.startDate,
+        }))
+      }
+    } catch (e: any) {
+      results.enabledCampaigns = { error: e.message }
+    }
+
+    // Also get ALL campaigns count
+    try {
+      const allResponse = await adsApiRequest<any>('/sp/campaigns/list', {
         method: 'POST',
         profileId,
         body: {
           stateFilter: {
             include: ['ENABLED', 'PAUSED', 'ARCHIVED']
           },
-          maxResults: 10
+          maxResults: 1000
         }
       })
 
-      results.campaigns = {
-        count: Array.isArray(campaignsResponse) ? campaignsResponse.length :
-               campaignsResponse?.campaigns?.length || 0,
-        data: Array.isArray(campaignsResponse) ?
-              campaignsResponse.slice(0, 3) :
-              campaignsResponse?.campaigns?.slice(0, 3) || campaignsResponse
+      const allCampaigns = Array.isArray(allResponse) ? allResponse : 
+                           allResponse?.campaigns || []
+      
+      const byState = {
+        ENABLED: allCampaigns.filter((c: any) => c.state === 'ENABLED').length,
+        PAUSED: allCampaigns.filter((c: any) => c.state === 'PAUSED').length,
+        ARCHIVED: allCampaigns.filter((c: any) => c.state === 'ARCHIVED').length,
+      }
+      
+      results.allCampaigns = {
+        total: allCampaigns.length,
+        byState,
       }
     } catch (e: any) {
-      results.campaigns = { error: e.message }
+      results.allCampaigns = { error: e.message }
     }
 
     // Try requesting a very simple 1-day report
