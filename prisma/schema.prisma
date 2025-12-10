@@ -2004,3 +2004,64 @@ model AuditThreshold {
   @@index([sku])
   @@map("audit_thresholds")
 }
+
+// ============================================
+// DASHBOARD & USER SETTINGS
+// ============================================
+
+model UserProfile {
+  id        Int      @id @default(autoincrement())
+  name      String   @default("there")
+  email     String?
+  timezone  String   @default("America/New_York")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  
+  schedule  UserSchedule[]
+  events    CalendarEvent[]
+  
+  @@map("user_profile")
+}
+
+model UserSchedule {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @default(1) @map("user_id")
+  user       UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  dayOfWeek  Int      @map("day_of_week") // 0=Sunday, 6=Saturday
+  isWorking  Boolean  @default(true) @map("is_working")
+  startTime  String?  @map("start_time") // "09:00"
+  endTime    String?  @map("end_time")   // "17:00"
+  
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+  
+  @@unique([userId, dayOfWeek])
+  @@map("user_schedule")
+}
+
+model CalendarEvent {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @default(1) @map("user_id")
+  user        UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String?  @db.Text
+  eventType   String   @default("appointment") @map("event_type") // appointment, reminder, time_off, holiday
+  
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime? @map("end_date") @db.Date // For multi-day events
+  startTime   String?  @map("start_time") // "09:00"
+  endTime     String?  @map("end_time")
+  isAllDay    Boolean  @default(false) @map("is_all_day")
+  
+  recurrence  String   @default("none") // none, daily, weekly, monthly
+  reminderMinutes Int? @map("reminder_minutes")
+  
+  createdBy   String   @default("user") @map("created_by") // 'user' or 'ai'
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  @@index([startDate, endDate])
+  @@index([userId])
+  @@map("calendar_events")
+}
