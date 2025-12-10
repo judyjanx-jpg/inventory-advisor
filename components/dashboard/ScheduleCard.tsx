@@ -744,11 +744,11 @@ export default function ScheduleCard() {
                 onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()}
                 placeholder="e.g., Remind me to call supplier Tuesday at 2pm"
                 className="flex-1 px-3 py-2 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                disabled={aiAvailable === false}
+                disabled={!aiAvailable}
               />
               <button
                 onClick={handleAiSubmit}
-                disabled={aiLoading || !aiInput.trim() || aiAvailable === false}
+                disabled={aiLoading || !aiInput.trim() || !aiAvailable}
                 className="px-3 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {aiLoading ? (
