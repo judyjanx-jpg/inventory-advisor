@@ -88,11 +88,12 @@ export async function GET(request: NextRequest) {
       take: 10
     })
 
-    // Out of stock items from channel_inventory
-    const outOfStockResult = await query<{ master_sku: string; product_title: string }>(`
-      SELECT master_sku, product_title
-      FROM channel_inventory
-      WHERE fba_available = 0 AND channel = 'Amazon'
+    // Out of stock items from channel_inventory joined with products
+    const outOfStockResult = await query<{ master_sku: string; title: string }>(`
+      SELECT ci.master_sku, COALESCE(p.title, ci.master_sku) as title
+      FROM channel_inventory ci
+      LEFT JOIN products p ON ci.master_sku = p.sku
+      WHERE ci.fba_available = 0 AND ci.channel = 'Amazon'
       LIMIT 10
     `, [])
     
@@ -184,7 +185,7 @@ export async function GET(request: NextRequest) {
             count: outOfStockItems.length,
             items: outOfStockItems.map(i => ({
               sku: i.master_sku,
-              title: i.product_title
+              title: i.title
             }))
           },
           lateShipments: {

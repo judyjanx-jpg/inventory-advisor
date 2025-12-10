@@ -62,7 +62,7 @@ export default function DashboardPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="space-y-6">
         {/* Greeting Header */}
         <GreetingHeader 
           userName={data?.userName || 'there'} 

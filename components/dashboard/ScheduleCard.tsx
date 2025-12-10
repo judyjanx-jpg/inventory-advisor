@@ -8,7 +8,9 @@ import {
   ChevronRight,
   Check,
   Loader2,
-  Sparkles
+  Sparkles,
+  Pencil,
+  X
 } from 'lucide-react'
 
 interface ScheduleDay {
@@ -39,6 +41,9 @@ export default function ScheduleCard() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResponse, setAiResponse] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [editingDay, setEditingDay] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState({ isWorking: true, startTime: '09:00', endTime: '17:00' })
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     fetchSchedule()
@@ -73,6 +78,58 @@ export default function ScheduleCard() {
       }
     } catch (error) {
       console.error('Error fetching events:', error)
+    }
+  }
+
+  const handleEditDay = (dayOfWeek: number) => {
+    const daySchedule = schedule.find(s => s.dayOfWeek === dayOfWeek)
+    setEditForm({
+      isWorking: daySchedule?.isWorking ?? true,
+      startTime: daySchedule?.startTime || '09:00',
+      endTime: daySchedule?.endTime || '17:00'
+    })
+    setEditingDay(dayOfWeek)
+  }
+
+  const handleSaveDay = async () => {
+    if (editingDay === null) return
+    
+    setSaving(true)
+    try {
+      const res = await fetch('/api/dashboard/schedule', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dayOfWeek: editingDay,
+          isWorking: editForm.isWorking,
+          startTime: editForm.isWorking ? editForm.startTime : null,
+          endTime: editForm.isWorking ? editForm.endTime : null
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        // Update local state
+        setSchedule(prev => {
+          const existing = prev.findIndex(s => s.dayOfWeek === editingDay)
+          const newDay = {
+            dayOfWeek: editingDay,
+            isWorking: editForm.isWorking,
+            startTime: editForm.isWorking ? editForm.startTime : null,
+            endTime: editForm.isWorking ? editForm.endTime : null
+          }
+          if (existing >= 0) {
+            const updated = [...prev]
+            updated[existing] = newDay
+            return updated
+          }
+          return [...prev, newDay]
+        })
+        setEditingDay(null)
+      }
+    } catch (error) {
+      console.error('Error saving schedule:', error)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -237,15 +294,70 @@ export default function ScheduleCard() {
             ) : (
               FULL_DAY_NAMES.map((dayName, idx) => {
                 const daySchedule = schedule.find(s => s.dayOfWeek === idx)
+                const isEditing = editingDay === idx
+                
+                if (isEditing) {
+                  return (
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-[var(--muted)]/50 rounded-lg">
+                      <span className="text-[var(--muted-foreground)] w-12 text-sm">{dayName.slice(0, 3)}:</span>
+                      <select
+                        value={editForm.isWorking ? 'working' : 'closed'}
+                        onChange={(e) => setEditForm({ ...editForm, isWorking: e.target.value === 'working' })}
+                        className="px-2 py-1 bg-[var(--input)] border border-[var(--border)] rounded text-sm text-[var(--foreground)]"
+                      >
+                        <option value="working">Working</option>
+                        <option value="closed">Closed</option>
+                      </select>
+                      {editForm.isWorking && (
+                        <>
+                          <input
+                            type="time"
+                            value={editForm.startTime}
+                            onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
+                            className="px-2 py-1 bg-[var(--input)] border border-[var(--border)] rounded text-sm text-[var(--foreground)]"
+                          />
+                          <span className="text-[var(--muted-foreground)]">-</span>
+                          <input
+                            type="time"
+                            value={editForm.endTime}
+                            onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
+                            className="px-2 py-1 bg-[var(--input)] border border-[var(--border)] rounded text-sm text-[var(--foreground)]"
+                          />
+                        </>
+                      )}
+                      <button
+                        onClick={handleSaveDay}
+                        disabled={saving}
+                        className="p-1 text-emerald-400 hover:bg-emerald-500/20 rounded"
+                      >
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => setEditingDay(null)}
+                        className="p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)] rounded"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )
+                }
+                
                 return (
-                  <div key={idx} className="flex items-center justify-between text-sm py-1">
-                    <span className="text-[var(--muted-foreground)] w-24">{dayName.slice(0, 3)}:</span>
-                    <span className={daySchedule?.isWorking ? 'text-[var(--foreground)]' : 'text-[var(--muted-foreground)]'}>
-                      {daySchedule?.isWorking 
-                        ? `${formatTime(daySchedule.startTime)} - ${formatTime(daySchedule.endTime)}`
-                        : 'Closed'
-                      }
-                    </span>
+                  <div 
+                    key={idx} 
+                    className="flex items-center justify-between text-sm py-1.5 px-2 rounded-lg hover:bg-[var(--muted)]/30 group cursor-pointer"
+                    onClick={() => handleEditDay(idx)}
+                  >
+                    <span className="text-[var(--muted-foreground)] w-12">{dayName.slice(0, 3)}:</span>
+                    <div className="flex items-center gap-2">
+                      <span className={daySchedule?.isWorking ? 'text-[var(--foreground)]' : 'text-[var(--muted-foreground)]'}>
+                        {daySchedule?.isWorking 
+                          ? `${formatTime(daySchedule.startTime)} - ${formatTime(daySchedule.endTime)}`
+                          : 'Closed'
+                        }
+                      </span>
+                      <Pencil className="w-3 h-3 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
                   </div>
                 )
               })
@@ -283,7 +395,11 @@ export default function ScheduleCard() {
           
           {/* AI Response */}
           {aiResponse && (
-            <div className="mt-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-sm text-emerald-400">
+            <div className={`mt-2 p-2 rounded-lg text-sm ${
+              aiResponse.includes('Sorry') || aiResponse.includes('wrong') 
+                ? 'bg-red-500/10 border border-red-500/20 text-red-400'
+                : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+            }`}>
               {aiResponse}
             </div>
           )}
@@ -292,4 +408,3 @@ export default function ScheduleCard() {
     </Card>
   )
 }
-

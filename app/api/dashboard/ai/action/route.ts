@@ -4,7 +4,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { randomUUID } from 'crypto'
 import { pendingActions } from '@/lib/pending-actions'
 
-const anthropic = new Anthropic()
+// Only create client if API key exists
+const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +17,13 @@ export async function POST(request: NextRequest) {
         success: false,
         error: 'Please provide a command'
       }, { status: 400 })
+    }
+
+    if (!anthropic) {
+      return NextResponse.json({
+        success: false,
+        error: 'AI features require ANTHROPIC_API_KEY to be configured. Please add it to your environment variables.'
+      }, { status: 503 })
     }
 
     // Get some context about available SKUs and data

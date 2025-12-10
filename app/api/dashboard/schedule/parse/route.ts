@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
 import { addDays, format, parseISO, startOfWeek } from 'date-fns'
 
-const anthropic = new Anthropic()
+// Only create client if API key exists
+const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null
 
 interface ParsedScheduleAction {
   type: 'time_off' | 'work_hours' | 'event' | 'appointment' | 'holiday'
@@ -28,6 +29,13 @@ export async function POST(request: NextRequest) {
         success: false,
         error: 'Please provide some input'
       }, { status: 400 })
+    }
+
+    if (!anthropic) {
+      return NextResponse.json({
+        success: false,
+        error: 'AI features require ANTHROPIC_API_KEY to be configured.'
+      }, { status: 503 })
     }
 
     const profile = await prisma.userProfile.findFirst()
