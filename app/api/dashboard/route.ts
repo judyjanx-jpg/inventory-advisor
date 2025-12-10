@@ -70,28 +70,53 @@ export async function GET(request: NextRequest) {
     // Get task counts
     const today = startOfDay(now)
 
-    // Items to order - products with low total inventory (FBA + warehouse < reorder point or < 14 days supply)
+    // Items to order - products with low days of supply based on recent sales velocity
     const itemsToOrderResult = await query<{ sku: string; title: string; total_qty: number; days_of_supply: number }>(`
+      WITH velocity AS (
+        SELECT 
+          oi.master_sku as sku,
+          COALESCE(SUM(oi.quantity), 0) / 30.0 as avg_daily_sales
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.purchase_date > NOW() - INTERVAL '30 days'
+          AND o.status != 'Cancelled'
+        GROUP BY oi.master_sku
+      )
       SELECT 
         p.sku, 
         p.title,
         COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0) as total_qty,
         CASE 
-          WHEN COALESCE(f.avg_daily_velocity, 0) > 0 
-          THEN (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / f.avg_daily_velocity
+          WHEN COALESCE(v.avg_daily_sales, 0) > 0 
+          THEN ROUND((COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / v.avg_daily_sales)
           ELSE 999
         END as days_of_supply
       FROM products p
       LEFT JOIN inventory_levels il ON p.sku = il.master_sku
-      LEFT JOIN forecasts f ON p.sku = f.master_sku AND f.channel = 'Amazon'
-      WHERE p.is_active = true
-        AND (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) < COALESCE(p.reorder_point, 50)
+      LEFT JOIN velocity v ON p.sku = v.sku
+      WHERE p.is_hidden = false
+        AND COALESCE(v.avg_daily_sales, 0) > 0.1
+        AND CASE 
+          WHEN COALESCE(v.avg_daily_sales, 0) > 0 
+          THEN (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / v.avg_daily_sales
+          ELSE 999
+        END < 21
       ORDER BY days_of_supply ASC
       LIMIT 10
     `, [])
     
     // Items to ship to Amazon - have warehouse stock but low FBA stock
     const itemsToShipResult = await query<{ sku: string; title: string; warehouse_qty: number; fba_qty: number }>(`
+      WITH velocity AS (
+        SELECT 
+          oi.master_sku as sku,
+          COALESCE(SUM(oi.quantity), 0) / 30.0 as avg_daily_sales
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.purchase_date > NOW() - INTERVAL '30 days'
+          AND o.status != 'Cancelled'
+        GROUP BY oi.master_sku
+      )
       SELECT 
         p.sku,
         p.title,
@@ -99,28 +124,30 @@ export async function GET(request: NextRequest) {
         COALESCE(il.fba_available, 0) as fba_qty
       FROM products p
       LEFT JOIN inventory_levels il ON p.sku = il.master_sku
-      LEFT JOIN forecasts f ON p.sku = f.master_sku AND f.channel = 'Amazon'
-      WHERE p.is_active = true
+      LEFT JOIN velocity v ON p.sku = v.sku
+      WHERE p.is_hidden = false
         AND COALESCE(il.warehouse_available, 0) > 0
         AND COALESCE(il.fba_available, 0) < 30
-        AND COALESCE(f.avg_daily_velocity, 0) > 0
+        AND COALESCE(v.avg_daily_sales, 0) > 0.1
       ORDER BY il.fba_available ASC
       LIMIT 10
     `, [])
 
-    // Out of stock items - FBA available = 0 but has sales history
+    // Out of stock items - FBA available = 0 but has recent sales history
     const outOfStockResult = await query<{ sku: string; title: string }>(`
       SELECT DISTINCT
         p.sku,
         p.title
       FROM products p
       LEFT JOIN inventory_levels il ON p.sku = il.master_sku
-      WHERE p.is_active = true
+      WHERE p.is_hidden = false
         AND COALESCE(il.fba_available, 0) = 0
         AND EXISTS (
           SELECT 1 FROM order_items oi 
+          JOIN orders o ON oi.order_id = o.id
           WHERE oi.master_sku = p.sku 
-          AND oi.created_at > NOW() - INTERVAL '90 days'
+          AND o.purchase_date > NOW() - INTERVAL '30 days'
+          AND o.status != 'Cancelled'
         )
       LIMIT 10
     `, [])
