@@ -21,7 +21,10 @@ import {
   LineChart,
   RefreshCw,
   ClipboardCheck,
+  Sun,
+  Moon,
 } from 'lucide-react'
+import { useTheme } from '@/contexts/ThemeContext'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -41,6 +44,7 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const { theme, toggleTheme } = useTheme()
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -200,7 +204,7 @@ export default function Sidebar() {
       </nav>
       
       {/* AI Advisor Button */}
-      <div className="border-t border-slate-700/50 p-4">
+      <div className="border-t border-[var(--sidebar-border)] p-4">
         <Link
           href="/advisor"
           className={cn(
@@ -219,11 +223,11 @@ export default function Sidebar() {
       </div>
 
       {/* Sync Status Section */}
-      <div className="border-t border-slate-700/50 px-4 py-3">
+      <div className="border-t border-[var(--sidebar-border)] px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-[var(--muted-foreground)]">
             {lastSync ? (
-              <>Last sync: <span className="text-slate-400">{lastSync}</span></>
+              <>Last sync: <span className="text-[var(--foreground)] opacity-70">{lastSync}</span></>
             ) : (
               'No sync data'
             )}
@@ -235,7 +239,7 @@ export default function Sidebar() {
               "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all",
               syncing
                 ? "bg-cyan-500/20 text-cyan-400 cursor-not-allowed"
-                : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+                : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--hover-bg)] hover:text-[var(--foreground)]"
             )}
           >
             <RefreshCw className={cn("w-3 h-3", syncing && "animate-spin")} />
@@ -245,15 +249,27 @@ export default function Sidebar() {
       </div>
 
       {/* User/Status Section */}
-      <div className="border-t border-slate-700/50 p-4">
+      <div className="border-t border-[var(--sidebar-border)] p-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center">
             <span className="text-white text-sm font-medium">K</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-200 truncate">KISPER</p>
-            <p className="text-xs text-slate-500">Amazon FBA</p>
+            <p className="text-sm font-medium text-[var(--foreground)] truncate">KISPER</p>
+            <p className="text-xs text-[var(--muted-foreground)]">Amazon FBA</p>
           </div>
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? (
+              <Sun className="w-4 h-4" />
+            ) : (
+              <Moon className="w-4 h-4" />
+            )}
+          </button>
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
         </div>
       </div>
