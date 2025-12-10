@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
 Available data:
 - Products/SKUs: ${products.slice(0, 20).map(p => p.sku).join(', ')}${products.length > 20 ? '...' : ''}
 - Pending POs: ${purchaseOrders.map(po => po.poNumber).join(', ') || '(none)'}
+- Dashboard cards that can be added/removed: goals, top_products, inventory_summary
 
 Parse the user's command and return a JSON object:
 
@@ -51,9 +52,10 @@ Parse the user's command and return a JSON object:
   "needsClarification": true/false,
   "question": "Clarification question if needed",
   "action": {
-    "type": "update_inventory" | "update_cost" | "create_po" | "update_po" | "dismiss_recommendations" | "unknown",
+    "type": "update_inventory" | "update_cost" | "create_po" | "update_po" | "dismiss_recommendations" | "add_card" | "remove_card" | "unknown",
     "sku": "SKU-123",
     "poNumber": "PO-123",
+    "cardType": "goals",
     "field": "field_name",
     "fromValue": "current value",
     "toValue": "new value",
@@ -63,6 +65,18 @@ Parse the user's command and return a JSON object:
 }
 
 IMPORTANT: Be flexible in understanding user intent. Here are examples of commands you should understand:
+
+DASHBOARD CARD management:
+- "Add a goals card" → add_card, cardType: "goals"
+- "Add the goals card to the dashboard" → add_card, cardType: "goals"
+- "I want to see my goals" → add_card, cardType: "goals"
+- "Show me top products" → add_card, cardType: "top_products"
+- "Add inventory summary" → add_card, cardType: "inventory_summary"
+- "Remove the goals card" → remove_card, cardType: "goals"
+- "Hide the schedule card" → remove_card, cardType: "schedule"
+- "I don't need the profit card" → remove_card, cardType: "profit"
+
+Available card types: goals, top_products, inventory_summary, tasks, profit, schedule
 
 COST/COGS updates (all mean the same thing - updating product cost):
 - "Update cost for SKU-123 to $4.50" → update_cost

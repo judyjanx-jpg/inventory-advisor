@@ -73,6 +73,44 @@ export async function POST(request: NextRequest) {
         }
         break
 
+      case 'add_card':
+        if (action.cardType) {
+          await prisma.dashboardCard.upsert({
+            where: {
+              userId_cardType: { userId: 1, cardType: action.cardType }
+            },
+            update: { isEnabled: true },
+            create: {
+              userId: 1,
+              cardType: action.cardType,
+              isEnabled: true,
+              column: action.cardType === 'goals' ? 'left' : 'right',
+              sortOrder: 99
+            }
+          })
+          message = `Done! Added the ${action.cardType.replace('_', ' ')} card to your dashboard. Refresh to see it!`
+        }
+        break
+
+      case 'remove_card':
+        if (action.cardType) {
+          await prisma.dashboardCard.upsert({
+            where: {
+              userId_cardType: { userId: 1, cardType: action.cardType }
+            },
+            update: { isEnabled: false },
+            create: {
+              userId: 1,
+              cardType: action.cardType,
+              isEnabled: false,
+              column: 'left',
+              sortOrder: 99
+            }
+          })
+          message = `Done! Removed the ${action.cardType.replace('_', ' ')} card from your dashboard. Refresh to see changes!`
+        }
+        break
+
       default:
         return NextResponse.json({
           success: false,

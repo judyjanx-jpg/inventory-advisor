@@ -2065,3 +2065,57 @@ model CalendarEvent {
   @@index([userId])
   @@map("calendar_events")
 }
+
+// Dashboard card configuration
+model DashboardCard {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @default(1) @map("user_id")
+  
+  cardType    String   @map("card_type") // tasks, profit, schedule, goals, top_products, inventory_summary, ai_query, ai_action
+  isEnabled   Boolean  @default(true) @map("is_enabled")
+  column      String   @default("left") // left, right
+  sortOrder   Int      @default(0) @map("sort_order")
+  
+  // Card-specific settings stored as JSON
+  settings    String?  @db.Text // JSON string for card-specific config
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  @@unique([userId, cardType])
+  @@map("dashboard_cards")
+}
+
+// Goals for the Goals card
+model Goal {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @default(1) @map("user_id")
+  
+  title       String
+  description String?  @db.Text
+  goalType    String   @default("custom") @map("goal_type") // revenue, profit, units, orders, custom
+  
+  // Target values
+  targetValue Decimal? @map("target_value") @db.Decimal(12, 2)
+  currentValue Decimal? @default(0) @map("current_value") @db.Decimal(12, 2)
+  unit        String?  // $, units, orders, %
+  
+  // Time period
+  periodType  String   @default("monthly") @map("period_type") // daily, weekly, monthly, quarterly, yearly, custom
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  
+  // Status
+  isCompleted Boolean  @default(false) @map("is_completed")
+  completedAt DateTime? @map("completed_at")
+  
+  // Display
+  color       String   @default("#0ea5e9") // Tailwind cyan-500
+  sortOrder   Int      @default(0) @map("sort_order")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  @@index([userId])
+  @@map("goals")
+}

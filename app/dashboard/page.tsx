@@ -6,6 +6,7 @@ import GreetingHeader from '@/components/dashboard/GreetingHeader'
 import TasksCard from '@/components/dashboard/TasksCard'
 import ScheduleCard from '@/components/dashboard/ScheduleCard'
 import ProfitCard from '@/components/dashboard/ProfitCard'
+import GoalsCard from '@/components/dashboard/GoalsCard'
 import AiQueryCard from '@/components/dashboard/AiQueryCard'
 import AiActionCard from '@/components/dashboard/AiActionCard'
 
@@ -29,12 +30,21 @@ interface DashboardData {
   }
 }
 
+interface CardConfig {
+  cardType: string
+  isEnabled: boolean
+  column: string
+  sortOrder: number
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
+  const [cards, setCards] = useState<CardConfig[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchDashboardData()
+    fetchCardConfig()
   }, [])
 
   const fetchDashboardData = async () => {
@@ -51,6 +61,63 @@ export default function DashboardPage() {
     }
   }
 
+  const fetchCardConfig = async () => {
+    try {
+      const res = await fetch('/api/dashboard/cards')
+      const result = await res.json()
+      if (result.success) {
+        setCards(result.cards)
+      }
+    } catch (error) {
+      console.error('Error fetching card config:', error)
+    }
+  }
+
+  const isCardEnabled = (cardType: string) => {
+    const card = cards.find(c => c.cardType === cardType)
+    // Default enabled for core cards if no config exists
+    if (!card) {
+      return ['tasks', 'profit', 'schedule'].includes(cardType)
+    }
+    return card.isEnabled
+  }
+
+  const getLeftColumnCards = () => {
+    const leftCards = cards.filter(c => c.column === 'left' && c.isEnabled)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+    
+    // If no config, return defaults
+    if (leftCards.length === 0 && cards.length === 0) {
+      return ['tasks', 'profit']
+    }
+    return leftCards.map(c => c.cardType)
+  }
+
+  const getRightColumnCards = () => {
+    const rightCards = cards.filter(c => c.column === 'right' && c.isEnabled)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+    
+    if (rightCards.length === 0 && cards.length === 0) {
+      return ['schedule']
+    }
+    return rightCards.map(c => c.cardType)
+  }
+
+  const renderCard = (cardType: string) => {
+    switch (cardType) {
+      case 'tasks':
+        return <TasksCard key="tasks" tasks={data?.tasks} onRefresh={fetchDashboardData} />
+      case 'profit':
+        return <ProfitCard key="profit" initialData={data?.profit} />
+      case 'schedule':
+        return <ScheduleCard key="schedule" />
+      case 'goals':
+        return <GoalsCard key="goals" />
+      default:
+        return null
+    }
+  }
+
   if (loading) {
     return (
       <MainLayout>
@@ -61,6 +128,9 @@ export default function DashboardPage() {
     )
   }
 
+  const leftCards = getLeftColumnCards()
+  const rightCards = getRightColumnCards()
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -70,21 +140,16 @@ export default function DashboardPage() {
           yesterdayProfit={data?.yesterdayProfit || 0}
         />
 
-        {/* Main Grid */}
+        {/* Main Grid - Dynamic Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* Left Column */}
           <div className="space-y-6">
-            {/* Today's Tasks */}
-            <TasksCard tasks={data?.tasks} onRefresh={fetchDashboardData} />
-            
-            {/* Quick Profit */}
-            <ProfitCard initialData={data?.profit} />
+            {leftCards.map(cardType => renderCard(cardType))}
           </div>
 
-          {/* Right Column - Schedule stretches to match left column */}
-          <div className="lg:h-full">
-            {/* Schedule & Calendar */}
-            <ScheduleCard />
+          {/* Right Column */}
+          <div className="lg:h-full space-y-6">
+            {rightCards.map(cardType => renderCard(cardType))}
           </div>
         </div>
 
@@ -94,7 +159,7 @@ export default function DashboardPage() {
           <AiQueryCard />
           
           {/* What would you like to do? */}
-          <AiActionCard onActionComplete={fetchDashboardData} />
+          <AiActionCard onActionComplete={() => { fetchDashboardData(); fetchCardConfig(); }} />
         </div>
       </div>
     </MainLayout>
