@@ -99,7 +99,7 @@ export default function GoalsCard() {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Target className="w-5 h-5 text-[var(--primary)]" />
-            My Goals
+            My List
           </CardTitle>
           <button onClick={() => setShowForm(!showForm)} className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--muted-foreground)]">
             {showForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
@@ -111,7 +111,7 @@ export default function GoalsCard() {
           <form onSubmit={handleSubmit} className="space-y-2 p-3 bg-[var(--muted)]/30 rounded-xl">
             <input
               type="text"
-              placeholder="Goal (e.g., Hit $50k revenue)"
+              placeholder="Add item (e.g., Research new supplier, Hit $50k revenue)"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               className="w-full px-3 py-2 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm"
@@ -135,14 +135,14 @@ export default function GoalsCard() {
             </div>
             <button type="submit" disabled={saving || !form.title.trim()}
               className="w-full px-4 py-2 bg-[var(--primary)] text-white rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add Goal
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add Item
             </button>
           </form>
         )}
         {loading ? (
           <div className="animate-pulse space-y-2">{[1, 2].map(i => <div key={i} className="h-12 bg-[var(--muted)] rounded-lg" />)}</div>
         ) : goals.length === 0 ? (
-          <div className="text-center py-4 text-[var(--muted-foreground)] text-sm">No goals yet</div>
+          <div className="text-center py-4 text-[var(--muted-foreground)] text-sm">No items yet. Click + to add one!</div>
         ) : (
           goals.map(goal => (
             <div key={goal.id} className={`p-3 rounded-lg border ${goal.isCompleted ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-[var(--card)] border-[var(--border)]'}`}>

@@ -96,15 +96,27 @@ export async function POST(request: NextRequest) {
       prisma.goal.findMany({ take: 10, select: { id: true, title: true, isCompleted: true } })
     ])
 
+    // Get available dashboard cards
+    const dashboardCards = await prisma.dashboardCard.findMany({
+      where: { userId: 1 },
+      select: { cardType: true, isEnabled: true }
+    })
+
     const systemPrompt = `You are a powerful AI assistant for an Amazon FBA inventory management system. You can execute a WIDE variety of actions on the database.
 
 ${DATABASE_SCHEMA}
+
+AVAILABLE DASHBOARD CARDS (can be shown/hidden):
+- tasks: Today's tasks summary (enabled: ${dashboardCards.find(c => c.cardType === 'tasks')?.isEnabled ?? true})
+- profit: Quick profit metrics (enabled: ${dashboardCards.find(c => c.cardType === 'profit')?.isEnabled ?? true})
+- schedule: Calendar & work hours (enabled: ${dashboardCards.find(c => c.cardType === 'schedule')?.isEnabled ?? true})
+- goals: My Goals list - USE THIS for tracking items, to-dos, notes, new products, ideas! (enabled: ${dashboardCards.find(c => c.cardType === 'goals')?.isEnabled ?? false})
 
 CURRENT DATA CONTEXT:
 - Products: ${products.slice(0, 15).map(p => `${p.sku} ($${p.cost || 'no cost'})`).join(', ')}${products.length > 15 ? '...' : ''}
 - Pending POs: ${purchaseOrders.map(po => po.poNumber).join(', ') || '(none)'}
 - Suppliers: ${suppliers.map(s => `${s.name} (id:${s.id})`).join(', ') || '(none)'}
-- Goals: ${goals.map(g => `"${g.title}" (id:${g.id}, ${g.isCompleted ? 'done' : 'active'})`).join(', ') || '(none)'}
+- Goals/Items list: ${goals.map(g => `"${g.title}" (id:${g.id}, ${g.isCompleted ? 'done' : 'active'})`).join(', ') || '(none)'}
 
 Parse the user's command and return a JSON object with the operation to perform:
 
@@ -136,8 +148,11 @@ EXAMPLES:
 5. "Set warehouse quantity for SKU-ABC to 500"
 → { "understood": true, "operation": { "type": "update", "table": "inventory_levels", "where": { "masterSku": "SKU-ABC" }, "data": { "warehouseAvailable": 500 }, "description": "Update warehouse quantity for SKU-ABC to 500" } }
 
-6. "Add the goals card to dashboard"
-→ { "understood": true, "operation": { "type": "update", "table": "dashboard_cards", "where": { "cardType": "goals" }, "data": { "isEnabled": true }, "upsert": true, "description": "Add goals card to dashboard" } }
+6. "Add the goals card to dashboard" or "Show goals card" or "I want to track new items"
+→ { "understood": true, "operation": { "type": "update", "table": "dashboard_cards", "where": { "cardType": "goals" }, "data": { "isEnabled": true }, "upsert": true, "description": "Enable Goals card on dashboard - use this to track items, ideas, and notes!" } }
+
+6b. "Hide the profit card" or "Remove schedule card"
+→ { "understood": true, "operation": { "type": "update", "table": "dashboard_cards", "where": { "cardType": "profit" }, "data": { "isEnabled": false }, "upsert": true, "description": "Hide profit card from dashboard" } }
 
 7. "Create a new supplier called China Direct with email china@example.com"
 → { "understood": true, "operation": { "type": "create", "table": "suppliers", "data": { "name": "China Direct", "email": "china@example.com" }, "description": "Create new supplier: China Direct" } }
@@ -154,6 +169,13 @@ BE FLEXIBLE! Understand natural language variations:
 - "remove", "delete", "hide" → delete or update with isEnabled: false
 - "cost", "COGS", "unit cost" all mean the cost field
 - "qty", "quantity", "stock", "inventory" mean inventory quantities
+
+IMPORTANT - CUSTOM CARD/LIST REQUESTS:
+When user asks for a "new card", "custom list", "track items", "new items list", "to-do list", "notes card", etc.:
+1. First, ENABLE the "goals" card (it's a flexible list for tracking anything)
+2. Then optionally add items to the goals list
+Example: "Create a card for tracking new products I'm researching"
+→ { "understood": true, "operation": { "type": "update", "table": "dashboard_cards", "where": { "cardType": "goals" }, "data": { "isEnabled": true }, "upsert": true, "description": "Enable Goals card - perfect for tracking new products, ideas, and to-do items!" } }
 
 If the user's request is unclear, return:
 { "understood": false, "clarification": "What specifically would you like to do?" }
