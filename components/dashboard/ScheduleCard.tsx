@@ -257,14 +257,14 @@ export default function ScheduleCard() {
   }
 
   return (
-    <Card className="h-fit">
-      <CardHeader>
+    <Card className="h-full flex flex-col">
+      <CardHeader className="flex-shrink-0">
         <CardTitle className="flex items-center gap-2">
           <CalendarIcon className="w-5 h-5 text-[var(--primary)]" />
           My Schedule
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 flex-1 overflow-y-auto">
         {/* Mini Calendar */}
         <div className="bg-[var(--muted)]/30 rounded-xl p-3">
           {/* Month Navigation */}

@@ -71,7 +71,7 @@ export default function DashboardPage() {
         />
 
         {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* Left Column */}
           <div className="space-y-6">
             {/* Today's Tasks */}
@@ -81,8 +81,8 @@ export default function DashboardPage() {
             <ProfitCard initialData={data?.profit} />
           </div>
 
-          {/* Right Column */}
-          <div className="space-y-6">
+          {/* Right Column - Schedule stretches to match left column */}
+          <div className="lg:h-full">
             {/* Schedule & Calendar */}
             <ScheduleCard />
           </div>
