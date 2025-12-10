@@ -70,33 +70,63 @@ export async function GET(request: NextRequest) {
     // Get task counts
     const today = startOfDay(now)
 
-    // Items to order (from inventory alerts with stockout_risk or low inventory)
-    const orderAlerts = await prisma.inventoryAlert.findMany({
-      where: {
-        isResolved: false,
-        alertType: { in: ['stockout_risk', 'low_inventory'] }
-      },
-      take: 10
-    })
-
-    // Items to ship to Amazon (alerts suggesting FBA replenishment)
-    const shipAlerts = await prisma.inventoryAlert.findMany({
-      where: {
-        isResolved: false,
-        alertType: 'fba_replenishment'
-      },
-      take: 10
-    })
-
-    // Out of stock items from channel_inventory joined with products
-    const outOfStockResult = await query<{ master_sku: string; title: string }>(`
-      SELECT ci.master_sku, COALESCE(p.title, ci.master_sku) as title
-      FROM channel_inventory ci
-      LEFT JOIN products p ON ci.master_sku = p.sku
-      WHERE ci.fba_available = 0 AND ci.channel = 'Amazon'
+    // Items to order - products with low total inventory (FBA + warehouse < reorder point or < 14 days supply)
+    const itemsToOrderResult = await query<{ sku: string; title: string; total_qty: number; days_of_supply: number }>(`
+      SELECT 
+        p.sku, 
+        p.title,
+        COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0) as total_qty,
+        CASE 
+          WHEN COALESCE(f.avg_daily_velocity, 0) > 0 
+          THEN (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / f.avg_daily_velocity
+          ELSE 999
+        END as days_of_supply
+      FROM products p
+      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+      LEFT JOIN forecasts f ON p.sku = f.master_sku AND f.channel = 'Amazon'
+      WHERE p.is_active = true
+        AND (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) < COALESCE(p.reorder_point, 50)
+      ORDER BY days_of_supply ASC
       LIMIT 10
     `, [])
     
+    // Items to ship to Amazon - have warehouse stock but low FBA stock
+    const itemsToShipResult = await query<{ sku: string; title: string; warehouse_qty: number; fba_qty: number }>(`
+      SELECT 
+        p.sku,
+        p.title,
+        COALESCE(il.warehouse_available, 0) as warehouse_qty,
+        COALESCE(il.fba_available, 0) as fba_qty
+      FROM products p
+      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+      LEFT JOIN forecasts f ON p.sku = f.master_sku AND f.channel = 'Amazon'
+      WHERE p.is_active = true
+        AND COALESCE(il.warehouse_available, 0) > 0
+        AND COALESCE(il.fba_available, 0) < 30
+        AND COALESCE(f.avg_daily_velocity, 0) > 0
+      ORDER BY il.fba_available ASC
+      LIMIT 10
+    `, [])
+
+    // Out of stock items - FBA available = 0 but has sales history
+    const outOfStockResult = await query<{ sku: string; title: string }>(`
+      SELECT DISTINCT
+        p.sku,
+        p.title
+      FROM products p
+      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+      WHERE p.is_active = true
+        AND COALESCE(il.fba_available, 0) = 0
+        AND EXISTS (
+          SELECT 1 FROM order_items oi 
+          WHERE oi.master_sku = p.sku 
+          AND oi.created_at > NOW() - INTERVAL '90 days'
+        )
+      LIMIT 10
+    `, [])
+    
+    const itemsToOrder = itemsToOrderResult
+    const itemsToShip = itemsToShipResult
     const outOfStockItems = outOfStockResult
 
     // Late shipments (POs past expected arrival date and not received)
@@ -178,28 +208,30 @@ export async function GET(request: NextRequest) {
         yesterdayProfit: Math.round(yesterdayProfit * 100) / 100,
         tasks: {
           itemsToOrder: {
-            count: orderAlerts.length,
+            count: itemsToOrder.length,
             nextDate: null,
-            items: orderAlerts.map(a => ({
-              sku: a.masterSku,
-              quantity: a.recommendedQuantity,
-              title: a.title
+            items: itemsToOrder.map(item => ({
+              sku: item.sku,
+              title: item.title,
+              quantity: item.total_qty,
+              daysOfSupply: Math.round(Number(item.days_of_supply))
             }))
           },
           itemsToShip: {
-            count: shipAlerts.length,
+            count: itemsToShip.length,
             nextDate: null,
-            items: shipAlerts.map(a => ({
-              sku: a.masterSku,
-              quantity: a.recommendedQuantity,
-              title: a.title
+            items: itemsToShip.map(item => ({
+              sku: item.sku,
+              title: item.title,
+              warehouseQty: item.warehouse_qty,
+              fbaQty: item.fba_qty
             }))
           },
           outOfStock: {
             count: outOfStockItems.length,
-            items: outOfStockItems.map(i => ({
-              sku: i.master_sku,
-              title: i.title
+            items: outOfStockItems.map(item => ({
+              sku: item.sku,
+              title: item.title
             }))
           },
           lateShipments: {

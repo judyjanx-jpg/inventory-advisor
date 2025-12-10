@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -28,6 +28,7 @@ import GoalsCard from '@/components/dashboard/GoalsCard'
 import AiQueryCard from '@/components/dashboard/AiQueryCard'
 import AiActionCard from '@/components/dashboard/AiActionCard'
 import DraggableCard from '@/components/dashboard/DraggableCard'
+import { Plus, Eye, ChevronDown } from 'lucide-react'
 
 interface DashboardData {
   userName: string
@@ -59,11 +60,21 @@ interface CardConfig {
   isCollapsed: boolean
 }
 
+const CARD_NAMES: Record<string, string> = {
+  'tasks': 'Today\'s Tasks',
+  'profit': 'Quick Profit',
+  'schedule': 'Schedule',
+  'goals': 'My List',
+  'top_products': 'Top Products',
+  'inventory_summary': 'Inventory Summary',
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [cards, setCards] = useState<CardConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [showHiddenMenu, setShowHiddenMenu] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -78,6 +89,15 @@ export default function DashboardPage() {
     fetchDashboardData()
     fetchCardConfig()
   }, [])
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClick = () => setShowHiddenMenu(false)
+    if (showHiddenMenu) {
+      document.addEventListener('click', handleClick)
+      return () => document.removeEventListener('click', handleClick)
+    }
+  }, [showHiddenMenu])
 
   const fetchDashboardData = async () => {
     try {
@@ -123,10 +143,25 @@ export default function DashboardPage() {
     updateCardConfig(cardType, { isCollapsed })
   }
 
+  const handleHideCard = (cardType: string) => {
+    setCards(prev => prev.map(c => c.cardType === cardType ? { ...c, isEnabled: false } : c))
+    updateCardConfig(cardType, { isEnabled: false })
+  }
+
+  const handleShowCard = (cardType: string) => {
+    setCards(prev => prev.map(c => c.cardType === cardType ? { ...c, isEnabled: true } : c))
+    updateCardConfig(cardType, { isEnabled: true })
+    setShowHiddenMenu(false)
+  }
+
   const getColumnCards = (column: string) => {
     return cards
       .filter(c => c.column === column && c.isEnabled)
       .sort((a, b) => a.sortOrder - b.sortOrder)
+  }
+
+  const getHiddenCards = () => {
+    return cards.filter(c => !c.isEnabled)
   }
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -216,15 +251,55 @@ export default function DashboardPage() {
 
   const leftCards = getColumnCards('left')
   const rightCards = getColumnCards('right')
-  const allCardIds = [...leftCards, ...rightCards].map(c => c.cardType)
+  const hiddenCards = getHiddenCards()
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <GreetingHeader 
-          userName={data?.userName || 'there'} 
-          yesterdayProfit={data?.yesterdayProfit || 0}
-        />
+        <div className="flex items-center justify-between">
+          <GreetingHeader 
+            userName={data?.userName || 'there'} 
+            yesterdayProfit={data?.yesterdayProfit || 0}
+          />
+          
+          {/* Hidden Cards Button */}
+          {hiddenCards.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowHiddenMenu(!showHiddenMenu)
+                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--muted)] hover:bg-[var(--hover-bg)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors text-sm"
+              >
+                <Eye className="w-4 h-4" />
+                <span>{hiddenCards.length} hidden</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${showHiddenMenu ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showHiddenMenu && (
+                <div 
+                  className="absolute right-0 mt-2 w-56 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xl z-50 py-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-3 py-2 text-xs text-[var(--muted-foreground)] font-medium border-b border-[var(--border)]">
+                    Hidden Cards
+                  </div>
+                  {hiddenCards.map(card => (
+                    <button
+                      key={card.cardType}
+                      onClick={() => handleShowCard(card.cardType)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[var(--hover-bg)] transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-[var(--primary)]" />
+                      {CARD_NAMES[card.cardType] || card.cardType}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <DndContext
           sensors={sensors}
@@ -245,6 +320,7 @@ export default function DashboardPage() {
                     isCollapsed={card.isCollapsed}
                     onHeightChange={(h) => handleHeightChange(card.cardType, h)}
                     onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
+                    onHide={() => handleHideCard(card.cardType)}
                   >
                     {renderCard(card.cardType)}
                   </DraggableCard>
@@ -268,6 +344,7 @@ export default function DashboardPage() {
                     isCollapsed={card.isCollapsed}
                     onHeightChange={(h) => handleHeightChange(card.cardType, h)}
                     onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
+                    onHide={() => handleHideCard(card.cardType)}
                   >
                     {renderCard(card.cardType)}
                   </DraggableCard>

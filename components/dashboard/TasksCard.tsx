@@ -29,6 +29,10 @@ interface TaskItem {
   daysLate?: number
   time?: string | null
   eventType?: string
+  // New fields for better task display
+  daysOfSupply?: number
+  warehouseQty?: number
+  fbaQty?: number
 }
 
 interface ReminderItem {
@@ -230,17 +234,41 @@ export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
                         ) : (
                           <>
                             <Package className="w-4 h-4 text-[var(--muted-foreground)]" />
-                            <span className="text-sm font-medium text-[var(--foreground)]">
-                              {item.sku || item.poNumber || item.title}
-                            </span>
-                            {item.supplier && (
-                              <span className="text-xs text-[var(--muted-foreground)]">
-                                • {item.supplier}
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium text-[var(--foreground)]">
+                                {item.sku || item.poNumber}
+                              </span>
+                              {item.title && (
+                                <span className="text-xs text-[var(--muted-foreground)] ml-2 truncate">
+                                  {item.title.length > 30 ? item.title.substring(0, 30) + '...' : item.title}
+                                </span>
+                              )}
+                            </div>
+                            {/* Show days of supply for items to order */}
+                            {item.daysOfSupply !== undefined && (
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                item.daysOfSupply < 7 ? 'bg-red-500/20 text-red-400' :
+                                item.daysOfSupply < 14 ? 'bg-amber-500/20 text-amber-400' :
+                                'bg-blue-500/20 text-blue-400'
+                              }`}>
+                                {item.daysOfSupply}d supply
                               </span>
                             )}
-                            {item.daysLate && (
+                            {/* Show warehouse vs FBA qty for items to ship */}
+                            {item.warehouseQty !== undefined && item.fbaQty !== undefined && (
+                              <span className="text-xs text-[var(--muted-foreground)]">
+                                WH: {item.warehouseQty} → FBA: {item.fbaQty}
+                              </span>
+                            )}
+                            {/* Show supplier for late shipments */}
+                            {item.supplier && (
+                              <span className="text-xs text-[var(--muted-foreground)]">
+                                {item.supplier}
+                              </span>
+                            )}
+                            {item.daysLate !== undefined && item.daysLate > 0 && (
                               <span className="text-xs text-orange-400">
-                                • {item.daysLate} day{item.daysLate > 1 ? 's' : ''} late
+                                {item.daysLate}d late
                               </span>
                             )}
                           </>

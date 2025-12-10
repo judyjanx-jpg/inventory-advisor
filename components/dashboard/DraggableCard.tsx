@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, ReactNode } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, ChevronUp, ChevronDown, Minimize2 } from 'lucide-react'
+import { GripVertical, ChevronUp, ChevronDown, Minimize2, EyeOff } from 'lucide-react'
 
 interface DraggableCardProps {
   id: string
@@ -12,6 +12,7 @@ interface DraggableCardProps {
   isCollapsed?: boolean
   onHeightChange?: (height: number | null) => void
   onCollapsedChange?: (collapsed: boolean) => void
+  onHide?: () => void
 }
 
 export default function DraggableCard({ 
@@ -20,7 +21,8 @@ export default function DraggableCard({
   height,
   isCollapsed = false,
   onHeightChange,
-  onCollapsedChange
+  onCollapsedChange,
+  onHide
 }: DraggableCardProps) {
   const [currentHeight, setCurrentHeight] = useState<number | null>(height ?? null)
   const [isResizing, setIsResizing] = useState(false)
@@ -122,6 +124,11 @@ export default function DraggableCard({
     onHeightChange?.(null)
   }
 
+  const handleHide = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onHide?.()
+  }
+
   const wrapperStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition: isResizing ? 'none' : transition,
@@ -159,6 +166,15 @@ export default function DraggableCard({
 
         {/* Control Buttons - Top Right */}
         <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-30">
+          {onHide && (
+            <button
+              onClick={handleHide}
+              className="p-1.5 rounded-lg hover:bg-red-500/20 text-[var(--muted-foreground)] hover:text-red-400 transition-colors"
+              title="Hide card"
+            >
+              <EyeOff className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={toggleCollapse}
             className="p-1.5 rounded-lg hover:bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
@@ -180,9 +196,6 @@ export default function DraggableCard({
         {/* Card Content - Children rendered inside, fills height */}
         <div 
           className={`h-full ${isCollapsed ? 'pointer-events-none overflow-hidden' : 'overflow-auto'}`}
-          style={{ 
-            // Remove the card styling from children since we have it on the container
-          }}
         >
           <div className="h-full [&>*]:border-0 [&>*]:rounded-none [&>*]:bg-transparent [&>*]:h-full">
             {children}
