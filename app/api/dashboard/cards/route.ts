@@ -13,7 +13,6 @@ const DEFAULT_CARDS = [
 
 export async function GET(request: NextRequest) {
   try {
-    // Get existing card configs
     let cards = await prisma.dashboardCard.findMany({
       where: { userId: 1 },
       orderBy: [{ column: 'asc' }, { sortOrder: 'asc' }]
@@ -40,6 +39,8 @@ export async function GET(request: NextRequest) {
         isEnabled: c.isEnabled,
         column: c.column,
         sortOrder: c.sortOrder,
+        height: c.height,
+        isCollapsed: c.isCollapsed,
         settings: c.settings ? JSON.parse(c.settings) : null
       })),
       availableCards: DEFAULT_CARDS.map(c => c.cardType)
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { cardType, isEnabled, column, sortOrder } = body
+    const { cardType, isEnabled, column, sortOrder, height, isCollapsed } = body
 
     if (!cardType) {
       return NextResponse.json({
@@ -65,22 +66,27 @@ export async function PUT(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Upsert the card config
+    // Build update data - only include fields that were provided
+    const updateData: any = {}
+    if (isEnabled !== undefined) updateData.isEnabled = isEnabled
+    if (column !== undefined) updateData.column = column
+    if (sortOrder !== undefined) updateData.sortOrder = sortOrder
+    if (height !== undefined) updateData.height = height
+    if (isCollapsed !== undefined) updateData.isCollapsed = isCollapsed
+
     const card = await prisma.dashboardCard.upsert({
       where: {
         userId_cardType: { userId: 1, cardType }
       },
-      update: {
-        isEnabled: isEnabled !== undefined ? isEnabled : undefined,
-        column: column || undefined,
-        sortOrder: sortOrder !== undefined ? sortOrder : undefined
-      },
+      update: updateData,
       create: {
         userId: 1,
         cardType,
         isEnabled: isEnabled !== undefined ? isEnabled : true,
         column: column || 'left',
-        sortOrder: sortOrder !== undefined ? sortOrder : 99
+        sortOrder: sortOrder !== undefined ? sortOrder : 99,
+        height: height || null,
+        isCollapsed: isCollapsed || false
       }
     })
 
@@ -91,9 +97,10 @@ export async function PUT(request: NextRequest) {
         cardType: card.cardType,
         isEnabled: card.isEnabled,
         column: card.column,
-        sortOrder: card.sortOrder
-      },
-      message: isEnabled ? `Added ${cardType} card to dashboard` : `Removed ${cardType} card from dashboard`
+        sortOrder: card.sortOrder,
+        height: card.height,
+        isCollapsed: card.isCollapsed
+      }
     })
   } catch (error) {
     console.error('Update dashboard card error:', error)

@@ -1,6 +1,24 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  DragOverEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
 import MainLayout from '@/components/layout/MainLayout'
 import GreetingHeader from '@/components/dashboard/GreetingHeader'
 import TasksCard from '@/components/dashboard/TasksCard'
@@ -9,6 +27,7 @@ import ProfitCard from '@/components/dashboard/ProfitCard'
 import GoalsCard from '@/components/dashboard/GoalsCard'
 import AiQueryCard from '@/components/dashboard/AiQueryCard'
 import AiActionCard from '@/components/dashboard/AiActionCard'
+import DraggableCard from '@/components/dashboard/DraggableCard'
 
 interface DashboardData {
   userName: string
@@ -31,16 +50,29 @@ interface DashboardData {
 }
 
 interface CardConfig {
+  id: number
   cardType: string
   isEnabled: boolean
   column: string
   sortOrder: number
+  height: number | null
+  isCollapsed: boolean
 }
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [cards, setCards] = useState<CardConfig[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeId, setActiveId] = useState<string | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   useEffect(() => {
     fetchDashboardData()
@@ -51,9 +83,7 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/dashboard')
       const result = await res.json()
-      if (result.success) {
-        setData(result.data)
-      }
+      if (result.success) setData(result.data)
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
     } finally {
@@ -65,54 +95,110 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/dashboard/cards')
       const result = await res.json()
-      if (result.success) {
-        setCards(result.cards)
-      }
+      if (result.success) setCards(result.cards)
     } catch (error) {
       console.error('Error fetching card config:', error)
     }
   }
 
-  const isCardEnabled = (cardType: string) => {
-    const card = cards.find(c => c.cardType === cardType)
-    // Default enabled for core cards if no config exists
-    if (!card) {
-      return ['tasks', 'profit', 'schedule'].includes(cardType)
+  const updateCardConfig = async (cardType: string, updates: Partial<CardConfig>) => {
+    try {
+      await fetch('/api/dashboard/cards', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardType, ...updates })
+      })
+    } catch (error) {
+      console.error('Error updating card config:', error)
     }
-    return card.isEnabled
   }
 
-  const getLeftColumnCards = () => {
-    const leftCards = cards.filter(c => c.column === 'left' && c.isEnabled)
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-    
-    // If no config, return defaults
-    if (leftCards.length === 0 && cards.length === 0) {
-      return ['tasks', 'profit']
-    }
-    return leftCards.map(c => c.cardType)
+  const handleHeightChange = (cardType: string, height: number | null) => {
+    setCards(prev => prev.map(c => c.cardType === cardType ? { ...c, height } : c))
+    updateCardConfig(cardType, { height })
   }
 
-  const getRightColumnCards = () => {
-    const rightCards = cards.filter(c => c.column === 'right' && c.isEnabled)
+  const handleCollapsedChange = (cardType: string, isCollapsed: boolean) => {
+    setCards(prev => prev.map(c => c.cardType === cardType ? { ...c, isCollapsed } : c))
+    updateCardConfig(cardType, { isCollapsed })
+  }
+
+  const getColumnCards = (column: string) => {
+    return cards
+      .filter(c => c.column === column && c.isEnabled)
       .sort((a, b) => a.sortOrder - b.sortOrder)
+  }
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string)
+  }
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event
+    if (!over) return
+
+    const activeCard = cards.find(c => c.cardType === active.id)
+    const overCard = cards.find(c => c.cardType === over.id)
     
-    if (rightCards.length === 0 && cards.length === 0) {
-      return ['schedule']
+    if (!activeCard || !overCard) return
+    if (activeCard.column === overCard.column) return
+
+    // Move card to different column
+    setCards(prev => prev.map(c => 
+      c.cardType === active.id 
+        ? { ...c, column: overCard.column }
+        : c
+    ))
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    setActiveId(null)
+    
+    if (!over || active.id === over.id) return
+
+    const activeCard = cards.find(c => c.cardType === active.id)
+    const overCard = cards.find(c => c.cardType === over.id)
+    
+    if (!activeCard || !overCard) return
+
+    // Same column - reorder
+    if (activeCard.column === overCard.column) {
+      const columnCards = getColumnCards(activeCard.column)
+      const oldIndex = columnCards.findIndex(c => c.cardType === active.id)
+      const newIndex = columnCards.findIndex(c => c.cardType === over.id)
+      
+      const reordered = arrayMove(columnCards, oldIndex, newIndex)
+      
+      // Update sort orders
+      const updates = reordered.map((card, index) => ({
+        cardType: card.cardType,
+        sortOrder: index
+      }))
+
+      setCards(prev => prev.map(c => {
+        const update = updates.find(u => u.cardType === c.cardType)
+        return update ? { ...c, sortOrder: update.sortOrder } : c
+      }))
+
+      // Save to server
+      updates.forEach(u => updateCardConfig(u.cardType, { sortOrder: u.sortOrder }))
+    } else {
+      // Different column - move and save
+      updateCardConfig(activeCard.cardType, { column: overCard.column })
     }
-    return rightCards.map(c => c.cardType)
   }
 
   const renderCard = (cardType: string) => {
     switch (cardType) {
       case 'tasks':
-        return <TasksCard key="tasks" tasks={data?.tasks} onRefresh={fetchDashboardData} />
+        return <TasksCard tasks={data?.tasks} onRefresh={fetchDashboardData} />
       case 'profit':
-        return <ProfitCard key="profit" initialData={data?.profit} />
+        return <ProfitCard initialData={data?.profit} />
       case 'schedule':
-        return <ScheduleCard key="schedule" />
+        return <ScheduleCard />
       case 'goals':
-        return <GoalsCard key="goals" />
+        return <GoalsCard />
       default:
         return null
     }
@@ -128,37 +214,85 @@ export default function DashboardPage() {
     )
   }
 
-  const leftCards = getLeftColumnCards()
-  const rightCards = getRightColumnCards()
+  const leftCards = getColumnCards('left')
+  const rightCards = getColumnCards('right')
+  const allCardIds = [...leftCards, ...rightCards].map(c => c.cardType)
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Greeting Header */}
         <GreetingHeader 
           userName={data?.userName || 'there'} 
           yesterdayProfit={data?.yesterdayProfit || 0}
         />
 
-        {/* Main Grid - Dynamic Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* Left Column */}
-          <div className="space-y-6">
-            {leftCards.map(cardType => renderCard(cardType))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            {/* Left Column */}
+            <SortableContext items={leftCards.map(c => c.cardType)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-6 min-h-[200px]">
+                {leftCards.map(card => (
+                  <DraggableCard
+                    key={card.cardType}
+                    id={card.cardType}
+                    height={card.height}
+                    isCollapsed={card.isCollapsed}
+                    onHeightChange={(h) => handleHeightChange(card.cardType, h)}
+                    onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
+                  >
+                    {renderCard(card.cardType)}
+                  </DraggableCard>
+                ))}
+                {leftCards.length === 0 && (
+                  <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
+                    Drop cards here
+                  </div>
+                )}
+              </div>
+            </SortableContext>
+
+            {/* Right Column */}
+            <SortableContext items={rightCards.map(c => c.cardType)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-6 min-h-[200px]">
+                {rightCards.map(card => (
+                  <DraggableCard
+                    key={card.cardType}
+                    id={card.cardType}
+                    height={card.height}
+                    isCollapsed={card.isCollapsed}
+                    onHeightChange={(h) => handleHeightChange(card.cardType, h)}
+                    onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
+                  >
+                    {renderCard(card.cardType)}
+                  </DraggableCard>
+                ))}
+                {rightCards.length === 0 && (
+                  <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
+                    Drop cards here
+                  </div>
+                )}
+              </div>
+            </SortableContext>
           </div>
 
-          {/* Right Column */}
-          <div className="lg:h-full space-y-6">
-            {rightCards.map(cardType => renderCard(cardType))}
-          </div>
-        </div>
+          <DragOverlay>
+            {activeId && (
+              <div className="opacity-80 shadow-2xl rounded-xl">
+                {renderCard(activeId)}
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
 
         {/* AI Cards - Full Width */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* What would you like to see? */}
           <AiQueryCard />
-          
-          {/* What would you like to do? */}
           <AiActionCard onActionComplete={() => { fetchDashboardData(); fetchCardConfig(); }} />
         </div>
       </div>

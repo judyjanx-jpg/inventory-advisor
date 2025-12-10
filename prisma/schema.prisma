@@ -2076,6 +2076,10 @@ model DashboardCard {
   column      String   @default("left") // left, right
   sortOrder   Int      @default(0) @map("sort_order")
   
+  // Size preferences
+  height      Int?     // Custom height in pixels (null = auto)
+  isCollapsed Boolean  @default(false) @map("is_collapsed")
+  
   // Card-specific settings stored as JSON
   settings    String?  @db.Text // JSON string for card-specific config
   
