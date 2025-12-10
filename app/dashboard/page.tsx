@@ -256,12 +256,10 @@ export default function DashboardPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <GreetingHeader 
-            userName={data?.userName || 'there'} 
-            yesterdayProfit={data?.yesterdayProfit || 0}
-          />
-          
+        <GreetingHeader 
+          userName={data?.userName || 'there'} 
+          yesterdayProfit={data?.yesterdayProfit || 0}
+        >
           {/* Hidden Cards Button */}
           {hiddenCards.length > 0 && (
             <div className="relative">
@@ -270,7 +268,7 @@ export default function DashboardPage() {
                   e.stopPropagation()
                   setShowHiddenMenu(!showHiddenMenu)
                 }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--muted)] hover:bg-[var(--hover-bg)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors text-sm"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--card)] hover:bg-[var(--hover-bg)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors text-sm border border-[var(--border)]"
               >
                 <Eye className="w-4 h-4" />
                 <span>{hiddenCards.length} hidden</span>
@@ -299,7 +297,7 @@ export default function DashboardPage() {
               )}
             </div>
           )}
-        </div>
+        </GreetingHeader>
 
         <DndContext
           sensors={sensors}
