@@ -212,10 +212,10 @@ export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
                 )}
               </button>
 
-              {/* Expanded Items */}
+              {/* Expanded Items - scrollable */}
               {isExpanded && section.items.length > 0 && (
-                <div className="ml-13 pl-3 border-l-2 border-[var(--border)] mt-2 mb-3 space-y-2">
-                  {section.items.slice(0, 5).map((item: any, idx) => (
+                <div className="ml-13 pl-3 border-l-2 border-[var(--border)] mt-2 mb-3 space-y-2 max-h-72 overflow-y-auto pr-2">
+                  {section.items.map((item: any, idx) => (
                     <div 
                       key={idx} 
                       className="flex items-center justify-between p-2 rounded-lg bg-[var(--muted)]/30"
