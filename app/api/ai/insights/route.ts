@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       take: 50
     })
 
-    const newCount = observations.filter(o => o.status === 'new').length
+    const newCount = observations.filter((o: { status: string }) => o.status === 'new').length
 
     return NextResponse.json({
       success: true,

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      schedule: schedule.map(s => ({
+      schedule: schedule.map((s: { dayOfWeek: number; isWorking: boolean; startTime: string | null; endTime: string | null }) => ({
         dayOfWeek: s.dayOfWeek,
         isWorking: s.isWorking,
         startTime: s.startTime,

@@ -1,16 +1,12 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 import { SyncWrapper } from '@/components/sync/SyncWrapper'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 // Initialize queue system (scheduler + worker)
 import '@/lib/queues/init'
 
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  fallback: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-})
+// Use system font stack instead of Google Fonts to avoid network dependency during build
+const fontClassName = 'font-sans'
 
 export const metadata: Metadata = {
   title: 'Inventory Advisor',
@@ -40,7 +36,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className}>
+      <body className={fontClassName}>
         <ThemeProvider>
           <SyncWrapper>
             {children}

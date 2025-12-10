@@ -267,7 +267,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       total,
-      byType: Object.fromEntries(counts.map(c => [c.alertType, c._count]))
+      byType: Object.fromEntries(counts.map((c: { alertType: string; _count: number }) => [c.alertType, c._count]))
     })
   } catch (error) {
     return NextResponse.json({

@@ -20,10 +20,11 @@ export async function GET(
       )
     }
 
-    const flaggedCount = session.entries.filter(e => e.isFlagged).length
-    const totalVariance = session.entries.reduce((sum, e) => sum + e.variance, 0)
-    const positiveVariance = session.entries.filter(e => e.variance > 0).reduce((sum, e) => sum + e.variance, 0)
-    const negativeVariance = Math.abs(session.entries.filter(e => e.variance < 0).reduce((sum, e) => sum + e.variance, 0))
+    type AuditEntry = { isFlagged: boolean; variance: number }
+    const flaggedCount = session.entries.filter((e: AuditEntry) => e.isFlagged).length
+    const totalVariance = session.entries.reduce((sum: number, e: AuditEntry) => sum + e.variance, 0)
+    const positiveVariance = session.entries.filter((e: AuditEntry) => e.variance > 0).reduce((sum: number, e: AuditEntry) => sum + e.variance, 0)
+    const negativeVariance = Math.abs(session.entries.filter((e: AuditEntry) => e.variance < 0).reduce((sum: number, e: AuditEntry) => sum + e.variance, 0))
 
     return NextResponse.json({
       totalSkus: session.totalSkus,

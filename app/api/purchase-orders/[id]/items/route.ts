@@ -97,7 +97,7 @@ async function recalculatePOTotals(poId: number) {
     where: { poId },
   })
 
-  const subtotal = items.reduce((sum, item) => sum + Number(item.lineTotal), 0)
+  const subtotal = items.reduce((sum: number, item: { lineTotal: unknown }) => sum + Number(item.lineTotal), 0)
 
   const po = await prisma.purchaseOrder.findUnique({
     where: { id: poId },

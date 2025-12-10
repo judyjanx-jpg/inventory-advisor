@@ -8,7 +8,7 @@ export async function GET() {
     })
     return NextResponse.json({
       success: true,
-      goals: goals.map(g => ({
+      goals: goals.map((g: { id: number; title: string; goalType: string | null; targetValue: unknown; currentValue: unknown; unit: string | null; periodType: string | null; isCompleted: boolean; color: string }) => ({
         id: g.id,
         title: g.title,
         goalType: g.goalType,

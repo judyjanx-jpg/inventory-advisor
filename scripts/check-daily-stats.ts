@@ -38,8 +38,8 @@ async function checkDailyStats() {
         console.log(`${date} | ${units.padStart(8)} | ${lineItems.padStart(10)}`)
       }
       
-      const totalUnits = results.reduce((sum, r) => sum + Number(r.units || 0), 0)
-      const totalLineItems = results.reduce((sum, r) => sum + Number(r.line_items), 0)
+      const totalUnits = results.reduce((sum: number, r: { units: unknown; line_items: unknown }) => sum + Number(r.units || 0), 0)
+      const totalLineItems = results.reduce((sum: number, r: { units: unknown; line_items: unknown }) => sum + Number(r.line_items), 0)
       console.log('-'.repeat(60))
       console.log(`Total         | ${totalUnits.toLocaleString().padStart(8)} | ${totalLineItems.toLocaleString().padStart(10)}`)
     }

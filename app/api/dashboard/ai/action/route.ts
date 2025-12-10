@@ -107,16 +107,16 @@ export async function POST(request: NextRequest) {
 ${DATABASE_SCHEMA}
 
 AVAILABLE DASHBOARD CARDS (can be shown/hidden):
-- tasks: Today's tasks summary (enabled: ${dashboardCards.find(c => c.cardType === 'tasks')?.isEnabled ?? true})
-- profit: Quick profit metrics (enabled: ${dashboardCards.find(c => c.cardType === 'profit')?.isEnabled ?? true})
-- schedule: Calendar & work hours (enabled: ${dashboardCards.find(c => c.cardType === 'schedule')?.isEnabled ?? true})
-- goals: My Goals list - USE THIS for tracking items, to-dos, notes, new products, ideas! (enabled: ${dashboardCards.find(c => c.cardType === 'goals')?.isEnabled ?? false})
+- tasks: Today's tasks summary (enabled: ${dashboardCards.find((c: { cardType: string; isEnabled: boolean }) => c.cardType === 'tasks')?.isEnabled ?? true})
+- profit: Quick profit metrics (enabled: ${dashboardCards.find((c: { cardType: string; isEnabled: boolean }) => c.cardType === 'profit')?.isEnabled ?? true})
+- schedule: Calendar & work hours (enabled: ${dashboardCards.find((c: { cardType: string; isEnabled: boolean }) => c.cardType === 'schedule')?.isEnabled ?? true})
+- goals: My Goals list - USE THIS for tracking items, to-dos, notes, new products, ideas! (enabled: ${dashboardCards.find((c: { cardType: string; isEnabled: boolean }) => c.cardType === 'goals')?.isEnabled ?? false})
 
 CURRENT DATA CONTEXT:
-- Products: ${products.slice(0, 15).map(p => `${p.sku} ($${p.cost || 'no cost'})`).join(', ')}${products.length > 15 ? '...' : ''}
-- Pending POs: ${purchaseOrders.map(po => po.poNumber).join(', ') || '(none)'}
-- Suppliers: ${suppliers.map(s => `${s.name} (id:${s.id})`).join(', ') || '(none)'}
-- Goals/Items list: ${goals.map(g => `"${g.title}" (id:${g.id}, ${g.isCompleted ? 'done' : 'active'})`).join(', ') || '(none)'}
+- Products: ${products.slice(0, 15).map((p: { sku: string; cost: number | null }) => `${p.sku} ($${p.cost || 'no cost'})`).join(', ')}${products.length > 15 ? '...' : ''}
+- Pending POs: ${purchaseOrders.map((po: { poNumber: string }) => po.poNumber).join(', ') || '(none)'}
+- Suppliers: ${suppliers.map((s: { name: string; id: number }) => `${s.name} (id:${s.id})`).join(', ') || '(none)'}
+- Goals/Items list: ${goals.map((g: { title: string; id: number; isCompleted: boolean }) => `"${g.title}" (id:${g.id}, ${g.isCompleted ? 'done' : 'active'})`).join(', ') || '(none)'}
 
 Parse the user's command and return a JSON object with the operation to perform:
 

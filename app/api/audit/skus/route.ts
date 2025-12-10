@@ -66,27 +66,29 @@ export async function GET(request: NextRequest) {
         where: { warehouseId: parseInt(warehouseId) },
         select: { sku: true, sortPosition: true },
       })
-      customOrder = new Map(customOrders.map(co => [co.sku, co.sortPosition]))
+      customOrder = new Map(customOrders.map((co: { sku: string; sortPosition: number }) => [co.sku, co.sortPosition]))
     }
 
     // Sort SKUs
-    let sortedSkus = warehouseInventory.map(inv => ({
+    type InventoryItem = { product: { sku: string; title: string; parentSku: string | null }; available: number }
+    let sortedSkus = warehouseInventory.map((inv: InventoryItem) => ({
       sku: inv.product.sku,
       title: inv.product.title,
       parentSku: inv.product.parentSku,
       available: inv.available,
     }))
 
+    type SkuItem = { sku: string; title: string; parentSku: string | null; available: number }
     if (sort === 'custom' && customOrder) {
-      sortedSkus.sort((a, b) => {
+      sortedSkus.sort((a: SkuItem, b: SkuItem) => {
         const posA = customOrder!.get(a.sku) ?? 999999
         const posB = customOrder!.get(b.sku) ?? 999999
         return posA - posB
       })
     } else if (sort === 'asc') {
-      sortedSkus.sort((a, b) => a.sku.localeCompare(b.sku))
+      sortedSkus.sort((a: SkuItem, b: SkuItem) => a.sku.localeCompare(b.sku))
     } else if (sort === 'desc') {
-      sortedSkus.sort((a, b) => b.sku.localeCompare(a.sku))
+      sortedSkus.sort((a: SkuItem, b: SkuItem) => b.sku.localeCompare(a.sku))
     }
 
     return NextResponse.json({ skus: sortedSkus })

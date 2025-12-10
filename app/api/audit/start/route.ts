@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
       select: { masterSku: true },
     })
 
-    const skus = warehouseInventory.map(inv => inv.masterSku)
-    
+    const skus = warehouseInventory.map((inv: { masterSku: string }) => inv.masterSku)
+
     let totalSkus = skus.length
     if (auditMode === 'parent') {
       // Get unique parent SKUs
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
         select: { sku: true, parentSku: true },
       })
       const parentSkus = new Set(
-        products.map(p => p.parentSku || p.sku)
+        products.map((p: { sku: string; parentSku: string | null }) => p.parentSku || p.sku)
       )
       totalSkus = parentSkus.size
     }

@@ -35,12 +35,14 @@ export async function GET(request: NextRequest) {
       take: limit,
     })
 
-    const sessionsWithStats = sessions.map(session => {
-      const variances = session.entries.map(e => e.variance)
-      const flaggedCount = session.entries.filter(e => e.isFlagged).length
-      const netVariance = variances.reduce((sum, v) => sum + v, 0)
-      const positiveVariance = variances.filter(v => v > 0).reduce((sum, v) => sum + v, 0)
-      const negativeVariance = Math.abs(variances.filter(v => v < 0).reduce((sum, v) => sum + v, 0))
+    type AuditEntry = { isFlagged: boolean; variance: number }
+    type AuditSession = { id: number; warehouse: string; auditMode: string; totalSkus: number; auditedCount: number; startedAt: Date; completedAt: Date | null; entries: AuditEntry[] }
+    const sessionsWithStats = sessions.map((session: AuditSession) => {
+      const variances = session.entries.map((e: AuditEntry) => e.variance)
+      const flaggedCount = session.entries.filter((e: AuditEntry) => e.isFlagged).length
+      const netVariance = variances.reduce((sum: number, v: number) => sum + v, 0)
+      const positiveVariance = variances.filter((v: number) => v > 0).reduce((sum: number, v: number) => sum + v, 0)
+      const negativeVariance = Math.abs(variances.filter((v: number) => v < 0).reduce((sum: number, v: number) => sum + v, 0))
 
       return {
         id: session.id,

@@ -51,11 +51,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      events: events.map(e => {
+      events: events.map((e: { id: number; title: string; eventType: string; startDate: Date; endDate: Date | null; startTime: string | null; endTime: string | null; isAllDay: boolean; description: string | null }) => {
         // Convert UTC dates to user's timezone for display
         const startDateInTz = toZonedTime(e.startDate, userTimezone)
         const endDateInTz = e.endDate ? toZonedTime(e.endDate, userTimezone) : null
-        
+
         return {
           id: e.id,
           title: e.title,

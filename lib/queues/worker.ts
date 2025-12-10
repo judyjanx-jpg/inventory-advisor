@@ -679,10 +679,11 @@ async function processReportsSync(job: any) {
     const existingProducts = await prisma.product.findMany({
       select: { sku: true, asin: true, fnsku: true }
     })
-    const existingSkuSet = new Set(existingProducts.map(p => p.sku))
+    type ProductInfo = { sku: string; asin: string | null; fnsku: string | null }
+    const existingSkuSet = new Set(existingProducts.map((p: ProductInfo) => p.sku))
     const productsByAsin = new Map<string, string>()
     const productsByFnsku = new Map<string, string>()
-    for (const p of existingProducts) {
+    for (const p of existingProducts as ProductInfo[]) {
       if (p.asin) productsByAsin.set(p.asin, p.sku)
       if (p.fnsku) productsByFnsku.set(p.fnsku, p.sku)
     }

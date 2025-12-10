@@ -41,7 +41,7 @@ export async function PUT(
       where: { poId: parseInt(params.id) },
     })
 
-    const subtotal = items.reduce((sum, item) => sum + Number(item.lineTotal), 0)
+    const subtotal = items.reduce((sum: number, item: { lineTotal: unknown }) => sum + Number(item.lineTotal), 0)
 
     const po = await prisma.purchaseOrder.findUnique({
       where: { id: parseInt(params.id) },
@@ -83,7 +83,7 @@ export async function DELETE(
       where: { poId: parseInt(params.id) },
     })
 
-    const subtotal = items.reduce((sum, item) => sum + Number(item.lineTotal), 0)
+    const subtotal = items.reduce((sum: number, item: { lineTotal: unknown }) => sum + Number(item.lineTotal), 0)
 
     const po = await prisma.purchaseOrder.findUnique({
       where: { id: parseInt(params.id) },

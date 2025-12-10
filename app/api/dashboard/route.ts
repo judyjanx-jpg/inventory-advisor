@@ -335,7 +335,7 @@ export async function GET(request: NextRequest) {
           },
           lateShipments: {
             count: latePOs.length,
-            items: latePOs.map(po => ({
+            items: latePOs.map((po: { poNumber: string; supplier: { name: string; email: string | null } | null; expectedArrivalDate: Date | null }) => ({
               poNumber: po.poNumber,
               supplier: po.supplier?.name || 'Unknown',
               supplierEmail: po.supplier?.email,
@@ -344,7 +344,7 @@ export async function GET(request: NextRequest) {
           },
           reminders: {
             count: todayEvents.length,
-            items: todayEvents.map(e => ({
+            items: todayEvents.map((e: { id: number; title: string; startTime: string | null; eventType: string }) => ({
               id: e.id,
               title: e.title,
               time: e.startTime,

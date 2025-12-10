@@ -299,17 +299,17 @@ TOP SELLING SKUs (last 30 days, by quantity):
 ${topProducts.slice(0, 5).map((p, i) => `${i + 1}. ${p.sku}: ${p.units} units, $${Number(p.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} revenue`).join('\n')}
 
 LOW STOCK ITEMS (< 10 units):
-${lowStockItems.length > 0 
-  ? lowStockItems.map(i => `- ${i.sku}: ${i.available} units`).join('\n')
+${lowStockItems.length > 0
+  ? lowStockItems.map((i: { sku: string; available: number }) => `- ${i.sku}: ${i.available} units`).join('\n')
   : '(None)'}
 
 PENDING PURCHASE ORDERS:
 ${pendingPOs.length > 0
-  ? pendingPOs.map(po => `- ${po.poNumber}: ${po.status}${po.expectedArrivalDate ? ` (expected ${format(po.expectedArrivalDate, 'MMM d')})` : ''}`).join('\n')
+  ? pendingPOs.map((po: { poNumber: string; status: string; expectedArrivalDate: Date | null }) => `- ${po.poNumber}: ${po.status}${po.expectedArrivalDate ? ` (expected ${format(po.expectedArrivalDate, 'MMM d')})` : ''}`).join('\n')
   : '(None)'}
 
 DAILY BREAKDOWN (last 7 days):
-${dailySales.map(day => `${day.date}: $${Number(day.revenue).toFixed(2)} revenue, $${Number(day.profit).toFixed(2)} profit, ${day.orders} orders`).join('\n')}
+${dailySales.map((day: { date: string; revenue: number; profit: number; orders: number }) => `${day.date}: $${Number(day.revenue).toFixed(2)} revenue, $${Number(day.profit).toFixed(2)} profit, ${day.orders} orders`).join('\n')}
 `
 
   return context

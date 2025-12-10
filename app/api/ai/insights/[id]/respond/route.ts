@@ -86,7 +86,7 @@ The user has responded to an observation you made. Generate a thoughtful, conver
 4. Asks follow-up questions to learn more
 
 Previous context about this business:
-${relevantContext.map(c => `- ${c.contextType}: ${c.context}`).join('\n')}
+${relevantContext.map((c: { contextType: string; context: string }) => `- ${c.contextType}: ${c.context}`).join('\n')}
 
 Be conversational and helpful, not robotic.`
 
