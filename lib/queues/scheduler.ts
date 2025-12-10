@@ -19,6 +19,7 @@ import {
   reportsQueue,
   aggregationQueue,
   adsReportsQueue,
+  alertsQueue,
   queueMap,
 } from './index'
 
@@ -88,6 +89,13 @@ const schedules: ScheduleConfig[] = [
     name: 'ads-reports-sync',
     cron: '*/30 * * * *',   // Every 30 minutes (to check pending reports and request new ones)
     description: 'Sync Amazon Ads campaign data (SP reports)',
+    enabled: true,
+  },
+  {
+    queue: alertsQueue,
+    name: 'alerts-generation',
+    cron: '0 8 * * *',      // Daily at 8am (after aggregation)
+    description: 'Generate inventory alerts from forecast data',
     enabled: true,
   },
 ]

@@ -12,6 +12,7 @@ import {
   reportsQueue,
   aggregationQueue,
   adsReportsQueue,
+  alertsQueue,
   allQueues,
 } from './index'
 import { prisma } from '@/lib/prisma'
@@ -1110,6 +1111,181 @@ async function processAdsReportsSync(job: any) {
 }
 
 /**
+ * Alerts generation processor
+ */
+async function processAlertsGeneration(job: any) {
+  const startTime = Date.now()
+  console.log(`\n[alerts-generation] Starting job ${job.id}...`)
+
+  try {
+    // Call the alerts generation API internally
+    const { prisma: db } = await import('@/lib/prisma')
+    const { query } = await import('@/lib/db')
+
+    // Clear old unresolved alerts
+    await db.inventoryAlert.deleteMany({
+      where: { isResolved: false }
+    })
+
+    const alerts: any[] = []
+
+    // 1. STOCKOUT RISK - Products with low days of supply
+    const stockoutRiskProducts = await query<{
+      sku: string
+      title: string
+      total_inventory: number
+      avg_daily_velocity: number
+      days_of_supply: number
+      recommended_qty: number
+    }>(`
+      SELECT 
+        p.sku,
+        p.title,
+        COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0) as total_inventory,
+        COALESCE(f.avg_daily_velocity, 0) as avg_daily_velocity,
+        CASE 
+          WHEN COALESCE(f.avg_daily_velocity, 0) > 0 
+          THEN (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / f.avg_daily_velocity
+          ELSE 999
+        END as days_of_supply,
+        CASE 
+          WHEN COALESCE(f.avg_daily_velocity, 0) > 0 
+          THEN CEIL(f.avg_daily_velocity * 45) - (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0))
+          ELSE 100
+        END as recommended_qty
+      FROM products p
+      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+      LEFT JOIN (
+        SELECT master_sku, avg_daily_velocity
+        FROM forecasts 
+        WHERE channel = 'Amazon'
+        AND (master_sku, created_at) IN (
+          SELECT master_sku, MAX(created_at) FROM forecasts GROUP BY master_sku
+        )
+      ) f ON p.sku = f.master_sku
+      WHERE p.is_active = true
+        AND COALESCE(f.avg_daily_velocity, 0) > 0.1
+        AND CASE 
+          WHEN COALESCE(f.avg_daily_velocity, 0) > 0 
+          THEN (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / f.avg_daily_velocity
+          ELSE 999
+        END < 21
+      ORDER BY days_of_supply ASC
+      LIMIT 50
+    `, [])
+
+    for (const product of stockoutRiskProducts) {
+      const daysOfSupply = Math.round(Number(product.days_of_supply))
+      const severity = daysOfSupply < 7 ? 'critical' : daysOfSupply < 14 ? 'high' : 'medium'
+      
+      alerts.push({
+        masterSku: product.sku,
+        alertType: 'stockout_risk',
+        severity,
+        title: `Low Stock: ${product.sku}`,
+        message: `${product.title || product.sku} has only ${daysOfSupply} days of supply remaining.`,
+        recommendedAction: `Order ${Math.max(0, Math.round(Number(product.recommended_qty)))} units`,
+        recommendedQuantity: Math.max(0, Math.round(Number(product.recommended_qty))),
+      })
+    }
+
+    // 2. FBA REPLENISHMENT
+    const fbaReplenishmentProducts = await query<{
+      sku: string
+      title: string
+      warehouse_qty: number
+      fba_qty: number
+      fba_days_of_supply: number
+    }>(`
+      SELECT 
+        p.sku,
+        p.title,
+        COALESCE(il.warehouse_available, 0) as warehouse_qty,
+        COALESCE(il.fba_available, 0) as fba_qty,
+        CASE 
+          WHEN COALESCE(f.avg_daily_velocity, 0) > 0 
+          THEN COALESCE(il.fba_available, 0) / f.avg_daily_velocity
+          ELSE 999
+        END as fba_days_of_supply
+      FROM products p
+      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+      LEFT JOIN (
+        SELECT master_sku, avg_daily_velocity
+        FROM forecasts 
+        WHERE channel = 'Amazon'
+        AND (master_sku, created_at) IN (
+          SELECT master_sku, MAX(created_at) FROM forecasts GROUP BY master_sku
+        )
+      ) f ON p.sku = f.master_sku
+      WHERE p.is_active = true
+        AND COALESCE(il.warehouse_available, 0) > 10
+        AND COALESCE(f.avg_daily_velocity, 0) > 0.1
+        AND CASE 
+          WHEN COALESCE(f.avg_daily_velocity, 0) > 0 
+          THEN COALESCE(il.fba_available, 0) / f.avg_daily_velocity
+          ELSE 999
+        END < 14
+      ORDER BY fba_days_of_supply ASC
+      LIMIT 30
+    `, [])
+
+    for (const product of fbaReplenishmentProducts) {
+      const daysOfSupply = Math.round(Number(product.fba_days_of_supply))
+      const severity = daysOfSupply < 5 ? 'critical' : daysOfSupply < 10 ? 'high' : 'medium'
+      
+      alerts.push({
+        masterSku: product.sku,
+        alertType: 'fba_replenishment',
+        severity,
+        title: `Ship to FBA: ${product.sku}`,
+        message: `${product.title || product.sku} has ${daysOfSupply} days FBA supply. ${product.warehouse_qty} units in warehouse.`,
+        recommendedQuantity: Math.min(product.warehouse_qty, 100),
+      })
+    }
+
+    // 3. OUT OF STOCK
+    const outOfStockProducts = await query<{ sku: string; title: string }>(`
+      SELECT DISTINCT p.sku, p.title
+      FROM products p
+      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+      WHERE p.is_active = true
+        AND COALESCE(il.fba_available, 0) = 0
+        AND EXISTS (
+          SELECT 1 FROM order_items oi 
+          WHERE oi.master_sku = p.sku 
+          AND oi.created_at > NOW() - INTERVAL '30 days'
+        )
+      LIMIT 20
+    `, [])
+
+    for (const product of outOfStockProducts) {
+      alerts.push({
+        masterSku: product.sku,
+        alertType: 'out_of_stock',
+        severity: 'critical',
+        title: `Out of Stock: ${product.sku}`,
+        message: `${product.title || product.sku} is out of stock at FBA.`,
+      })
+    }
+
+    // Insert all alerts
+    if (alerts.length > 0) {
+      await db.inventoryAlert.createMany({ data: alerts })
+    }
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1)
+    console.log(`[alerts-generation] Completed in ${duration}s - ${alerts.length} alerts generated`)
+    
+    await logSyncResult('alerts', 'success', { alertsGenerated: alerts.length }, null)
+    return { alertsGenerated: alerts.length }
+  } catch (error: any) {
+    console.error(`[alerts-generation] Failed:`, error.message)
+    await logSyncResult('alerts', 'failed', null, error.message)
+    throw error
+  }
+}
+
+/**
  * Start processing jobs
  * 
  * IMPORTANT: Process handlers must be registered WITH the exact job name
@@ -1128,6 +1304,7 @@ productsQueue.process('products-sync', processProductsSync)
 reportsQueue.process('daily-reports', processReportsSync)
 aggregationQueue.process('daily-aggregation', processAggregation)
 adsReportsQueue.process('ads-reports-sync', processAdsReportsSync)
+alertsQueue.process('alerts-generation', processAlertsGeneration)
 
   console.log('  ✓ Registered handler for orders-sync queue')
   console.log('  ✓ Registered handler for finances-sync queue')
@@ -1136,6 +1313,7 @@ adsReportsQueue.process('ads-reports-sync', processAdsReportsSync)
   console.log('  ✓ Registered handler for reports-sync queue')
   console.log('  ✓ Registered handler for aggregation queue')
   console.log('  ✓ Registered handler for ads-reports-sync queue')
+  console.log('  ✓ Registered handler for alerts-generation queue')
 
   // Global event handlers
   allQueues.forEach(queue => {

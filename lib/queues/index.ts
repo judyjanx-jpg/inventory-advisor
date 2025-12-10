@@ -65,6 +65,10 @@ export const adsReportsQueue = new Queue('ads-reports-sync', REDIS_URL, {
   },
 })
 
+export const alertsQueue = new Queue('alerts-generation', REDIS_URL, {
+  defaultJobOptions,
+})
+
 // All queues for easy iteration
 export const allQueues = [
   ordersQueue,
@@ -75,6 +79,7 @@ export const allQueues = [
   reportsQueue,
   aggregationQueue,
   adsReportsQueue,
+  alertsQueue,
 ]
 
 // Queue name to queue map
@@ -87,6 +92,7 @@ export const queueMap: Record<string, Queue.Queue> = {
   reports: reportsQueue,
   aggregation: aggregationQueue,
   'ads-reports': adsReportsQueue,
+  alerts: alertsQueue,
 }
 
 // Graceful shutdown
