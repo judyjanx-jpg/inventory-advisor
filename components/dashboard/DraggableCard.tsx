@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, ReactNode } from 'react'
+import { useState, useRef, useEffect, ReactNode } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, ChevronUp, ChevronDown, Minimize2 } from 'lucide-react'
@@ -23,15 +23,22 @@ export default function DraggableCard({
   onCollapsedChange
 }: DraggableCardProps) {
   const [currentHeight, setCurrentHeight] = useState<number | null>(height ?? null)
-  const [isDraggingResize, setIsDraggingResize] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
-  const startYRef = useRef(0)
-  const startHeightRef = useRef(0)
+  
+  // Store values in refs to avoid stale closures
+  const resizeDataRef = useRef({
+    startY: 0,
+    startHeight: 0,
+    isResizing: false,
+    latestHeight: height ?? null as number | null
+  })
 
-  // Sync height prop with state
+  // Sync height prop with state on mount
   useEffect(() => {
-    if (height !== undefined && height !== currentHeight) {
+    if (height !== undefined) {
       setCurrentHeight(height)
+      resizeDataRef.current.latestHeight = height
     }
   }, [height])
 
@@ -44,49 +51,61 @@ export default function DraggableCard({
     isDragging,
   } = useSortable({ id })
 
-  // Handle resize mouse move
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    const deltaY = e.clientY - startYRef.current
-    const newHeight = Math.max(150, startHeightRef.current + deltaY)
-    setCurrentHeight(newHeight)
-  }, [])
-
-  // Handle resize mouse up
-  const handleMouseUp = useCallback(() => {
-    setIsDraggingResize(false)
-    document.removeEventListener('mousemove', handleMouseMove)
-    document.removeEventListener('mouseup', handleMouseUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-    
-    // Save the final height
-    if (cardRef.current && onHeightChange) {
-      onHeightChange(currentHeight)
+  // Set up global mouse event listeners
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!resizeDataRef.current.isResizing) return
+      
+      const deltaY = e.clientY - resizeDataRef.current.startY
+      const newHeight = Math.max(150, resizeDataRef.current.startHeight + deltaY)
+      
+      // Update the DOM directly for immediate feedback
+      if (cardRef.current) {
+        cardRef.current.style.height = `${newHeight}px`
+      }
+      resizeDataRef.current.latestHeight = newHeight
     }
-  }, [currentHeight, onHeightChange, handleMouseMove])
 
-  // Handle resize start
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    const handleGlobalMouseUp = () => {
+      if (!resizeDataRef.current.isResizing) return
+      
+      resizeDataRef.current.isResizing = false
+      setIsResizing(false)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      
+      // Update React state and save
+      const finalHeight = resizeDataRef.current.latestHeight
+      setCurrentHeight(finalHeight)
+      onHeightChange?.(finalHeight)
+    }
+
+    window.addEventListener('mousemove', handleGlobalMouseMove)
+    window.addEventListener('mouseup', handleGlobalMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove)
+      window.removeEventListener('mouseup', handleGlobalMouseUp)
+    }
+  }, [onHeightChange])
+
+  const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     
-    setIsDraggingResize(true)
-    startYRef.current = e.clientY
-    startHeightRef.current = cardRef.current?.offsetHeight || 300
+    const startHeight = cardRef.current?.offsetHeight || 300
     
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
+    resizeDataRef.current = {
+      startY: e.clientY,
+      startHeight: startHeight,
+      isResizing: true,
+      latestHeight: startHeight
+    }
+    
+    setIsResizing(true)
     document.body.style.cursor = 'ns-resize'
     document.body.style.userSelect = 'none'
-  }, [handleMouseMove, handleMouseUp])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [handleMouseMove, handleMouseUp])
+  }
 
   const toggleCollapse = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -96,12 +115,16 @@ export default function DraggableCard({
   const resetHeight = (e: React.MouseEvent) => {
     e.stopPropagation()
     setCurrentHeight(null)
+    resizeDataRef.current.latestHeight = null
+    if (cardRef.current) {
+      cardRef.current.style.height = 'auto'
+    }
     onHeightChange?.(null)
   }
 
   const wrapperStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition: isDraggingResize ? 'none' : transition,
+    transition: isResizing ? 'none' : transition,
     opacity: isDragging ? 0.5 : 1,
   }
 
@@ -109,18 +132,19 @@ export default function DraggableCard({
     height: isCollapsed ? '52px' : (currentHeight ? `${currentHeight}px` : 'auto'),
     minHeight: isCollapsed ? '52px' : '150px',
     overflow: 'hidden',
+    position: 'relative',
   }
 
   return (
     <div 
       ref={setNodeRef}
       style={wrapperStyle}
-      className={`relative ${isDragging ? 'z-50' : ''}`}
+      className={`${isDragging ? 'z-50' : ''}`}
     >
       <div
         ref={cardRef}
         style={cardStyle}
-        className="relative group"
+        className="group"
       >
         {/* Drag Handle - Top Center */}
         <div 
@@ -159,18 +183,20 @@ export default function DraggableCard({
           {children}
         </div>
 
-        {/* Resize Handle - Bottom */}
+        {/* Resize Handle - Bottom - ALWAYS visible */}
         {!isCollapsed && (
           <div
             onMouseDown={handleResizeStart}
-            className="absolute bottom-0 left-0 right-0 h-5 cursor-ns-resize flex items-center justify-center z-30"
-            style={{ background: 'transparent' }}
+            className="absolute bottom-0 left-0 right-0 h-6 cursor-ns-resize flex items-center justify-center z-40"
+            style={{ 
+              background: 'linear-gradient(to top, rgba(0,0,0,0.05), transparent)',
+            }}
           >
             <div 
-              className={`w-20 h-1.5 rounded-full transition-all ${
-                isDraggingResize 
-                  ? 'bg-[var(--primary)] scale-110' 
-                  : 'bg-[var(--border)] group-hover:bg-[var(--primary)]'
+              className={`w-24 h-2 rounded-full transition-all ${
+                isResizing 
+                  ? 'bg-blue-500 scale-110' 
+                  : 'bg-gray-400 hover:bg-blue-500'
               }`} 
             />
           </div>
