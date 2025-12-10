@@ -768,11 +768,6 @@ export default function ScheduleCard() {
                 {aiResponse}
               </div>
             )}
-            {aiAvailable === false && (
-              <div className="mt-2 p-2 rounded-lg text-sm bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                AI features require ANTHROPIC_API_KEY to be configured in your environment variables.
-              </div>
-            )}
           </div>
         )}
       </CardContent>
