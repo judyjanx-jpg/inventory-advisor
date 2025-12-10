@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const request = await prisma.featureRequest.create({
+    const featureRequest = await prisma.featureRequest.create({
       data: {
         userId: profile.id,
         requestText,
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      request
+      request: featureRequest
     })
   } catch (error) {
     console.error('Create feature request error:', error)
