@@ -4,7 +4,7 @@ import { generateObservations } from '@/lib/jobs/generateInsights'
 // POST /api/ai/insights/generate - Manually trigger insight generation (for testing or scheduled jobs)
 export async function POST(request: NextRequest) {
   try {
-    const observations = await generateObservations()
+    const observations = await generateObservations() ?? []
 
     return NextResponse.json({
       success: true,
