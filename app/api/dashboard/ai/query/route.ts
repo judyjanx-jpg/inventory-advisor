@@ -115,9 +115,21 @@ Only include visualization if it adds value. Keep it simple.`
 async function buildDatabaseContext(): Promise<string> {
   const today = new Date()
   const thirtyDaysAgo = subDays(today, 30)
+  const yesterday = subDays(today, 1)
+  const sameYesterdayLastYear = new Date(yesterday)
+  sameYesterdayLastYear.setFullYear(sameYesterdayLastYear.getFullYear() - 1)
 
   // Get summary stats using raw SQL
-  const [productCountResult, topProductsResult, lowStockResult, pendingPOsResult, dailySalesResult] = await Promise.all([
+  const [
+    productCountResult, 
+    topProductsResult, 
+    lowStockResult, 
+    pendingPOsResult, 
+    dailySalesResult,
+    dateRangeResult,
+    yesterdaySalesResult,
+    lastYearSameDayResult
+  ] = await Promise.all([
     // Product count
     query<{ count: number }>(`SELECT COUNT(*) as count FROM products`, []),
     
@@ -168,7 +180,49 @@ async function buildDatabaseContext(): Promise<string> {
       GROUP BY DATE(o.purchase_date)
       ORDER BY date DESC
       LIMIT 7
-    `, [subDays(today, 7).toISOString()])
+    `, [subDays(today, 7).toISOString()]),
+
+    // Date range of available data
+    query<{ min_date: string; max_date: string }>(`
+      SELECT 
+        MIN(DATE(purchase_date)) as min_date,
+        MAX(DATE(purchase_date)) as max_date
+      FROM orders
+    `, []),
+
+    // Yesterday's sales
+    query<{ revenue: number; profit: number; orders: number; units: number }>(`
+      SELECT 
+        SUM((oi.item_price + oi.shipping_price) * oi.quantity) as revenue,
+        SUM(
+          (oi.item_price + oi.shipping_price) * oi.quantity 
+          - (oi.referral_fee + oi.fba_fee + oi.other_fees + oi.amazon_fees)
+          - COALESCE(p.cost, 0) * oi.quantity
+        ) as profit,
+        COUNT(DISTINCT o.id) as orders,
+        SUM(oi.quantity) as units
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      LEFT JOIN products p ON oi.master_sku = p.sku
+      WHERE DATE(o.purchase_date) = DATE($1) AND o.status != 'Cancelled'
+    `, [yesterday.toISOString()]),
+
+    // Same day last year
+    query<{ revenue: number; profit: number; orders: number; units: number }>(`
+      SELECT 
+        SUM((oi.item_price + oi.shipping_price) * oi.quantity) as revenue,
+        SUM(
+          (oi.item_price + oi.shipping_price) * oi.quantity 
+          - (oi.referral_fee + oi.fba_fee + oi.other_fees + oi.amazon_fees)
+          - COALESCE(p.cost, 0) * oi.quantity
+        ) as profit,
+        COUNT(DISTINCT o.id) as orders,
+        SUM(oi.quantity) as units
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      LEFT JOIN products p ON oi.master_sku = p.sku
+      WHERE DATE(o.purchase_date) = DATE($1) AND o.status != 'Cancelled'
+    `, [sameYesterdayLastYear.toISOString()])
   ])
 
   const productCount = productCountResult[0]?.count || 0
@@ -176,6 +230,9 @@ async function buildDatabaseContext(): Promise<string> {
   const lowStockItems = lowStockResult
   const pendingPOs = pendingPOsResult
   const dailySales = dailySalesResult
+  const dateRange = dateRangeResult[0]
+  const yesterdaySales = yesterdaySalesResult[0]
+  const lastYearSameDay = lastYearSameDayResult[0]
 
   // Calculate totals
   let totalRevenue = 0
@@ -187,13 +244,56 @@ async function buildDatabaseContext(): Promise<string> {
     totalOrders += Number(day.orders || 0)
   }
 
-  // Build context string
-  let context = `DATABASE SUMMARY (Last 7-30 days):
+  // Format yesterday and last year dates
+  const yesterdayStr = format(yesterday, 'MMMM d, yyyy')
+  const lastYearStr = format(sameYesterdayLastYear, 'MMMM d, yyyy')
+  
+  // Calculate YoY change
+  const hasLastYearData = lastYearSameDay && Number(lastYearSameDay.revenue || 0) > 0
+  let yoyRevenueChange = 'N/A'
+  let yoyOrdersChange = 'N/A'
+  if (hasLastYearData && yesterdaySales) {
+    const yesterdayRev = Number(yesterdaySales.revenue || 0)
+    const lastYearRev = Number(lastYearSameDay.revenue || 0)
+    const revChange = ((yesterdayRev - lastYearRev) / lastYearRev) * 100
+    yoyRevenueChange = `${revChange >= 0 ? '+' : ''}${revChange.toFixed(1)}%`
+    
+    const yesterdayOrders = Number(yesterdaySales.orders || 0)
+    const lastYearOrders = Number(lastYearSameDay.orders || 0)
+    if (lastYearOrders > 0) {
+      const ordersChange = ((yesterdayOrders - lastYearOrders) / lastYearOrders) * 100
+      yoyOrdersChange = `${ordersChange >= 0 ? '+' : ''}${ordersChange.toFixed(1)}%`
+    }
+  }
 
+  // Build context string
+  let context = `DATABASE SUMMARY:
+
+DATA AVAILABILITY:
+- Earliest order data: ${dateRange?.min_date || 'N/A'}
+- Latest order data: ${dateRange?.max_date || 'N/A'}
 - Total Products: ${productCount}
-- Total Revenue (7d): $${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-- Total Profit (7d): $${totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-- Total Orders (7d): ${totalOrders}
+
+YESTERDAY'S PERFORMANCE (${yesterdayStr}):
+- Revenue: $${Number(yesterdaySales?.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- Profit: $${Number(yesterdaySales?.profit || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- Orders: ${Number(yesterdaySales?.orders || 0)}
+- Units Sold: ${Number(yesterdaySales?.units || 0)}
+
+SAME DAY LAST YEAR (${lastYearStr}):
+${hasLastYearData ? `- Revenue: $${Number(lastYearSameDay.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- Profit: $${Number(lastYearSameDay.profit || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- Orders: ${Number(lastYearSameDay.orders || 0)}
+- Units Sold: ${Number(lastYearSameDay.units || 0)}` : '(No data available for this date last year)'}
+
+YEAR-OVER-YEAR COMPARISON:
+${hasLastYearData ? `- Revenue Change: ${yoyRevenueChange}
+- Orders Change: ${yoyOrdersChange}` : '(Cannot calculate - no data from last year)'}
+
+LAST 7 DAYS SUMMARY:
+- Total Revenue: $${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- Total Profit: $${totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- Total Orders: ${totalOrders}
 
 TOP SELLING SKUs (last 30 days, by quantity):
 ${topProducts.slice(0, 5).map((p, i) => `${i + 1}. ${p.sku}: ${p.units} units, $${Number(p.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} revenue`).join('\n')}
@@ -208,7 +308,7 @@ ${pendingPOs.length > 0
   ? pendingPOs.map(po => `- ${po.poNumber}: ${po.status}${po.expectedArrivalDate ? ` (expected ${format(po.expectedArrivalDate, 'MMM d')})` : ''}`).join('\n')
   : '(None)'}
 
-DAILY SUMMARY (last 7 days):
+DAILY BREAKDOWN (last 7 days):
 ${dailySales.map(day => `${day.date}: $${Number(day.revenue).toFixed(2)} revenue, $${Number(day.profit).toFixed(2)} profit, ${day.orders} orders`).join('\n')}
 `
 
