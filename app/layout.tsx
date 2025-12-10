@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { SyncWrapper } from '@/components/sync/SyncWrapper'
+import { ThemeProvider } from '@/contexts/ThemeContext'
 // Initialize queue system (scheduler + worker)
 import '@/lib/queues/init'
 
@@ -22,11 +23,29 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#0f172a" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('theme') || 'dark';
+                  document.documentElement.classList.add(theme);
+                  document.documentElement.setAttribute('data-theme', theme);
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className={inter.className}>
-        <SyncWrapper>
-          {children}
-        </SyncWrapper>
+        <ThemeProvider>
+          <SyncWrapper>
+            {children}
+          </SyncWrapper>
+        </ThemeProvider>
       </body>
     </html>
   )

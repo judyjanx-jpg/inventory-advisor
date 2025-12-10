@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
-import { Monitor, Save, Check, Tag } from 'lucide-react'
+import { Monitor, Save, Check, Tag, Sun, Moon, Palette } from 'lucide-react'
+import { useTheme } from '@/contexts/ThemeContext'
 
 type TitleDisplayMode = 'full' | 'short' | 'none'
 
@@ -23,6 +24,7 @@ const TITLE_OPTIONS: { value: TitleDisplayMode; label: string; description: stri
 ]
 
 export default function DisplaySettingsPage() {
+  const { theme, setTheme } = useTheme()
   const [settings, setSettings] = useState<DisplaySettings>({
     titleDisplay: 'short',
     shortTitleLength: 30,
@@ -56,9 +58,76 @@ export default function DisplaySettingsPage() {
       <div className="space-y-6 max-w-2xl">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-white">Display Settings</h1>
-          <p className="text-slate-400 mt-1">Customize how information is displayed</p>
+          <h1 className="text-3xl font-bold text-[var(--foreground)]">Display Settings</h1>
+          <p className="text-[var(--muted-foreground)] mt-1">Customize how information is displayed</p>
         </div>
+
+        {/* Theme Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Palette className="w-5 h-5" />
+              Theme
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Choose your preferred color theme
+            </p>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* Dark Theme Option */}
+              <button
+                onClick={() => setTheme('dark')}
+                className={`relative p-4 rounded-xl border-2 transition-all ${
+                  theme === 'dark'
+                    ? 'border-[var(--primary)] bg-[var(--primary)]/10'
+                    : 'border-[var(--border)] hover:border-[var(--muted-foreground)]'
+                }`}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-16 h-12 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shadow-lg">
+                    <Moon className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <div className="text-center">
+                    <div className="font-medium text-[var(--foreground)]">Dark</div>
+                    <div className="text-xs text-[var(--muted-foreground)]">Easy on the eyes</div>
+                  </div>
+                </div>
+                {theme === 'dark' && (
+                  <div className="absolute top-2 right-2">
+                    <Check className="w-5 h-5 text-[var(--primary)]" />
+                  </div>
+                )}
+              </button>
+
+              {/* Light Theme Option */}
+              <button
+                onClick={() => setTheme('light')}
+                className={`relative p-4 rounded-xl border-2 transition-all ${
+                  theme === 'light'
+                    ? 'border-[var(--primary)] bg-[var(--primary)]/10'
+                    : 'border-[var(--border)] hover:border-[var(--muted-foreground)]'
+                }`}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-16 h-12 rounded-lg bg-white border border-slate-200 flex items-center justify-center shadow-lg">
+                    <Sun className="w-6 h-6 text-amber-500" />
+                  </div>
+                  <div className="text-center">
+                    <div className="font-medium text-[var(--foreground)]">Light</div>
+                    <div className="text-xs text-[var(--muted-foreground)]">Classic bright</div>
+                  </div>
+                </div>
+                {theme === 'light' && (
+                  <div className="absolute top-2 right-2">
+                    <Check className="w-5 h-5 text-[var(--primary)]" />
+                  </div>
+                )}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Title Display */}
         <Card>

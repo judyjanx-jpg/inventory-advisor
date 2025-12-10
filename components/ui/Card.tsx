@@ -12,7 +12,7 @@ export function Card({ children, className, hover = false, onClick }: CardProps)
   return (
     <div 
       className={cn(
-        "bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden",
+        "bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden",
         hover && "card-hover cursor-pointer",
         onClick && "cursor-pointer",
         className
@@ -31,7 +31,7 @@ interface CardHeaderProps {
 
 export function CardHeader({ children, className }: CardHeaderProps) {
   return (
-    <div className={cn("px-6 py-4 border-b border-slate-700/50", className)}>
+    <div className={cn("px-6 py-4 border-b border-[var(--border)]", className)}>
       {children}
     </div>
   )
@@ -44,7 +44,7 @@ interface CardTitleProps {
 
 export function CardTitle({ children, className }: CardTitleProps) {
   return (
-    <h3 className={cn("text-lg font-semibold text-white", className)}>
+    <h3 className={cn("text-lg font-semibold text-[var(--card-foreground)]", className)}>
       {children}
     </h3>
   )
@@ -57,7 +57,7 @@ interface CardDescriptionProps {
 
 export function CardDescription({ children, className }: CardDescriptionProps) {
   return (
-    <p className={cn("text-sm text-slate-400 mt-1", className)}>
+    <p className={cn("text-sm text-[var(--muted-foreground)] mt-1", className)}>
       {children}
     </p>
   )
@@ -83,7 +83,7 @@ interface CardFooterProps {
 
 export function CardFooter({ children, className }: CardFooterProps) {
   return (
-    <div className={cn("px-6 py-4 border-t border-slate-700/50 bg-slate-900/30", className)}>
+    <div className={cn("px-6 py-4 border-t border-[var(--border)] bg-[var(--muted)]/30", className)}>
       {children}
     </div>
   )
@@ -105,14 +105,14 @@ export function StatCard({ title, value, change, changeType = 'neutral', icon, i
       <CardContent className="py-5">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-slate-400">{title}</p>
-            <p className="text-2xl font-bold text-white mt-1">{value}</p>
+            <p className="text-sm font-medium text-[var(--muted-foreground)]">{title}</p>
+            <p className="text-2xl font-bold text-[var(--foreground)] mt-1">{value}</p>
             {change && (
               <p className={cn(
                 "text-sm mt-1",
                 changeType === 'positive' && "text-emerald-400",
                 changeType === 'negative' && "text-red-400",
-                changeType === 'neutral' && "text-slate-400"
+                changeType === 'neutral' && "text-[var(--muted-foreground)]"
               )}>
                 {change}
               </p>

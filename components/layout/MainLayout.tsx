@@ -8,7 +8,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const isSyncing = syncState.status === 'syncing' || syncState.status === 'success' || syncState.status === 'error'
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
+    <div className="flex min-h-screen bg-[var(--background)]">
       <Sidebar />
       <main className="flex-1 ml-64">
         <div className={`p-8 ${isSyncing ? 'pt-20' : ''}`}>
