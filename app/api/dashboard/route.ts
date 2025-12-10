@@ -71,6 +71,31 @@ export async function GET(request: NextRequest) {
     const today = startOfDay(now)
 
     // Items to order - products with low days of supply based on recent sales velocity
+    // First get total count, then get items (limited for display)
+    const itemsToOrderCount = await query<{ count: number }>(`
+      WITH velocity AS (
+        SELECT 
+          oi.master_sku as sku,
+          COALESCE(SUM(oi.quantity), 0) / 30.0 as avg_daily_sales
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.purchase_date > NOW() - INTERVAL '30 days'
+          AND o.status != 'Cancelled'
+        GROUP BY oi.master_sku
+      )
+      SELECT COUNT(*) as count
+      FROM products p
+      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+      LEFT JOIN velocity v ON p.sku = v.sku
+      WHERE p.is_hidden = false
+        AND COALESCE(v.avg_daily_sales, 0) > 0.1
+        AND CASE 
+          WHEN COALESCE(v.avg_daily_sales, 0) > 0 
+          THEN (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / v.avg_daily_sales
+          ELSE 999
+        END < 21
+    `, [])
+
     const itemsToOrderResult = await query<{ sku: string; title: string; total_qty: number; days_of_supply: number }>(`
       WITH velocity AS (
         SELECT 
@@ -102,10 +127,31 @@ export async function GET(request: NextRequest) {
           ELSE 999
         END < 21
       ORDER BY days_of_supply ASC
-      LIMIT 10
+      LIMIT 20
     `, [])
     
     // Items to ship to Amazon - have warehouse stock but low FBA stock
+    const itemsToShipCount = await query<{ count: number }>(`
+      WITH velocity AS (
+        SELECT 
+          oi.master_sku as sku,
+          COALESCE(SUM(oi.quantity), 0) / 30.0 as avg_daily_sales
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.purchase_date > NOW() - INTERVAL '30 days'
+          AND o.status != 'Cancelled'
+        GROUP BY oi.master_sku
+      )
+      SELECT COUNT(*) as count
+      FROM products p
+      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+      LEFT JOIN velocity v ON p.sku = v.sku
+      WHERE p.is_hidden = false
+        AND COALESCE(il.warehouse_available, 0) > 0
+        AND COALESCE(il.fba_available, 0) < 30
+        AND COALESCE(v.avg_daily_sales, 0) > 0.1
+    `, [])
+
     const itemsToShipResult = await query<{ sku: string; title: string; warehouse_qty: number; fba_qty: number }>(`
       WITH velocity AS (
         SELECT 
@@ -130,10 +176,25 @@ export async function GET(request: NextRequest) {
         AND COALESCE(il.fba_available, 0) < 30
         AND COALESCE(v.avg_daily_sales, 0) > 0.1
       ORDER BY il.fba_available ASC
-      LIMIT 10
+      LIMIT 20
     `, [])
 
     // Out of stock items - FBA available = 0 but has recent sales history
+    const outOfStockCount = await query<{ count: number }>(`
+      SELECT COUNT(DISTINCT p.sku) as count
+      FROM products p
+      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+      WHERE p.is_hidden = false
+        AND COALESCE(il.fba_available, 0) = 0
+        AND EXISTS (
+          SELECT 1 FROM order_items oi 
+          JOIN orders o ON oi.order_id = o.id
+          WHERE oi.master_sku = p.sku 
+          AND o.purchase_date > NOW() - INTERVAL '30 days'
+          AND o.status != 'Cancelled'
+        )
+    `, [])
+
     const outOfStockResult = await query<{ sku: string; title: string }>(`
       SELECT DISTINCT
         p.sku,
@@ -149,12 +210,12 @@ export async function GET(request: NextRequest) {
           AND o.purchase_date > NOW() - INTERVAL '30 days'
           AND o.status != 'Cancelled'
         )
-      LIMIT 10
+      LIMIT 20
     `, [])
     
-    const itemsToOrder = itemsToOrderResult
-    const itemsToShip = itemsToShipResult
-    const outOfStockItems = outOfStockResult
+    const itemsToOrderTotal = Number(itemsToOrderCount[0]?.count || 0)
+    const itemsToShipTotal = Number(itemsToShipCount[0]?.count || 0)
+    const outOfStockTotal = Number(outOfStockCount[0]?.count || 0)
 
     // Late shipments (POs past expected arrival date and not received)
     const latePOs = await prisma.purchaseOrder.findMany({
@@ -235,9 +296,9 @@ export async function GET(request: NextRequest) {
         yesterdayProfit: Math.round(yesterdayProfit * 100) / 100,
         tasks: {
           itemsToOrder: {
-            count: itemsToOrder.length,
+            count: itemsToOrderTotal,
             nextDate: null,
-            items: itemsToOrder.map(item => ({
+            items: itemsToOrderResult.map(item => ({
               sku: item.sku,
               title: item.title,
               quantity: item.total_qty,
@@ -245,9 +306,9 @@ export async function GET(request: NextRequest) {
             }))
           },
           itemsToShip: {
-            count: itemsToShip.length,
+            count: itemsToShipTotal,
             nextDate: null,
-            items: itemsToShip.map(item => ({
+            items: itemsToShipResult.map(item => ({
               sku: item.sku,
               title: item.title,
               warehouseQty: item.warehouse_qty,
@@ -255,8 +316,8 @@ export async function GET(request: NextRequest) {
             }))
           },
           outOfStock: {
-            count: outOfStockItems.length,
-            items: outOfStockItems.map(item => ({
+            count: outOfStockTotal,
+            items: outOfStockResult.map(item => ({
               sku: item.sku,
               title: item.title
             }))
