@@ -44,7 +44,7 @@ interface ReminderItem {
 
 interface TasksData {
   itemsToOrder: { count: number; nextDate: string | null; items: TaskItem[] }
-  itemsToShip: { count: number; nextDate: string | null; items: TaskItem[] }
+  itemsToShip: { count: number; productCount?: number; nextDate: string | null; items: TaskItem[] }
   outOfStock: { count: number; items: TaskItem[] }
   lateShipments: { count: number; items: TaskItem[] }
   reminders?: { count: number; items: ReminderItem[] }
@@ -126,12 +126,12 @@ export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
       iconBg: 'bg-purple-500/20',
       iconColor: 'text-purple-400',
       label: tasks?.itemsToShip?.count
-        ? `${tasks.itemsToShip.count} item${tasks.itemsToShip.count > 1 ? 's' : ''} to ship`
+        ? `${tasks.itemsToShip.count.toLocaleString()} units to ship`
         : 'No items to ship',
-      sublabel: tasks?.itemsToShip?.nextDate
-        ? formatNextDate(tasks.itemsToShip.nextDate)
+      sublabel: tasks?.itemsToShip?.productCount
+        ? `${tasks.itemsToShip.productCount} products`
         : null,
-      count: tasks?.itemsToShip?.count || 0,
+      count: tasks?.itemsToShip?.items?.length || 0,
       items: tasks?.itemsToShip?.items || [],
       action: { label: 'View All', href: '/fba-shipments' }
     },

@@ -71,31 +71,7 @@ export async function GET(request: NextRequest) {
     const today = startOfDay(now)
 
     // Items to order - products with low days of supply based on recent sales velocity
-    // First get total count, then get items (limited for display)
-    const itemsToOrderCount = await query<{ count: number }>(`
-      WITH velocity AS (
-        SELECT 
-          oi.master_sku as sku,
-          COALESCE(SUM(oi.quantity), 0) / 30.0 as avg_daily_sales
-        FROM order_items oi
-        JOIN orders o ON oi.order_id = o.id
-        WHERE o.purchase_date > NOW() - INTERVAL '30 days'
-          AND o.status != 'Cancelled'
-        GROUP BY oi.master_sku
-      )
-      SELECT COUNT(*) as count
-      FROM products p
-      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
-      LEFT JOIN velocity v ON p.sku = v.sku
-      WHERE p.is_hidden = false
-        AND COALESCE(v.avg_daily_sales, 0) > 0.1
-        AND CASE 
-          WHEN COALESCE(v.avg_daily_sales, 0) > 0 
-          THEN (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / v.avg_daily_sales
-          ELSE 999
-        END < 21
-    `, [])
-
+    // No limit - show all products that need ordering
     const itemsToOrderResult = await query<{ sku: string; title: string; total_qty: number; days_of_supply: number }>(`
       WITH velocity AS (
         SELECT 
@@ -127,32 +103,18 @@ export async function GET(request: NextRequest) {
           ELSE 999
         END < 21
       ORDER BY days_of_supply ASC
-      LIMIT 20
     `, [])
     
     // Items to ship to Amazon - have warehouse stock but low FBA stock
-    const itemsToShipCount = await query<{ count: number }>(`
-      WITH velocity AS (
-        SELECT 
-          oi.master_sku as sku,
-          COALESCE(SUM(oi.quantity), 0) / 30.0 as avg_daily_sales
-        FROM order_items oi
-        JOIN orders o ON oi.order_id = o.id
-        WHERE o.purchase_date > NOW() - INTERVAL '30 days'
-          AND o.status != 'Cancelled'
-        GROUP BY oi.master_sku
-      )
-      SELECT COUNT(*) as count
-      FROM products p
-      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
-      LEFT JOIN velocity v ON p.sku = v.sku
-      WHERE p.is_hidden = false
-        AND COALESCE(il.warehouse_available, 0) > 0
-        AND COALESCE(il.fba_available, 0) < 30
-        AND COALESCE(v.avg_daily_sales, 0) > 0.1
-    `, [])
-
-    const itemsToShipResult = await query<{ sku: string; title: string; warehouse_qty: number; fba_qty: number }>(`
+    // Calculate RECOMMENDED shipment qty (to reach 30 days supply at FBA)
+    const itemsToShipResult = await query<{ 
+      sku: string
+      title: string
+      warehouse_qty: number
+      fba_qty: number
+      avg_daily_sales: number
+      recommended_ship_qty: number
+    }>(`
       WITH velocity AS (
         SELECT 
           oi.master_sku as sku,
@@ -167,7 +129,13 @@ export async function GET(request: NextRequest) {
         p.sku,
         p.title,
         COALESCE(il.warehouse_available, 0) as warehouse_qty,
-        COALESCE(il.fba_available, 0) as fba_qty
+        COALESCE(il.fba_available, 0) as fba_qty,
+        COALESCE(v.avg_daily_sales, 0) as avg_daily_sales,
+        -- Recommended = enough to get to 30 days supply, but not more than warehouse has
+        LEAST(
+          COALESCE(il.warehouse_available, 0),
+          GREATEST(0, CEIL(v.avg_daily_sales * 30) - COALESCE(il.fba_available, 0))
+        ) as recommended_ship_qty
       FROM products p
       LEFT JOIN inventory_levels il ON p.sku = il.master_sku
       LEFT JOIN velocity v ON p.sku = v.sku
@@ -175,26 +143,18 @@ export async function GET(request: NextRequest) {
         AND COALESCE(il.warehouse_available, 0) > 0
         AND COALESCE(il.fba_available, 0) < 30
         AND COALESCE(v.avg_daily_sales, 0) > 0.1
-      ORDER BY il.fba_available ASC
-      LIMIT 20
+      ORDER BY 
+        -- Prioritize items with 0 FBA stock first, then by days of supply
+        CASE WHEN COALESCE(il.fba_available, 0) = 0 THEN 0 ELSE 1 END,
+        COALESCE(il.fba_available, 0) / NULLIF(v.avg_daily_sales, 0) ASC
     `, [])
+
+    // Sum up total recommended units to ship
+    const itemsToShipTotalUnits = itemsToShipResult.reduce((sum, item) => sum + Number(item.recommended_ship_qty), 0)
+    const itemsToShipProductCount = itemsToShipResult.length
 
     // Out of stock items - FBA available = 0 but has recent sales history
-    const outOfStockCount = await query<{ count: number }>(`
-      SELECT COUNT(DISTINCT p.sku) as count
-      FROM products p
-      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
-      WHERE p.is_hidden = false
-        AND COALESCE(il.fba_available, 0) = 0
-        AND EXISTS (
-          SELECT 1 FROM order_items oi 
-          JOIN orders o ON oi.order_id = o.id
-          WHERE oi.master_sku = p.sku 
-          AND o.purchase_date > NOW() - INTERVAL '30 days'
-          AND o.status != 'Cancelled'
-        )
-    `, [])
-
+    // No limit - show all out of stock items
     const outOfStockResult = await query<{ sku: string; title: string }>(`
       SELECT DISTINCT
         p.sku,
@@ -210,12 +170,10 @@ export async function GET(request: NextRequest) {
           AND o.purchase_date > NOW() - INTERVAL '30 days'
           AND o.status != 'Cancelled'
         )
-      LIMIT 20
     `, [])
     
-    const itemsToOrderTotal = Number(itemsToOrderCount[0]?.count || 0)
-    const itemsToShipTotal = Number(itemsToShipCount[0]?.count || 0)
-    const outOfStockTotal = Number(outOfStockCount[0]?.count || 0)
+    const itemsToOrderTotal = itemsToOrderResult.length
+    const outOfStockTotal = outOfStockResult.length
 
     // Late shipments (POs past expected arrival date and not received)
     const latePOs = await prisma.purchaseOrder.findMany({
@@ -306,13 +264,15 @@ export async function GET(request: NextRequest) {
             }))
           },
           itemsToShip: {
-            count: itemsToShipTotal,
+            count: itemsToShipTotalUnits, // Total recommended UNITS to ship
+            productCount: itemsToShipProductCount, // Number of different products
             nextDate: null,
             items: itemsToShipResult.map(item => ({
               sku: item.sku,
               title: item.title,
               warehouseQty: item.warehouse_qty,
-              fbaQty: item.fba_qty
+              fbaQty: item.fba_qty,
+              recommendedQty: Number(item.recommended_ship_qty)
             }))
           },
           outOfStock: {
