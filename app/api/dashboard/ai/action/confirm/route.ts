@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { pendingActions } from '@/lib/pending-actions'
 
+// Map table names to Prisma models
+const tableModelMap: Record<string, string> = {
+  'products': 'product',
+  'inventory_levels': 'inventoryLevel',
+  'purchase_orders': 'purchaseOrder',
+  'purchase_order_items': 'purchaseOrderItem',
+  'suppliers': 'supplier',
+  'goals': 'goal',
+  'dashboard_cards': 'dashboardCard',
+  'calendar_events': 'calendarEvent',
+  'user_schedule': 'userSchedule',
+  'user_profile': 'userProfile',
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -22,113 +36,136 @@ export async function POST(request: NextRequest) {
       }, { status: 404 })
     }
 
-    // Execute the action
-    let message = 'Action completed!'
+    let message = 'Done!'
+    const modelName = tableModelMap[action.table] || action.table
+    const model = (prisma as any)[modelName]
 
-    switch (action.type) {
-      case 'update_inventory':
-        if (action.sku && action.toValue !== undefined) {
-          await prisma.inventoryLevel.updateMany({
-            where: { masterSku: action.sku },
-            data: { warehouseAvailable: parseInt(action.toValue) }
-          })
-          message = `Done! Updated warehouse quantity for ${action.sku} to ${action.toValue}.`
-        }
-        break
-
-      case 'update_cost':
-        if (action.sku && action.toValue !== undefined) {
-          await prisma.product.updateMany({
-            where: { sku: action.sku },
-            data: { cost: parseFloat(action.toValue) }
-          })
-          message = `Done! Updated cost for ${action.sku} to $${parseFloat(action.toValue).toFixed(2)}.`
-        }
-        break
-
-      case 'update_po':
-        if (action.poNumber && action.toValue) {
-          await prisma.purchaseOrder.updateMany({
-            where: { poNumber: action.poNumber },
-            data: { status: action.toValue }
-          })
-          message = `Done! Marked PO #${action.poNumber} as ${action.toValue}.`
-        }
-        break
-
-      case 'dismiss_recommendations':
-        if (action.sku) {
-          // Mark related inventory alerts as resolved
-          await prisma.inventoryAlert.updateMany({
-            where: { 
-              masterSku: action.sku,
-              isResolved: false
-            },
-            data: { 
-              isResolved: true,
-              resolvedAt: new Date()
-            }
-          })
-          message = `Done! Dismissed recommendations for ${action.sku}.`
-        }
-        break
-
-      case 'add_card':
-        if (action.cardType) {
-          await prisma.dashboardCard.upsert({
-            where: {
-              userId_cardType: { userId: 1, cardType: action.cardType }
-            },
-            update: { isEnabled: true },
-            create: {
-              userId: 1,
-              cardType: action.cardType,
-              isEnabled: true,
-              column: action.cardType === 'goals' ? 'left' : 'right',
-              sortOrder: 99
-            }
-          })
-          message = `Done! Added the ${action.cardType.replace('_', ' ')} card to your dashboard. Refresh to see it!`
-        }
-        break
-
-      case 'remove_card':
-        if (action.cardType) {
-          await prisma.dashboardCard.upsert({
-            where: {
-              userId_cardType: { userId: 1, cardType: action.cardType }
-            },
-            update: { isEnabled: false },
-            create: {
-              userId: 1,
-              cardType: action.cardType,
-              isEnabled: false,
-              column: 'left',
-              sortOrder: 99
-            }
-          })
-          message = `Done! Removed the ${action.cardType.replace('_', ' ')} card from your dashboard. Refresh to see changes!`
-        }
-        break
-
-      default:
-        return NextResponse.json({
-          success: false,
-          error: 'Unknown action type'
-        }, { status: 400 })
+    if (!model) {
+      return NextResponse.json({
+        success: false,
+        error: `Unknown table: ${action.table}`
+      }, { status: 400 })
     }
 
-    // Remove the pending action
+    try {
+      switch (action.type) {
+        case 'create':
+          await model.create({ data: action.data })
+          message = `Created successfully: ${action.description}`
+          break
+
+        case 'update':
+          if (action.upsert) {
+            // Special handling for dashboard cards which need upsert
+            if (action.table === 'dashboard_cards') {
+              await prisma.dashboardCard.upsert({
+                where: { 
+                  userId_cardType: { 
+                    userId: 1, 
+                    cardType: action.where.cardType 
+                  } 
+                },
+                update: action.data,
+                create: { 
+                  userId: 1, 
+                  cardType: action.where.cardType,
+                  ...action.data,
+                  column: action.data.column || 'left',
+                  sortOrder: action.data.sortOrder || 99
+                }
+              })
+            } else {
+              // Generic upsert - try update first, then create
+              const existing = await model.findFirst({ where: action.where })
+              if (existing) {
+                await model.update({ where: action.where, data: action.data })
+              } else {
+                await model.create({ data: { ...action.where, ...action.data } })
+              }
+            }
+          } else {
+            // Check if record exists
+            const whereKey = Object.keys(action.where)[0]
+            const whereValue = action.where[whereKey]
+            
+            // Handle different table structures
+            if (action.table === 'products') {
+              await prisma.product.update({
+                where: { sku: whereValue },
+                data: action.data
+              })
+            } else if (action.table === 'inventory_levels') {
+              await prisma.inventoryLevel.updateMany({
+                where: { masterSku: whereValue },
+                data: action.data
+              })
+            } else if (action.table === 'purchase_orders') {
+              await prisma.purchaseOrder.updateMany({
+                where: { poNumber: whereValue },
+                data: action.data
+              })
+            } else if (action.table === 'goals') {
+              await prisma.goal.update({
+                where: { id: typeof whereValue === 'number' ? whereValue : parseInt(whereValue) },
+                data: action.data
+              })
+            } else if (action.table === 'suppliers') {
+              await prisma.supplier.update({
+                where: { id: typeof whereValue === 'number' ? whereValue : parseInt(whereValue) },
+                data: action.data
+              })
+            } else {
+              // Generic update
+              await model.updateMany({ where: action.where, data: action.data })
+            }
+          }
+          message = `Updated successfully: ${action.description}`
+          break
+
+        case 'delete':
+          if (action.table === 'goals') {
+            await prisma.goal.delete({
+              where: { id: typeof action.where.id === 'number' ? action.where.id : parseInt(action.where.id) }
+            })
+          } else if (action.table === 'dashboard_cards') {
+            // For dashboard cards, we disable instead of delete
+            await prisma.dashboardCard.updateMany({
+              where: action.where,
+              data: { isEnabled: false }
+            })
+          } else if (action.table === 'calendar_events') {
+            await prisma.calendarEvent.delete({
+              where: { id: typeof action.where.id === 'number' ? action.where.id : parseInt(action.where.id) }
+            })
+          } else {
+            await model.deleteMany({ where: action.where })
+          }
+          message = `Deleted successfully: ${action.description}`
+          break
+
+        default:
+          return NextResponse.json({
+            success: false,
+            error: `Unknown operation type: ${action.type}`
+          }, { status: 400 })
+      }
+    } catch (dbError: any) {
+      console.error('Database operation error:', dbError)
+      return NextResponse.json({
+        success: false,
+        error: `Database error: ${dbError.message || 'Operation failed'}`
+      }, { status: 500 })
+    }
+
+    // Remove pending action
     pendingActions.delete(actionId)
 
     // Log the action
-    console.log(`AI Action executed: ${action.type}`, {
+    console.log(`AI Action executed: ${action.type} ${action.table}`, {
       actionId,
       command: action.command,
-      sku: action.sku,
-      poNumber: action.poNumber,
-      fromValue: action.fromValue,
-      toValue: action.toValue
+      where: action.where,
+      data: action.data
     })
 
     return NextResponse.json({
@@ -143,4 +180,3 @@ export async function POST(request: NextRequest) {
     }, { status: 500 })
   }
 }
-

@@ -4,8 +4,65 @@ import Anthropic from '@anthropic-ai/sdk'
 import { randomUUID } from 'crypto'
 import { pendingActions } from '@/lib/pending-actions'
 
-// Only create client if API key exists
 const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null
+
+// Database schema context for the AI
+const DATABASE_SCHEMA = `
+DATABASE TABLES AND FIELDS:
+
+products:
+  - sku (string, unique) - Product SKU
+  - title (string) - Product title  
+  - cost (decimal) - Cost/COGS per unit
+  - price (decimal) - Selling price
+  - weight (decimal) - Product weight
+  - length, width, height (decimal) - Dimensions
+  - supplierId (int) - Link to supplier
+  - isActive (boolean) - Whether product is active
+
+inventory_levels:
+  - masterSku (string) - Links to products.sku
+  - fbaAvailable (int) - FBA available quantity
+  - warehouseAvailable (int) - Warehouse quantity
+  - fbaReserved (int) - FBA reserved
+
+purchase_orders:
+  - poNumber (string, unique) - PO number
+  - status (string) - draft, sent, confirmed, shipped, partial, received, cancelled
+  - supplierId (int) - Link to supplier
+  - subtotal, total (decimal) - Order totals
+  - expectedArrivalDate (date)
+
+purchase_order_items:
+  - poId (int) - Link to purchase_orders.id
+  - masterSku (string) - Product SKU
+  - quantityOrdered (int)
+  - quantityReceived (int)
+  - unitCost (decimal)
+
+suppliers:
+  - name (string) - Supplier name
+  - email (string) - Contact email
+  - leadTimeDays (int) - Lead time
+
+goals:
+  - title (string) - Goal title
+  - targetValue (decimal) - Target number
+  - currentValue (decimal) - Current progress
+  - isCompleted (boolean)
+  - color (string) - Display color
+
+dashboard_cards:
+  - cardType (string) - tasks, profit, schedule, goals, etc.
+  - isEnabled (boolean) - Whether card is visible
+  - column (string) - left or right
+
+calendar_events:
+  - title (string) - Event title
+  - startDate (date)
+  - startTime (string) - HH:MM format
+  - eventType (string) - appointment, reminder, time_off
+`
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,103 +79,95 @@ export async function POST(request: NextRequest) {
     if (!anthropic) {
       return NextResponse.json({
         success: false,
-        error: 'AI features require ANTHROPIC_API_KEY to be configured. Please add it to your environment variables.'
+        error: 'AI features require ANTHROPIC_API_KEY to be configured.'
       }, { status: 503 })
     }
 
-    // Get some context about available SKUs and data
-    const products = await prisma.product.findMany({
-      take: 50,
-      select: { sku: true, title: true, cost: true }
-    })
-    
-    const purchaseOrders = await prisma.purchaseOrder.findMany({
-      where: { status: { notIn: ['received', 'cancelled'] } },
-      take: 20,
-      select: { poNumber: true, status: true }
-    })
+    // Get some sample data for context
+    const [products, purchaseOrders, suppliers, goals] = await Promise.all([
+      prisma.product.findMany({ take: 30, select: { sku: true, title: true, cost: true } }),
+      prisma.purchaseOrder.findMany({ 
+        where: { status: { notIn: ['received', 'cancelled'] } },
+        take: 20, 
+        select: { poNumber: true, status: true, supplierId: true }
+      }),
+      prisma.supplier.findMany({ take: 20, select: { id: true, name: true } }),
+      prisma.goal.findMany({ take: 10, select: { id: true, title: true, isCompleted: true } })
+    ])
 
-    const systemPrompt = `You are a helpful assistant that parses business commands for an Amazon FBA inventory system.
+    const systemPrompt = `You are a powerful AI assistant for an Amazon FBA inventory management system. You can execute a WIDE variety of actions on the database.
 
-Available data:
-- Products/SKUs: ${products.slice(0, 20).map(p => p.sku).join(', ')}${products.length > 20 ? '...' : ''}
+${DATABASE_SCHEMA}
+
+CURRENT DATA CONTEXT:
+- Products: ${products.slice(0, 15).map(p => `${p.sku} ($${p.cost || 'no cost'})`).join(', ')}${products.length > 15 ? '...' : ''}
 - Pending POs: ${purchaseOrders.map(po => po.poNumber).join(', ') || '(none)'}
-- Dashboard cards that can be added/removed: goals, top_products, inventory_summary
+- Suppliers: ${suppliers.map(s => `${s.name} (id:${s.id})`).join(', ') || '(none)'}
+- Goals: ${goals.map(g => `"${g.title}" (id:${g.id}, ${g.isCompleted ? 'done' : 'active'})`).join(', ') || '(none)'}
 
-Parse the user's command and return a JSON object:
+Parse the user's command and return a JSON object with the operation to perform:
 
 {
-  "understood": true/false,
-  "needsClarification": true/false,
-  "question": "Clarification question if needed",
-  "action": {
-    "type": "update_inventory" | "update_cost" | "create_po" | "update_po" | "dismiss_recommendations" | "add_card" | "remove_card" | "unknown",
-    "sku": "SKU-123",
-    "poNumber": "PO-123",
-    "cardType": "goals",
-    "field": "field_name",
-    "fromValue": "current value",
-    "toValue": "new value",
-    "quantity": 500,
-    "description": "Human readable description of the action"
+  "understood": true,
+  "operation": {
+    "type": "update" | "create" | "delete" | "custom",
+    "table": "products" | "inventory_levels" | "purchase_orders" | "suppliers" | "goals" | "dashboard_cards" | "calendar_events",
+    "where": { "field": "value" },  // For update/delete
+    "data": { "field": "value" },   // For update/create
+    "description": "Human-readable description of what will happen"
   }
 }
 
-IMPORTANT: Be flexible in understanding user intent. Here are examples of commands you should understand:
+EXAMPLES:
 
-DASHBOARD CARD management:
-- "Add a goals card" → add_card, cardType: "goals"
-- "Add the goals card to the dashboard" → add_card, cardType: "goals"
-- "I want to see my goals" → add_card, cardType: "goals"
-- "Show me top products" → add_card, cardType: "top_products"
-- "Add inventory summary" → add_card, cardType: "inventory_summary"
-- "Remove the goals card" → remove_card, cardType: "goals"
-- "Hide the schedule card" → remove_card, cardType: "schedule"
-- "I don't need the profit card" → remove_card, cardType: "profit"
+1. "Update cost for SKU-123 to $4.50"
+→ { "understood": true, "operation": { "type": "update", "table": "products", "where": { "sku": "SKU-123" }, "data": { "cost": 4.50 }, "description": "Update cost for SKU-123 to $4.50" } }
 
-Available card types: goals, top_products, inventory_summary, tasks, profit, schedule
+2. "Add a goal: Hit $100k revenue this month"
+→ { "understood": true, "operation": { "type": "create", "table": "goals", "data": { "title": "Hit $100k revenue this month", "targetValue": 100000 }, "description": "Create new goal: Hit $100k revenue this month" } }
 
-COST/COGS updates (all mean the same thing - updating product cost):
-- "Update cost for SKU-123 to $4.50" → update_cost
-- "Change COGS for SKU-123 to 4.50" → update_cost
-- "Set the cost of SKU-123 to $4.50" → update_cost
-- "Add COGS for SKU-123 to $2.54" → update_cost
-- "The cost for SKU-123 is $4.50" → update_cost
-- "SKU-123 costs $4.50" → update_cost
+3. "Delete the goal about revenue"
+→ { "understood": true, "operation": { "type": "delete", "table": "goals", "where": { "id": 1 }, "description": "Delete goal: Hit $100k revenue this month" } }
 
-Inventory updates:
-- "Change warehouse qty for SKU-123 to 500" → update_inventory
-- "Set inventory for SKU-123 to 500" → update_inventory
-- "Update stock for SKU-123 to 500" → update_inventory
+4. "Mark PO-2024-001 as received"
+→ { "understood": true, "operation": { "type": "update", "table": "purchase_orders", "where": { "poNumber": "PO-2024-001" }, "data": { "status": "received" }, "description": "Mark PO-2024-001 as received" } }
 
-PO updates:
-- "Mark PO #1234 as received" → update_po
-- "PO 1234 has been received" → update_po
-- "Received PO #1234" → update_po
+5. "Set warehouse quantity for SKU-ABC to 500"
+→ { "understood": true, "operation": { "type": "update", "table": "inventory_levels", "where": { "masterSku": "SKU-ABC" }, "data": { "warehouseAvailable": 500 }, "description": "Update warehouse quantity for SKU-ABC to 500" } }
 
-When parsing:
-- Strip $ symbols from monetary values
-- Convert values like "$2.54" to 2.54
-- The SKU might appear anywhere in the command
-- "COGS" and "cost" mean the same thing
-- Always set understood: true if you can figure out the intent
+6. "Add the goals card to dashboard"
+→ { "understood": true, "operation": { "type": "update", "table": "dashboard_cards", "where": { "cardType": "goals" }, "data": { "isEnabled": true }, "upsert": true, "description": "Add goals card to dashboard" } }
 
-If you need more info (like quantity for creating a PO), set needsClarification: true.
-Only set understood: false if you truly cannot figure out what the user wants.`
+7. "Create a new supplier called China Direct with email china@example.com"
+→ { "understood": true, "operation": { "type": "create", "table": "suppliers", "data": { "name": "China Direct", "email": "china@example.com" }, "description": "Create new supplier: China Direct" } }
+
+8. "Remind me to call the supplier tomorrow at 2pm"  
+→ { "understood": true, "operation": { "type": "create", "table": "calendar_events", "data": { "title": "Call the supplier", "startDate": "2025-12-11", "startTime": "14:00", "eventType": "reminder" }, "description": "Add reminder: Call the supplier tomorrow at 2pm" } }
+
+9. "Deactivate product SKU-OLD"
+→ { "understood": true, "operation": { "type": "update", "table": "products", "where": { "sku": "SKU-OLD" }, "data": { "isActive": false }, "description": "Deactivate product SKU-OLD" } }
+
+BE FLEXIBLE! Understand natural language variations:
+- "change", "update", "set", "make" → update operation
+- "add", "create", "new" → create operation  
+- "remove", "delete", "hide" → delete or update with isEnabled: false
+- "cost", "COGS", "unit cost" all mean the cost field
+- "qty", "quantity", "stock", "inventory" mean inventory quantities
+
+If the user's request is unclear, return:
+{ "understood": false, "clarification": "What specifically would you like to do?" }
+
+Return ONLY the JSON object, no other text.`
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 500,
+      max_tokens: 800,
       system: systemPrompt,
-      messages: [
-        { role: 'user', content: command }
-      ]
+      messages: [{ role: 'user', content: command }]
     })
 
     const content = response.content[0]
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type')
-    }
+    if (content.type !== 'text') throw new Error('Unexpected response type')
 
     let parsed
     try {
@@ -130,71 +179,58 @@ Only set understood: false if you truly cannot figure out what the user wants.`
     } catch {
       return NextResponse.json({
         success: false,
-        error: "Sorry, I couldn't understand that command. Try being more specific."
+        error: "Sorry, I couldn't understand that. Try rephrasing your request."
       })
     }
 
     if (!parsed.understood) {
       return NextResponse.json({
         success: false,
-        error: "I'm not sure what you're asking. Try something like 'Update warehouse qty for SKU-123 to 500'."
+        error: parsed.clarification || "I'm not sure what you want to do. Can you be more specific?"
       })
     }
 
-    if (parsed.needsClarification) {
-      return NextResponse.json({
-        success: true,
-        needsClarification: true,
-        question: parsed.question
-      })
-    }
+    // Look up current values for update operations
+    const operation = parsed.operation
+    let currentData: any = null
 
-    // Look up current values for context
-    const action = parsed.action
-    let currentValue = null
-
-    if (action.type === 'update_inventory' && action.sku) {
-      const inv = await prisma.inventoryLevel.findFirst({
-        where: { masterSku: action.sku }
-      })
-      currentValue = inv?.warehouseAvailable
-      action.fromValue = currentValue
-    } else if (action.type === 'update_cost' && action.sku) {
-      const product = await prisma.product.findFirst({
-        where: { sku: action.sku }
-      })
-      currentValue = product?.cost
-      action.fromValue = currentValue ? Number(currentValue) : null
-    } else if (action.type === 'update_po' && action.poNumber) {
-      const po = await prisma.purchaseOrder.findFirst({
-        where: { poNumber: action.poNumber }
-      })
-      currentValue = po?.status
-      action.fromValue = currentValue
+    if (operation.type === 'update' && operation.where) {
+      try {
+        const model = (prisma as any)[operation.table]
+        if (model) {
+          currentData = await model.findFirst({ where: operation.where })
+        }
+      } catch (e) {
+        // Ignore lookup errors
+      }
     }
 
     // Create action ID and store pending action
     const actionId = randomUUID()
     pendingActions.set(actionId, {
-      ...action,
+      ...operation,
       command,
+      currentData,
       createdAt: new Date()
     })
 
-    // Auto-expire pending actions after 5 minutes
     setTimeout(() => pendingActions.delete(actionId), 5 * 60 * 1000)
+
+    // Build preview
+    const changes = operation.data && currentData ? 
+      Object.keys(operation.data).map(field => ({
+        field,
+        from: currentData[field],
+        to: operation.data[field]
+      })) : undefined
 
     return NextResponse.json({
       success: true,
       preview: {
         actionId,
-        action: action.type,
-        description: action.description,
-        changes: action.fromValue !== undefined ? [{
-          field: action.field || action.type.replace('update_', ''),
-          from: action.fromValue,
-          to: action.toValue
-        }] : undefined
+        action: `${operation.type} ${operation.table}`,
+        description: operation.description,
+        changes
       }
     })
   } catch (error) {
@@ -205,4 +241,3 @@ Only set understood: false if you truly cannot figure out what the user wants.`
     }, { status: 500 })
   }
 }
-
