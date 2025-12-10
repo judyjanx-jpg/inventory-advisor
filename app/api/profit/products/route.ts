@@ -302,8 +302,31 @@ export async function GET(request: NextRequest) {
       // Returns table might not have data
     }
 
-    // Create lookup map for refunds
+    // Get ad spend by ASIN from Amazon Ads data
+    let adSpendByAsin: Array<{ asin: string; sku: string | null; spend: string }> = []
+    try {
+      adSpendByAsin = await query<{
+        asin: string
+        sku: string | null
+        spend: string
+      }>(`
+        SELECT
+          asin,
+          sku,
+          COALESCE(SUM(spend), 0)::text as spend
+        FROM ad_product_spend
+        WHERE start_date >= $1::date
+          AND end_date <= $2::date
+        GROUP BY asin, sku
+      `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]])
+    } catch (e) {
+      // Ad spend table might not have data yet
+    }
+
+    // Create lookup maps
     const refundsMap = new Map(refundsByProduct.map(r => [r.sku, r]))
+    const adSpendByAsinMap = new Map(adSpendByAsin.map(a => [a.asin, parseFloat(a.spend) || 0]))
+    const adSpendBySkuMap = new Map(adSpendByAsin.filter(a => a.sku).map(a => [a.sku!, parseFloat(a.spend) || 0]))
 
     // Build product profit data with fee estimation
     const products: ProductProfit[] = salesByProduct.map((sale) => {
@@ -316,7 +339,10 @@ export async function GET(request: NextRequest) {
       const actualFees = parseFloat(sale.actual_fees || '0')
       const itemsWithFees = parseInt(sale.items_with_fees || '0', 10)
       const totalItems = parseInt(sale.total_items || '0', 10)
-      const adSpend = 0 // Will be populated when Ads API is connected
+      
+      // Get ad spend from Amazon Ads data (by ASIN first, then SKU)
+      const adSpend = adSpendByAsinMap.get(sale.asin) || adSpendBySkuMap.get(sale.sku) || 0
+      
       const cogs = parseFloat(sale.cost || '0')
       const cogsTotal = cogs * unitsSold
 

@@ -1893,6 +1893,41 @@ model AdCampaign {
 }
 
 // ============================================
+// Amazon Ads - Product Level Spend (for profit calculation)
+// ============================================
+model AdProductSpend {
+  id            String   @id @default(uuid())
+  
+  // Product identifiers
+  asin          String
+  sku           String?  // If available from report
+  
+  // Date range this data covers
+  startDate     DateTime @map("start_date") @db.Date
+  endDate       DateTime @map("end_date") @db.Date
+  
+  // Metrics
+  impressions   Int      @default(0)
+  clicks        Int      @default(0)
+  spend         Decimal  @default(0) @db.Decimal(12, 2)
+  sales         Decimal  @default(0) @db.Decimal(12, 2)
+  orders        Int      @default(0)
+  units         Int      @default(0)
+  
+  // Calculated
+  acos          Decimal? @db.Decimal(6, 2)
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+  
+  @@unique([asin, startDate, endDate])
+  @@index([asin])
+  @@index([sku])
+  @@index([startDate, endDate])
+  @@map("ad_product_spend")
+}
+
+// ============================================
 // INVENTORY AUDIT SYSTEM
 // ============================================
 model AuditSession {

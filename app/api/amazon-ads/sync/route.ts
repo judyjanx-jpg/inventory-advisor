@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
       results.checked = 0
       results.completed = 0
       results.campaignsUpdated = 0
+      results.productsUpdated = 0
 
       for (const report of pendingReports) {
         results.checked++
@@ -129,53 +130,106 @@ export async function POST(request: NextRequest) {
           const downloadResponse = await fetch(status.url)
           const gzipBuffer = await downloadResponse.arrayBuffer()
           const jsonBuffer = gunzipSync(Buffer.from(gzipBuffer))
-          const campaigns = JSON.parse(jsonBuffer.toString('utf-8'))
+          const data = JSON.parse(jsonBuffer.toString('utf-8'))
 
-          if (Array.isArray(campaigns)) {
-            for (const campaign of campaigns) {
-              const campaignId = campaign.campaignId?.toString()
-              if (!campaignId) continue
+          // Parse date range from report
+          const dateRangeParts = report.dateRange?.split(' to ') || []
+          const startDateStr = dateRangeParts[0] || new Date().toISOString().split('T')[0]
+          const endDateStr = dateRangeParts[1] || startDateStr
 
-              const spend = parseFloat(campaign.cost) || 0
-              const sales = parseFloat(campaign.sales14d) || 0
+          if (Array.isArray(data)) {
+            // Handle based on report type
+            if (report.reportType === 'SP_PRODUCTS') {
+              // Product-level report - store in AdProductSpend
+              for (const item of data) {
+                const asin = item.advertisedAsin
+                if (!asin) continue
 
-              await prisma.adCampaign.upsert({
-                where: { campaignId },
-                update: {
-                  campaignName: campaign.campaignName || 'Unknown',
-                  campaignStatus: campaign.campaignStatus || 'UNKNOWN',
-                  campaignType: 'SP',
-                  budgetAmount: parseFloat(campaign.campaignBudgetAmount) || 0,
-                  budgetType: campaign.campaignBudgetType || 'DAILY',
-                  impressions: campaign.impressions || 0,
-                  clicks: campaign.clicks || 0,
-                  spend,
-                  sales14d: sales,
-                  orders14d: campaign.purchases14d || 0,
-                  units14d: campaign.unitsSoldClicks14d || 0,
-                  acos: sales > 0 ? (spend / sales) * 100 : null,
-                  roas: spend > 0 ? sales / spend : null,
-                  lastSyncedAt: new Date(),
-                },
-                create: {
-                  campaignId,
-                  campaignName: campaign.campaignName || 'Unknown',
-                  campaignStatus: campaign.campaignStatus || 'UNKNOWN',
-                  campaignType: 'SP',
-                  budgetAmount: parseFloat(campaign.campaignBudgetAmount) || 0,
-                  budgetType: campaign.campaignBudgetType || 'DAILY',
-                  impressions: campaign.impressions || 0,
-                  clicks: campaign.clicks || 0,
-                  spend,
-                  sales14d: sales,
-                  orders14d: campaign.purchases14d || 0,
-                  units14d: campaign.unitsSoldClicks14d || 0,
-                  acos: sales > 0 ? (spend / sales) * 100 : null,
-                  roas: spend > 0 ? sales / spend : null,
-                  lastSyncedAt: new Date(),
-                },
-              })
-              results.campaignsUpdated++
+                const spend = parseFloat(item.spend) || 0
+                const sales = parseFloat(item.sales14d) || 0
+
+                await prisma.adProductSpend.upsert({
+                  where: {
+                    asin_startDate_endDate: {
+                      asin,
+                      startDate: new Date(startDateStr),
+                      endDate: new Date(endDateStr),
+                    },
+                  },
+                  update: {
+                    sku: item.advertisedSku || null,
+                    impressions: item.impressions || 0,
+                    clicks: item.clicks || 0,
+                    spend,
+                    sales,
+                    orders: item.purchases14d || 0,
+                    units: item.unitsSoldClicks14d || 0,
+                    acos: sales > 0 ? (spend / sales) * 100 : null,
+                    updatedAt: new Date(),
+                  },
+                  create: {
+                    asin,
+                    sku: item.advertisedSku || null,
+                    startDate: new Date(startDateStr),
+                    endDate: new Date(endDateStr),
+                    impressions: item.impressions || 0,
+                    clicks: item.clicks || 0,
+                    spend,
+                    sales,
+                    orders: item.purchases14d || 0,
+                    units: item.unitsSoldClicks14d || 0,
+                    acos: sales > 0 ? (spend / sales) * 100 : null,
+                  },
+                })
+                results.productsUpdated++
+              }
+            } else {
+              // Campaign-level report - store in AdCampaign
+              for (const campaign of data) {
+                const campaignId = campaign.campaignId?.toString()
+                if (!campaignId) continue
+
+                const spend = parseFloat(campaign.cost) || 0
+                const sales = parseFloat(campaign.sales14d) || 0
+
+                await prisma.adCampaign.upsert({
+                  where: { campaignId },
+                  update: {
+                    campaignName: campaign.campaignName || 'Unknown',
+                    campaignStatus: campaign.campaignStatus || 'UNKNOWN',
+                    campaignType: 'SP',
+                    budgetAmount: parseFloat(campaign.campaignBudgetAmount) || 0,
+                    budgetType: campaign.campaignBudgetType || 'DAILY',
+                    impressions: campaign.impressions || 0,
+                    clicks: campaign.clicks || 0,
+                    spend,
+                    sales14d: sales,
+                    orders14d: campaign.purchases14d || 0,
+                    units14d: campaign.unitsSoldClicks14d || 0,
+                    acos: sales > 0 ? (spend / sales) * 100 : null,
+                    roas: spend > 0 ? sales / spend : null,
+                    lastSyncedAt: new Date(),
+                  },
+                  create: {
+                    campaignId,
+                    campaignName: campaign.campaignName || 'Unknown',
+                    campaignStatus: campaign.campaignStatus || 'UNKNOWN',
+                    campaignType: 'SP',
+                    budgetAmount: parseFloat(campaign.campaignBudgetAmount) || 0,
+                    budgetType: campaign.campaignBudgetType || 'DAILY',
+                    impressions: campaign.impressions || 0,
+                    clicks: campaign.clicks || 0,
+                    spend,
+                    sales14d: sales,
+                    orders14d: campaign.purchases14d || 0,
+                    units14d: campaign.unitsSoldClicks14d || 0,
+                    acos: sales > 0 ? (spend / sales) * 100 : null,
+                    roas: spend > 0 ? sales / spend : null,
+                    lastSyncedAt: new Date(),
+                  },
+                })
+                results.campaignsUpdated++
+              }
             }
           }
 
@@ -194,7 +248,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Action: Request a new report
+    // Action: Request new reports (campaign + product level)
     if (action === 'sync' || action === 'request') {
       const days = body.days || 1
       const endDate = new Date()
@@ -205,8 +259,9 @@ export async function POST(request: NextRequest) {
       const startDateStr = startDate.toISOString().split('T')[0]
       const endDateStr = endDate.toISOString().split('T')[0]
 
-      const reportConfig = {
-        name: `Sync_SP_${Date.now()}`,
+      // Request campaign-level report
+      const campaignReportConfig = {
+        name: `Sync_SP_Campaign_${Date.now()}`,
         startDate: startDateStr,
         endDate: endDateStr,
         configuration: {
@@ -231,36 +286,63 @@ export async function POST(request: NextRequest) {
         },
       }
 
-      const response = await fetch(`${ADS_API_BASE}/reporting/reports`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${credentials.accessToken}`,
-          'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
-          'Amazon-Advertising-API-Scope': profileId,
-          'Content-Type': 'application/json',
-          'Accept': 'application/vnd.createasyncreport.v3+json',
+      // Request product-level report (for profit calculation)
+      const productReportConfig = {
+        name: `Sync_SP_Product_${Date.now()}`,
+        startDate: startDateStr,
+        endDate: endDateStr,
+        configuration: {
+          adProduct: 'SPONSORED_PRODUCTS',
+          groupBy: ['advertiser'],
+          columns: [
+            'advertisedAsin',
+            'advertisedSku',
+            'impressions',
+            'clicks',
+            'spend',
+            'sales14d',
+            'purchases14d',
+            'unitsSoldClicks14d',
+          ],
+          reportTypeId: 'spAdvertisedProduct',
+          timeUnit: 'SUMMARY',
+          format: 'GZIP_JSON',
         },
-        body: JSON.stringify(reportConfig),
-      })
-
-      const responseText = await response.text()
-      let reportId: string | null = null
-
-      if (response.status === 425) {
-        const match = responseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
-        if (match) reportId = match[1]
-        results.newReportDuplicate = true
-      } else if (response.ok) {
-        const data = JSON.parse(responseText)
-        reportId = data.reportId
       }
 
-      if (reportId) {
-        const existing = await prisma.adsPendingReport.findUnique({ where: { reportId } })
+      const headers = {
+        'Authorization': `Bearer ${credentials.accessToken}`,
+        'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
+        'Amazon-Advertising-API-Scope': profileId,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.createasyncreport.v3+json',
+      }
+
+      // Request campaign report
+      const campaignResponse = await fetch(`${ADS_API_BASE}/reporting/reports`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(campaignReportConfig),
+      })
+
+      const campaignResponseText = await campaignResponse.text()
+      let campaignReportId: string | null = null
+
+      if (campaignResponse.status === 425) {
+        const match = campaignResponseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
+        if (match) campaignReportId = match[1]
+        results.campaignReportDuplicate = true
+      } else if (campaignResponse.ok) {
+        const data = JSON.parse(campaignResponseText)
+        campaignReportId = data.reportId
+      }
+
+      if (campaignReportId) {
+        const existing = await prisma.adsPendingReport.findUnique({ where: { reportId: campaignReportId } })
         if (!existing) {
           await prisma.adsPendingReport.create({
             data: {
-              reportId,
+              reportId: campaignReportId,
               profileId,
               reportType: 'SP_CAMPAIGNS',
               status: 'PENDING',
@@ -268,9 +350,45 @@ export async function POST(request: NextRequest) {
             },
           })
         }
-        results.newReportId = reportId
-        results.dateRange = `${startDateStr} to ${endDateStr}`
+        results.campaignReportId = campaignReportId
       }
+
+      // Request product report
+      const productResponse = await fetch(`${ADS_API_BASE}/reporting/reports`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(productReportConfig),
+      })
+
+      const productResponseText = await productResponse.text()
+      let productReportId: string | null = null
+
+      if (productResponse.status === 425) {
+        const match = productResponseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
+        if (match) productReportId = match[1]
+        results.productReportDuplicate = true
+      } else if (productResponse.ok) {
+        const data = JSON.parse(productResponseText)
+        productReportId = data.reportId
+      }
+
+      if (productReportId) {
+        const existing = await prisma.adsPendingReport.findUnique({ where: { reportId: productReportId } })
+        if (!existing) {
+          await prisma.adsPendingReport.create({
+            data: {
+              reportId: productReportId,
+              profileId,
+              reportType: 'SP_PRODUCTS',
+              status: 'PENDING',
+              dateRange: `${startDateStr} to ${endDateStr}`,
+            },
+          })
+        }
+        results.productReportId = productReportId
+      }
+
+      results.dateRange = `${startDateStr} to ${endDateStr}`
     }
 
     return NextResponse.json(results)
