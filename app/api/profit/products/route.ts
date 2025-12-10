@@ -315,8 +315,8 @@ export async function GET(request: NextRequest) {
           sku,
           COALESCE(SUM(spend), 0)::text as spend
         FROM ad_product_spend
-        WHERE start_date >= $1::date
-          AND end_date <= $2::date
+        WHERE start_date <= $2::date
+          AND end_date >= $1::date
         GROUP BY asin, sku
       `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]])
     } catch (e) {
