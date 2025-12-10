@@ -8,60 +8,61 @@ const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null
 
 // Database schema context for the AI
 const DATABASE_SCHEMA = `
-DATABASE TABLES AND FIELDS:
+DATABASE TABLES - USER EDITABLE FIELDS:
 
-products:
-  - sku (string, unique) - Product SKU
-  - title (string) - Product title  
-  - cost (decimal) - Cost/COGS per unit
-  - price (decimal) - Selling price
-  - weight (decimal) - Product weight
-  - length, width, height (decimal) - Dimensions
-  - supplierId (int) - Link to supplier
-  - isActive (boolean) - Whether product is active
+products (user can edit):
+  - cost (decimal) - Cost/COGS per unit ✓ EDITABLE
+  - supplierId (int) - Link to supplier ✓ EDITABLE
+  - isActive (boolean) - Whether product is active ✓ EDITABLE
+  - weight, length, width, height (decimal) - Dimensions ✓ EDITABLE
+  - NOTE: sku, asin, title come from Amazon - READ ONLY
 
-inventory_levels:
-  - masterSku (string) - Links to products.sku
-  - fbaAvailable (int) - FBA available quantity
-  - warehouseAvailable (int) - Warehouse quantity
-  - fbaReserved (int) - FBA reserved
+inventory_levels (user can edit):
+  - warehouseAvailable (int) - User's own warehouse quantity ✓ EDITABLE
+  - warehouseReserved (int) - Reserved in warehouse ✓ EDITABLE
+  - NOTE: fbaAvailable, fbaReserved, fbaInbound* come from Amazon API - READ ONLY, cannot be changed
 
-purchase_orders:
-  - poNumber (string, unique) - PO number
-  - status (string) - draft, sent, confirmed, shipped, partial, received, cancelled
-  - supplierId (int) - Link to supplier
-  - subtotal, total (decimal) - Order totals
-  - expectedArrivalDate (date)
+purchase_orders (user can edit):
+  - poNumber (string, unique) ✓ EDITABLE
+  - status (string) - draft, sent, confirmed, shipped, partial, received, cancelled ✓ EDITABLE
+  - supplierId (int) ✓ EDITABLE
+  - expectedArrivalDate (date) ✓ EDITABLE
+  - notes (text) ✓ EDITABLE
 
-purchase_order_items:
-  - poId (int) - Link to purchase_orders.id
-  - masterSku (string) - Product SKU
-  - quantityOrdered (int)
-  - quantityReceived (int)
-  - unitCost (decimal)
+purchase_order_items (user can edit):
+  - quantityOrdered (int) ✓ EDITABLE
+  - quantityReceived (int) ✓ EDITABLE
+  - unitCost (decimal) ✓ EDITABLE
 
-suppliers:
-  - name (string) - Supplier name
-  - email (string) - Contact email
-  - leadTimeDays (int) - Lead time
+suppliers (user can edit):
+  - name (string) ✓ EDITABLE
+  - email (string) ✓ EDITABLE
+  - phone (string) ✓ EDITABLE
+  - leadTimeDays (int) ✓ EDITABLE
+  - minimumOrderQty (int) ✓ EDITABLE
 
-goals:
-  - title (string) - Goal title
-  - targetValue (decimal) - Target number
-  - currentValue (decimal) - Current progress
-  - isCompleted (boolean)
-  - color (string) - Display color
+goals (user can edit - all fields):
+  - title (string) ✓ EDITABLE
+  - targetValue (decimal) ✓ EDITABLE
+  - currentValue (decimal) ✓ EDITABLE
+  - isCompleted (boolean) ✓ EDITABLE
+  - color (string) ✓ EDITABLE
 
-dashboard_cards:
-  - cardType (string) - tasks, profit, schedule, goals, etc.
-  - isEnabled (boolean) - Whether card is visible
-  - column (string) - left or right
+dashboard_cards (user can edit):
+  - isEnabled (boolean) ✓ EDITABLE
+  - column (string) - left or right ✓ EDITABLE
 
-calendar_events:
-  - title (string) - Event title
-  - startDate (date)
-  - startTime (string) - HH:MM format
-  - eventType (string) - appointment, reminder, time_off
+calendar_events (user can edit - all fields):
+  - title (string) ✓ EDITABLE
+  - startDate (date) ✓ EDITABLE
+  - startTime (string) ✓ EDITABLE
+  - eventType (string) ✓ EDITABLE
+
+IMPORTANT - READ-ONLY DATA (from Amazon API, cannot be changed):
+  - Product ASIN, title, category, brand (synced from Amazon)
+  - FBA inventory levels (fbaAvailable, fbaReserved, fbaInbound*)
+  - Order data (orders, order_items) - historical sales data
+  - Amazon fees (referral_fee, fba_fee, etc.)
 `
 
 export async function POST(request: NextRequest) {

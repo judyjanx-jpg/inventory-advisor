@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { pendingActions } from '@/lib/pending-actions'
 
+// Fields that come from Amazon API and should NOT be modified
+const AMAZON_READONLY_FIELDS = [
+  // Inventory - FBA data synced from Amazon
+  'fbaAvailable', 'fbaInboundWorking', 'fbaInboundShipped', 
+  'fbaInboundReceiving', 'fbaReserved', 'fbaUnfulfillable',
+  // Product - Amazon catalog data
+  'asin', 'amazonTitle', 'brand', 'category', 'parentAsin',
+  // Order data - historical
+  'orderId', 'purchaseDate', 'itemPrice', 'amazonFees', 
+  'referralFee', 'fbaFee', 'otherFees'
+]
+
+// Tables that are entirely read-only (Amazon data)
+const READONLY_TABLES = ['orders', 'order_items', 'sales_history']
+
 // Map table names to Prisma models
 const tableModelMap: Record<string, string> = {
   'products': 'product',
@@ -37,6 +52,26 @@ export async function POST(request: NextRequest) {
     }
 
     let message = 'Done!'
+    
+    // Block modifications to Amazon-controlled tables
+    if (READONLY_TABLES.includes(action.table)) {
+      return NextResponse.json({
+        success: false,
+        error: `Cannot modify ${action.table} - this data comes from Amazon and is read-only.`
+      }, { status: 400 })
+    }
+
+    // Block modifications to Amazon-controlled fields
+    if (action.data) {
+      const readonlyFields = Object.keys(action.data).filter(f => AMAZON_READONLY_FIELDS.includes(f))
+      if (readonlyFields.length > 0) {
+        return NextResponse.json({
+          success: false,
+          error: `Cannot modify ${readonlyFields.join(', ')} - this data comes from Amazon and is read-only.`
+        }, { status: 400 })
+      }
+    }
+
     const modelName = tableModelMap[action.table] || action.table
     const model = (prisma as any)[modelName]
 
