@@ -60,7 +60,10 @@ interface PurchaseOrder {
   createdDate: string
   orderDate: string
   sentDate?: string
+  confirmedDate?: string
+  expectedShipDate?: string
   expectedArrivalDate?: string
+  actualShipDate?: string
   actualArrivalDate?: string
   subtotal: number
   shippingCost: number

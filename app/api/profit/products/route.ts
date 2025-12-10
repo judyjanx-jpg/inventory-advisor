@@ -341,7 +341,7 @@ export async function GET(request: NextRequest) {
       const totalItems = parseInt(sale.total_items || '0', 10)
       
       // Get ad spend from Amazon Ads data (by ASIN first, then SKU)
-      const adSpend = adSpendByAsinMap.get(sale.asin) || adSpendBySkuMap.get(sale.sku) || 0
+      const adSpend = (sale.asin ? adSpendByAsinMap.get(sale.asin) : 0) || adSpendBySkuMap.get(sale.sku) || 0
       
       const cogs = parseFloat(sale.cost || '0')
       const cogsTotal = cogs * unitsSold
