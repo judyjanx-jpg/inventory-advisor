@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef, useEffect, ReactNode } from 'react'
+import { useState, useRef, useEffect, useCallback, ReactNode } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, ChevronUp, ChevronDown, Maximize2, Minimize2 } from 'lucide-react'
+import { GripVertical, ChevronUp, ChevronDown, Minimize2 } from 'lucide-react'
 
 interface DraggableCardProps {
   id: string
@@ -22,11 +22,18 @@ export default function DraggableCard({
   onHeightChange,
   onCollapsedChange
 }: DraggableCardProps) {
-  const [isResizing, setIsResizing] = useState(false)
   const [currentHeight, setCurrentHeight] = useState<number | null>(height || null)
   const cardRef = useRef<HTMLDivElement>(null)
+  const isResizingRef = useRef(false)
   const startY = useRef(0)
   const startHeight = useRef(0)
+
+  // Sync height prop with state
+  useEffect(() => {
+    if (height !== undefined) {
+      setCurrentHeight(height)
+    }
+  }, [height])
 
   const {
     attributes,
@@ -37,94 +44,94 @@ export default function DraggableCard({
     isDragging,
   } = useSortable({ id })
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isResizingRef.current ? 'none' : transition,
     opacity: isDragging ? 0.5 : 1,
-    height: isCollapsed ? '48px' : (currentHeight ? `${currentHeight}px` : 'auto'),
-    minHeight: isCollapsed ? '48px' : '120px',
-    overflow: isCollapsed ? 'hidden' : 'visible',
+    height: isCollapsed ? '52px' : (currentHeight ? `${currentHeight}px` : 'auto'),
+    minHeight: isCollapsed ? '52px' : '150px',
   }
 
-  const handleResizeStart = (e: React.MouseEvent) => {
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
-    setIsResizing(true)
+    e.stopPropagation()
+    isResizingRef.current = true
     startY.current = e.clientY
     startHeight.current = cardRef.current?.offsetHeight || 300
     
-    document.addEventListener('mousemove', handleResizeMove)
-    document.addEventListener('mouseup', handleResizeEnd)
-  }
-
-  const handleResizeMove = (e: MouseEvent) => {
-    if (!isResizing) return
-    const deltaY = e.clientY - startY.current
-    const newHeight = Math.max(120, startHeight.current + deltaY)
-    setCurrentHeight(newHeight)
-  }
-
-  const handleResizeEnd = () => {
-    setIsResizing(false)
-    document.removeEventListener('mousemove', handleResizeMove)
-    document.removeEventListener('mouseup', handleResizeEnd)
-    
-    if (onHeightChange && currentHeight) {
-      onHeightChange(currentHeight)
+    const handleMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return
+      const deltaY = e.clientY - startY.current
+      const newHeight = Math.max(150, startHeight.current + deltaY)
+      setCurrentHeight(newHeight)
     }
+
+    const handleUp = () => {
+      isResizingRef.current = false
+      document.removeEventListener('mousemove', handleMove)
+      document.removeEventListener('mouseup', handleUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      
+      // Save the height
+      if (cardRef.current) {
+        const finalHeight = cardRef.current.offsetHeight
+        onHeightChange?.(finalHeight)
+      }
+    }
+
+    document.addEventListener('mousemove', handleMove)
+    document.addEventListener('mouseup', handleUp)
+    document.body.style.cursor = 'ns-resize'
+    document.body.style.userSelect = 'none'
+  }, [onHeightChange])
+
+  const toggleCollapse = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onCollapsedChange?.(!isCollapsed)
   }
 
-  const toggleCollapse = () => {
-    const newCollapsed = !isCollapsed
-    onCollapsedChange?.(newCollapsed)
-  }
-
-  const resetHeight = () => {
+  const resetHeight = (e: React.MouseEvent) => {
+    e.stopPropagation()
     setCurrentHeight(null)
     onHeightChange?.(null)
   }
-
-  useEffect(() => {
-    return () => {
-      document.removeEventListener('mousemove', handleResizeMove)
-      document.removeEventListener('mouseup', handleResizeEnd)
-    }
-  }, [])
 
   return (
     <div 
       ref={(node) => {
         setNodeRef(node)
-        if (node) (cardRef as any).current = node
+        ;(cardRef as any).current = node
       }}
       style={style}
-      className={`relative group ${isDragging ? 'z-50' : ''} ${isResizing ? 'select-none' : ''}`}
+      className={`relative group ${isDragging ? 'z-50' : ''}`}
     >
-      {/* Drag Handle - Top Bar */}
+      {/* Drag Handle - Top Center */}
       <div 
         {...attributes}
         {...listeners}
-        className="absolute top-0 left-0 right-0 h-8 flex items-center justify-center cursor-grab active:cursor-grabbing z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute top-0 left-1/2 -translate-x-1/2 h-6 px-4 flex items-center justify-center cursor-grab active:cursor-grabbing z-20 opacity-0 group-hover:opacity-100 transition-opacity"
       >
-        <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--muted)]/80 backdrop-blur-sm">
-          <GripVertical className="w-4 h-4 text-[var(--muted-foreground)]" />
-          <span className="text-xs text-[var(--muted-foreground)]">Drag to move</span>
+        <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-sm">
+          <GripVertical className="w-3 h-3 text-[var(--muted-foreground)]" />
+          <span className="text-[10px] text-[var(--muted-foreground)]">drag</span>
         </div>
       </div>
 
       {/* Control Buttons - Top Right */}
-      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+      <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
         <button
           onClick={toggleCollapse}
-          className="p-1 rounded hover:bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          className="p-1.5 rounded-lg hover:bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
           title={isCollapsed ? "Expand" : "Collapse"}
         >
           {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
         </button>
-        {currentHeight && (
+        {currentHeight && !isCollapsed && (
           <button
             onClick={resetHeight}
-            className="p-1 rounded hover:bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            title="Reset size"
+            className="p-1.5 rounded-lg hover:bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            title="Reset to auto height"
           >
             <Minimize2 className="w-4 h-4" />
           </button>
@@ -132,7 +139,7 @@ export default function DraggableCard({
       </div>
 
       {/* Card Content */}
-      <div className={`h-full ${isCollapsed ? 'overflow-hidden' : ''}`}>
+      <div className={`h-full overflow-hidden ${isCollapsed ? 'pointer-events-none' : ''}`}>
         {children}
       </div>
 
@@ -140,12 +147,11 @@ export default function DraggableCard({
       {!isCollapsed && (
         <div
           onMouseDown={handleResizeStart}
-          className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute -bottom-1 left-0 right-0 h-4 cursor-ns-resize flex items-center justify-center z-20 group/resize"
         >
-          <div className="w-12 h-1 rounded-full bg-[var(--muted-foreground)]/50 hover:bg-[var(--primary)]" />
+          <div className="w-16 h-1.5 rounded-full bg-[var(--border)] group-hover/resize:bg-[var(--primary)] transition-colors opacity-0 group-hover:opacity-100" />
         </div>
       )}
     </div>
   )
 }
-
