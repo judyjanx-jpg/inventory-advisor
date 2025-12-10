@@ -81,26 +81,40 @@ function safeFloat(value: any): number {
   return isNaN(parsed) ? 0 : parsed
 }
 
-// Update database with fees for a batch of items
-async function updateFeesInDb(feesByOrderSku: Map<string, { referralFee: number; fbaFee: number; otherFees: number }>) {
+// Data from financial events - includes actual revenue from settlements for Sellerboard-level accuracy
+interface FinancialEventData {
+  referralFee: number
+  fbaFee: number
+  otherFees: number
+  actualRevenue: number  // From ItemChargeList - source of truth for revenue
+  postedAt: Date | null  // When the financial event was posted
+}
+
+// Update database with fees AND actual revenue for a batch of items
+async function updateFinancialDataInDb(dataByOrderSku: Map<string, FinancialEventData>) {
   let updated = 0
-  const entries = Array.from(feesByOrderSku.entries())
+  const entries = Array.from(dataByOrderSku.entries())
 
   for (let i = 0; i < entries.length; i += 50) {
     const batch = entries.slice(i, i + 50)
 
-    await Promise.all(batch.map(async ([key, fees]) => {
+    await Promise.all(batch.map(async ([key, data]) => {
       const [orderId, sku] = key.split('|')
-      const totalFees = fees.referralFee + fees.fbaFee + fees.otherFees
+      const totalFees = data.referralFee + data.fbaFee + data.otherFees
 
       try {
         const result = await prisma.orderItem.updateMany({
           where: { orderId, masterSku: sku },
           data: {
-            referralFee: fees.referralFee,
-            fbaFee: fees.fbaFee,
-            otherFees: fees.otherFees,
+            referralFee: data.referralFee,
+            fbaFee: data.fbaFee,
+            otherFees: data.otherFees,
             amazonFees: totalFees,
+            // Actual revenue from settlement - Sellerboard-level accuracy
+            ...(data.actualRevenue > 0 && {
+              actualRevenue: data.actualRevenue,
+              actualRevenuePostedAt: data.postedAt,
+            }),
           },
         })
         if (result.count > 0) updated++
@@ -223,7 +237,8 @@ export async function POST(request: NextRequest) {
       let nextToken: string | null = null
       let batchItems = 0
       let pageCount = 0
-      const feesBatch = new Map<string, { referralFee: number; fbaFee: number; otherFees: number }>()
+      // Now stores full financial data including actual revenue from settlements
+      const financialDataBatch = new Map<string, FinancialEventData>()
       const refundsBatch = new Map<string, number>() // orderId|sku -> refund amount
 
       // Fetch all pages for this date range
@@ -240,14 +255,14 @@ export async function POST(request: NextRequest) {
 
         // Handle rate limit
         if (response.rateLimited) {
-          console.log(`   ⚠️ Rate limited on page ${pageCount}. Saving ${feesBatch.size} items and ${refundsBatch.size} refunds...`)
+          console.log(`   ⚠️ Rate limited on page ${pageCount}. Saving ${financialDataBatch.size} items and ${refundsBatch.size} refunds...`)
 
           // SAVE what we have so far
-          if (feesBatch.size > 0) {
-            const updated = await updateFeesInDb(feesBatch)
+          if (financialDataBatch.size > 0) {
+            const updated = await updateFinancialDataInDb(financialDataBatch)
             syncStatus.itemsUpdated += updated
-            console.log(`   ✓ Saved ${updated} fee items to database`)
-            feesBatch.clear()
+            console.log(`   ✓ Saved ${updated} items (fees + actual revenue) to database`)
+            financialDataBatch.clear()
           }
           if (refundsBatch.size > 0) {
             const updated = await updateRefundsInDb(refundsBatch)
@@ -272,19 +287,19 @@ export async function POST(request: NextRequest) {
 
         // Handle token expiry - move to next batch
         if (response.tokenExpired) {
-          console.log(`   ⚠️ Token expired. Saving ${feesBatch.size} items and ${refundsBatch.size} refunds...`)
+          console.log(`   ⚠️ Token expired. Saving ${financialDataBatch.size} items and ${refundsBatch.size} refunds...`)
 
-          if (feesBatch.size > 0) {
-            const updated = await updateFeesInDb(feesBatch)
+          if (financialDataBatch.size > 0) {
+            const updated = await updateFinancialDataInDb(financialDataBatch)
             syncStatus.itemsUpdated += updated
-            console.log(`   ✓ Saved ${updated} fee items`)
+            console.log(`   ✓ Saved ${updated} items (fees + actual revenue)`)
           }
           if (refundsBatch.size > 0) {
             const updated = await updateRefundsInDb(refundsBatch)
             syncStatus.refundsUpdated += updated
             console.log(`   ✓ Saved ${updated} refunds`)
           }
-          
+
           // Refresh token and move on
           accessToken = await getAccessToken(credentials)
           tokenTime = Date.now()
@@ -300,6 +315,9 @@ export async function POST(request: NextRequest) {
           const orderId = event.AmazonOrderId
           if (!orderId) continue
 
+          // Get the posted date for this financial event (used for date attribution)
+          const postedDate = event.PostedDate ? new Date(event.PostedDate) : null
+
           for (const item of event.ShipmentItemList || []) {
             const sku = item.SellerSKU
             if (!sku) continue
@@ -307,7 +325,9 @@ export async function POST(request: NextRequest) {
             let referralFee = 0
             let fbaFee = 0
             let otherFees = 0
+            let actualRevenue = 0  // From ItemChargeList - the source of truth for Sellerboard-level accuracy
 
+            // Process ItemFeeList for fees (these are typically negative/charges to seller)
             for (const fee of (item.ItemFeeList || [])) {
               const feeType = fee.FeeType || ''
               const amount = Math.abs(safeFloat(fee.FeeAmount?.CurrencyAmount))
@@ -321,13 +341,43 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            if (referralFee > 0 || fbaFee > 0 || otherFees > 0) {
-              const key = `${orderId}|${sku}`
-              const existing = feesBatch.get(key) || { referralFee: 0, fbaFee: 0, otherFees: 0 }
-              feesBatch.set(key, {
+            // Process ItemChargeList for actual revenue (this is the Sellerboard-level accuracy key!)
+            // These are the actual charges collected: Principal, Shipping, Tax, etc.
+            for (const charge of (item.ItemChargeList || [])) {
+              const chargeType = charge.ChargeType || ''
+              const amount = safeFloat(charge.ChargeAmount?.CurrencyAmount)
+
+              // Principal is the main item price, but we also include shipping/tax charges to customer
+              // These are positive values (money collected from customer)
+              if (amount > 0) {
+                actualRevenue += amount
+              }
+            }
+
+            // Also check for promotion adjustments which reduce revenue
+            for (const promo of (item.PromotionList || [])) {
+              const promoAmount = Math.abs(safeFloat(promo.PromotionAmount?.CurrencyAmount))
+              // Promotions are typically discounts (negative impact on revenue)
+              actualRevenue -= promoAmount
+            }
+
+            const key = `${orderId}|${sku}`
+            const existing = financialDataBatch.get(key) || {
+              referralFee: 0,
+              fbaFee: 0,
+              otherFees: 0,
+              actualRevenue: 0,
+              postedAt: null
+            }
+
+            // Accumulate data (in case of multiple events for same order|sku)
+            if (referralFee > 0 || fbaFee > 0 || otherFees > 0 || actualRevenue > 0) {
+              financialDataBatch.set(key, {
                 referralFee: existing.referralFee + referralFee,
                 fbaFee: existing.fbaFee + fbaFee,
                 otherFees: existing.otherFees + otherFees,
+                actualRevenue: existing.actualRevenue + actualRevenue,
+                postedAt: postedDate || existing.postedAt, // Keep the most recent posted date
               })
               batchItems++
               syncStatus.itemsProcessed++
@@ -363,10 +413,10 @@ export async function POST(request: NextRequest) {
         }
 
         syncStatus.pagesProcessed++
-        syncStatus.message = `Batch ${batch}/${totalBatches}: Page ${pageCount}, ${feesBatch.size} fees, ${refundsBatch.size} refunds`
+        syncStatus.message = `Batch ${batch}/${totalBatches}: Page ${pageCount}, ${financialDataBatch.size} items, ${refundsBatch.size} refunds`
 
         if (pageCount % 10 === 0) {
-          console.log(`   Page ${pageCount}: ${feesBatch.size} items`)
+          console.log(`   Page ${pageCount}: ${financialDataBatch.size} items (fees + revenue)`)
         }
 
         // Small delay between pages
@@ -376,12 +426,12 @@ export async function POST(request: NextRequest) {
 
       } while (nextToken && syncStatus.isRunning)
 
-      // Save this batch's fees and refunds to database
-      if (feesBatch.size > 0) {
-        console.log(`   Saving ${feesBatch.size} fee items to database...`)
-        const updated = await updateFeesInDb(feesBatch)
+      // Save this batch's financial data (fees + actual revenue) and refunds to database
+      if (financialDataBatch.size > 0) {
+        console.log(`   Saving ${financialDataBatch.size} items (fees + actual revenue) to database...`)
+        const updated = await updateFinancialDataInDb(financialDataBatch)
         syncStatus.itemsUpdated += updated
-        console.log(`   ✓ Batch ${batch}: ${updated} fee items updated`)
+        console.log(`   ✓ Batch ${batch}: ${updated} items updated (Sellerboard-level accuracy)`)
       }
       if (refundsBatch.size > 0) {
         console.log(`   Saving ${refundsBatch.size} refunds to database...`)

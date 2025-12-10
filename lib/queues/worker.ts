@@ -123,7 +123,8 @@ async function processOrdersSync(job: any) {
 
 /**
  * Financial events sync processor
- * Processes both ShipmentEventList (for fees) and RefundEventList (for refund amounts)
+ * Processes both ShipmentEventList (for fees AND actual revenue) and RefundEventList (for refund amounts)
+ * Captures actual revenue from ItemChargeList for Sellerboard-level accuracy
  * Includes rate limit handling with exponential backoff
  */
 async function processFinancesSync(job: any) {
@@ -145,13 +146,14 @@ async function processFinancesSync(job: any) {
 
     let eventsProcessed = 0
     let feesUpdated = 0
+    let actualRevenueUpdated = 0
     let refundsProcessed = 0
     let refundsUpdated = 0
     let nextToken: string | null = null
     let retryCount = 0
     const maxRetries = 3
 
-    console.log(`  Syncing ${daysBack} days of financial events...`)
+    console.log(`  Syncing ${daysBack} days of financial events (fees + actual revenue)...`)
 
     do {
       try {
@@ -172,37 +174,74 @@ async function processFinancesSync(job: any) {
         const events = response?.payload?.FinancialEvents || response?.FinancialEvents || {}
         nextToken = response?.payload?.NextToken || response?.NextToken || null
 
-        // Process ShipmentEventList for order fees
+        // Process ShipmentEventList for order fees AND actual revenue
         for (const event of events.ShipmentEventList || []) {
           const orderId = event.AmazonOrderId
           if (!orderId) continue
+
+          // Get the posted date for this financial event
+          const postedDate = event.PostedDate ? new Date(event.PostedDate) : null
 
           for (const item of event.ShipmentItemList || []) {
             const sku = item.SellerSKU
             if (!sku) continue
 
             let referralFee = 0, fbaFee = 0, otherFees = 0
+            let actualRevenue = 0  // From ItemChargeList - source of truth for Sellerboard-level accuracy
 
+            // Process ItemFeeList for fees
             for (const fee of (item.ItemFeeList || [])) {
               const feeType = fee.FeeType || ''
               const amount = Math.abs(parseFloat(fee.FeeAmount?.CurrencyAmount || 0))
 
               if (feeType.includes('Commission') || feeType.includes('Referral')) {
                 referralFee += amount
-              } else if (feeType.includes('FBA')) {
+              } else if (feeType.includes('FBA') || feeType.includes('Fulfillment')) {
                 fbaFee += amount
               } else if (feeType.includes('Fee')) {
                 otherFees += amount
               }
             }
 
+            // Process ItemChargeList for actual revenue (Sellerboard-level accuracy key!)
+            // These are the actual charges collected: Principal, Shipping, Tax, etc.
+            for (const charge of (item.ItemChargeList || [])) {
+              const amount = parseFloat(charge.ChargeAmount?.CurrencyAmount || 0)
+              // Positive values are money collected from customer
+              if (amount > 0) {
+                actualRevenue += amount
+              }
+            }
+
+            // Also check for promotion adjustments which reduce revenue
+            for (const promo of (item.PromotionList || [])) {
+              const promoAmount = Math.abs(parseFloat(promo.PromotionAmount?.CurrencyAmount || 0))
+              actualRevenue -= promoAmount
+            }
+
             const totalFees = referralFee + fbaFee + otherFees
-            if (totalFees > 0) {
+            if (totalFees > 0 || actualRevenue > 0) {
+              const updateData: any = {
+                referralFee,
+                fbaFee,
+                otherFees,
+                amazonFees: totalFees,
+              }
+
+              // Add actual revenue if available (Sellerboard-level accuracy)
+              if (actualRevenue > 0) {
+                updateData.actualRevenue = actualRevenue
+                updateData.actualRevenuePostedAt = postedDate
+              }
+
               const result = await prisma.orderItem.updateMany({
                 where: { orderId, masterSku: sku },
-                data: { referralFee, fbaFee, otherFees, amazonFees: totalFees },
+                data: updateData,
               })
-              if (result.count > 0) feesUpdated++
+              if (result.count > 0) {
+                feesUpdated++
+                if (actualRevenue > 0) actualRevenueUpdated++
+              }
             }
             eventsProcessed++
           }
@@ -262,10 +301,10 @@ async function processFinancesSync(job: any) {
     } while (nextToken)
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
-    console.log(`[finances-sync] Completed in ${duration}s - ${feesUpdated} fees, ${refundsUpdated} refunds updated`)
+    console.log(`[finances-sync] Completed in ${duration}s - ${feesUpdated} fees, ${actualRevenueUpdated} actual revenue, ${refundsUpdated} refunds updated`)
 
-    await logSyncResult('finances', 'success', { eventsProcessed, feesUpdated, refundsProcessed, refundsUpdated }, null)
-    return { eventsProcessed, feesUpdated, refundsProcessed, refundsUpdated }
+    await logSyncResult('finances', 'success', { eventsProcessed, feesUpdated, actualRevenueUpdated, refundsProcessed, refundsUpdated }, null)
+    return { eventsProcessed, feesUpdated, actualRevenueUpdated, refundsProcessed, refundsUpdated }
   } catch (error: any) {
     console.error(`[finances-sync] Failed:`, error.message)
     await logSyncResult('finances', 'failed', null, error.message)

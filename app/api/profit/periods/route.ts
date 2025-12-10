@@ -16,7 +16,11 @@ import {
 } from 'date-fns'
 import { toZonedTime, fromZonedTime } from 'date-fns-tz'
 
-// Amazon uses PST/PDT (America/Los_Angeles) for their day boundaries
+// TIMEZONE CONSISTENCY FOR SELLERBOARD-LEVEL ACCURACY
+// Amazon uses PST/PDT (America/Los_Angeles) for their day boundaries in Seller Central.
+// All profit calculations should use this timezone for day boundaries to match Amazon's reports.
+// The actual timestamps in the database are stored in UTC, but we convert to PST for day grouping.
+// This ensures Railway (UTC) and local development show the same day-level numbers.
 const AMAZON_TIMEZONE = 'America/Los_Angeles'
 
 export const dynamic = 'force-dynamic'
@@ -37,6 +41,12 @@ interface DebugInfo {
     amazonFees: number
     estimatedFees: number
   }>
+  // Sellerboard-level accuracy: Settlement data coverage
+  settlementAccuracy?: {
+    itemsWithActualRevenue: number  // Items with actual_revenue from financial events
+    actualRevenueTotal: number  // Total revenue from settlement data
+    settlementCoverageRate: number  // % of items using settlement data (higher = more accurate)
+  }
 }
 
 interface PeriodSummary {
@@ -89,8 +99,8 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   debug?: DebugInfo
 }> {
   // Get aggregated order items data using SQL for accuracy and performance
-  // Use gross_revenue field which is already calculated and stored
-  // If gross_revenue is NULL or 0, calculate from item_price + shipping_price + gift_wrap_price
+  // SELLERBOARD-LEVEL ACCURACY: Prioritize actual_revenue from financial events (settlements)
+  // Fallback chain: actual_revenue → gross_revenue → item_price + shipping + gift_wrap → avg price → catalog price
   // Calculate estimated fees in SQL for deterministic results
   // Fee estimation: 15% referral fee + $3.50 FBA fee per unit
   const summaryData = await queryOne<{
@@ -105,9 +115,11 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     line_items: string
     estimated_items_count: string
     estimated_sales_amount: string
+    items_with_actual_revenue: string  // Items with settlement data (Sellerboard-level accuracy)
+    actual_revenue_total: string  // Total from settlement data
   }>(`
     WITH recent_avg_prices AS (
-      SELECT 
+      SELECT
         oi.master_sku,
         AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
       FROM order_items oi
@@ -119,10 +131,16 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       GROUP BY oi.master_sku
     )
     SELECT
+      -- SELLERBOARD-LEVEL ACCURACY: Use actual_revenue from settlements when available
       ROUND(COALESCE(SUM(
-        CASE 
-          WHEN COALESCE(oi.gross_revenue, 0) > 0 
+        CASE
+          -- Priority 1: actual_revenue from financial events (settlement data - most accurate)
+          WHEN COALESCE(oi.actual_revenue, 0) > 0
+          THEN oi.actual_revenue
+          -- Priority 2: gross_revenue calculated from orders
+          WHEN COALESCE(oi.gross_revenue, 0) > 0
           THEN oi.gross_revenue
+          -- Priority 3: Calculate from item components
           WHEN oi.item_price > 0
           THEN oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
           -- Price estimation fallback chain: avg price → catalog × 0.95 → 0
@@ -137,10 +155,10 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       ROUND(COALESCE(SUM(COALESCE(oi.promo_discount, 0)), 0), 2)::text as total_promo,
       ROUND(COALESCE(SUM(COALESCE(oi.amazon_fees, 0)), 0), 2)::text as total_actual_fees,
       ROUND(COALESCE(SUM(
-        CASE 
-          WHEN COALESCE(oi.amazon_fees, 0) = 0 
+        CASE
+          WHEN COALESCE(oi.amazon_fees, 0) = 0
           THEN CASE
-            WHEN oi.item_price > 0 
+            WHEN oi.item_price > 0
             THEN ROUND((oi.item_price * 0.15) + (3.50 * oi.quantity), 2)
             -- Fee estimation fallback chain: avg price → catalog × 0.95 → 0
             WHEN COALESCE(rap.avg_unit_price, 0) > 0
@@ -149,7 +167,7 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
             THEN ROUND((p.price * oi.quantity * 0.95 * 0.15) + (3.50 * oi.quantity), 2)
             ELSE 0
           END
-          ELSE 0 
+          ELSE 0
         END
       ), 0), 2)::text as total_estimated_fees,
       COALESCE(SUM(CASE WHEN COALESCE(oi.amazon_fees, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_fees,
@@ -157,10 +175,10 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
       COUNT(DISTINCT o.id)::text as total_orders,
       COUNT(oi.id)::text as line_items,
       -- Track estimated items for transparency
-      COALESCE(SUM(CASE WHEN COALESCE(oi.item_price, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0 THEN 1 ELSE 0 END), 0)::text as estimated_items_count,
+      COALESCE(SUM(CASE WHEN COALESCE(oi.item_price, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0 AND COALESCE(oi.actual_revenue, 0) = 0 THEN 1 ELSE 0 END), 0)::text as estimated_items_count,
       ROUND(COALESCE(SUM(
-        CASE 
-          WHEN COALESCE(oi.item_price, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0
+        CASE
+          WHEN COALESCE(oi.item_price, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0 AND COALESCE(oi.actual_revenue, 0) = 0
           THEN CASE
             WHEN COALESCE(rap.avg_unit_price, 0) > 0
             THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
@@ -170,7 +188,10 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
           END
           ELSE 0
         END
-      ), 0), 2)::text as estimated_sales_amount
+      ), 0), 2)::text as estimated_sales_amount,
+      -- Track items with actual revenue from settlements (Sellerboard-level accuracy indicator)
+      COALESCE(SUM(CASE WHEN COALESCE(oi.actual_revenue, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_actual_revenue,
+      ROUND(COALESCE(SUM(COALESCE(oi.actual_revenue, 0)), 0), 2)::text as actual_revenue_total
     FROM order_items oi
     INNER JOIN orders o ON oi.order_id = o.id
     LEFT JOIN recent_avg_prices rap ON oi.master_sku = rap.master_sku
@@ -192,6 +213,9 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
   const itemsWithEstimatedFees = totalItems - itemsWithActualFees
   const estimatedItemsCount = parseInt(summaryData?.estimated_items_count || '0', 10)
   const estimatedSalesAmount = parseFloat(summaryData?.estimated_sales_amount || '0')
+  // Sellerboard-level accuracy metrics
+  const itemsWithActualRevenue = parseInt(summaryData?.items_with_actual_revenue || '0', 10)
+  const actualRevenueTotal = parseFloat(summaryData?.actual_revenue_total || '0')
 
   // Collect sample items for debugging if needed
   const sampleItems: DebugInfo['sampleItems'] = []
@@ -245,6 +269,12 @@ async function getPeriodData(startDate: Date, endDate: Date, includeDebug: boole
     estimatedItemsCount,
     estimatedSalesAmount: Number(estimatedSalesAmount.toFixed(2)),
     sampleItems,
+    // Sellerboard-level accuracy: items using settlement data vs estimated
+    settlementAccuracy: {
+      itemsWithActualRevenue,
+      actualRevenueTotal: Number(actualRevenueTotal.toFixed(2)),
+      settlementCoverageRate: totalItems > 0 ? Number(((itemsWithActualRevenue / totalItems) * 100).toFixed(1)) : 0,
+    },
   } : undefined
 
   // Order count is now calculated in the main query above using COUNT(DISTINCT o.id)

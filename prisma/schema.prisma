@@ -394,9 +394,14 @@ model OrderItem {
   fbaFee      Decimal @default(0) @map("fba_fee") @db.Decimal(10, 2)
   otherFees   Decimal @default(0) @map("other_fees") @db.Decimal(10, 2)
 
-  // Calculated fields
+  // Calculated fields (from Orders API)
   grossRevenue Decimal @default(0) @map("gross_revenue") @db.Decimal(10, 2)
   netRevenue   Decimal @default(0) @map("net_revenue") @db.Decimal(10, 2)
+
+  // Actual revenue from Financial Events API (source of truth for Sellerboard-level accuracy)
+  // This includes all actual charges from settlements: principal, shipping, tax, adjustments
+  actualRevenue          Decimal? @map("actual_revenue") @db.Decimal(10, 2)
+  actualRevenuePostedAt  DateTime? @map("actual_revenue_posted_at") // When the financial event was posted
 
   // Relations
   amazonFeesDetail AmazonFee?
