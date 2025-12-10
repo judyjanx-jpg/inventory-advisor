@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const observations = await generateObservations()
+    const observations = await generateObservations() ?? []
 
     return NextResponse.json({
       success: true,
