@@ -131,8 +131,6 @@ export default function DraggableCard({
   const cardStyle: React.CSSProperties = {
     height: isCollapsed ? '52px' : (currentHeight ? `${currentHeight}px` : 'auto'),
     minHeight: isCollapsed ? '52px' : '150px',
-    overflow: 'hidden',
-    position: 'relative',
   }
 
   return (
@@ -141,10 +139,11 @@ export default function DraggableCard({
       style={wrapperStyle}
       className={`${isDragging ? 'z-50' : ''}`}
     >
+      {/* This is the actual card container with background */}
       <div
         ref={cardRef}
         style={cardStyle}
-        className="group"
+        className="group relative rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden"
       >
         {/* Drag Handle - Top Center */}
         <div 
@@ -152,7 +151,7 @@ export default function DraggableCard({
           {...listeners}
           className="absolute top-0 left-1/2 -translate-x-1/2 h-6 px-4 flex items-center justify-center cursor-grab active:cursor-grabbing z-30 opacity-0 group-hover:opacity-100 transition-opacity"
         >
-          <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--card)] border border-[var(--border)] shadow-sm">
+          <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--muted)] border border-[var(--border)] shadow-sm">
             <GripVertical className="w-3 h-3 text-[var(--muted-foreground)]" />
             <span className="text-[10px] text-[var(--muted-foreground)]">drag</span>
           </div>
@@ -178,25 +177,32 @@ export default function DraggableCard({
           )}
         </div>
 
-        {/* Card Content */}
-        <div className={`h-full ${isCollapsed ? 'pointer-events-none' : 'overflow-auto'}`}>
-          {children}
+        {/* Card Content - Children rendered inside, fills height */}
+        <div 
+          className={`h-full ${isCollapsed ? 'pointer-events-none overflow-hidden' : 'overflow-auto'}`}
+          style={{ 
+            // Remove the card styling from children since we have it on the container
+          }}
+        >
+          <div className="h-full [&>*]:border-0 [&>*]:rounded-none [&>*]:bg-transparent [&>*]:h-full">
+            {children}
+          </div>
         </div>
 
-        {/* Resize Handle - Bottom - ALWAYS visible */}
+        {/* Resize Handle - Bottom */}
         {!isCollapsed && (
           <div
             onMouseDown={handleResizeStart}
             className="absolute bottom-0 left-0 right-0 h-6 cursor-ns-resize flex items-center justify-center z-40"
             style={{ 
-              background: 'linear-gradient(to top, rgba(0,0,0,0.05), transparent)',
+              background: 'linear-gradient(to top, var(--card), transparent)',
             }}
           >
             <div 
               className={`w-24 h-2 rounded-full transition-all ${
                 isResizing 
                   ? 'bg-blue-500 scale-110' 
-                  : 'bg-gray-400 hover:bg-blue-500'
+                  : 'bg-gray-500 hover:bg-blue-500'
               }`} 
             />
           </div>
