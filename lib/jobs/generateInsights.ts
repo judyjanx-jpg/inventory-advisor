@@ -213,7 +213,7 @@ async function checkLateShipments() {
   return result.map(po => ({
     poNumber: po.poNumber,
     supplier: po.supplier?.name || 'Unknown',
-    daysLate: Math.floor((Date.now() - po.expectedArrivalDate.getTime()) / (1000 * 60 * 60 * 24)),
+    daysLate: Math.floor((Date.now() - (po.expectedArrivalDate?.getTime() ?? Date.now())) / (1000 * 60 * 60 * 24)),
     expectedDate: po.expectedArrivalDate
   }))
 }
