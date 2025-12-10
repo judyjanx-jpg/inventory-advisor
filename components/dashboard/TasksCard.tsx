@@ -14,7 +14,9 @@ import {
   Truck,
   Package,
   Bell,
-  Clock
+  Clock,
+  Trash2,
+  Loader2
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -57,9 +59,37 @@ interface TasksCardProps {
 
 export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  const [deletingReminderId, setDeletingReminderId] = useState<number | null>(null)
 
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section)
+  }
+
+  const handleDeleteReminder = async (reminderId: number, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('Delete this reminder?')) return
+
+    setDeletingReminderId(reminderId)
+    try {
+      const res = await fetch(`/api/dashboard/events?id=${reminderId}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (data.success) {
+        // Trigger refresh of dashboard tasks
+        if (onRefresh) {
+          onRefresh()
+        }
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'))
+      } else {
+        alert(data.error || 'Failed to delete reminder')
+      }
+    } catch (error) {
+      console.error('Error deleting reminder:', error)
+      alert('Failed to delete reminder. Please try again.')
+    } finally {
+      setDeletingReminderId(null)
+    }
   }
 
   const formatNextDate = (dateStr: string | null) => {
@@ -126,8 +156,8 @@ export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
       iconBg: 'bg-purple-500/20',
       iconColor: 'text-purple-400',
       label: tasks?.itemsToShip?.count
-        ? `${tasks.itemsToShip.count.toLocaleString()} units to ship`
-        : 'No items to ship',
+        ? `${tasks.itemsToShip.count.toLocaleString()} units to ship to Amazon`
+        : 'No items to ship to Amazon',
       sublabel: tasks?.itemsToShip?.productCount
         ? `${tasks.itemsToShip.productCount} products`
         : null,
@@ -274,18 +304,34 @@ export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
                           </>
                         )}
                       </div>
-                      {section.showEmail && item.supplierEmail && item.poNumber && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openEmailClient(item.supplierEmail!, item.poNumber!)
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-[var(--primary)]/20 text-[var(--primary)] transition-colors"
-                          title="Send follow-up email"
-                        >
-                          <Mail className="w-4 h-4" />
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {section.isReminder && (
+                          <button
+                            onClick={(e) => handleDeleteReminder(item.id, e)}
+                            disabled={deletingReminderId === item.id}
+                            className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors disabled:opacity-50"
+                            title="Delete reminder"
+                          >
+                            {deletingReminderId === item.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+                        {section.showEmail && item.supplierEmail && item.poNumber && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEmailClient(item.supplierEmail!, item.poNumber!)
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-[var(--primary)]/20 text-[var(--primary)] transition-colors"
+                            title="Send follow-up email"
+                          >
+                            <Mail className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                   {section.items.length > 5 && (

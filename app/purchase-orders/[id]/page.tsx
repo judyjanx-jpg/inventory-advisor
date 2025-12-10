@@ -193,6 +193,13 @@ export default function PurchaseOrderDetailPage() {
     return Math.ceil((expected.getTime() - order.getTime()) / (1000 * 60 * 60 * 24))
   }
 
+  const calculateActualLeadTime = () => {
+    if (!po || !po.orderDate || !po.actualArrivalDate) return null
+    const order = new Date(po.orderDate)
+    const actual = new Date(po.actualArrivalDate)
+    return Math.ceil((actual.getTime() - order.getTime()) / (1000 * 60 * 60 * 24))
+  }
+
   const handleFieldUpdate = async (field: string, value: any) => {
     if (!po) return
     
@@ -514,7 +521,8 @@ export default function PurchaseOrderDetailPage() {
             <CardTitle>PO Information</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {/* Row 1: Supplier | Created Date | Confirmed Date */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <div>
                 <p className="text-sm text-slate-400 mb-2">Supplier</p>
                 <EditableField
@@ -538,6 +546,21 @@ export default function PurchaseOrderDetailPage() {
                 />
               </div>
               <div>
+                <p className="text-sm text-slate-400 mb-2">Confirmed Date</p>
+                <EditableField
+                  value={po.confirmedDate || ''}
+                  onChange={(value) => handleFieldUpdate('confirmedDate', value)}
+                  type="date"
+                  className="text-white font-medium"
+                  formatValue={(val) => val ? formatDate(new Date(val as string)) : 'Not set'}
+                  placeholder="Not set"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Expected Date | Exp. Lead Time | Ship Date | Actual Lead Time */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div>
                 <p className="text-sm text-slate-400 mb-2">Expected Date</p>
                 <EditableField
                   value={po.expectedArrivalDate || ''}
@@ -549,7 +572,7 @@ export default function PurchaseOrderDetailPage() {
                 />
               </div>
               <div>
-                <p className="text-sm text-slate-400 mb-2">Lead Time</p>
+                <p className="text-sm text-slate-400 mb-2">Exp. Lead Time</p>
                 <EditableField
                   value={calculateLeadTime() || 0}
                   onChange={(value) => handleFieldUpdate('leadTimeDays', value)}
@@ -558,6 +581,23 @@ export default function PurchaseOrderDetailPage() {
                   formatValue={(val) => `${val} days`}
                   min={0}
                 />
+              </div>
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Ship Date</p>
+                <EditableField
+                  value={po.actualShipDate || ''}
+                  onChange={(value) => handleFieldUpdate('actualShipDate', value)}
+                  type="date"
+                  className="text-white font-medium"
+                  formatValue={(val) => val ? formatDate(new Date(val as string)) : 'Not set'}
+                  placeholder="Not set"
+                />
+              </div>
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Actual Lead Time</p>
+                <div className="text-white font-medium">
+                  {calculateActualLeadTime() !== null ? `${calculateActualLeadTime()} days` : 'Not set'}
+                </div>
               </div>
             </div>
 

@@ -27,6 +27,8 @@ import ProfitCard from '@/components/dashboard/ProfitCard'
 import GoalsCard from '@/components/dashboard/GoalsCard'
 import AiQueryCard from '@/components/dashboard/AiQueryCard'
 import AiActionCard from '@/components/dashboard/AiActionCard'
+import AIInsightsCard from '@/components/dashboard/AIInsightsCard'
+import UserToolsSection from '@/components/dashboard/UserToolsSection'
 import DraggableCard from '@/components/dashboard/DraggableCard'
 import { Plus, Eye, ChevronDown } from 'lucide-react'
 
@@ -67,6 +69,7 @@ const CARD_NAMES: Record<string, string> = {
   'goals': 'My List',
   'top_products': 'Top Products',
   'inventory_summary': 'Inventory Summary',
+  'ai_insights': 'AI Insights',
 }
 
 export default function DashboardPage() {
@@ -88,6 +91,16 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData()
     fetchCardConfig()
+    
+    // Listen for refresh events from other components (e.g., ScheduleCard)
+    const handleRefresh = () => {
+      fetchDashboardData()
+    }
+    window.addEventListener('dashboard-refresh', handleRefresh)
+    
+    return () => {
+      window.removeEventListener('dashboard-refresh', handleRefresh)
+    }
   }, [])
 
   // Close menu when clicking outside
@@ -234,6 +247,8 @@ export default function DashboardPage() {
         return <ScheduleCard />
       case 'goals':
         return <GoalsCard />
+      case 'ai_insights':
+        return <AIInsightsCard />
       default:
         return null
     }
@@ -370,6 +385,9 @@ export default function DashboardPage() {
           <AiQueryCard />
           <AiActionCard onActionComplete={() => { fetchDashboardData(); fetchCardConfig(); }} />
         </div>
+
+        {/* User Tools Section */}
+        <UserToolsSection />
       </div>
     </MainLayout>
   )

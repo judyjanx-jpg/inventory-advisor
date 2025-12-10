@@ -1896,30 +1896,30 @@ model AdCampaign {
 // Amazon Ads - Product Level Spend (for profit calculation)
 // ============================================
 model AdProductSpend {
-  id            String   @id @default(uuid())
-  
+  id String @id @default(uuid())
+
   // Product identifiers
-  asin          String
-  sku           String?  // If available from report
-  
+  asin String
+  sku  String? // If available from report
+
   // Date range this data covers
-  startDate     DateTime @map("start_date") @db.Date
-  endDate       DateTime @map("end_date") @db.Date
-  
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+
   // Metrics
-  impressions   Int      @default(0)
-  clicks        Int      @default(0)
-  spend         Decimal  @default(0) @db.Decimal(12, 2)
-  sales         Decimal  @default(0) @db.Decimal(12, 2)
-  orders        Int      @default(0)
-  units         Int      @default(0)
-  
+  impressions Int     @default(0)
+  clicks      Int     @default(0)
+  spend       Decimal @default(0) @db.Decimal(12, 2)
+  sales       Decimal @default(0) @db.Decimal(12, 2)
+  orders      Int     @default(0)
+  units       Int     @default(0)
+
   // Calculated
-  acos          Decimal? @db.Decimal(6, 2)
-  
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
-  
+  acos Decimal? @db.Decimal(6, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
   @@unique([asin, startDate, endDate])
   @@index([asin])
   @@index([sku])
@@ -2006,61 +2006,194 @@ model AuditThreshold {
 }
 
 // ============================================
+// AI INSIGHTS & LEARNING SYSTEM
+// ============================================
+
+// AI observations (what AI notices proactively)
+model AiObservation {
+  id     Int         @id @default(autoincrement())
+  userId Int         @default(1) @map("user_id")
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  observationType String  @map("observation_type") // 'out_of_stock', 'sales_spike', 'late_shipment', etc.
+  title           String
+  description     String? @db.Text
+  data            Json? // Relevant data (SKUs, numbers, dates, etc.)
+  status          String  @default("new") // 'new', 'viewed', 'responded', 'dismissed', 'resolved'
+  priority        String  @default("normal") // 'low', 'normal', 'high'
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  viewedAt   DateTime? @map("viewed_at")
+  resolvedAt DateTime? @map("resolved_at")
+
+  conversations AiInsightConversation[]
+
+  @@index([userId, status])
+  @@index([observationType])
+  @@map("ai_observations")
+}
+
+// AI insight conversations (learning from user responses)
+model AiInsightConversation {
+  id            Int           @id @default(autoincrement())
+  observationId Int           @map("observation_id")
+  observation   AiObservation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  role          String // 'ai' or 'user'
+  content       String  @db.Text
+  quickResponse String? @map("quick_response") // If user clicked a quick button
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("ai_insight_conversations")
+}
+
+// AI learned business context (what AI remembers about the business)
+model AiBusinessContext {
+  id     Int         @id @default(autoincrement())
+  userId Int         @default(1) @map("user_id")
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  contextType         String    @map("context_type") // 'seasonal_pattern', 'sku_note', 'supplier_note', etc.
+  subject             String? // SKU, supplier name, category, etc.
+  context             String    @db.Text // What AI learned
+  sourceObservationId Int?      @map("source_observation_id")
+  confidence          Decimal   @default(1.0) @db.Decimal(3, 2) // How confident (can decay over time)
+  expiresAt           DateTime? @map("expires_at") // Some context may expire (e.g., "running a sale")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, contextType, subject])
+  @@map("ai_business_context")
+}
+
+// AI action log (audit trail)
+model AiActionLog {
+  id     Int         @id @default(autoincrement())
+  userId Int         @default(1) @map("user_id")
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  actionType  String  @map("action_type") // 'query', 'action', 'create_tool', 'insight_response'
+  input       String? @db.Text // What user asked/said
+  intent      String? // Classified intent
+  actionTaken String? @map("action_taken") @db.Text // What AI did
+  result      Json? // Result of action
+  success     Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("ai_action_log")
+}
+
+// ============================================
+// USER TOOLS SYSTEM
+// ============================================
+
+// User-created tools (cards, widgets, notepads)
+model UserTool {
+  id     Int         @id @default(autoincrement())
+  userId Int         @default(1) @map("user_id")
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  toolType  String  @map("tool_type") // 'data_card', 'notepad', 'chart', 'quick_action', 'filtered_list', 'growth_tracker'
+  title     String
+  config    Json // Tool configuration
+  position  Int     @default(0) // For reordering
+  size      String  @default("medium") // 'small', 'medium', 'large', 'full'
+  isActive  Boolean @default(true) @map("is_active")
+  createdBy String  @default("user") @map("created_by") // 'user' or 'ai'
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, isActive])
+  @@map("user_tools")
+}
+
+// Feature requests for complex things AI can't do
+model FeatureRequest {
+  id     Int         @id @default(autoincrement())
+  userId Int         @default(1) @map("user_id")
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  requestText         String    @map("request_text") @db.Text
+  aiAnalysis          String?   @map("ai_analysis") @db.Text
+  aiSuggestedApproach String?   @map("ai_suggested_approach") @db.Text
+  status              String    @default("pending") // 'pending', 'reviewed', 'approved', 'rejected', 'completed'
+  priority            String    @default("normal") // 'low', 'normal', 'high'
+  reviewedBy          String?   @map("reviewed_by")
+  reviewedAt          DateTime? @map("reviewed_at")
+  notes               String?   @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, status])
+  @@map("feature_requests")
+}
+
+// ============================================
 // DASHBOARD & USER SETTINGS
 // ============================================
 
 model UserProfile {
-  id        Int      @id @default(autoincrement())
-  name      String   @default("there")
-  email     String?
-  timezone  String   @default("America/New_York")
-  
+  id       Int     @id @default(autoincrement())
+  name     String  @default("there")
+  email    String?
+  timezone String  @default("America/New_York")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-  
-  schedule  UserSchedule[]
-  events    CalendarEvent[]
-  
+
+  schedule           UserSchedule[]
+  events             CalendarEvent[]
+  aiObservations     AiObservation[]
+  aiBusinessContexts AiBusinessContext[]
+  aiActionLogs       AiActionLog[]
+  userTools          UserTool[]
+  featureRequests    FeatureRequest[]
+
   @@map("user_profile")
 }
 
 model UserSchedule {
-  id         Int      @id @default(autoincrement())
-  userId     Int      @default(1) @map("user_id")
-  user       UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  dayOfWeek  Int      @map("day_of_week") // 0=Sunday, 6=Saturday
-  isWorking  Boolean  @default(true) @map("is_working")
-  startTime  String?  @map("start_time") // "09:00"
-  endTime    String?  @map("end_time")   // "17:00"
-  
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
-  
+  id     Int         @id @default(autoincrement())
+  userId Int         @default(1) @map("user_id")
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dayOfWeek Int     @map("day_of_week") // 0=Sunday, 6=Saturday
+  isWorking Boolean @default(true) @map("is_working")
+  startTime String? @map("start_time") // "09:00"
+  endTime   String? @map("end_time") // "17:00"
+
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
   @@unique([userId, dayOfWeek])
   @@map("user_schedule")
 }
 
 model CalendarEvent {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @default(1) @map("user_id")
-  user        UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id     Int         @id @default(autoincrement())
+  userId Int         @default(1) @map("user_id")
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   title       String
-  description String?  @db.Text
-  eventType   String   @default("appointment") @map("event_type") // appointment, reminder, time_off, holiday
-  
-  startDate   DateTime @map("start_date") @db.Date
-  endDate     DateTime? @map("end_date") @db.Date // For multi-day events
-  startTime   String?  @map("start_time") // "09:00"
-  endTime     String?  @map("end_time")
-  isAllDay    Boolean  @default(false) @map("is_all_day")
-  
-  recurrence  String   @default("none") // none, daily, weekly, monthly
-  reminderMinutes Int? @map("reminder_minutes")
-  
-  createdBy   String   @default("user") @map("created_by") // 'user' or 'ai'
-  createdAt   DateTime @default(now()) @map("created_at")
-  
+  description String? @db.Text
+  eventType   String  @default("appointment") @map("event_type") // appointment, reminder, time_off, holiday
+
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date // For multi-day events
+  startTime String?   @map("start_time") // "09:00"
+  endTime   String?   @map("end_time")
+  isAllDay  Boolean   @default(false) @map("is_all_day")
+
+  recurrence      String @default("none") // none, daily, weekly, monthly
+  reminderMinutes Int?   @map("reminder_minutes")
+
+  createdBy String   @default("user") @map("created_by") // 'user' or 'ai'
+  createdAt DateTime @default(now()) @map("created_at")
+
   @@index([startDate, endDate])
   @@index([userId])
   @@map("calendar_events")
@@ -2068,58 +2201,58 @@ model CalendarEvent {
 
 // Dashboard card configuration
 model DashboardCard {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @default(1) @map("user_id")
-  
-  cardType    String   @map("card_type") // tasks, profit, schedule, goals, top_products, inventory_summary, ai_query, ai_action
-  isEnabled   Boolean  @default(true) @map("is_enabled")
-  column      String   @default("left") // left, right
-  sortOrder   Int      @default(0) @map("sort_order")
-  
+  id     Int @id @default(autoincrement())
+  userId Int @default(1) @map("user_id")
+
+  cardType  String  @map("card_type") // tasks, profit, schedule, goals, top_products, inventory_summary, ai_query, ai_action
+  isEnabled Boolean @default(true) @map("is_enabled")
+  column    String  @default("left") // left, right
+  sortOrder Int     @default(0) @map("sort_order")
+
   // Size preferences
-  height      Int?     // Custom height in pixels (null = auto)
-  isCollapsed Boolean  @default(false) @map("is_collapsed")
-  
+  height      Int? // Custom height in pixels (null = auto)
+  isCollapsed Boolean @default(false) @map("is_collapsed")
+
   // Card-specific settings stored as JSON
-  settings    String?  @db.Text // JSON string for card-specific config
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  
+  settings String? @db.Text // JSON string for card-specific config
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@unique([userId, cardType])
   @@map("dashboard_cards")
 }
 
 // Goals for the Goals card
 model Goal {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @default(1) @map("user_id")
-  
+  id     Int @id @default(autoincrement())
+  userId Int @default(1) @map("user_id")
+
   title       String
-  description String?  @db.Text
-  goalType    String   @default("custom") @map("goal_type") // revenue, profit, units, orders, custom
-  
+  description String? @db.Text
+  goalType    String  @default("custom") @map("goal_type") // revenue, profit, units, orders, custom
+
   // Target values
-  targetValue Decimal? @map("target_value") @db.Decimal(12, 2)
+  targetValue  Decimal? @map("target_value") @db.Decimal(12, 2)
   currentValue Decimal? @default(0) @map("current_value") @db.Decimal(12, 2)
-  unit        String?  // $, units, orders, %
-  
+  unit         String? // $, units, orders, %
+
   // Time period
-  periodType  String   @default("monthly") @map("period_type") // daily, weekly, monthly, quarterly, yearly, custom
-  startDate   DateTime? @map("start_date")
-  endDate     DateTime? @map("end_date")
-  
+  periodType String    @default("monthly") @map("period_type") // daily, weekly, monthly, quarterly, yearly, custom
+  startDate  DateTime? @map("start_date")
+  endDate    DateTime? @map("end_date")
+
   // Status
-  isCompleted Boolean  @default(false) @map("is_completed")
+  isCompleted Boolean   @default(false) @map("is_completed")
   completedAt DateTime? @map("completed_at")
-  
+
   // Display
-  color       String   @default("#0ea5e9") // Tailwind cyan-500
-  sortOrder   Int      @default(0) @map("sort_order")
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  
+  color     String @default("#0ea5e9") // Tailwind cyan-500
+  sortOrder Int    @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@index([userId])
   @@map("goals")
 }

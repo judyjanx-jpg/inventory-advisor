@@ -2,6 +2,7 @@
 
 import Sidebar from './Sidebar'
 import { useSyncContext } from '@/components/sync/SyncProvider'
+import FloatingOrb from '@/components/floating-ai/FloatingOrb'
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { syncState } = useSyncContext()
@@ -15,6 +16,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           {children}
         </div>
       </main>
+      <FloatingOrb />
     </div>
   )
 }

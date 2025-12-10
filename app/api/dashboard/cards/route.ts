@@ -6,28 +6,93 @@ const DEFAULT_CARDS = [
   { cardType: 'tasks', isEnabled: true, column: 'left', sortOrder: 0 },
   { cardType: 'profit', isEnabled: true, column: 'left', sortOrder: 1 },
   { cardType: 'schedule', isEnabled: true, column: 'right', sortOrder: 0 },
+  { cardType: 'ai_insights', isEnabled: true, column: 'right', sortOrder: 1 },
   { cardType: 'goals', isEnabled: false, column: 'left', sortOrder: 2 },
-  { cardType: 'top_products', isEnabled: false, column: 'right', sortOrder: 1 },
-  { cardType: 'inventory_summary', isEnabled: false, column: 'right', sortOrder: 2 },
+  { cardType: 'top_products', isEnabled: false, column: 'right', sortOrder: 2 },
+  { cardType: 'inventory_summary', isEnabled: false, column: 'right', sortOrder: 3 },
 ]
 
 export async function GET(request: NextRequest) {
   try {
-    let cards = await prisma.dashboardCard.findMany({
-      where: { userId: 1 },
-      orderBy: [{ column: 'asc' }, { sortOrder: 'asc' }]
-    })
+    // Check for reset query parameter
+    const { searchParams } = new URL(request.url)
+    const reset = searchParams.get('reset') === 'true'
 
-    // If no cards exist, create defaults
-    if (cards.length === 0) {
-      for (const card of DEFAULT_CARDS) {
-        await prisma.dashboardCard.create({
-          data: { userId: 1, ...card }
-        })
-      }
+    // Try to find cards - if table doesn't exist, this will throw
+    let cards: any[] = []
+    try {
       cards = await prisma.dashboardCard.findMany({
         where: { userId: 1 },
         orderBy: [{ column: 'asc' }, { sortOrder: 'asc' }]
+      })
+
+      // If reset requested or no cards exist, create/update defaults
+      if (reset || cards.length === 0) {
+        // Delete all existing cards if reset
+        if (reset && cards.length > 0) {
+          await prisma.dashboardCard.deleteMany({
+            where: { userId: 1 }
+          })
+        }
+
+        // Create all default cards
+        for (const card of DEFAULT_CARDS) {
+          await prisma.dashboardCard.upsert({
+            where: {
+              userId_cardType: { userId: 1, cardType: card.cardType }
+            },
+            update: {
+              isEnabled: card.isEnabled,
+              column: card.column,
+              sortOrder: card.sortOrder
+            },
+            create: {
+              userId: 1,
+              ...card
+            }
+          })
+        }
+        
+        // Refresh cards after updates
+        cards = await prisma.dashboardCard.findMany({
+          where: { userId: 1 },
+          orderBy: [{ column: 'asc' }, { sortOrder: 'asc' }]
+        })
+      } else {
+        // Ensure default enabled cards exist and are enabled
+        const existingCardTypes = new Set(cards.map((c: any) => c.cardType))
+        for (const defaultCard of DEFAULT_CARDS) {
+          if (!existingCardTypes.has(defaultCard.cardType)) {
+            // Create missing default card
+            await prisma.dashboardCard.create({
+              data: { userId: 1, ...defaultCard }
+            })
+          } else if (defaultCard.isEnabled) {
+            // Ensure default enabled cards are actually enabled
+            const existingCard = cards.find((c: any) => c.cardType === defaultCard.cardType)
+            if (existingCard && !existingCard.isEnabled) {
+              await prisma.dashboardCard.update({
+                where: { id: existingCard.id },
+                data: { isEnabled: true }
+              })
+            }
+          }
+        }
+        // Refresh cards after updates
+        cards = await prisma.dashboardCard.findMany({
+          where: { userId: 1 },
+          orderBy: [{ column: 'asc' }, { sortOrder: 'asc' }]
+        })
+      }
+    } catch (dbError: any) {
+      // If table doesn't exist, return empty array and log error
+      console.error('DashboardCard table may not exist:', dbError?.message)
+      // Return empty cards array - frontend will handle gracefully
+      return NextResponse.json({
+        success: true,
+        cards: [],
+        availableCards: DEFAULT_CARDS.map(c => c.cardType),
+        error: 'Table not initialized. Please run database migrations.'
       })
     }
 
@@ -45,11 +110,23 @@ export async function GET(request: NextRequest) {
       })),
       availableCards: DEFAULT_CARDS.map(c => c.cardType)
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Dashboard cards API error:', error)
+    const errorMessage = error?.message || String(error)
+    
+    // Check if it's a table doesn't exist error
+    if (errorMessage.includes('does not exist') || errorMessage.includes('Unknown table')) {
+      return NextResponse.json({
+        success: false,
+        error: 'Dashboard cards table does not exist. Please run: npx prisma db push',
+        details: errorMessage
+      }, { status: 500 })
+    }
+    
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch dashboard cards'
+      error: 'Failed to fetch dashboard cards',
+      details: errorMessage
     }, { status: 500 })
   }
 }

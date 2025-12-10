@@ -53,14 +53,42 @@ export default function ScheduleCard() {
   const [showWorkHours, setShowWorkHours] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [deletingEvent, setDeletingEvent] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+  const [editEventForm, setEditEventForm] = useState({
+    title: '',
+    startDate: '',
+    startTime: '',
+    endTime: '',
+    isAllDay: false
+  })
+  const [savingEvent, setSavingEvent] = useState(false)
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
+  const [scheduleTimezone, setScheduleTimezone] = useState('America/New_York')
+  const [deletingTestReminders, setDeletingTestReminders] = useState(false)
 
   useEffect(() => {
     fetchSchedule()
+    checkAiAvailability()
   }, [])
 
   useEffect(() => {
     fetchEvents()
   }, [currentMonth])
+
+  const checkAiAvailability = async () => {
+    try {
+      // Try to check if AI is available by making a test request
+      // The API will return 503 if ANTHROPIC_API_KEY is not configured
+      const res = await fetch('/api/dashboard/schedule/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: 'test' })
+      })
+      setAiAvailable(res.status !== 503)
+    } catch {
+      setAiAvailable(false)
+    }
+  }
 
   const fetchSchedule = async () => {
     try {
@@ -152,11 +180,83 @@ export default function ScheduleCard() {
         setEvents(prev => prev.filter(e => e.id !== eventId))
         setSelectedEvent(null)
         setSelectedDate(null)
+        setEditingEvent(null)
+        // Trigger refresh of dashboard tasks
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'))
       }
     } catch (error) {
       console.error('Error deleting event:', error)
     } finally {
       setDeletingEvent(false)
+    }
+  }
+
+  const handleDeleteTestReminders = async () => {
+    if (!confirm('Delete all test reminders? This cannot be undone.')) return
+    
+    setDeletingTestReminders(true)
+    try {
+      const res = await fetch(`/api/dashboard/events?deleteTest=true`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (data.success) {
+        setEvents(prev => prev.filter(e => !e.title.toLowerCase().includes('test')))
+        fetchEvents()
+        // Trigger refresh of dashboard tasks
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'))
+        setAiResponse(`Deleted ${data.message || 'test reminders'}`)
+        setTimeout(() => setAiResponse(null), 3000)
+      }
+    } catch (error) {
+      console.error('Error deleting test reminders:', error)
+      setAiResponse('Failed to delete test reminders')
+      setTimeout(() => setAiResponse(null), 3000)
+    } finally {
+      setDeletingTestReminders(false)
+    }
+  }
+
+  const handleEditEvent = (event: CalendarEvent) => {
+    setEditingEvent(event)
+    setEditEventForm({
+      title: event.title,
+      startDate: event.startDate,
+      startTime: event.startTime || '',
+      endTime: event.endTime || '',
+      isAllDay: event.isAllDay
+    })
+  }
+
+  const handleSaveEvent = async () => {
+    if (!editingEvent) return
+    
+    setSavingEvent(true)
+    try {
+      const res = await fetch(`/api/dashboard/events?id=${editingEvent.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editEventForm.title,
+          startDate: editEventForm.startDate,
+          startTime: editEventForm.isAllDay ? null : editEventForm.startTime,
+          endTime: editEventForm.isAllDay ? null : editEventForm.endTime,
+          isAllDay: editEventForm.isAllDay
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setEvents(prev => prev.map(e => 
+          e.id === editingEvent.id ? data.event : e
+        ))
+        setEditingEvent(null)
+        setSelectedEvent(null)
+        fetchEvents()
+      }
+    } catch (error) {
+      console.error('Error updating event:', error)
+    } finally {
+      setSavingEvent(false)
     }
   }
 
@@ -179,6 +279,8 @@ export default function ScheduleCard() {
         setAiInput('')
         fetchSchedule()
         fetchEvents()
+        // Trigger refresh of dashboard tasks
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'))
         setTimeout(() => setAiResponse(null), 5000)
       } else {
         setAiResponse(data.error || 'Sorry, I couldn\'t understand that.')
@@ -210,17 +312,43 @@ export default function ScheduleCard() {
   }
 
   const getEventsForDay = (day: number) => {
-    const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    // Convert day to date string in schedule timezone
+    const year = currentMonth.getFullYear()
+    const month = currentMonth.getMonth() + 1
+    const dateInTz = new Date(year, month - 1, day)
+    
+    // Format as YYYY-MM-DD in the schedule timezone
+    const dateStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: scheduleTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(dateInTz)
+    
     return events.filter(e => e.startDate === dateStr)
   }
 
   const hasEventOnDay = (day: number) => getEventsForDay(day).length > 0
 
   const isToday = (day: number) => {
-    const today = new Date()
-    return day === today.getDate() && 
-           currentMonth.getMonth() === today.getMonth() && 
-           currentMonth.getFullYear() === today.getFullYear()
+    // Use schedule timezone
+    const now = new Date()
+    
+    // Get today's date in schedule timezone
+    const todayInUserTz = new Intl.DateTimeFormat('en-US', {
+      timeZone: scheduleTimezone,
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric'
+    }).formatToParts(now)
+    
+    const todayDay = parseInt(todayInUserTz.find(p => p.type === 'day')?.value || '0')
+    const todayMonth = parseInt(todayInUserTz.find(p => p.type === 'month')?.value || '0') - 1 // 0-indexed
+    const todayYear = parseInt(todayInUserTz.find(p => p.type === 'year')?.value || '0')
+    
+    return day === todayDay && 
+           currentMonth.getMonth() === todayMonth && 
+           currentMonth.getFullYear() === todayYear
   }
 
   const formatTime = (time: string | null) => {
@@ -259,10 +387,25 @@ export default function ScheduleCard() {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="flex-shrink-0">
-        <CardTitle className="flex items-center gap-2">
-          <CalendarIcon className="w-5 h-5 text-[var(--primary)]" />
-          My Schedule
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <CalendarIcon className="w-5 h-5 text-[var(--primary)]" />
+            My Schedule
+          </CardTitle>
+          <select
+            value={scheduleTimezone}
+            onChange={(e) => setScheduleTimezone(e.target.value)}
+            className="px-2 py-1 text-xs bg-[var(--input)] border border-[var(--border)] rounded text-[var(--foreground)] hover:bg-[var(--hover-bg)] transition-colors"
+            title="Select timezone for schedule"
+          >
+            <option value="America/New_York">EST/EDT</option>
+            <option value="America/Chicago">CST/CDT</option>
+            <option value="America/Denver">MST/MDT</option>
+            <option value="America/Los_Angeles">PST/PDT</option>
+            <option value="America/Phoenix">MST (Arizona)</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4 flex-1 overflow-y-auto">
         {/* Mini Calendar */}
@@ -276,7 +419,11 @@ export default function ScheduleCard() {
               <ChevronLeft className="w-4 h-4 text-[var(--muted-foreground)]" />
             </button>
             <span className="font-medium text-[var(--foreground)]">
-              {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              {new Intl.DateTimeFormat('en-US', { 
+                month: 'long', 
+                year: 'numeric',
+                timeZone: scheduleTimezone
+              }).format(currentMonth)}
             </span>
             <button 
               onClick={nextMonth}
@@ -339,12 +486,17 @@ export default function ScheduleCard() {
                 {getEventsForDay(selectedDate.getDate()).map(event => (
                   <div 
                     key={event.id}
-                    className={`p-2 rounded-lg border cursor-pointer transition-colors ${
+                    className={`p-2 rounded-lg border transition-colors ${
                       selectedEvent?.id === event.id 
                         ? 'bg-[var(--primary)]/20 border-[var(--primary)]' 
-                        : 'bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)]/50'
+                        : 'bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)]/50 cursor-pointer'
                     }`}
-                    onClick={() => setSelectedEvent(selectedEvent?.id === event.id ? null : event)}
+                    onClick={() => {
+                      // Don't toggle if we're editing this event
+                      if (editingEvent?.id !== event.id) {
+                        setSelectedEvent(selectedEvent?.id === event.id ? null : event)
+                      }
+                    }}
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-[var(--foreground)]">{event.title}</span>
@@ -365,18 +517,98 @@ export default function ScheduleCard() {
                       </div>
                     )}
                     {selectedEvent?.id === event.id && (
-                      <div className="mt-2 pt-2 border-t border-[var(--border)]">
-                        {event.description && (
-                          <p className="text-xs text-[var(--muted-foreground)] mb-2">{event.description}</p>
+                      <div className="mt-2 pt-2 border-t border-[var(--border)]" onClick={(e) => e.stopPropagation()}>
+                        {editingEvent?.id === event.id ? (
+                          <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              value={editEventForm.title}
+                              onChange={(e) => setEditEventForm({ ...editEventForm, title: e.target.value })}
+                              onClick={(e) => e.stopPropagation()}
+                              onFocus={(e) => e.stopPropagation()}
+                              className="w-full px-2 py-1 bg-[var(--input)] border border-[var(--border)] rounded text-sm text-[var(--foreground)]"
+                              placeholder="Event name"
+                              autoFocus
+                            />
+                            <input
+                              type="date"
+                              value={editEventForm.startDate}
+                              onChange={(e) => setEditEventForm({ ...editEventForm, startDate: e.target.value })}
+                              onClick={(e) => e.stopPropagation()}
+                              onFocus={(e) => e.stopPropagation()}
+                              className="w-full px-2 py-1 bg-[var(--input)] border border-[var(--border)] rounded text-sm text-[var(--foreground)]"
+                            />
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={editEventForm.isAllDay}
+                                onChange={(e) => setEditEventForm({ ...editEventForm, isAllDay: e.target.checked })}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-4 h-4"
+                              />
+                              <span className="text-xs text-[var(--muted-foreground)]">All day</span>
+                            </div>
+                            {!editEventForm.isAllDay && (
+                              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="time"
+                                  value={editEventForm.startTime}
+                                  onChange={(e) => setEditEventForm({ ...editEventForm, startTime: e.target.value })}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onFocus={(e) => e.stopPropagation()}
+                                  className="flex-1 px-2 py-1 bg-[var(--input)] border border-[var(--border)] rounded text-sm text-[var(--foreground)]"
+                                />
+                                <span className="text-xs text-[var(--muted-foreground)]">-</span>
+                                <input
+                                  type="time"
+                                  value={editEventForm.endTime}
+                                  onChange={(e) => setEditEventForm({ ...editEventForm, endTime: e.target.value })}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onFocus={(e) => e.stopPropagation()}
+                                  className="flex-1 px-2 py-1 bg-[var(--input)] border border-[var(--border)] rounded text-sm text-[var(--foreground)]"
+                                />
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleSaveEvent(); }}
+                                disabled={savingEvent || !editEventForm.title.trim()}
+                                className="flex-1 px-2 py-1 bg-[var(--primary)] text-white rounded text-xs hover:opacity-90 disabled:opacity-50"
+                              >
+                                {savingEvent ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : 'Save'}
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setEditingEvent(null); }}
+                                className="px-2 py-1 bg-[var(--muted)] text-[var(--foreground)] rounded text-xs hover:bg-[var(--hover-bg)]"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {event.description && (
+                              <p className="text-xs text-[var(--muted-foreground)] mb-2">{event.description}</p>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
+                                className="flex items-center gap-1 text-xs text-[var(--primary)] hover:text-[var(--primary)]/80"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+                                disabled={deletingEvent}
+                                className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300"
+                              >
+                                {deletingEvent ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                Delete
+                              </button>
+                            </div>
+                          </>
                         )}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-                          disabled={deletingEvent}
-                          className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300"
-                        >
-                          {deletingEvent ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                          Delete
-                        </button>
                       </div>
                     )}
                   </div>
@@ -481,44 +713,68 @@ export default function ScheduleCard() {
           )}
         </div>
 
-        {/* AI Input */}
-        <div className="border-t border-[var(--border)] pt-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-[var(--primary)]" />
-            <span className="text-sm text-[var(--muted-foreground)]">Type anything about your schedule...</span>
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={aiInput}
-              onChange={(e) => setAiInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()}
-              placeholder="e.g., Remind me to call supplier Tuesday at 2pm"
-              className="flex-1 px-3 py-2 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            />
-            <button
-              onClick={handleAiSubmit}
-              disabled={aiLoading || !aiInput.trim()}
-              className="px-3 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              {aiLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Check className="w-4 h-4" />
+        {/* AI Input - Only show if AI is available */}
+        {aiAvailable !== false && (
+          <div className="border-t border-[var(--border)] pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[var(--primary)]" />
+                <span className="text-sm text-[var(--muted-foreground)]">Type anything about your schedule...</span>
+              </div>
+              {events.some(e => e.title.toLowerCase().includes('test')) && (
+                <button
+                  onClick={handleDeleteTestReminders}
+                  disabled={deletingTestReminders}
+                  className="px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50"
+                  title="Delete all test reminders"
+                >
+                  {deletingTestReminders ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <>Delete Test Reminders</>
+                  )}
+                </button>
               )}
-            </button>
-          </div>
-          
-          {aiResponse && (
-            <div className={`mt-2 p-2 rounded-lg text-sm ${
-              aiResponse.includes('Sorry') || aiResponse.includes('wrong') || aiResponse.includes('require')
-                ? 'bg-red-500/10 border border-red-500/20 text-red-400'
-                : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-            }`}>
-              {aiResponse}
             </div>
-          )}
-        </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={aiInput}
+                onChange={(e) => setAiInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()}
+                placeholder="e.g., Remind me to call supplier Tuesday at 2pm"
+                className="flex-1 px-3 py-2 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                disabled={aiAvailable === false}
+              />
+              <button
+                onClick={handleAiSubmit}
+                disabled={aiLoading || !aiInput.trim() || aiAvailable === false}
+                className="px-3 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {aiLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+            
+            {aiResponse && (
+              <div className={`mt-2 p-2 rounded-lg text-sm ${
+                aiResponse.includes('Sorry') || aiResponse.includes('wrong') || aiResponse.includes('require')
+                  ? 'bg-red-500/10 border border-red-500/20 text-red-400'
+                  : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+              }`}>
+                {aiResponse}
+              </div>
+            )}
+            {aiAvailable === false && (
+              <div className="mt-2 p-2 rounded-lg text-sm bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                AI features require ANTHROPIC_API_KEY to be configured in your environment variables.
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

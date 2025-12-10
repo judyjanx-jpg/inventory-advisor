@@ -11,7 +11,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "generate-insights": "node scripts/generate-insights.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -62,6 +63,7 @@
     "eslint-config-next": "^14.0.4",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.3.3"
   }
 }

@@ -44,6 +44,7 @@ export async function PUT(
     const {
       status,
       orderDate,
+      confirmedDate,
       expectedShipDate,
       expectedArrivalDate,
       actualShipDate,
@@ -102,6 +103,9 @@ export async function PUT(
         newExpectedDate.setDate(newExpectedDate.getDate() + Number(body.leadTimeDays))
         updateData.expectedArrivalDate = newExpectedDate
       }
+    }
+    if (confirmedDate !== undefined) {
+      updateData.confirmedDate = confirmedDate ? new Date(confirmedDate) : null
     }
     if (expectedShipDate !== undefined) updateData.expectedShipDate = new Date(expectedShipDate)
     if (expectedArrivalDate !== undefined) {

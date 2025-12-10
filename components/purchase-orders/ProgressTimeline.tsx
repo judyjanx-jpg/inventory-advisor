@@ -85,8 +85,13 @@ export default function ProgressTimeline({
       { label: 'Created', position: 0, reached: true }
     ]
 
+    // Calculate week positions, leaving space for Goal marker
+    const goalPosition = 85
+    const weekRange = goalPosition - 5 // Leave 5% space before goal
+    
     for (let w = 1; w <= weeksToShow; w++) {
-      const weekPosition = (w / weeksTotal) * 85
+      // Position weeks in the available range, avoiding overlap with Goal
+      const weekPosition = 5 + ((w / (weeksToShow + 1)) * weekRange)
       const weekDate = addDays(created, w * 7)
       const weekReached = weekDate <= now && currentStatusIndex >= 2
       compactMarkers.push({
@@ -99,10 +104,13 @@ export default function ProgressTimeline({
 
     compactMarkers.push({
       label: 'Goal',
-      position: 85,
+      position: goalPosition,
       reached: status === 'received',
       isGoal: true
     })
+    
+    // Sort markers by position to ensure proper order
+    compactMarkers.sort((a, b) => a.position - b.position)
 
     return (
       <div className="pb-4">
@@ -143,37 +151,47 @@ export default function ProgressTimeline({
           )}
 
           {/* Markers */}
-          {compactMarkers.map((marker, i) => (
-            <div 
-              key={i}
-              className="absolute flex flex-col items-center"
-              style={{ 
-                left: `${marker.position}%`,
-                top: marker.isWeek ? '0px' : '-2px',
-                transform: 'translateX(-50%)'
-              }}
-            >
+          {compactMarkers.map((marker, i) => {
+            // Check if this marker is too close to the previous one
+            const prevMarker = i > 0 ? compactMarkers[i - 1] : null
+            const minSpacing = marker.isGoal || prevMarker?.isGoal ? 8 : 5 // More space around Goal
+            const tooClose = prevMarker && Math.abs(marker.position - prevMarker.position) < minSpacing
+            
+            // Adjust label position if too close
+            const labelOffset = tooClose && marker.isGoal ? 'translate-x-1' : tooClose && prevMarker?.isGoal ? '-translate-x-1' : ''
+            
+            return (
               <div 
-                className={`
-                  rounded-full border-2 transition-all
-                  ${marker.isWeek ? 'w-1.5 h-1.5' : marker.isGoal ? 'w-3 h-3' : 'w-2.5 h-2.5'}
-                  ${marker.reached
-                    ? marker.isGoal && isOverdue
-                      ? 'bg-amber-400 border-amber-400 shadow-md shadow-amber-400/50'
-                      : marker.isGoal
-                        ? 'bg-emerald-400 border-emerald-400 shadow-md shadow-emerald-400/50'
-                        : 'bg-cyan-400 border-cyan-400'
-                    : 'bg-slate-800 border-slate-600'
-                  }
-                `}
-              />
-              <span className={`text-[9px] mt-2 whitespace-nowrap ${
-                marker.reached ? 'text-slate-300' : 'text-slate-500'
-              } ${marker.isGoal ? 'font-semibold' : ''}`}>
-                {marker.label}
-              </span>
-            </div>
-          ))}
+                key={i}
+                className="absolute flex flex-col items-center"
+                style={{ 
+                  left: `${marker.position}%`,
+                  top: marker.isWeek ? '0px' : '-2px',
+                  transform: 'translateX(-50%)'
+                }}
+              >
+                <div 
+                  className={`
+                    rounded-full border-2 transition-all
+                    ${marker.isWeek ? 'w-1.5 h-1.5' : marker.isGoal ? 'w-3 h-3' : 'w-2.5 h-2.5'}
+                    ${marker.reached
+                      ? marker.isGoal && isOverdue
+                        ? 'bg-amber-400 border-amber-400 shadow-md shadow-amber-400/50'
+                        : marker.isGoal
+                          ? 'bg-emerald-400 border-emerald-400 shadow-md shadow-emerald-400/50'
+                          : 'bg-cyan-400 border-cyan-400'
+                      : 'bg-slate-800 border-slate-600'
+                    }
+                  `}
+                />
+                <span className={`text-[9px] mt-2 whitespace-nowrap ${labelOffset} ${
+                  marker.reached ? 'text-slate-300' : 'text-slate-500'
+                } ${marker.isGoal ? 'font-semibold' : ''}`}>
+                  {marker.label}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </div>
     )
@@ -246,19 +264,19 @@ export default function ProgressTimeline({
 
       {/* Timeline container - fixed height */}
       <div className="relative h-16 mx-2">
-        {/* Background line */}
-        <div className="absolute top-2 left-0 right-0 h-1 bg-slate-700 rounded-full" />
+        {/* Background line - centered vertically */}
+        <div className="absolute top-1/2 left-0 right-0 h-1 -translate-y-1/2 bg-slate-700 rounded-full" />
         
         {/* Progress fill */}
         <div 
-          className="absolute top-2 left-0 h-1 bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full transition-all duration-500"
+          className="absolute top-1/2 left-0 h-1 -translate-y-1/2 bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full transition-all duration-500"
           style={{ width: `${Math.min(progressPercent, 88)}%` }}
         />
         
         {/* Overdue extension past goal */}
         {isOverdue && (
           <div 
-            className="absolute top-2 h-1 bg-gradient-to-r from-red-500 to-red-400 rounded-r-full transition-all duration-500"
+            className="absolute top-1/2 h-1 -translate-y-1/2 bg-gradient-to-r from-red-500 to-red-400 rounded-r-full transition-all duration-500"
             style={{ 
               left: '88%',
               width: `${Math.min(progressPercent - 88, 12)}%`
@@ -273,7 +291,8 @@ export default function ProgressTimeline({
             className="absolute flex flex-col items-center"
             style={{ 
               left: `${stage.position}%`,
-              transform: 'translateX(-50%)'
+              top: '50%',
+              transform: 'translate(-50%, -50%)'
             }}
           >
             {/* Dot */}
@@ -281,10 +300,10 @@ export default function ProgressTimeline({
               className={`
                 rounded-full border-2 transition-all
                 ${stage.isWeek 
-                  ? 'w-2 h-2 mt-1' 
+                  ? 'w-2 h-2' 
                   : stage.isGoal 
-                    ? 'w-4 h-4 -mt-0.5 border-[2.5px]' 
-                    : 'w-3 h-3 mt-0.5'
+                    ? 'w-4 h-4 border-[2.5px]' 
+                    : 'w-3 h-3'
                 }
                 ${stage.reached
                   ? stage.isGoal && isOverdue

@@ -71,8 +71,9 @@ export async function GET(request: NextRequest) {
     const today = startOfDay(now)
 
     // Items to order - products with low days of supply based on recent sales velocity
-    // No limit - show all products that need ordering
-    const itemsToOrderResult = await query<{ sku: string; title: string; total_qty: number; days_of_supply: number }>(`
+    // Only show CRITICAL items (urgency = 'critical')
+    // Critical = daysUntilMustOrder <= 14 (where daysUntilMustOrder = totalDaysOfSupply - leadTimeDays - 14)
+    const itemsToOrderResult = await query<{ sku: string; title: string; total_qty: number; days_of_supply: number; lead_time_days: number }>(`
       WITH velocity AS (
         SELECT 
           oi.master_sku as sku,
@@ -82,36 +83,48 @@ export async function GET(request: NextRequest) {
         WHERE o.purchase_date > NOW() - INTERVAL '30 days'
           AND o.status != 'Cancelled'
         GROUP BY oi.master_sku
+      ),
+      product_data AS (
+        SELECT 
+          p.sku, 
+          p.title,
+          COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0) as total_qty,
+          COALESCE(v.avg_daily_sales, 0) as avg_daily_sales,
+          COALESCE(s.lead_time_days, 30) as lead_time_days,
+          CASE 
+            WHEN COALESCE(v.avg_daily_sales, 0) > 0 
+            THEN ROUND((COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / v.avg_daily_sales)
+            ELSE 999
+          END as days_of_supply
+        FROM products p
+        LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+        LEFT JOIN velocity v ON p.sku = v.sku
+        LEFT JOIN suppliers s ON p.supplier_id = s.id
+        WHERE p.is_hidden = false
+          AND COALESCE(v.avg_daily_sales, 0) > 0.1
       )
       SELECT 
-        p.sku, 
-        p.title,
-        COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0) as total_qty,
-        CASE 
-          WHEN COALESCE(v.avg_daily_sales, 0) > 0 
-          THEN ROUND((COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / v.avg_daily_sales)
-          ELSE 999
-        END as days_of_supply
-      FROM products p
-      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
-      LEFT JOIN velocity v ON p.sku = v.sku
-      WHERE p.is_hidden = false
-        AND COALESCE(v.avg_daily_sales, 0) > 0.1
-        AND CASE 
-          WHEN COALESCE(v.avg_daily_sales, 0) > 0 
-          THEN (COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / v.avg_daily_sales
-          ELSE 999
-        END < 21
+        sku,
+        title,
+        total_qty,
+        days_of_supply,
+        lead_time_days
+      FROM product_data
+      WHERE days_of_supply - lead_time_days - 14 <= 14  -- Critical urgency threshold
+        AND days_of_supply < 999
       ORDER BY days_of_supply ASC
     `, [])
     
-    // Items to ship to Amazon - have warehouse stock but low FBA stock
-    // Calculate RECOMMENDED shipment qty (to reach 30 days supply at FBA)
+    // Items to ship to Amazon - use forecaster logic: "ship by - Today"
+    // Items with "ship by - Today" are those where:
+    // - fbaTotal === 0, OR
+    // - daysOfSupply < 3
     const itemsToShipResult = await query<{ 
       sku: string
       title: string
       warehouse_qty: number
       fba_qty: number
+      fba_inbound: number
       avg_daily_sales: number
       recommended_ship_qty: number
     }>(`
@@ -124,32 +137,64 @@ export async function GET(request: NextRequest) {
         WHERE o.purchase_date > NOW() - INTERVAL '30 days'
           AND o.status != 'Cancelled'
         GROUP BY oi.master_sku
+      ),
+      shipment_candidates AS (
+        SELECT 
+          p.sku,
+          p.title,
+          COALESCE(il.warehouse_available, 0) as warehouse_qty,
+          COALESCE(il.fba_available, 0) as fba_qty,
+          COALESCE(il.fba_inbound_working, 0) + COALESCE(il.fba_inbound_shipped, 0) + COALESCE(il.fba_inbound_receiving, 0) as fba_inbound,
+          COALESCE(v.avg_daily_sales, 0) as avg_daily_sales,
+          -- Calculate total FBA (available + inbound)
+          COALESCE(il.fba_available, 0) + 
+          COALESCE(il.fba_inbound_working, 0) + 
+          COALESCE(il.fba_inbound_shipped, 0) + 
+          COALESCE(il.fba_inbound_receiving, 0) as fba_total,
+          -- Calculate days of supply
+          CASE 
+            WHEN COALESCE(v.avg_daily_sales, 0) > 0 
+            THEN (COALESCE(il.fba_available, 0) + 
+                  COALESCE(il.fba_inbound_working, 0) + 
+                  COALESCE(il.fba_inbound_shipped, 0) + 
+                  COALESCE(il.fba_inbound_receiving, 0)) / v.avg_daily_sales
+            ELSE 999
+          END as days_of_supply,
+          -- Recommended = enough to get to 30 days supply, but not more than warehouse has
+          LEAST(
+            COALESCE(il.warehouse_available, 0),
+            GREATEST(0, CEIL(v.avg_daily_sales * 30) - 
+              (COALESCE(il.fba_available, 0) + 
+               COALESCE(il.fba_inbound_working, 0) + 
+               COALESCE(il.fba_inbound_shipped, 0) + 
+               COALESCE(il.fba_inbound_receiving, 0)))
+          ) as recommended_ship_qty
+        FROM products p
+        LEFT JOIN inventory_levels il ON p.sku = il.master_sku
+        LEFT JOIN velocity v ON p.sku = v.sku
+        WHERE p.is_hidden = false
+          AND COALESCE(il.warehouse_available, 0) > 0
+          AND COALESCE(v.avg_daily_sales, 0) > 0.1
       )
       SELECT 
-        p.sku,
-        p.title,
-        COALESCE(il.warehouse_available, 0) as warehouse_qty,
-        COALESCE(il.fba_available, 0) as fba_qty,
-        COALESCE(v.avg_daily_sales, 0) as avg_daily_sales,
-        -- Recommended = enough to get to 30 days supply, but not more than warehouse has
-        LEAST(
-          COALESCE(il.warehouse_available, 0),
-          GREATEST(0, CEIL(v.avg_daily_sales * 30) - COALESCE(il.fba_available, 0))
-        ) as recommended_ship_qty
-      FROM products p
-      LEFT JOIN inventory_levels il ON p.sku = il.master_sku
-      LEFT JOIN velocity v ON p.sku = v.sku
-      WHERE p.is_hidden = false
-        AND COALESCE(il.warehouse_available, 0) > 0
-        AND COALESCE(il.fba_available, 0) < 30
-        AND COALESCE(v.avg_daily_sales, 0) > 0.1
+        sku,
+        title,
+        warehouse_qty,
+        fba_qty,
+        fba_inbound,
+        avg_daily_sales,
+        recommended_ship_qty
+      FROM shipment_candidates
+      WHERE 
+        -- "Ship by - Today" criteria: fbaTotal === 0 OR daysOfSupply < 3
+        (fba_total = 0 OR days_of_supply < 3)
+        AND recommended_ship_qty > 0
       ORDER BY 
-        -- Prioritize items with 0 FBA stock first, then by days of supply
-        CASE WHEN COALESCE(il.fba_available, 0) = 0 THEN 0 ELSE 1 END,
-        COALESCE(il.fba_available, 0) / NULLIF(v.avg_daily_sales, 0) ASC
+        CASE WHEN fba_total = 0 THEN 0 ELSE 1 END,
+        days_of_supply ASC
     `, [])
 
-    // Sum up total recommended units to ship
+    // Sum up total recommended units to ship (only "ship by - Today" items)
     const itemsToShipTotalUnits = itemsToShipResult.reduce((sum, item) => sum + Number(item.recommended_ship_qty), 0)
     const itemsToShipProductCount = itemsToShipResult.length
 
@@ -191,13 +236,19 @@ export async function GET(request: NextRequest) {
       take: 10
     })
 
-    // Today's reminders and appointments
-    const todayEnd = endOfDay(now)
+    // Today's reminders and appointments - use user's timezone (EST/EDT)
+    const userTimezone = profile.timezone || 'America/New_York'
+    const nowInUserTz = toZonedTime(now, userTimezone)
+    const todayStartUserTz = startOfDay(nowInUserTz)
+    const todayEndUserTz = endOfDay(nowInUserTz)
+    const todayStartUTC = fromZonedTime(todayStartUserTz, userTimezone)
+    const todayEndUTC = fromZonedTime(todayEndUserTz, userTimezone)
+    
     const todayEvents = await prisma.calendarEvent.findMany({
       where: {
         startDate: {
-          gte: today,
-          lte: todayEnd
+          gte: todayStartUTC,
+          lte: todayEndUTC
         },
         eventType: { in: ['reminder', 'appointment', 'event'] }
       },
