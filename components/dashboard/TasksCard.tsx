@@ -12,11 +12,14 @@ import {
   ExternalLink,
   Mail,
   Truck,
-  Package
+  Package,
+  Bell,
+  Clock
 } from 'lucide-react'
 import Link from 'next/link'
 
 interface TaskItem {
+  id?: number
   sku?: string
   title?: string
   quantity?: number
@@ -24,6 +27,15 @@ interface TaskItem {
   supplier?: string
   supplierEmail?: string
   daysLate?: number
+  time?: string | null
+  eventType?: string
+}
+
+interface ReminderItem {
+  id: number
+  title: string
+  time: string | null
+  eventType: string
 }
 
 interface TasksData {
@@ -31,6 +43,7 @@ interface TasksData {
   itemsToShip: { count: number; nextDate: string | null; items: TaskItem[] }
   outOfStock: { count: number; items: TaskItem[] }
   lateShipments: { count: number; items: TaskItem[] }
+  reminders?: { count: number; items: ReminderItem[] }
 }
 
 interface TasksCardProps {
@@ -57,6 +70,15 @@ export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
     return `by ${date.toLocaleDateString('en-US', { weekday: 'long' })}`
   }
 
+  const formatTime = (time: string | null) => {
+    if (!time) return 'All day'
+    const [hours, minutes] = time.split(':')
+    const hour = parseInt(hours)
+    const ampm = hour >= 12 ? 'PM' : 'AM'
+    const hour12 = hour % 12 || 12
+    return `${hour12}:${minutes} ${ampm}`
+  }
+
   const openEmailClient = (email: string, poNumber: string) => {
     const subject = encodeURIComponent(`Following up on PO #${poNumber}`)
     const body = encodeURIComponent(`Hi,\n\nI wanted to follow up on Purchase Order #${poNumber}.\n\nCould you please provide an update on the expected delivery date?\n\nThank you!`)
@@ -64,6 +86,21 @@ export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
   }
 
   const taskSections = [
+    // Reminders at the top
+    {
+      id: 'reminders',
+      icon: Bell,
+      iconBg: 'bg-cyan-500/20',
+      iconColor: 'text-cyan-400',
+      label: tasks?.reminders?.count
+        ? `${tasks.reminders.count} reminder${tasks.reminders.count > 1 ? 's' : ''} today`
+        : 'No reminders today',
+      sublabel: null,
+      count: tasks?.reminders?.count || 0,
+      items: tasks?.reminders?.items || [],
+      action: { label: 'View Calendar', href: '/dashboard' },
+      isReminder: true
+    },
     {
       id: 'order',
       icon: ShoppingCart,
@@ -174,25 +211,39 @@ export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
               {/* Expanded Items */}
               {isExpanded && section.items.length > 0 && (
                 <div className="ml-13 pl-3 border-l-2 border-[var(--border)] mt-2 mb-3 space-y-2">
-                  {section.items.slice(0, 5).map((item, idx) => (
+                  {section.items.slice(0, 5).map((item: any, idx) => (
                     <div 
                       key={idx} 
                       className="flex items-center justify-between p-2 rounded-lg bg-[var(--muted)]/30"
                     >
                       <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-[var(--muted-foreground)]" />
-                        <span className="text-sm font-medium text-[var(--foreground)]">
-                          {item.sku || item.poNumber}
-                        </span>
-                        {item.supplier && (
-                          <span className="text-xs text-[var(--muted-foreground)]">
-                            • {item.supplier}
-                          </span>
-                        )}
-                        {item.daysLate && (
-                          <span className="text-xs text-orange-400">
-                            • {item.daysLate} day{item.daysLate > 1 ? 's' : ''} late
-                          </span>
+                        {section.isReminder ? (
+                          <>
+                            <Clock className="w-4 h-4 text-[var(--muted-foreground)]" />
+                            <span className="text-sm font-medium text-[var(--foreground)]">
+                              {item.title}
+                            </span>
+                            <span className="text-xs text-cyan-400">
+                              • {formatTime(item.time)}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Package className="w-4 h-4 text-[var(--muted-foreground)]" />
+                            <span className="text-sm font-medium text-[var(--foreground)]">
+                              {item.sku || item.poNumber || item.title}
+                            </span>
+                            {item.supplier && (
+                              <span className="text-xs text-[var(--muted-foreground)]">
+                                • {item.supplier}
+                              </span>
+                            )}
+                            {item.daysLate && (
+                              <span className="text-xs text-orange-400">
+                                • {item.daysLate} day{item.daysLate > 1 ? 's' : ''} late
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       {section.showEmail && item.supplierEmail && item.poNumber && (
@@ -227,4 +278,3 @@ export default function TasksCard({ tasks, onRefresh }: TasksCardProps) {
     </Card>
   )
 }
-

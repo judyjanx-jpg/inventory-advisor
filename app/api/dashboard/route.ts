@@ -115,6 +115,20 @@ export async function GET(request: NextRequest) {
       take: 10
     })
 
+    // Today's reminders and appointments
+    const todayEnd = endOfDay(now)
+    const todayEvents = await prisma.calendarEvent.findMany({
+      where: {
+        startDate: {
+          gte: today,
+          lte: todayEnd
+        },
+        eventType: { in: ['reminder', 'appointment', 'event'] }
+      },
+      orderBy: { startTime: 'asc' },
+      take: 10
+    })
+
     // Calculate profit periods for last 4 days
     const profitPeriods = []
     for (let i = 0; i < 4; i++) {
@@ -195,6 +209,15 @@ export async function GET(request: NextRequest) {
               supplier: po.supplier?.name || 'Unknown',
               supplierEmail: po.supplier?.email,
               daysLate: Math.floor((now.getTime() - (po.expectedArrivalDate?.getTime() || 0)) / (1000 * 60 * 60 * 24))
+            }))
+          },
+          reminders: {
+            count: todayEvents.length,
+            items: todayEvents.map(e => ({
+              id: e.id,
+              title: e.title,
+              time: e.startTime,
+              eventType: e.eventType
             }))
           }
         },

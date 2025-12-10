@@ -17,6 +17,7 @@ interface DashboardData {
     itemsToShip: { count: number; nextDate: string | null; items: any[] }
     outOfStock: { count: number; items: any[] }
     lateShipments: { count: number; items: any[] }
+    reminders?: { count: number; items: any[] }
   }
   profit: {
     periods: Array<{
