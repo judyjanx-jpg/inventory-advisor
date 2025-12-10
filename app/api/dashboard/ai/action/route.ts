@@ -62,14 +62,35 @@ Parse the user's command and return a JSON object:
   }
 }
 
-Examples:
-- "Change warehouse qty for SKU-123 to 500" → update_inventory, sku: SKU-123, field: warehouse_qty, toValue: 500
-- "Update cost for KISPER-001 to $4.50" → update_cost, sku: KISPER-001, toValue: 4.50
-- "Mark PO #1234 as received" → update_po, poNumber: 1234, toValue: "received"
-- "Create a PO for SKU-456" → create_po, sku: SKU-456 (may need clarification for quantity)
+IMPORTANT: Be flexible in understanding user intent. Here are examples of commands you should understand:
 
-If you need more info (like quantity), set needsClarification: true.
-If you can't understand the command, set understood: false.`
+COST/COGS updates (all mean the same thing - updating product cost):
+- "Update cost for SKU-123 to $4.50" → update_cost
+- "Change COGS for SKU-123 to 4.50" → update_cost
+- "Set the cost of SKU-123 to $4.50" → update_cost
+- "Add COGS for SKU-123 to $2.54" → update_cost
+- "The cost for SKU-123 is $4.50" → update_cost
+- "SKU-123 costs $4.50" → update_cost
+
+Inventory updates:
+- "Change warehouse qty for SKU-123 to 500" → update_inventory
+- "Set inventory for SKU-123 to 500" → update_inventory
+- "Update stock for SKU-123 to 500" → update_inventory
+
+PO updates:
+- "Mark PO #1234 as received" → update_po
+- "PO 1234 has been received" → update_po
+- "Received PO #1234" → update_po
+
+When parsing:
+- Strip $ symbols from monetary values
+- Convert values like "$2.54" to 2.54
+- The SKU might appear anywhere in the command
+- "COGS" and "cost" mean the same thing
+- Always set understood: true if you can figure out the intent
+
+If you need more info (like quantity for creating a PO), set needsClarification: true.
+Only set understood: false if you truly cannot figure out what the user wants.`
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
