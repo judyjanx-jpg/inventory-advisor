@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
 
       for (const report of pendingReports) {
         results.checked++
-        
+
         const statusResponse = await fetch(`${ADS_API_BASE}/reporting/reports/${report.reportId}`, {
           headers: {
             'Authorization': `Bearer ${credentials.accessToken}`,
@@ -246,9 +246,59 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        if (!statusResponse.ok) continue
+        if (!statusResponse.ok) {
+          // Track failed status checks for debugging
+          if (!results.statusCheckErrors) results.statusCheckErrors = []
+          const errorBody = await statusResponse.text().catch(() => 'Unable to read body')
+          results.statusCheckErrors.push({
+            reportId: report.reportId,
+            status: statusResponse.status,
+            error: errorBody.substring(0, 200), // Truncate long errors
+          })
+
+          // If 404, the report doesn't exist on Amazon anymore - mark as failed
+          if (statusResponse.status === 404) {
+            await prisma.adsPendingReport.update({
+              where: { id: report.id },
+              data: { status: 'FAILED', failureReason: 'Report not found (404) - may have expired' },
+            })
+          }
+          continue
+        }
 
         const status = await statusResponse.json()
+
+        // Track the actual status from Amazon for debugging
+        if (!results.reportStatuses) results.reportStatuses = []
+        results.reportStatuses.push({
+          reportId: report.reportId,
+          amazonStatus: status.status,
+          hasUrl: !!status.url,
+        })
+
+        // Handle FAILED reports from Amazon
+        if (status.status === 'FAILED') {
+          await prisma.adsPendingReport.update({
+            where: { id: report.id },
+            data: {
+              status: 'FAILED',
+              failureReason: status.failureReason || 'Report failed on Amazon side',
+            },
+          })
+          continue
+        }
+
+        // Handle EXPIRED reports
+        if (status.status === 'EXPIRED') {
+          await prisma.adsPendingReport.update({
+            where: { id: report.id },
+            data: {
+              status: 'FAILED',
+              failureReason: 'Report expired on Amazon side',
+            },
+          })
+          continue
+        }
 
         if (status.status === 'COMPLETED' && status.url) {
           // Download and store
