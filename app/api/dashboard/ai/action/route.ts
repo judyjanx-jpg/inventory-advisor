@@ -113,7 +113,7 @@ AVAILABLE DASHBOARD CARDS (can be shown/hidden):
 - goals: My Goals list - USE THIS for tracking items, to-dos, notes, new products, ideas! (enabled: ${dashboardCards.find((c: { cardType: string; isEnabled: boolean }) => c.cardType === 'goals')?.isEnabled ?? false})
 
 CURRENT DATA CONTEXT:
-- Products: ${products.slice(0, 15).map((p: { sku: string; cost: number | null }) => `${p.sku} ($${p.cost || 'no cost'})`).join(', ')}${products.length > 15 ? '...' : ''}
+- Products: ${products.slice(0, 15).map((p: { sku: string; cost: unknown }) => `${p.sku} ($${p.cost || 'no cost'})`).join(', ')}${products.length > 15 ? '...' : ''}
 - Pending POs: ${purchaseOrders.map((po: { poNumber: string }) => po.poNumber).join(', ') || '(none)'}
 - Suppliers: ${suppliers.map((s: { name: string; id: number }) => `${s.name} (id:${s.id})`).join(', ') || '(none)'}
 - Goals/Items list: ${goals.map((g: { title: string; id: number; isCompleted: boolean }) => `"${g.title}" (id:${g.id}, ${g.isCompleted ? 'done' : 'active'})`).join(', ') || '(none)'}
