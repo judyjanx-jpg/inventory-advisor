@@ -43,6 +43,42 @@ async function main() {
     process.exit(1)
   }
 
+  if (!dbUrl) {
+    console.error('\n❌ DATABASE_URL not set in environment')
+    process.exit(1)
+  }
+
+  // Test database connection with retry logic
+  console.log('\n   Testing database connection...')
+  const { prisma } = await import('@/lib/prisma')
+  
+  let dbConnected = false
+  const maxRetries = 5
+  const retryDelay = 5000 // 5 seconds
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await prisma.$connect()
+      await prisma.$queryRaw`SELECT 1`
+      dbConnected = true
+      console.log('   ✓ Database connection successful')
+      break
+    } catch (error: any) {
+      console.log(`   ⚠️  Database connection attempt ${attempt}/${maxRetries} failed: ${error.message}`)
+      if (attempt < maxRetries) {
+        console.log(`   Retrying in ${retryDelay / 1000} seconds...`)
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+      } else {
+        console.error('\n❌ Failed to connect to database after', maxRetries, 'attempts')
+        console.error('   Please check:')
+        console.error('   1. DATABASE_URL is correct in Railway')
+        console.error('   2. Database service is running')
+        console.error('   3. Services are properly linked in Railway')
+        process.exit(1)
+      }
+    }
+  }
+
   console.log('\n   Initializing...\n')
 
   try {
