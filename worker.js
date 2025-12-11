@@ -59,21 +59,28 @@ const inventoryQueue = new Queue('inventory-sync', REDIS_URL, { defaultJobOption
 const productsQueue = new Queue('products-sync', REDIS_URL, { defaultJobOptions })
 const reportsQueue = new Queue('reports-sync', REDIS_URL, { defaultJobOptions })
 const aggregationQueue = new Queue('aggregation', REDIS_URL, { defaultJobOptions })
+const adsReportsQueue = new Queue('ads-reports-sync', REDIS_URL, {
+  defaultJobOptions: {
+    ...defaultJobOptions,
+    attempts: 5,
+    timeout: 7200000, // 2 hour timeout (Amazon reports can take 1+ hour)
+  }
+})
+const alertsQueue = new Queue('alerts-generation', REDIS_URL, { defaultJobOptions })
 
-const allQueues = [ordersQueue, ordersReportQueue, financesQueue, inventoryQueue, productsQueue, reportsQueue, aggregationQueue]
+const allQueues = [ordersQueue, ordersReportQueue, financesQueue, inventoryQueue, productsQueue, reportsQueue, aggregationQueue, adsReportsQueue, alertsQueue]
 
-// Schedule configuration
+// Schedule configuration - synced with lib/queues/scheduler.ts
 const schedules = [
-  // NEW: Orders Report sync - gets pending order items (like Sellerboard)
-  { queue: ordersReportQueue, name: 'orders-report-sync', cron: '*/30 * * * *', description: 'Sync orders via Report API (includes pending orders)' },
-  
-  // Existing schedules
-  { queue: ordersQueue, name: 'orders-sync', cron: '*/15 * * * *', description: 'Sync recent orders' },
-  { queue: financesQueue, name: 'finances-sync', cron: '0 */2 * * *', description: 'Sync financial events' },
-  { queue: inventoryQueue, name: 'inventory-sync', cron: '0 * * * *', description: 'Sync FBA inventory' },
-  { queue: productsQueue, name: 'products-sync', cron: '0 6 * * *', description: 'Sync product catalog' },
-  { queue: reportsQueue, name: 'daily-reports', cron: '0 7 * * *', description: 'Generate daily reports' },
-  { queue: aggregationQueue, name: 'daily-aggregation', cron: '30 7 * * *', description: 'Calculate profit summaries' },
+  { queue: ordersReportQueue, name: 'orders-report-sync', cron: '*/30 * * * *', description: 'Sync orders via Report API (includes pending orders)', enabled: true },
+  { queue: ordersQueue, name: 'orders-sync', cron: '*/15 * * * *', description: 'Sync recent orders from SP-API', enabled: false }, // Disabled - using orders-report instead
+  { queue: financesQueue, name: 'finances-sync', cron: '0 */4 * * *', description: 'Sync financial events (fees, refunds)', enabled: true, data: { daysBack: 14 } },
+  { queue: inventoryQueue, name: 'inventory-sync', cron: '0 * * * *', description: 'Sync FBA inventory levels', enabled: true },
+  { queue: productsQueue, name: 'products-sync', cron: '0 6 * * *', description: 'Sync product catalog', enabled: true },
+  { queue: reportsQueue, name: 'daily-reports', cron: '0 7 * * *', description: 'Sync returns data from Amazon reports', enabled: true, data: { daysBack: 30 } },
+  { queue: aggregationQueue, name: 'daily-aggregation', cron: '30 7 * * *', description: 'Calculate daily profit summaries', enabled: true },
+  { queue: adsReportsQueue, name: 'ads-reports-sync', cron: '*/30 * * * *', description: 'Sync Amazon Ads campaign data (SP reports)', enabled: true },
+  { queue: alertsQueue, name: 'alerts-generation', cron: '0 8 * * *', description: 'Generate inventory alerts from forecast data', enabled: true },
 ]
 
 // Initialize scheduler
@@ -81,6 +88,11 @@ async function initializeScheduler() {
   console.log('🕐 Initializing job scheduler...')
 
   for (const schedule of schedules) {
+    if (schedule.enabled === false) {
+      console.log(`  ⏸ ${schedule.name}: disabled`)
+      continue
+    }
+
     try {
       // Remove existing repeatable jobs
       const existingJobs = await schedule.queue.getRepeatableJobs()
@@ -90,14 +102,15 @@ async function initializeScheduler() {
         }
       }
 
-      // Add scheduled job
+      // Add scheduled job with optional data
       await schedule.queue.add(
         schedule.name,
-        { scheduled: true, createdAt: new Date().toISOString() },
+        { scheduled: true, createdAt: new Date().toISOString(), ...schedule.data },
         { repeat: { cron: schedule.cron }, jobId: schedule.name }
       )
 
       console.log(`  ✓ ${schedule.name}: ${schedule.cron}`)
+      console.log(`    └─ ${schedule.description}`)
     } catch (error) {
       console.error(`  ✗ ${schedule.name}: ${error.message}`)
     }
@@ -309,18 +322,56 @@ async function processAggregation(job) {
   }
 }
 
+async function processAdsReportsSync(job) {
+  console.log(`[ads-reports] Processing job ${job.id}...`)
+
+  try {
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const response = await fetch(`${baseUrl}/api/amazon-ads/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const data = await response.json()
+    console.log(`[ads-reports] Completed:`, data.success ? 'success' : data.error)
+    return data
+  } catch (error) {
+    console.error(`[ads-reports] Failed:`, error.message)
+    throw error
+  }
+}
+
+async function processAlertsGeneration(job) {
+  console.log(`[alerts] Processing job ${job.id}...`)
+
+  try {
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const response = await fetch(`${baseUrl}/api/inventory/alerts/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const data = await response.json()
+    console.log(`[alerts] Completed:`, data.success ? `${data.alertsGenerated || 0} alerts generated` : data.error)
+    return data
+  } catch (error) {
+    console.error(`[alerts] Failed:`, error.message)
+    throw error
+  }
+}
+
 // Start worker
 function startWorker() {
   console.log('🔧 Starting sync worker...\n')
 
   // Register processors
-  ordersReportQueue.process('orders-report-sync', 1, processOrdersReportSync)  // NEW
+  ordersReportQueue.process('orders-report-sync', 1, processOrdersReportSync)
   ordersQueue.process('orders-sync', 1, processOrdersSync)
   financesQueue.process('finances-sync', 1, processFinancesSync)
   inventoryQueue.process('inventory-sync', 1, processInventorySync)
   productsQueue.process('products-sync', 1, processProductsSync)
   reportsQueue.process('daily-reports', 1, processReportsSync)
   aggregationQueue.process('daily-aggregation', 1, processAggregation)
+  adsReportsQueue.process('ads-reports-sync', 1, processAdsReportsSync)
+  alertsQueue.process('alerts-generation', 1, processAlertsGeneration)
 
   // Event handlers
   allQueues.forEach(queue => {
