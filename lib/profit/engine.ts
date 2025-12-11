@@ -227,8 +227,20 @@ export async function getPeriodData(
     items_with_actual_revenue: string
     actual_revenue_total: string
   }>(`
-    WITH recent_avg_prices AS (
-      -- Recent 30-day average prices (preferred for active products)
+    most_recent_prices AS (
+      -- Most recent price per SKU (preferred for pending orders)
+      SELECT DISTINCT ON (oi.master_sku)
+        oi.master_sku,
+        (oi.item_price / NULLIF(oi.quantity, 0)) as recent_unit_price
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      WHERE oi.item_price > 0
+        AND oi.quantity > 0
+        AND o.status NOT IN ('Cancelled', 'Canceled')
+      ORDER BY oi.master_sku, o.purchase_date DESC
+    ),
+    recent_avg_prices AS (
+      -- Recent 30-day average prices (fallback for products without recent sales)
       SELECT
         oi.master_sku,
         AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
@@ -266,13 +278,16 @@ export async function getPeriodData(
           -- Priority 3: Calculate from item components
           WHEN oi.item_price > 0
           THEN oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
-          -- Priority 4: Recent 30-day avg price
+          -- Priority 4: Most recent price for this SKU (best for pending orders)
+          WHEN COALESCE(mrp.recent_unit_price, 0) > 0
+          THEN (mrp.recent_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          -- Priority 5: Recent 30-day avg price
           WHEN COALESCE(rap.avg_unit_price, 0) > 0
           THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
-          -- Priority 5: ALL-TIME historical avg price (NEW - fixes Pending order estimation)
+          -- Priority 6: Historical 180-day avg price
           WHEN COALESCE(hap.avg_unit_price, 0) > 0
           THEN (hap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
-          -- Priority 6: Catalog price × 0.95
+          -- Priority 7: Catalog price × 0.95
           WHEN COALESCE(p.price, 0) > 0
           THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
           ELSE COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
@@ -287,7 +302,9 @@ export async function getPeriodData(
           THEN CASE
             WHEN oi.item_price > 0
             THEN ROUND((oi.item_price * 0.15) + (3.50 * oi.quantity), 2)
-            -- Fee estimation fallback chain: recent avg → historical avg → catalog × 0.95 → 0
+            -- Fee estimation fallback chain: most recent → recent avg → historical avg → catalog × 0.95 → 0
+            WHEN COALESCE(mrp.recent_unit_price, 0) > 0
+            THEN ROUND((mrp.recent_unit_price * oi.quantity * 0.15) + (3.50 * oi.quantity), 2)
             WHEN COALESCE(rap.avg_unit_price, 0) > 0
             THEN ROUND((rap.avg_unit_price * oi.quantity * 0.15) + (3.50 * oi.quantity), 2)
             WHEN COALESCE(hap.avg_unit_price, 0) > 0
@@ -309,6 +326,8 @@ export async function getPeriodData(
         CASE
           WHEN COALESCE(oi.item_price, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0 AND COALESCE(oi.actual_revenue, 0) = 0
           THEN CASE
+            WHEN COALESCE(mrp.recent_unit_price, 0) > 0
+            THEN (mrp.recent_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
             WHEN COALESCE(rap.avg_unit_price, 0) > 0
             THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
             WHEN COALESCE(hap.avg_unit_price, 0) > 0
@@ -325,6 +344,7 @@ export async function getPeriodData(
       ROUND(COALESCE(SUM(COALESCE(oi.actual_revenue, 0)), 0), 2)::text as actual_revenue_total
     FROM order_items oi
     INNER JOIN orders o ON oi.order_id = o.id
+    LEFT JOIN most_recent_prices mrp ON oi.master_sku = mrp.master_sku
     LEFT JOIN recent_avg_prices rap ON oi.master_sku = rap.master_sku
     LEFT JOIN historical_avg_prices hap ON oi.master_sku = hap.master_sku
     LEFT JOIN products p ON oi.master_sku = p.sku
