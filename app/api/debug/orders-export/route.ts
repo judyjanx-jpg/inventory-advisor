@@ -29,8 +29,6 @@ export async function GET(request: NextRequest) {
       actual_revenue: number
       gross_revenue: number
       amazon_fees: number
-      referral_fee: number
-      fba_fee: number
     }>(`
       SELECT
         o.id as order_id,
@@ -38,7 +36,7 @@ export async function GET(request: NextRequest) {
         o.status,
         oi.asin,
         oi.master_sku,
-        oi.title,
+        p.title,
         oi.quantity,
         COALESCE(oi.item_price, 0) as item_price,
         COALESCE(oi.shipping_price, 0) as shipping_price,
@@ -46,11 +44,10 @@ export async function GET(request: NextRequest) {
         COALESCE(oi.promo_discount, 0) as promo_discount,
         COALESCE(oi.actual_revenue, 0) as actual_revenue,
         COALESCE(oi.gross_revenue, 0) as gross_revenue,
-        COALESCE(oi.amazon_fees, 0) as amazon_fees,
-        COALESCE(oi.referral_fee, 0) as referral_fee,
-        COALESCE(oi.fba_fee, 0) as fba_fee
+        COALESCE(oi.amazon_fees, 0) as amazon_fees
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
+      LEFT JOIN products p ON oi.master_sku = p.sku
       WHERE o.purchase_date >= $1
         AND o.purchase_date < $2
       ORDER BY o.purchase_date, o.id
