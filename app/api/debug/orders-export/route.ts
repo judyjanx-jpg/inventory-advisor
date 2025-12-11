@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     // Get all order items for the period with full details
     const orders = await query<{
-      amazon_order_id: string
+      order_id: string
       purchase_date: string
       status: string
       asin: string
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       fba_fee: number
     }>(`
       SELECT
-        o.amazon_order_id,
+        o.id as order_id,
         o.purchase_date::text,
         o.status,
         oi.asin,
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       JOIN orders o ON oi.order_id = o.id
       WHERE o.purchase_date >= $1
         AND o.purchase_date < $2
-      ORDER BY o.purchase_date, o.amazon_order_id
+      ORDER BY o.purchase_date, o.id
     `, [range.start, range.end])
 
     // Summary stats
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         end: range.end.toISOString(),
         label: range.label
       },
-      totalOrders: new Set(orders.map(o => o.amazon_order_id)).size,
+      totalOrders: new Set(orders.map(o => o.order_id)).size,
       totalLineItems: orders.length,
       totalUnits: orders.reduce((sum, o) => sum + (o.quantity || 0), 0),
       byStatus: {} as Record<string, { orders: number, units: number }>,
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       if (!ordersByStatus.has(order.status)) {
         ordersByStatus.set(order.status, new Set())
       }
-      ordersByStatus.get(order.status)!.add(order.amazon_order_id)
+      ordersByStatus.get(order.status)!.add(order.order_id)
     }
     for (const [status, orderSet] of ordersByStatus) {
       summary.byStatus[status].orders = orderSet.size
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
       success: true,
       summary,
       orders: orders.map(o => ({
-        orderId: o.amazon_order_id,
+        orderId: o.order_id,
         date: o.purchase_date,
         status: o.status,
         asin: o.asin,
