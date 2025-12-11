@@ -18,7 +18,7 @@ export async function GET() {
       GROUP BY status
       ORDER BY order_count DESC
     `
-    results.orderStatuses = statusCounts.map((row: { status: string; order_count: bigint }) => ({
+    results.orderStatuses = statusCounts.map((row: { status: string | null; order_count: bigint }) => ({
       status: row.status,
       order_count: Number(row.order_count)
     }))
