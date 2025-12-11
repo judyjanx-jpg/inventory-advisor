@@ -69,7 +69,9 @@ export async function GET(request: NextRequest) {
       }
 
       const { start, end, label } = getCustomDateRange(startDateParam, endDateParam)
-      const data = await getPeriodData(start, end, includeDebug)
+      // Pre-compute price lookups to avoid running heavy CTEs
+      const priceLookups = await precomputePriceLookups()
+      const data = await getPeriodDataLightweight(start, end, priceLookups, includeDebug)
       const metrics = calculateMetrics(data)
 
       return NextResponse.json({
