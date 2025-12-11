@@ -614,6 +614,7 @@ export default function PurchaseOrderDetailPage() {
                   <Plus className="w-4 h-4 mr-2" />
                   Add Item
                 </Button>
+                {po && <ExportDropdown po={po} />}
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                   <input

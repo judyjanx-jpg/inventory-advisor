@@ -19,6 +19,7 @@ interface ExportDropdownProps {
       quantityOrdered: number
       quantityReceived: number
       quantityDamaged: number
+      quantityBackordered?: number
       unitCost: number
       lineTotal: number
     }>
@@ -50,18 +51,54 @@ export default function ExportDropdown({ po }: ExportDropdownProps) {
     }
   }, [isOpen])
 
+  const exportItemsCSV = () => {
+    try {
+      const headers = ['SKU', 'Product Name', 'Ordered', 'Received', 'Damaged', 'Backorder', 'Unit Cost', 'Line Total']
+      const rows = po.items.map(item => [
+        item.masterSku,
+        item.product?.title || '',
+        item.quantityOrdered,
+        item.quantityReceived,
+        item.quantityDamaged,
+        (item as any).quantityBackordered || 0,
+        Number(item.unitCost).toFixed(2),
+        Number(item.lineTotal).toFixed(2),
+      ])
+      
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+      ].join('\n')
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `${po.poNumber}-items.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      setIsOpen(false)
+    } catch (error) {
+      console.error('Error exporting items CSV:', error)
+      alert('Failed to export items')
+    }
+  }
+
   const exportItemsExcel = async () => {
     try {
       const XLSX = await import('xlsx')
       
       const worksheetData = [
-        ['SKU', 'Product Name', 'Ordered', 'Received', 'Damaged', 'Unit Cost', 'Line Total'],
+        ['SKU', 'Product Name', 'Ordered', 'Received', 'Damaged', 'Backorder', 'Unit Cost', 'Line Total'],
         ...po.items.map(item => [
           item.masterSku,
           item.product?.title || '',
           item.quantityOrdered,
           item.quantityReceived,
           item.quantityDamaged,
+          (item as any).quantityBackordered || 0,
           Number(item.unitCost),
           Number(item.lineTotal),
         ]),
@@ -98,13 +135,14 @@ export default function ExportDropdown({ po }: ExportDropdownProps) {
 
       // Sheet 2: Items
       const itemsData = [
-        ['SKU', 'Product Name', 'Ordered', 'Received', 'Damaged', 'Unit Cost', 'Line Total'],
+        ['SKU', 'Product Name', 'Ordered', 'Received', 'Damaged', 'Backorder', 'Unit Cost', 'Line Total'],
         ...po.items.map(item => [
           item.masterSku,
           item.product?.title || '',
           item.quantityOrdered,
           item.quantityReceived,
           item.quantityDamaged,
+          item.quantityBackordered || 0,
           Number(item.unitCost),
           Number(item.lineTotal),
         ]),
@@ -234,8 +272,15 @@ export default function ExportDropdown({ po }: ExportDropdownProps) {
       {isOpen && (
         <div className="absolute top-full right-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 min-w-[200px]">
           <button
-            onClick={exportItemsExcel}
+            onClick={exportItemsCSV}
             className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors rounded-t-lg"
+          >
+            <FileText className="w-4 h-4 text-slate-400" />
+            <span className="text-white">Export Items (CSV)</span>
+          </button>
+          <button
+            onClick={exportItemsExcel}
+            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors border-t border-slate-700"
           >
             <FileSpreadsheet className="w-4 h-4 text-slate-400" />
             <span className="text-white">Export Items (Excel)</span>
