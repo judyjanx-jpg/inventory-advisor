@@ -1,4 +1,11 @@
 # Railway Worker Dockerfile
+#
+# Uses the TypeScript worker (lib/queues/standalone-worker.ts) which includes:
+# - All sync queues (orders, finances, inventory, products, reports, aggregation)
+# - Ads reports sync
+# - Alerts generation
+# - Health check server for Railway
+#
 FROM node:20-alpine
 
 WORKDIR /app
@@ -14,8 +21,9 @@ RUN npm ci
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# Copy ALL source files (needed for @/ path aliases)
+# Copy ALL source files (needed for @/ path aliases and TypeScript)
 COPY . .
 
-# Run the worker (this runs both scheduler and worker)
-CMD ["node", "worker.js"]
+# Run the TypeScript worker via tsx
+# This is the CANONICAL worker entrypoint - do not use worker.js
+CMD ["npx", "tsx", "lib/queues/standalone-worker.ts"]
