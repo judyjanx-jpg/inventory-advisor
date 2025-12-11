@@ -5,8 +5,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAdsCredentials } from '@/lib/amazon-ads-api'
 import { gunzipSync } from 'zlib'
+import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+import { startOfDay, subDays } from 'date-fns'
 
 const ADS_API_BASE = 'https://advertising-api.amazon.com'
+
+/**
+ * Amazon uses PST/PDT (America/Los_Angeles) for day boundaries
+ */
+const AMAZON_TIMEZONE = 'America/Los_Angeles'
+
+/**
+ * Get a date range in UTC that corresponds to PST day boundaries
+ */
+function getPSTDateRange(daysBack: number): { startDate: Date; endDate: Date } {
+  const nowUTC = new Date()
+  const nowInPST = toZonedTime(nowUTC, AMAZON_TIMEZONE)
+  const startInPST = startOfDay(subDays(nowInPST, daysBack))
+  const endInPST = startOfDay(subDays(nowInPST, 1)) // Yesterday in PST
+
+  return {
+    startDate: fromZonedTime(startInPST, AMAZON_TIMEZONE),
+    endDate: fromZonedTime(endInPST, AMAZON_TIMEZONE),
+  }
+}
 
 // GET: Check sync status and pending reports
 export async function GET() {
@@ -251,13 +273,12 @@ export async function POST(request: NextRequest) {
     // Action: Request new reports (campaign + product level)
     if (action === 'sync' || action === 'request') {
       const days = body.days || 1
-      const endDate = new Date()
-      endDate.setDate(endDate.getDate() - 1)
-      const startDate = new Date(endDate)
-      startDate.setDate(startDate.getDate() - days + 1)
+      // Use PST day boundaries for ads reports
+      const { startDate, endDate } = getPSTDateRange(days)
 
-      const startDateStr = startDate.toISOString().split('T')[0]
-      const endDateStr = endDate.toISOString().split('T')[0]
+      // Format dates in PST for the report request
+      const startDateStr = toZonedTime(startDate, AMAZON_TIMEZONE).toISOString().split('T')[0]
+      const endDateStr = toZonedTime(endDate, AMAZON_TIMEZONE).toISOString().split('T')[0]
 
       // Request campaign-level report
       const campaignReportConfig = {

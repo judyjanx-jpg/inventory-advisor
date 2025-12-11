@@ -8,6 +8,28 @@
 import Bull from 'bull'
 import { prisma } from '@/lib/prisma'
 import { createSpApiClient, getAmazonCredentials, marketplaceToChannel } from '@/lib/amazon-sp-api'
+import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+import { startOfDay, subDays } from 'date-fns'
+
+/**
+ * Amazon uses PST/PDT (America/Los_Angeles) for day boundaries
+ */
+const AMAZON_TIMEZONE = 'America/Los_Angeles'
+
+/**
+ * Get a date range in UTC that corresponds to PST day boundaries
+ */
+function getPSTDateRange(daysBack: number): { startDate: Date; endDate: Date } {
+  const nowUTC = new Date()
+  const nowInPST = toZonedTime(nowUTC, AMAZON_TIMEZONE)
+  const startInPST = startOfDay(subDays(nowInPST, Math.min(daysBack, 730)))
+  const endInPST = nowInPST
+
+  return {
+    startDate: fromZonedTime(startInPST, AMAZON_TIMEZONE),
+    endDate: fromZonedTime(endInPST, AMAZON_TIMEZONE),
+  }
+}
 
 // Queue configuration
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379'
@@ -193,13 +215,14 @@ historicalSyncQueue.process(async (job: Bull.Job<HistoricalSyncJobData>) => {
     }
     
     const channel = marketplaceToChannel(credentials.marketplaceId)
-    
-    // Calculate date range
-    const endDate = new Date()
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - Math.min(daysBack, 730))
-    
-    await job.log(`Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`)
+
+    // Calculate date range using PST day boundaries
+    const { startDate, endDate } = getPSTDateRange(daysBack)
+
+    // Format dates for logging in PST
+    const startDatePST = toZonedTime(startDate, AMAZON_TIMEZONE).toISOString().split('T')[0]
+    const endDatePST = toZonedTime(endDate, AMAZON_TIMEZONE).toISOString().split('T')[0]
+    await job.log(`Date range (PST): ${startDatePST} to ${endDatePST}`)
     await job.progress(10)
     
     // Request report
