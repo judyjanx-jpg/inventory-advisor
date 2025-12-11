@@ -1,22 +1,15 @@
 // app/api/profit/products/route.ts
 // Returns product-level profit data for the selected period
+// Uses the same revenue priority chain as the shared profit engine for Sellerboard-level accuracy
 
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { getQuickFeeEstimate } from '@/lib/fee-estimation'
 import {
-  startOfDay,
-  endOfDay,
-  startOfMonth,
-  endOfMonth,
-  subDays,
-  addDays,
-  subMonths
-} from 'date-fns'
-import { toZonedTime, fromZonedTime } from 'date-fns-tz'
-
-// Amazon uses PST/PDT (America/Los_Angeles) for their day boundaries
-const AMAZON_TIMEZONE = 'America/Los_Angeles'
+  getDateRangeForPeriod,
+  getCustomDateRange,
+  AMAZON_TIMEZONE,
+} from '@/lib/profit/engine'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,14 +26,17 @@ interface ProductProfit {
   channel?: string
   unitsSold: number
   refunds: number
+  refundAmount: number  // Dollar amount of refunds
   refundRate: number
   sales: number
+  promos: number        // Promo discounts
   adSpend: number
   cogs: number
   cogsTotal: number
   amazonFees: number
   amazonFeesEstimated: number  // Portion that was estimated
-  netProfit: number
+  grossProfit: number   // Sales - Promos - Amazon Fees - COGS
+  netProfit: number     // Gross Profit - Ad Spend - Refunds
   margin: number
   roi: number
   realAcos: number | null
@@ -50,109 +46,15 @@ interface ProductProfit {
   bsrChange?: number
 }
 
-// Helper to get date range in Amazon's timezone (PST/PDT)
-// Uses startOfNextDay with < comparison for more reliable date range queries
+// Helper to get date range - uses the shared engine's date utilities
 function getDateRange(period: string, startDateParam?: string, endDateParam?: string): { startDate: Date; endDate: Date } {
-  const now = new Date()
-  // Convert current UTC time to PST for day boundary calculations
-  const nowInPST = toZonedTime(now, AMAZON_TIMEZONE)
-
-  // Helper to convert PST time back to UTC for database queries
-  const toUTC = (date: Date) => fromZonedTime(date, AMAZON_TIMEZONE)
-
-  // Handle custom date range
   if (period === 'custom' && startDateParam && endDateParam) {
-    const startDatePST = toZonedTime(new Date(startDateParam), AMAZON_TIMEZONE)
-    const endDatePST = toZonedTime(new Date(endDateParam), AMAZON_TIMEZONE)
-    return {
-      startDate: toUTC(startOfDay(startDatePST)),
-      endDate: toUTC(startOfDay(addDays(endDatePST, 1)))
-    }
+    const { start, end } = getCustomDateRange(startDateParam, endDateParam)
+    return { startDate: start, endDate: end }
   }
 
-  switch (period) {
-    case 'today': {
-      const todayStart = startOfDay(nowInPST)
-      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
-      return {
-        startDate: toUTC(todayStart),
-        endDate: toUTC(tomorrowStart)
-      }
-    }
-    case 'yesterday': {
-      const yesterdayStart = startOfDay(subDays(nowInPST, 1))
-      const todayStart = startOfDay(nowInPST)
-      return {
-        startDate: toUTC(yesterdayStart),
-        endDate: toUTC(todayStart)
-      }
-    }
-    case '2daysAgo': {
-      const twoDaysAgoStart = startOfDay(subDays(nowInPST, 2))
-      const yesterdayStart = startOfDay(subDays(nowInPST, 1))
-      return {
-        startDate: toUTC(twoDaysAgoStart),
-        endDate: toUTC(yesterdayStart)
-      }
-    }
-    case '3daysAgo': {
-      const threeDaysAgoStart = startOfDay(subDays(nowInPST, 3))
-      const twoDaysAgoStart = startOfDay(subDays(nowInPST, 2))
-      return {
-        startDate: toUTC(threeDaysAgoStart),
-        endDate: toUTC(twoDaysAgoStart)
-      }
-    }
-    case '7days': {
-      const sevenDaysAgoStart = startOfDay(subDays(nowInPST, 6))
-      const todayStart = startOfDay(nowInPST)
-      return {
-        startDate: toUTC(sevenDaysAgoStart),
-        endDate: toUTC(todayStart)
-      }
-    }
-    case '14days': {
-      const fourteenDaysAgoStart = startOfDay(subDays(nowInPST, 13))
-      const todayStart = startOfDay(nowInPST)
-      return {
-        startDate: toUTC(fourteenDaysAgoStart),
-        endDate: toUTC(todayStart)
-      }
-    }
-    case '30days': {
-      const thirtyDaysAgoStart = startOfDay(subDays(nowInPST, 30))
-      const todayStart = startOfDay(nowInPST)
-      return {
-        startDate: toUTC(thirtyDaysAgoStart),
-        endDate: toUTC(todayStart)
-      }
-    }
-    case 'mtd':
-    case 'forecast': {
-      const monthStart = startOfMonth(nowInPST)
-      const tomorrowStart = startOfDay(addDays(nowInPST, 1))
-      return {
-        startDate: toUTC(monthStart),
-        endDate: toUTC(tomorrowStart)
-      }
-    }
-    case 'lastMonth': {
-      const lastMonthStart = startOfMonth(subMonths(nowInPST, 1))
-      const thisMonthStart = startOfMonth(nowInPST)
-      return {
-        startDate: toUTC(lastMonthStart),
-        endDate: toUTC(thisMonthStart)
-      }
-    }
-    default: {
-      const yesterdayStart = startOfDay(subDays(nowInPST, 1))
-      const todayStart = startOfDay(nowInPST)
-      return {
-        startDate: toUTC(yesterdayStart),
-        endDate: toUTC(todayStart)
-      }
-    }
-  }
+  const range = getDateRangeForPeriod(period)
+  return { startDate: range.start, endDate: range.end }
 }
 
 // Build the GROUP BY column based on the groupBy parameter
@@ -185,10 +87,9 @@ export async function GET(request: NextRequest) {
     const { startDate, endDate } = getDateRange(period, startDateParam || undefined, endDateParam || undefined)
     const { column: groupByColumn } = getGroupByColumn(groupBy)
 
-    // Get product-level data with fees directly using pg
-    // Dynamic grouping based on groupBy parameter
-    // Joins with suppliers table to get supplier names
-    // Joins with parent product (parent_p) to get display_name for parent grouping
+    // Get product-level data with Sellerboard-level accuracy
+    // Revenue priority: actual_revenue → gross_revenue → item_price + shipping → estimated
+    // Also tracks promos for proper profit calculation
     const salesByProduct = await query<{
       sku: string
       asin: string | null
@@ -200,15 +101,17 @@ export async function GET(request: NextRequest) {
       cost: string | null
       units_sold: string
       total_sales: string
+      total_promos: string
       sales_estimated: string
       actual_fees: string
       items_with_fees: string
       total_items: string
       unique_orders: string
       line_items: string
+      items_with_actual_revenue: string
     }>(`
       WITH recent_avg_prices AS (
-        SELECT 
+        SELECT
           oi.master_sku,
           AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
         FROM order_items oi
@@ -229,28 +132,38 @@ export async function GET(request: NextRequest) {
         MAX(p.parent_sku) as parent_sku,
         COALESCE(AVG(p.cost), 0)::text as cost,
         COALESCE(SUM(oi.quantity), 0)::text as units_sold,
+        -- SELLERBOARD-LEVEL ACCURACY: Same revenue priority as profit engine
         COALESCE(SUM(
-          CASE 
-            WHEN oi.item_price > 0 
-            THEN oi.item_price + COALESCE(oi.shipping_price, 0)
+          CASE
+            -- Priority 1: actual_revenue from financial events (settlement data - most accurate)
+            WHEN COALESCE(oi.actual_revenue, 0) > 0
+            THEN oi.actual_revenue
+            -- Priority 2: gross_revenue calculated from orders
+            WHEN COALESCE(oi.gross_revenue, 0) > 0
+            THEN oi.gross_revenue
+            -- Priority 3: Calculate from item components
+            WHEN oi.item_price > 0
+            THEN oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
             -- Price estimation fallback chain: avg price → catalog × 0.95 → 0
             WHEN COALESCE(rap.avg_unit_price, 0) > 0
-            THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0)
+            THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
             WHEN COALESCE(p.price, 0) > 0
-            THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0)
-            ELSE COALESCE(oi.shipping_price, 0)
+            THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+            ELSE COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
           END
         ), 0)::text as total_sales,
+        -- Track promos for proper profit calculation
+        ROUND(COALESCE(SUM(COALESCE(oi.promo_discount, 0)), 0), 2)::text as total_promos,
         -- Track estimated sales amount
         ROUND(COALESCE(SUM(
-          CASE 
-            WHEN oi.item_price = 0 OR oi.item_price IS NULL
+          CASE
+            WHEN COALESCE(oi.actual_revenue, 0) = 0 AND COALESCE(oi.gross_revenue, 0) = 0 AND (oi.item_price = 0 OR oi.item_price IS NULL)
             THEN CASE
               WHEN COALESCE(rap.avg_unit_price, 0) > 0
-              THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0)
+              THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
               WHEN COALESCE(p.price, 0) > 0
-              THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0)
-              ELSE COALESCE(oi.shipping_price, 0)
+              THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+              ELSE COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
             END
             ELSE 0
           END
@@ -259,7 +172,9 @@ export async function GET(request: NextRequest) {
         COUNT(CASE WHEN oi.amazon_fees > 0 THEN 1 END)::text as items_with_fees,
         COUNT(oi.id)::text as total_items,
         COUNT(DISTINCT o.id)::text as unique_orders,
-        COUNT(oi.id)::text as line_items
+        COUNT(oi.id)::text as line_items,
+        -- Track items with actual revenue (settlement data coverage)
+        COALESCE(SUM(CASE WHEN COALESCE(oi.actual_revenue, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_actual_revenue
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
       LEFT JOIN recent_avg_prices rap ON oi.master_sku = rap.master_sku
@@ -271,35 +186,59 @@ export async function GET(request: NextRequest) {
         AND o.status NOT IN ('Cancelled', 'Canceled')
       GROUP BY ${groupByColumn}
       ORDER BY SUM(
-        CASE 
-          WHEN oi.item_price > 0 
-          THEN oi.item_price
-          WHEN COALESCE(rap.avg_unit_price, 0) > 0
-          THEN rap.avg_unit_price * oi.quantity
-          WHEN COALESCE(p.price, 0) > 0
-          THEN p.price * oi.quantity * 0.95
+        CASE
+          WHEN COALESCE(oi.actual_revenue, 0) > 0 THEN oi.actual_revenue
+          WHEN COALESCE(oi.gross_revenue, 0) > 0 THEN oi.gross_revenue
+          WHEN oi.item_price > 0 THEN oi.item_price
+          WHEN COALESCE(rap.avg_unit_price, 0) > 0 THEN rap.avg_unit_price * oi.quantity
+          WHEN COALESCE(p.price, 0) > 0 THEN p.price * oi.quantity * 0.95
           ELSE 0
         END
       ) DESC
     `, [startDate, endDate])
 
-    // Get refunds by product
-    let refundsByProduct: Array<{ sku: string; refund_count: string }> = []
+    // Get refunds by product (count and amount)
+    let refundsByProduct: Array<{ sku: string; refund_count: string; refund_amount: string }> = []
     try {
       refundsByProduct = await query<{
         sku: string
         refund_count: string
+        refund_amount: string
       }>(`
         SELECT
           master_sku as sku,
-          COALESCE(SUM(quantity), 0)::text as refund_count
+          COALESCE(SUM(quantity), 0)::text as refund_count,
+          COALESCE(SUM(refund_amount), 0)::text as refund_amount
         FROM returns
         WHERE return_date >= $1
           AND return_date < $2
         GROUP BY master_sku
       `, [startDate, endDate])
-    } catch (e) {
+    } catch {
       // Returns table might not have data
+    }
+
+    // If refund_amount is 0, try to estimate from order item prices
+    if (refundsByProduct.length > 0 && refundsByProduct.every(r => parseFloat(r.refund_amount) === 0)) {
+      try {
+        refundsByProduct = await query<{
+          sku: string
+          refund_count: string
+          refund_amount: string
+        }>(`
+          SELECT
+            r.master_sku as sku,
+            COALESCE(SUM(r.quantity), 0)::text as refund_count,
+            COALESCE(SUM(oi.item_price * r.quantity / NULLIF(oi.quantity, 1)), 0)::text as refund_amount
+          FROM returns r
+          LEFT JOIN order_items oi ON r.order_id = oi.order_id AND r.master_sku = oi.master_sku
+          WHERE r.return_date >= $1
+            AND r.return_date < $2
+          GROUP BY r.master_sku
+        `, [startDate, endDate])
+      } catch {
+        // Estimation failed
+      }
     }
 
     // Get ad spend by ASIN from Amazon Ads data
@@ -319,7 +258,7 @@ export async function GET(request: NextRequest) {
           AND end_date >= $1::date
         GROUP BY asin, sku
       `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]])
-    } catch (e) {
+    } catch {
       // Ad spend table might not have data yet
     }
 
@@ -334,15 +273,17 @@ export async function GET(request: NextRequest) {
 
       const unitsSold = parseInt(sale.units_sold || '0', 10)
       const totalSales = parseFloat(sale.total_sales || '0')
+      const totalPromos = parseFloat(sale.total_promos || '0')
       const salesEstimated = parseFloat(sale.sales_estimated || '0')
       const refundCount = parseInt(refund?.refund_count || '0', 10)
+      const refundAmount = parseFloat(refund?.refund_amount || '0')
       const actualFees = parseFloat(sale.actual_fees || '0')
       const itemsWithFees = parseInt(sale.items_with_fees || '0', 10)
       const totalItems = parseInt(sale.total_items || '0', 10)
-      
+
       // Get ad spend from Amazon Ads data (by ASIN first, then SKU)
       const adSpend = (sale.asin ? adSpendByAsinMap.get(sale.asin) : 0) || adSpendBySkuMap.get(sale.sku) || 0
-      
+
       const cogs = parseFloat(sale.cost || '0')
       const cogsTotal = cogs * unitsSold
 
@@ -360,8 +301,13 @@ export async function GET(request: NextRequest) {
       const totalFees = actualFees + estimatedFees
 
       const refundRate = unitsSold > 0 ? (refundCount / unitsSold) * 100 : 0
-      const grossProfit = totalSales - totalFees - cogsTotal
-      const netProfit = grossProfit - adSpend
+
+      // SELLERBOARD-LEVEL ACCURACY: Match the shared engine's profit formulas
+      // Gross Profit = Sales - Promos - Amazon Fees - COGS
+      const grossProfit = totalSales - totalPromos - totalFees - cogsTotal
+      // Net Profit = Gross Profit - Ad Spend - Refunds
+      const netProfit = grossProfit - adSpend - refundAmount
+
       const margin = totalSales > 0 ? (netProfit / totalSales) * 100 : 0
       const roi = cogsTotal > 0 ? (netProfit / cogsTotal) * 100 : 0
       const realAcos = netProfit > 0 && adSpend > 0 ? (adSpend / netProfit) * 100 : null
@@ -371,22 +317,24 @@ export async function GET(request: NextRequest) {
         sku: sale.sku,
         asin: sale.asin || '',
         parentAsin: sale.parent_sku || undefined,
-        // display_name is internal SKU, title is Amazon product title
         displayName: sale.display_name || undefined,
         title: sale.title || sale.sku,
-        imageUrl: undefined, // No image_url column in products table
+        imageUrl: undefined,
         brand: sale.brand || undefined,
         supplier: sale.supplier_name || undefined,
         channel: 'Amazon',
         unitsSold,
         refunds: refundCount,
+        refundAmount,
         refundRate,
         sales: totalSales,
+        promos: totalPromos,
         adSpend,
         cogs,
         cogsTotal,
         amazonFees: totalFees,
         amazonFeesEstimated: estimatedFees,
+        grossProfit,
         netProfit,
         margin,
         roi,
@@ -406,11 +354,16 @@ export async function GET(request: NextRequest) {
     const totalActualFees = products.reduce((sum, p) => sum + (p.amazonFees - p.amazonFeesEstimated), 0)
     const totalFees = totalEstimatedFees + totalActualFees
     const feeEstimationRate = totalFees > 0 ? (totalEstimatedFees / totalFees) * 100 : 0
-    
-    // Calculate total estimated sales and order counts
+
+    // Calculate totals
     const totalSalesEstimated = salesByProduct.reduce((sum, s) => sum + parseFloat(s.sales_estimated || '0'), 0)
     const totalUniqueOrders = salesByProduct.reduce((sum, s) => sum + parseInt(s.unique_orders || '0', 10), 0)
     const totalLineItems = salesByProduct.reduce((sum, s) => sum + parseInt(s.line_items || '0', 10), 0)
+    const totalPromos = products.reduce((sum, p) => sum + p.promos, 0)
+    const totalRefundAmount = products.reduce((sum, p) => sum + p.refundAmount, 0)
+    const totalItemsWithActualRevenue = salesByProduct.reduce((sum, s) => sum + parseInt(s.items_with_actual_revenue || '0', 10), 0)
+    const totalItems = salesByProduct.reduce((sum, s) => sum + parseInt(s.total_items || '0', 10), 0)
+    const settlementCoverageRate = totalItems > 0 ? (totalItemsWithActualRevenue / totalItems) * 100 : 0
 
     return NextResponse.json({
       products,
@@ -419,24 +372,29 @@ export async function GET(request: NextRequest) {
         totalEstimatedFees: Number(totalEstimatedFees.toFixed(2)),
         feeEstimationRate: Number(feeEstimationRate.toFixed(1)),
         salesEstimated: Number(totalSalesEstimated.toFixed(2)),
+        totalPromos: Number(totalPromos.toFixed(2)),
+        totalRefunds: Number(totalRefundAmount.toFixed(2)),
         uniqueOrders: totalUniqueOrders,
         lineItems: totalLineItems,
+        settlementCoverageRate: Number(settlementCoverageRate.toFixed(1)),
         note: feeEstimationRate > 10
           ? 'Some fees are estimated. Run financial-events sync for actual fees.'
-          : undefined,
+          : settlementCoverageRate < 50
+            ? 'Low settlement coverage. Run financial-events sync for actual revenue data.'
+            : undefined,
       },
     })
 
-  } catch (error: any) {
-    console.error('Error fetching product profit data:', error)
+  } catch (error: unknown) {
+    const err = error as Error
+    console.error('Error fetching product profit data:', err)
     return NextResponse.json(
       {
-        error: error.message,
+        error: err.message,
         products: [],
-        // Include more details for debugging
-        errorCode: error.code,
-        errorMeta: error.meta,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        errorCode: (error as { code?: string }).code,
+        errorMeta: (error as { meta?: unknown }).meta,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
       },
       { status: 500 }
     )

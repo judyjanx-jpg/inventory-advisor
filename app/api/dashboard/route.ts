@@ -3,14 +3,18 @@ import { prisma } from '@/lib/prisma'
 import { query } from '@/lib/db'
 import { subDays, startOfDay, endOfDay, format } from 'date-fns'
 import { toZonedTime, fromZonedTime } from 'date-fns-tz'
-
-const AMAZON_TIMEZONE = 'America/Los_Angeles'
+import {
+  getNetProfitForRange,
+  nowInPST,
+  pstToUTC,
+  AMAZON_TIMEZONE,
+} from '@/lib/profit/engine'
 
 export async function GET(request: NextRequest) {
   try {
     // Get user profile
     let profile = await prisma.userProfile.findFirst()
-    
+
     // Create default profile if it doesn't exist
     if (!profile) {
       profile = await prisma.userProfile.create({
@@ -19,7 +23,7 @@ export async function GET(request: NextRequest) {
           timezone: 'America/New_York'
         }
       })
-      
+
       // Create default schedule (Mon-Fri 9-5)
       const defaultSchedule = [
         { dayOfWeek: 0, isWorking: false, startTime: null, endTime: null },
@@ -30,7 +34,7 @@ export async function GET(request: NextRequest) {
         { dayOfWeek: 5, isWorking: true, startTime: '09:00', endTime: '17:00' },
         { dayOfWeek: 6, isWorking: false, startTime: null, endTime: null },
       ]
-      
+
       for (const day of defaultSchedule) {
         await prisma.userSchedule.create({
           data: {
@@ -42,30 +46,12 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date()
-    const nowInPST = toZonedTime(now, AMAZON_TIMEZONE)
-    const toUTC = (date: Date) => fromZonedTime(date, AMAZON_TIMEZONE)
+    const currentPST = nowInPST()
 
-    const yesterdayStart = toUTC(startOfDay(subDays(nowInPST, 1)))
-    const yesterdayEnd = toUTC(startOfDay(nowInPST))
-
-    // Calculate yesterday's profit using raw SQL
-    const yesterdayProfitResult = await query<{ profit: number }>(`
-      SELECT COALESCE(
-        SUM(
-          (item_price + shipping_price + gift_wrap_price) * quantity 
-          - (referral_fee + fba_fee + other_fees + amazon_fees)
-          - COALESCE(p.cost, 0) * oi.quantity
-        ), 
-        0
-      ) as profit
-      FROM order_items oi
-      JOIN orders o ON oi.order_id = o.id
-      LEFT JOIN products p ON oi.master_sku = p.sku
-      WHERE o.purchase_date >= $1 AND o.purchase_date < $2
-        AND o.status != 'Cancelled'
-    `, [yesterdayStart.toISOString(), yesterdayEnd.toISOString()])
-
-    const yesterdayProfit = Number(yesterdayProfitResult[0]?.profit || 0)
+    // Calculate yesterday's profit using the shared profit engine (Sellerboard-level accuracy)
+    const yesterdayStart = pstToUTC(startOfDay(subDays(currentPST, 1)))
+    const yesterdayEnd = pstToUTC(startOfDay(currentPST))
+    const yesterdayProfit = await getNetProfitForRange(yesterdayStart, yesterdayEnd)
 
     // Get task counts
     const today = startOfDay(now)
@@ -75,7 +61,7 @@ export async function GET(request: NextRequest) {
     // Critical = daysUntilMustOrder <= 14 (where daysUntilMustOrder = totalDaysOfSupply - leadTimeDays - 14)
     const itemsToOrderResult = await query<{ sku: string; title: string; total_qty: number; days_of_supply: number; lead_time_days: number }>(`
       WITH velocity AS (
-        SELECT 
+        SELECT
           oi.master_sku as sku,
           COALESCE(SUM(oi.quantity), 0) / 30.0 as avg_daily_sales
         FROM order_items oi
@@ -85,14 +71,14 @@ export async function GET(request: NextRequest) {
         GROUP BY oi.master_sku
       ),
       product_data AS (
-        SELECT 
-          p.sku, 
+        SELECT
+          p.sku,
           p.title,
           COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0) as total_qty,
           COALESCE(v.avg_daily_sales, 0) as avg_daily_sales,
           COALESCE(s.lead_time_days, 30) as lead_time_days,
-          CASE 
-            WHEN COALESCE(v.avg_daily_sales, 0) > 0 
+          CASE
+            WHEN COALESCE(v.avg_daily_sales, 0) > 0
             THEN ROUND((COALESCE(il.fba_available, 0) + COALESCE(il.warehouse_available, 0)) / v.avg_daily_sales)
             ELSE 999
           END as days_of_supply
@@ -103,7 +89,7 @@ export async function GET(request: NextRequest) {
         WHERE p.is_hidden = false
           AND COALESCE(v.avg_daily_sales, 0) > 0.1
       )
-      SELECT 
+      SELECT
         sku,
         title,
         total_qty,
@@ -114,12 +100,12 @@ export async function GET(request: NextRequest) {
         AND days_of_supply < 999
       ORDER BY days_of_supply ASC
     `, [])
-    
+
     // Items to ship to Amazon - use forecaster logic: "ship by - Today"
     // Items with "ship by - Today" are those where:
     // - fbaTotal === 0, OR
     // - daysOfSupply < 3
-    const itemsToShipResult = await query<{ 
+    const itemsToShipResult = await query<{
       sku: string
       title: string
       warehouse_qty: number
@@ -129,7 +115,7 @@ export async function GET(request: NextRequest) {
       recommended_ship_qty: number
     }>(`
       WITH velocity AS (
-        SELECT 
+        SELECT
           oi.master_sku as sku,
           COALESCE(SUM(oi.quantity), 0) / 30.0 as avg_daily_sales
         FROM order_items oi
@@ -139,7 +125,7 @@ export async function GET(request: NextRequest) {
         GROUP BY oi.master_sku
       ),
       shipment_candidates AS (
-        SELECT 
+        SELECT
           p.sku,
           p.title,
           COALESCE(il.warehouse_available, 0) as warehouse_qty,
@@ -147,26 +133,26 @@ export async function GET(request: NextRequest) {
           COALESCE(il.fba_inbound_working, 0) + COALESCE(il.fba_inbound_shipped, 0) + COALESCE(il.fba_inbound_receiving, 0) as fba_inbound,
           COALESCE(v.avg_daily_sales, 0) as avg_daily_sales,
           -- Calculate total FBA (available + inbound)
-          COALESCE(il.fba_available, 0) + 
-          COALESCE(il.fba_inbound_working, 0) + 
-          COALESCE(il.fba_inbound_shipped, 0) + 
+          COALESCE(il.fba_available, 0) +
+          COALESCE(il.fba_inbound_working, 0) +
+          COALESCE(il.fba_inbound_shipped, 0) +
           COALESCE(il.fba_inbound_receiving, 0) as fba_total,
           -- Calculate days of supply
-          CASE 
-            WHEN COALESCE(v.avg_daily_sales, 0) > 0 
-            THEN (COALESCE(il.fba_available, 0) + 
-                  COALESCE(il.fba_inbound_working, 0) + 
-                  COALESCE(il.fba_inbound_shipped, 0) + 
+          CASE
+            WHEN COALESCE(v.avg_daily_sales, 0) > 0
+            THEN (COALESCE(il.fba_available, 0) +
+                  COALESCE(il.fba_inbound_working, 0) +
+                  COALESCE(il.fba_inbound_shipped, 0) +
                   COALESCE(il.fba_inbound_receiving, 0)) / v.avg_daily_sales
             ELSE 999
           END as days_of_supply,
           -- Recommended = enough to get to 30 days supply, but not more than warehouse has
           LEAST(
             COALESCE(il.warehouse_available, 0),
-            GREATEST(0, CEIL(v.avg_daily_sales * 30) - 
-              (COALESCE(il.fba_available, 0) + 
-               COALESCE(il.fba_inbound_working, 0) + 
-               COALESCE(il.fba_inbound_shipped, 0) + 
+            GREATEST(0, CEIL(v.avg_daily_sales * 30) -
+              (COALESCE(il.fba_available, 0) +
+               COALESCE(il.fba_inbound_working, 0) +
+               COALESCE(il.fba_inbound_shipped, 0) +
                COALESCE(il.fba_inbound_receiving, 0)))
           ) as recommended_ship_qty
         FROM products p
@@ -176,7 +162,7 @@ export async function GET(request: NextRequest) {
           AND COALESCE(il.warehouse_available, 0) > 0
           AND COALESCE(v.avg_daily_sales, 0) > 0.1
       )
-      SELECT 
+      SELECT
         sku,
         title,
         warehouse_qty,
@@ -185,11 +171,11 @@ export async function GET(request: NextRequest) {
         avg_daily_sales,
         recommended_ship_qty
       FROM shipment_candidates
-      WHERE 
+      WHERE
         -- "Ship by - Today" criteria: fbaTotal === 0 OR daysOfSupply < 3
         (fba_total = 0 OR days_of_supply < 3)
         AND recommended_ship_qty > 0
-      ORDER BY 
+      ORDER BY
         CASE WHEN fba_total = 0 THEN 0 ELSE 1 END,
         days_of_supply ASC
     `, [])
@@ -209,14 +195,14 @@ export async function GET(request: NextRequest) {
       WHERE p.is_hidden = false
         AND COALESCE(il.fba_available, 0) = 0
         AND EXISTS (
-          SELECT 1 FROM order_items oi 
+          SELECT 1 FROM order_items oi
           JOIN orders o ON oi.order_id = o.id
-          WHERE oi.master_sku = p.sku 
+          WHERE oi.master_sku = p.sku
           AND o.purchase_date > NOW() - INTERVAL '30 days'
           AND o.status != 'Cancelled'
         )
     `, [])
-    
+
     const itemsToOrderTotal = itemsToOrderResult.length
     const outOfStockTotal = outOfStockResult.length
 
@@ -243,7 +229,7 @@ export async function GET(request: NextRequest) {
     const todayEndUserTz = endOfDay(nowInUserTz)
     const todayStartUTC = fromZonedTime(todayStartUserTz, userTimezone)
     const todayEndUTC = fromZonedTime(todayEndUserTz, userTimezone)
-    
+
     const todayEvents = await prisma.calendarEvent.findMany({
       where: {
         startDate: {
@@ -256,34 +242,18 @@ export async function GET(request: NextRequest) {
       take: 10
     })
 
-    // Calculate profit periods for last 4 days
-    const profitPeriods = []
+    // Calculate profit periods for last 4 days using the shared profit engine
+    const profitPeriods: Array<{ label: string; date: string; profit: number; change: number | null }> = []
     for (let i = 0; i < 4; i++) {
-      const dayStart = toUTC(startOfDay(subDays(nowInPST, i)))
-      const dayEnd = toUTC(startOfDay(subDays(nowInPST, i - 1)))
+      const dayStart = pstToUTC(startOfDay(subDays(currentPST, i)))
+      const dayEnd = pstToUTC(startOfDay(subDays(currentPST, i - 1)))
 
-      const profitResult = await query<{ profit: number }>(`
-        SELECT COALESCE(
-          SUM(
-            (item_price + shipping_price + gift_wrap_price) * quantity 
-            - (referral_fee + fba_fee + other_fees + amazon_fees)
-            - COALESCE(p.cost, 0) * oi.quantity
-          ), 
-          0
-        ) as profit
-        FROM order_items oi
-        JOIN orders o ON oi.order_id = o.id
-        LEFT JOIN products p ON oi.master_sku = p.sku
-        WHERE o.purchase_date >= $1 AND o.purchase_date < $2
-          AND o.status != 'Cancelled'
-      `, [dayStart.toISOString(), dayEnd.toISOString()])
-
-      const profit = Number(profitResult[0]?.profit || 0)
+      const profit = await getNetProfitForRange(dayStart, dayEnd)
       const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : `${i} days ago`
 
       profitPeriods.push({
         label,
-        date: format(subDays(nowInPST, i), 'yyyy-MM-dd'),
+        date: format(subDays(currentPST, i), 'yyyy-MM-dd'),
         profit: Math.round(profit * 100) / 100,
         change: null as number | null
       })
