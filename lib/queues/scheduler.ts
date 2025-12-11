@@ -155,12 +155,14 @@ export async function triggerSync(syncType: string, data?: any) {
   // Map syncType to the actual job name used by processors
   const jobNameMap: Record<string, string> = {
     orders: 'orders-sync',
+    'orders-report': 'orders-report-sync',
     finances: 'finances-sync',
     inventory: 'inventory-sync',
     products: 'products-sync',
     reports: 'daily-reports',
     aggregation: 'daily-aggregation',
     'ads-reports': 'ads-reports-sync',
+    alerts: 'alerts-generation',
   }
 
   const jobName = jobNameMap[syncType] || `${syncType}-sync`
