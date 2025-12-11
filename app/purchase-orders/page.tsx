@@ -31,7 +31,6 @@ import {
   FileSpreadsheet
 } from 'lucide-react'
 import StatusButton from '@/components/purchase-orders/StatusButton'
-import ProgressTimeline from '@/components/purchase-orders/ProgressTimeline'
 
 interface PurchaseOrderItem {
   id: number
@@ -852,18 +851,9 @@ export default function PurchaseOrdersPage() {
                           </div>
                         </div>
 
-                        {/* Progress Timeline */}
+                        {/* Status Display */}
                         <div className="mb-4" onClick={(e) => e.stopPropagation()}>
-                          <ProgressTimeline
-                            status={po.status}
-                            createdDate={po.createdDate}
-                            orderDate={po.orderDate || undefined}
-                            confirmedDate={po.confirmedDate || undefined}
-                            shippedDate={po.actualShipDate || undefined}
-                            receivedDate={po.actualArrivalDate || undefined}
-                            expectedDate={po.expectedArrivalDate || undefined}
-                            compact={true}
-                          />
+                          <StatusButton status={po.status} poId={po.id} />
                         </div>
 
                         {/* Footer Row */}

@@ -29,7 +29,6 @@ import {
   Minus
 } from 'lucide-react'
 import StatusButton from '@/components/purchase-orders/StatusButton'
-import ProgressTimeline from '@/components/purchase-orders/ProgressTimeline'
 import EditableField from '@/components/purchase-orders/EditableField'
 import SKUSearchModal from '@/components/purchase-orders/SKUSearchModal'
 import ImportModal from '@/components/purchase-orders/ImportModal'
@@ -499,19 +498,25 @@ export default function PurchaseOrderDetailPage() {
           </div>
         </div>
 
-        {/* Progress Timeline */}
+        {/* Status Display */}
         <Card>
           <CardContent className="p-6">
-            <ProgressTimeline
-              status={po.status}
-              createdDate={po.createdDate}
-              orderDate={po.orderDate || undefined}
-              confirmedDate={po.confirmedDate || undefined}
-              shippedDate={po.actualShipDate || undefined}
-              receivedDate={po.actualArrivalDate || undefined}
-              expectedDate={po.expectedArrivalDate || undefined}
-              compact={false}
-            />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Status:</span>
+                <StatusButton status={po.status} poId={po.id} />
+              </div>
+              {po.createdDate && (
+                <div className="text-sm text-gray-600">
+                  Created: {new Date(po.createdDate).toLocaleDateString()}
+                </div>
+              )}
+              {po.expectedArrivalDate && (
+                <div className="text-sm text-gray-600">
+                  Expected: {new Date(po.expectedArrivalDate).toLocaleDateString()}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
