@@ -227,7 +227,7 @@ export async function getPeriodData(
     items_with_actual_revenue: string
     actual_revenue_total: string
   }>(`
-    most_recent_prices AS (
+    WITH most_recent_prices AS (
       -- Most recent price per SKU (preferred for pending orders)
       SELECT DISTINCT ON (oi.master_sku)
         oi.master_sku,

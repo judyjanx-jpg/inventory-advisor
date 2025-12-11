@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
       line_items: string
       items_with_actual_revenue: string
     }>(`
-      most_recent_prices AS (
+      WITH most_recent_prices AS (
         -- Most recent price per SKU (preferred for pending orders)
         SELECT DISTINCT ON (oi.master_sku)
           oi.master_sku,
