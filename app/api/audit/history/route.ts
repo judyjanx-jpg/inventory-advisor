@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     })
 
     type AuditEntry = { isFlagged: boolean; variance: number }
-    type AuditSession = { id: number; warehouse: string; auditMode: string; totalSkus: number; auditedCount: number; startedAt: Date; completedAt: Date | null; entries: AuditEntry[] }
+    type AuditSession = { id: number; warehouse: { id: number; name: string }; auditMode: string; totalSkus: number; auditedCount: number; startedAt: Date; completedAt: Date | null; entries: AuditEntry[] }
     const sessionsWithStats = sessions.map((session: AuditSession) => {
       const variances = session.entries.map((e: AuditEntry) => e.variance)
       const flaggedCount = session.entries.filter((e: AuditEntry) => e.isFlagged).length
