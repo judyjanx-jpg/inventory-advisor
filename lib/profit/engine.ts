@@ -190,6 +190,86 @@ export function getCustomDateRange(startDateStr: string, endDateStr: string): {
 }
 
 // ============================================================================
+// PRICE LOOKUP CACHE (to avoid recomputing for each period)
+// ============================================================================
+
+interface PriceLookup {
+  master_sku: string
+  recent_unit_price: number | null
+  avg_30d_price: number | null
+  avg_180d_price: number | null
+}
+
+/**
+ * Pre-compute price lookups once - these don't change between periods
+ * This avoids running the heavy CTEs multiple times
+ */
+export async function precomputePriceLookups(): Promise<Map<string, PriceLookup>> {
+  const lookups = await query<{
+    master_sku: string
+    recent_unit_price: string | null
+    avg_30d_price: string | null
+    avg_180d_price: string | null
+  }>(`
+    WITH recent_sales AS (
+      -- Get all sales data needed for price calculations in one scan
+      SELECT
+        oi.master_sku,
+        oi.item_price / NULLIF(oi.quantity, 0) as unit_price,
+        o.purchase_date
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      WHERE o.purchase_date >= NOW() - INTERVAL '180 days'
+        AND oi.item_price > 0
+        AND oi.quantity > 0
+        AND o.status NOT IN ('Cancelled', 'Canceled')
+    ),
+    most_recent_prices AS (
+      SELECT DISTINCT ON (master_sku)
+        master_sku,
+        unit_price as recent_unit_price
+      FROM recent_sales
+      WHERE purchase_date >= NOW() - INTERVAL '90 days'
+      ORDER BY master_sku, purchase_date DESC
+    ),
+    avg_30d_prices AS (
+      SELECT
+        master_sku,
+        AVG(unit_price) as avg_30d_price
+      FROM recent_sales
+      WHERE purchase_date >= NOW() - INTERVAL '30 days'
+      GROUP BY master_sku
+    ),
+    avg_180d_prices AS (
+      SELECT
+        master_sku,
+        AVG(unit_price) as avg_180d_price
+      FROM recent_sales
+      GROUP BY master_sku
+    )
+    SELECT
+      COALESCE(mrp.master_sku, a30.master_sku, a180.master_sku) as master_sku,
+      mrp.recent_unit_price::text,
+      a30.avg_30d_price::text,
+      a180.avg_180d_price::text
+    FROM most_recent_prices mrp
+    FULL OUTER JOIN avg_30d_prices a30 ON mrp.master_sku = a30.master_sku
+    FULL OUTER JOIN avg_180d_prices a180 ON COALESCE(mrp.master_sku, a30.master_sku) = a180.master_sku
+  `)
+
+  const map = new Map<string, PriceLookup>()
+  for (const row of lookups) {
+    map.set(row.master_sku, {
+      master_sku: row.master_sku,
+      recent_unit_price: row.recent_unit_price ? parseFloat(row.recent_unit_price) : null,
+      avg_30d_price: row.avg_30d_price ? parseFloat(row.avg_30d_price) : null,
+      avg_180d_price: row.avg_180d_price ? parseFloat(row.avg_180d_price) : null,
+    })
+  }
+  return map
+}
+
+// ============================================================================
 // CORE PROFIT CALCULATION
 // ============================================================================
 
@@ -205,6 +285,8 @@ export function getCustomDateRange(startDateStr: string, endDateStr: string): {
  * 4. Average unit price from last 30 days × quantity
  * 5. ALL-TIME average unit price × quantity (for SKUs without recent sales)
  * 6. Catalog price × 0.95 × quantity
+ *
+ * @param priceLookups - Optional pre-computed price lookups to avoid heavy CTEs
  */
 export async function getPeriodData(
   startDate: Date,
@@ -552,6 +634,274 @@ export async function getPeriodData(
     cogs = parseFloat(cogsData?.total_cogs || '0')
   } catch (e) {
     console.log('COGS query error:', e)
+  }
+
+  return {
+    sales: Number(totalSales.toFixed(2)),
+    orders: orderCount,
+    lineItems: lineItemsCount,
+    units: totalUnits,
+    promos: Number(totalPromo.toFixed(2)),
+    refunds: Number(refundAmount.toFixed(2)),
+    refundCount,
+    adCost: Number(adCost.toFixed(2)),
+    adCostSP: Number(adCostSP.toFixed(2)),
+    adCostSB: Number(adCostSB.toFixed(2)),
+    adCostSD: Number(adCostSD.toFixed(2)),
+    amazonFees: Number((actualFees + estimatedFees).toFixed(2)),
+    amazonFeesEstimated: Number(estimatedFees.toFixed(2)),
+    cogs: Number(cogs.toFixed(2)),
+    feeEstimationRate: Number(feeEstimationRate.toFixed(1)),
+    debug,
+  }
+}
+
+/**
+ * Lightweight version of getPeriodData that uses pre-computed price lookups
+ * This avoids running heavy CTEs for each period query
+ */
+export async function getPeriodDataLightweight(
+  startDate: Date,
+  endDate: Date,
+  priceLookups: Map<string, PriceLookup>,
+  includeDebug: boolean = false
+): Promise<PeriodData> {
+  // Get aggregated order items data - simplified query without price CTEs
+  const summaryData = await queryOne<{
+    total_sales: string
+    total_units: string
+    total_promo: string
+    total_actual_fees: string
+    total_items: string
+    total_orders: string
+    line_items: string
+    items_with_fees: string
+    items_with_actual_revenue: string
+    actual_revenue_total: string
+  }>(`
+    SELECT
+      -- Revenue with fallback to item components (price lookups handled in JS)
+      ROUND(COALESCE(SUM(
+        CASE
+          WHEN COALESCE(oi.actual_revenue, 0) > 0 THEN oi.actual_revenue
+          WHEN COALESCE(oi.gross_revenue, 0) > 0 THEN oi.gross_revenue
+          WHEN oi.item_price > 0 THEN oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          ELSE 0  -- Will be filled in from price lookups
+        END
+      ), 0), 2)::text as total_sales,
+      COALESCE(SUM(oi.quantity), 0)::text as total_units,
+      ROUND(COALESCE(SUM(COALESCE(oi.promo_discount, 0)), 0), 2)::text as total_promo,
+      ROUND(COALESCE(SUM(COALESCE(oi.amazon_fees, 0)), 0), 2)::text as total_actual_fees,
+      COUNT(*)::text as total_items,
+      COUNT(DISTINCT o.id)::text as total_orders,
+      COUNT(oi.id)::text as line_items,
+      COALESCE(SUM(CASE WHEN COALESCE(oi.amazon_fees, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_fees,
+      COALESCE(SUM(CASE WHEN COALESCE(oi.actual_revenue, 0) > 0 THEN 1 ELSE 0 END), 0)::text as items_with_actual_revenue,
+      ROUND(COALESCE(SUM(COALESCE(oi.actual_revenue, 0)), 0), 2)::text as actual_revenue_total
+    FROM order_items oi
+    INNER JOIN orders o ON oi.order_id = o.id
+    WHERE o.purchase_date >= $1::timestamp
+      AND o.purchase_date < $2::timestamp
+      AND o.status NOT IN ('Cancelled', 'Canceled')
+      AND (o.sales_channel IS NULL OR o.sales_channel = 'Amazon.com')
+  `, [startDate, endDate])
+
+  // Get items needing price estimation
+  const itemsNeedingEstimation = await query<{
+    master_sku: string
+    quantity: string
+    shipping_price: string
+    gift_wrap_price: string
+    catalog_price: string
+  }>(`
+    SELECT
+      oi.master_sku,
+      oi.quantity::text,
+      COALESCE(oi.shipping_price, 0)::text as shipping_price,
+      COALESCE(oi.gift_wrap_price, 0)::text as gift_wrap_price,
+      COALESCE(p.price, 0)::text as catalog_price
+    FROM order_items oi
+    INNER JOIN orders o ON oi.order_id = o.id
+    LEFT JOIN products p ON oi.master_sku = p.sku
+    WHERE o.purchase_date >= $1::timestamp
+      AND o.purchase_date < $2::timestamp
+      AND o.status NOT IN ('Cancelled', 'Canceled')
+      AND (o.sales_channel IS NULL OR o.sales_channel = 'Amazon.com')
+      AND COALESCE(oi.actual_revenue, 0) = 0
+      AND COALESCE(oi.gross_revenue, 0) = 0
+      AND COALESCE(oi.item_price, 0) = 0
+  `, [startDate, endDate])
+
+  // Calculate estimated sales and fees from price lookups
+  let estimatedSales = 0
+  let estimatedFees = 0
+  let estimatedItemsCount = 0
+
+  for (const item of itemsNeedingEstimation) {
+    const quantity = parseInt(item.quantity || '1', 10)
+    const shipping = parseFloat(item.shipping_price || '0')
+    const giftWrap = parseFloat(item.gift_wrap_price || '0')
+    const catalogPrice = parseFloat(item.catalog_price || '0')
+
+    const lookup = priceLookups.get(item.master_sku)
+    let unitPrice = 0
+
+    if (lookup?.recent_unit_price) {
+      unitPrice = lookup.recent_unit_price
+    } else if (lookup?.avg_30d_price) {
+      unitPrice = lookup.avg_30d_price
+    } else if (lookup?.avg_180d_price) {
+      unitPrice = lookup.avg_180d_price
+    } else if (catalogPrice > 0) {
+      unitPrice = catalogPrice * 0.95
+    }
+
+    if (unitPrice > 0) {
+      estimatedSales += (unitPrice * quantity) + shipping + giftWrap
+      estimatedFees += (unitPrice * quantity * 0.15) + (3.50 * quantity)
+      estimatedItemsCount++
+    }
+  }
+
+  // Get items without fees for fee estimation
+  const itemsWithoutFees = await query<{
+    item_price: string
+    quantity: string
+    master_sku: string
+    catalog_price: string
+  }>(`
+    SELECT
+      oi.item_price::text,
+      oi.quantity::text,
+      oi.master_sku,
+      COALESCE(p.price, 0)::text as catalog_price
+    FROM order_items oi
+    INNER JOIN orders o ON oi.order_id = o.id
+    LEFT JOIN products p ON oi.master_sku = p.sku
+    WHERE o.purchase_date >= $1::timestamp
+      AND o.purchase_date < $2::timestamp
+      AND o.status NOT IN ('Cancelled', 'Canceled')
+      AND (o.sales_channel IS NULL OR o.sales_channel = 'Amazon.com')
+      AND COALESCE(oi.amazon_fees, 0) = 0
+      AND oi.item_price > 0
+  `, [startDate, endDate])
+
+  // Calculate fee estimates for items with known prices but no fees
+  for (const item of itemsWithoutFees) {
+    const itemPrice = parseFloat(item.item_price || '0')
+    const quantity = parseInt(item.quantity || '1', 10)
+    if (itemPrice > 0) {
+      estimatedFees += (itemPrice * 0.15) + (3.50 * quantity)
+    }
+  }
+
+  const totalSales = parseFloat(summaryData?.total_sales || '0') + estimatedSales
+  const totalUnits = parseInt(summaryData?.total_units || '0', 10)
+  const totalPromo = parseFloat(summaryData?.total_promo || '0')
+  const actualFees = parseFloat(summaryData?.total_actual_fees || '0')
+  const itemsWithActualFees = parseInt(summaryData?.items_with_fees || '0', 10)
+  const totalItems = parseInt(summaryData?.total_items || '0', 10)
+  const orderCount = parseInt(summaryData?.total_orders || '0', 10)
+  const lineItemsCount = parseInt(summaryData?.line_items || '0', 10)
+  const itemsWithEstimatedFees = totalItems - itemsWithActualFees
+  const itemsWithActualRevenue = parseInt(summaryData?.items_with_actual_revenue || '0', 10)
+  const actualRevenueTotal = parseFloat(summaryData?.actual_revenue_total || '0')
+
+  const feeEstimationRate = totalItems > 0 ? (itemsWithEstimatedFees / totalItems) * 100 : 0
+
+  // Build debug info if requested
+  const debug: DebugInfo | undefined = includeDebug ? {
+    dateRange: {
+      start: format(startDate, 'yyyy-MM-dd HH:mm:ss'),
+      end: format(endDate, 'yyyy-MM-dd HH:mm:ss'),
+    },
+    orderItemCount: totalItems,
+    itemsWithActualFees,
+    itemsWithEstimatedFees,
+    totalActualFees: Number(actualFees.toFixed(2)),
+    totalEstimatedFees: Number(estimatedFees.toFixed(2)),
+    estimatedItemsCount,
+    estimatedSalesAmount: Number(estimatedSales.toFixed(2)),
+    settlementAccuracy: {
+      itemsWithActualRevenue,
+      actualRevenueTotal: Number(actualRevenueTotal.toFixed(2)),
+      settlementCoverageRate: totalItems > 0 ? Number(((itemsWithActualRevenue / totalItems) * 100).toFixed(1)) : 0,
+    },
+  } : undefined
+
+  // Get refund data
+  let refundCount = 0
+  let refundAmount = 0
+
+  try {
+    const refundData = await queryOne<{ total_quantity: string; total_amount: string }>(`
+      SELECT
+        COALESCE(SUM(quantity), 0)::text as total_quantity,
+        COALESCE(SUM(refund_amount), 0)::text as total_amount
+      FROM returns
+      WHERE return_date >= $1
+        AND return_date < $2
+    `, [startDate, endDate])
+    refundCount = parseInt(refundData?.total_quantity || '0', 10)
+    refundAmount = parseFloat(refundData?.total_amount || '0')
+  } catch {
+    // Returns table might not have data
+  }
+
+  if (refundAmount === 0 && refundCount > 0) {
+    try {
+      const estimatedRefunds = await queryOne<{ total: string }>(`
+        SELECT COALESCE(SUM(oi.item_price * r.quantity), 0)::text as total
+        FROM returns r
+        JOIN order_items oi ON r.order_id = oi.order_id AND r.master_sku = oi.master_sku
+        WHERE r.return_date >= $1 AND r.return_date < $2
+      `, [startDate, endDate])
+      refundAmount = parseFloat(estimatedRefunds?.total || '0')
+    } catch {
+      // Estimation failed
+    }
+  }
+
+  // Get ad spend
+  let adCost = 0
+  let adCostSP = 0
+  let adCostSB = 0
+  let adCostSD = 0
+  try {
+    const adData = await query<{ campaign_type: string; total_spend: string }>(`
+      SELECT campaign_type, COALESCE(SUM(spend), 0)::text as total_spend
+      FROM advertising_daily
+      WHERE date >= $1 AND date < $2
+      GROUP BY campaign_type
+    `, [startDate, endDate])
+
+    for (const row of adData) {
+      const spend = parseFloat(row.total_spend || '0')
+      adCost += spend
+      switch (row.campaign_type) {
+        case 'SP': adCostSP = spend; break
+        case 'SB': adCostSB = spend; break
+        case 'SD': adCostSD = spend; break
+      }
+    }
+  } catch {
+    // Ads table might not exist
+  }
+
+  // Calculate COGS
+  let cogs = 0
+  try {
+    const cogsData = await queryOne<{ total_cogs: string }>(`
+      SELECT COALESCE(SUM(oi.quantity * COALESCE(p.cost, 0)), 0)::text as total_cogs
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      LEFT JOIN products p ON oi.master_sku = p.sku
+      WHERE o.purchase_date >= $1 AND o.purchase_date < $2
+        AND o.status NOT IN ('Cancelled', 'Canceled')
+    `, [startDate, endDate])
+    cogs = parseFloat(cogsData?.total_cogs || '0')
+  } catch {
+    // COGS query error
   }
 
   return {

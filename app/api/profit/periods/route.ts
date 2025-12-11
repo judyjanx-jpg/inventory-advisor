@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import {
   getPeriodData,
+  getPeriodDataLightweight,
+  precomputePriceLookups,
   calculateMetrics,
   getDateRangeForPeriod,
   getCustomDateRange,
@@ -84,15 +86,19 @@ export async function GET(request: NextRequest) {
     // Get which periods to fetch based on preset
     const periodsToFetch = periodPresets[preset] || periodPresets.default
 
+    // Pre-compute price lookups once to avoid running heavy CTEs for each period
+    // This is the key optimization to prevent PostgreSQL shared memory exhaustion
+    const priceLookups = await precomputePriceLookups()
+
     // Build period data for each requested period
-    // Process sequentially to avoid PostgreSQL shared memory issues
-    const periodsData = []
+    // Process sequentially using lightweight queries that reuse price lookups
+    const periodsData: Array<PeriodData & { period: string; dateRange: string }> = []
     for (const period of periodsToFetch) {
       const range = getDateRangeForPeriod(period)
 
       // Special handling for forecast - it's based on MTD extrapolated
       if (period === 'forecast') {
-        const mtdData = await getPeriodData(monthStartUTC, pstToUTC(endOfDay(currentPST)), includeDebug)
+        const mtdData = await getPeriodDataLightweight(monthStartUTC, pstToUTC(endOfDay(currentPST)), priceLookups, includeDebug)
         const daysInMonth = endOfMonth(currentPST).getDate()
         const dayOfMonth = currentPST.getDate()
         const forecastMultiplier = daysInMonth / dayOfMonth
@@ -118,7 +124,7 @@ export async function GET(request: NextRequest) {
           debug: mtdData.debug,
         })
       } else {
-        const data = await getPeriodData(range.start, range.end, includeDebug)
+        const data = await getPeriodDataLightweight(range.start, range.end, priceLookups, includeDebug)
         periodsData.push({
           period,
           dateRange: range.label,
