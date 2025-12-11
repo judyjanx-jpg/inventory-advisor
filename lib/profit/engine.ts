@@ -241,13 +241,14 @@ export async function getPeriodData(
       GROUP BY oi.master_sku
     ),
     historical_avg_prices AS (
-      -- ALL-TIME average prices (fallback for products without recent sales)
+      -- 180-day average prices (fallback for products without recent 30-day sales)
       SELECT
         oi.master_sku,
         AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
-      WHERE oi.item_price > 0
+      WHERE o.purchase_date >= NOW() - INTERVAL '180 days'
+        AND oi.item_price > 0
         AND oi.quantity > 0
         AND o.status NOT IN ('Cancelled', 'Canceled')
       GROUP BY oi.master_sku
