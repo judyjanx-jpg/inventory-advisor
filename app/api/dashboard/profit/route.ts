@@ -1,56 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db'
-import { subDays, startOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, format } from 'date-fns'
-import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+// app/api/dashboard/profit/route.ts
+// Returns profit periods for the dashboard (4days, 7days, week, month)
+// Uses the shared profit engine for Sellerboard-level accuracy
 
-const AMAZON_TIMEZONE = 'America/Los_Angeles'
+import { NextRequest, NextResponse } from 'next/server'
+import {
+  getNetProfitForRange,
+  getDateRangeForPeriod,
+  nowInPST,
+  pstToUTC,
+  AMAZON_TIMEZONE,
+} from '@/lib/profit/engine'
+import {
+  subDays,
+  startOfDay,
+  startOfWeek,
+  addDays,
+  startOfMonth,
+  format,
+} from 'date-fns'
 
 type PeriodType = '4days' | '7days' | 'week' | 'month'
-
-async function calculateProfitForRange(startDate: Date, endDate: Date): Promise<number> {
-  const result = await query<{ profit: number }>(`
-    SELECT COALESCE(
-      SUM(
-        (item_price + shipping_price + gift_wrap_price) * quantity 
-        - (referral_fee + fba_fee + other_fees + amazon_fees)
-        - COALESCE(p.cost, 0) * oi.quantity
-      ), 
-      0
-    ) as profit
-    FROM order_items oi
-    JOIN orders o ON oi.order_id = o.id
-    LEFT JOIN products p ON oi.master_sku = p.sku
-    WHERE o.purchase_date >= $1 AND o.purchase_date < $2
-      AND o.status != 'Cancelled'
-  `, [startDate.toISOString(), endDate.toISOString()])
-
-  return Number(result[0]?.profit || 0)
-}
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const type = (searchParams.get('type') || '4days') as PeriodType
-    
-    const now = new Date()
-    const nowInPST = toZonedTime(now, AMAZON_TIMEZONE)
-    const toUTC = (date: Date) => fromZonedTime(date, AMAZON_TIMEZONE)
-    
+
+    const currentPST = nowInPST()
+
     let periods: Array<{ label: string; date: string; profit: number; change: number | null }> = []
 
     if (type === '4days' || type === '7days') {
       const numDays = type === '4days' ? 4 : 7
-      
+
       for (let i = 0; i < numDays; i++) {
-        const dayStart = toUTC(startOfDay(subDays(nowInPST, i)))
-        const dayEnd = toUTC(startOfDay(subDays(nowInPST, i - 1)))
-        const profit = await calculateProfitForRange(dayStart, dayEnd)
-        
+        const dayStart = pstToUTC(startOfDay(subDays(currentPST, i)))
+        const dayEnd = pstToUTC(startOfDay(subDays(currentPST, i - 1)))
+        const profit = await getNetProfitForRange(dayStart, dayEnd)
+
         const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : `${i} days ago`
-        
+
         periods.push({
           label,
-          date: format(subDays(nowInPST, i), 'yyyy-MM-dd'),
+          date: format(subDays(currentPST, i), 'yyyy-MM-dd'),
           profit: Math.round(profit * 100) / 100,
           change: null
         })
@@ -66,13 +58,13 @@ export async function GET(request: NextRequest) {
       }
     } else if (type === 'week') {
       // This week vs last week
-      const thisWeekStart = toUTC(startOfWeek(nowInPST, { weekStartsOn: 0 }))
-      const thisWeekEnd = toUTC(startOfDay(addDays(nowInPST, 1))) // Up to now
-      const lastWeekStart = toUTC(startOfDay(subDays(startOfWeek(nowInPST, { weekStartsOn: 0 }), 7)))
+      const thisWeekStart = pstToUTC(startOfWeek(currentPST, { weekStartsOn: 0 }))
+      const thisWeekEnd = pstToUTC(startOfDay(addDays(currentPST, 1))) // Up to now
+      const lastWeekStart = pstToUTC(startOfDay(subDays(startOfWeek(currentPST, { weekStartsOn: 0 }), 7)))
       const lastWeekEnd = thisWeekStart
 
-      const thisWeekProfit = await calculateProfitForRange(thisWeekStart, thisWeekEnd)
-      const lastWeekProfit = await calculateProfitForRange(lastWeekStart, lastWeekEnd)
+      const thisWeekProfit = await getNetProfitForRange(thisWeekStart, thisWeekEnd)
+      const lastWeekProfit = await getNetProfitForRange(lastWeekStart, lastWeekEnd)
 
       let change: number | null = null
       if (lastWeekProfit !== 0) {
@@ -80,28 +72,28 @@ export async function GET(request: NextRequest) {
       }
 
       periods = [
-        { 
-          label: 'This week', 
-          date: format(startOfWeek(nowInPST, { weekStartsOn: 0 }), 'yyyy-MM-dd'), 
-          profit: Math.round(thisWeekProfit * 100) / 100, 
-          change 
+        {
+          label: 'This week',
+          date: format(startOfWeek(currentPST, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+          profit: Math.round(thisWeekProfit * 100) / 100,
+          change
         },
-        { 
-          label: 'Last week', 
-          date: format(subDays(startOfWeek(nowInPST, { weekStartsOn: 0 }), 7), 'yyyy-MM-dd'), 
-          profit: Math.round(lastWeekProfit * 100) / 100, 
-          change: null 
+        {
+          label: 'Last week',
+          date: format(subDays(startOfWeek(currentPST, { weekStartsOn: 0 }), 7), 'yyyy-MM-dd'),
+          profit: Math.round(lastWeekProfit * 100) / 100,
+          change: null
         }
       ]
     } else if (type === 'month') {
       // This month vs last month
-      const thisMonthStart = toUTC(startOfMonth(nowInPST))
-      const thisMonthEnd = toUTC(startOfDay(addDays(nowInPST, 1))) // Up to now
-      const lastMonthStart = toUTC(startOfMonth(subDays(startOfMonth(nowInPST), 1)))
+      const thisMonthStart = pstToUTC(startOfMonth(currentPST))
+      const thisMonthEnd = pstToUTC(startOfDay(addDays(currentPST, 1))) // Up to now
+      const lastMonthStart = pstToUTC(startOfMonth(subDays(startOfMonth(currentPST), 1)))
       const lastMonthEnd = thisMonthStart
 
-      const thisMonthProfit = await calculateProfitForRange(thisMonthStart, thisMonthEnd)
-      const lastMonthProfit = await calculateProfitForRange(lastMonthStart, lastMonthEnd)
+      const thisMonthProfit = await getNetProfitForRange(thisMonthStart, thisMonthEnd)
+      const lastMonthProfit = await getNetProfitForRange(lastMonthStart, lastMonthEnd)
 
       let change: number | null = null
       if (lastMonthProfit !== 0) {
@@ -109,17 +101,17 @@ export async function GET(request: NextRequest) {
       }
 
       periods = [
-        { 
-          label: 'This month', 
-          date: format(startOfMonth(nowInPST), 'yyyy-MM-dd'), 
-          profit: Math.round(thisMonthProfit * 100) / 100, 
-          change 
+        {
+          label: 'This month',
+          date: format(startOfMonth(currentPST), 'yyyy-MM-dd'),
+          profit: Math.round(thisMonthProfit * 100) / 100,
+          change
         },
-        { 
-          label: 'Last month', 
-          date: format(startOfMonth(subDays(startOfMonth(nowInPST), 1)), 'yyyy-MM-dd'), 
-          profit: Math.round(lastMonthProfit * 100) / 100, 
-          change: null 
+        {
+          label: 'Last month',
+          date: format(startOfMonth(subDays(startOfMonth(currentPST), 1)), 'yyyy-MM-dd'),
+          profit: Math.round(lastMonthProfit * 100) / 100,
+          change: null
         }
       ]
     }
