@@ -59,8 +59,10 @@ const inventoryQueue = new Queue('inventory-sync', REDIS_URL, { defaultJobOption
 const productsQueue = new Queue('products-sync', REDIS_URL, { defaultJobOptions })
 const reportsQueue = new Queue('reports-sync', REDIS_URL, { defaultJobOptions })
 const aggregationQueue = new Queue('aggregation', REDIS_URL, { defaultJobOptions })
+const adsReportsQueue = new Queue('ads-reports-sync', REDIS_URL, { defaultJobOptions })
+const alertsQueue = new Queue('alerts-generation', REDIS_URL, { defaultJobOptions })
 
-const allQueues = [ordersQueue, ordersReportQueue, financesQueue, inventoryQueue, productsQueue, reportsQueue, aggregationQueue]
+const allQueues = [ordersQueue, ordersReportQueue, financesQueue, inventoryQueue, productsQueue, reportsQueue, aggregationQueue, adsReportsQueue, alertsQueue]
 
 // Schedule configuration
 const schedules = [
@@ -74,6 +76,8 @@ const schedules = [
   { queue: productsQueue, name: 'products-sync', cron: '0 6 * * *', description: 'Sync product catalog' },
   { queue: reportsQueue, name: 'daily-reports', cron: '0 7 * * *', description: 'Generate daily reports' },
   { queue: aggregationQueue, name: 'daily-aggregation', cron: '30 7 * * *', description: 'Calculate profit summaries' },
+  { queue: adsReportsQueue, name: 'ads-reports-sync', cron: '0 */3 * * *', description: 'Sync Amazon Ads reports' },
+  { queue: alertsQueue, name: 'alerts-generation', cron: '0 8 * * *', description: 'Generate inventory alerts' },
 ]
 
 // Initialize scheduler
@@ -309,18 +313,54 @@ async function processAggregation(job) {
   }
 }
 
+async function processAdsReportsSync(job) {
+  console.log(`[ads-reports] Processing job ${job.id}...`)
+
+  try {
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const response = await fetch(`${baseUrl}/api/amazon-ads/sync`, {
+      method: 'POST',
+    })
+    const data = await response.json()
+    console.log(`[ads-reports] Completed:`, data.success ? 'success' : (data.error || 'unknown error'))
+    return data
+  } catch (error) {
+    console.error(`[ads-reports] Failed:`, error.message)
+    throw error
+  }
+}
+
+async function processAlertsGeneration(job) {
+  console.log(`[alerts] Processing job ${job.id}...`)
+
+  try {
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const response = await fetch(`${baseUrl}/api/inventory/alerts/generate`, {
+      method: 'POST',
+    })
+    const data = await response.json()
+    console.log(`[alerts] Completed:`, data.success ? `${data.alertsGenerated || 0} alerts generated` : (data.error || 'unknown error'))
+    return data
+  } catch (error) {
+    console.error(`[alerts] Failed:`, error.message)
+    throw error
+  }
+}
+
 // Start worker
 function startWorker() {
   console.log('🔧 Starting sync worker...\n')
 
   // Register processors
-  ordersReportQueue.process('orders-report-sync', 1, processOrdersReportSync)  // NEW
+  ordersReportQueue.process('orders-report-sync', 1, processOrdersReportSync)
   ordersQueue.process('orders-sync', 1, processOrdersSync)
   financesQueue.process('finances-sync', 1, processFinancesSync)
   inventoryQueue.process('inventory-sync', 1, processInventorySync)
   productsQueue.process('products-sync', 1, processProductsSync)
   reportsQueue.process('daily-reports', 1, processReportsSync)
   aggregationQueue.process('daily-aggregation', 1, processAggregation)
+  adsReportsQueue.process('ads-reports-sync', 1, processAdsReportsSync)
+  alertsQueue.process('alerts-generation', 1, processAlertsGeneration)
 
   // Event handlers
   allQueues.forEach(queue => {
