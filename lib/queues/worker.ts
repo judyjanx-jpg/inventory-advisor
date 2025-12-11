@@ -19,6 +19,40 @@ import { prisma } from '@/lib/prisma'
 import { createSpApiClient, getAmazonCredentials } from '@/lib/amazon-sp-api'
 import { getAdsCredentials } from '@/lib/amazon-ads-api'
 import { gunzipSync } from 'zlib'
+import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+import { startOfDay, subDays } from 'date-fns'
+
+/**
+ * Amazon uses PST/PDT (America/Los_Angeles) for day boundaries
+ * All date grouping and calculations should use this timezone
+ */
+const AMAZON_TIMEZONE = 'America/Los_Angeles'
+
+/**
+ * Get a date range in UTC that corresponds to PST day boundaries
+ * This ensures consistent day grouping between Railway (UTC) and local dev
+ */
+function getPSTDateRange(daysBack: number): { startDate: Date; endDate: Date } {
+  const nowUTC = new Date()
+  const nowInPST = toZonedTime(nowUTC, AMAZON_TIMEZONE)
+  const startInPST = startOfDay(subDays(nowInPST, daysBack))
+  const endInPST = nowInPST
+
+  return {
+    startDate: fromZonedTime(startInPST, AMAZON_TIMEZONE),
+    endDate: fromZonedTime(endInPST, AMAZON_TIMEZONE),
+  }
+}
+
+/**
+ * Convert a UTC date to the start of that day in PST, returned as UTC
+ * Used for grouping orders/items by PST day
+ */
+function toPSTDayStart(utcDate: Date): Date {
+  const dateInPST = toZonedTime(utcDate, AMAZON_TIMEZONE)
+  const dayStartInPST = startOfDay(dateInPST)
+  return fromZonedTime(dayStartInPST, AMAZON_TIMEZONE)
+}
 
 /**
  * Log sync result to database
@@ -61,8 +95,7 @@ async function processOrdersSync(job: any) {
     if (!client) throw new Error('Failed to create SP-API client')
 
     const daysBack = job.data.daysBack || 2
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - daysBack)
+    const { startDate } = getPSTDateRange(daysBack)
 
     let ordersProcessed = 0
     let nextToken: string | null = null
@@ -139,10 +172,9 @@ async function processFinancesSync(job: any) {
     if (!client) throw new Error('Failed to create SP-API client')
 
     const daysBack = job.data.daysBack || 14
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - daysBack)
-    const endDate = new Date()
-    endDate.setMinutes(endDate.getMinutes() - 5) // Amazon requires end date in past
+    const { startDate, endDate: rangeEnd } = getPSTDateRange(daysBack)
+    // Amazon requires end date in past
+    const endDate = new Date(rangeEnd.getTime() - 5 * 60 * 1000)
 
     let eventsProcessed = 0
     let feesUpdated = 0
@@ -668,9 +700,7 @@ async function processReportsSync(job: any) {
     if (!client) throw new Error('Failed to create SP-API client')
 
     const daysBack = job.data.daysBack || 90 // Sync last 90 days of returns
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - daysBack)
-    const endDate = new Date()
+    const { startDate, endDate } = getPSTDateRange(daysBack)
 
     let returnsCreated = 0
     let returnsUpdated = 0
@@ -804,8 +834,7 @@ async function processAggregation(job: any) {
 
   try {
     const daysBack = job.data.daysBack || 30
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - daysBack)
+    const { startDate } = getPSTDateRange(daysBack)
 
     const orderItems = await prisma.orderItem.findMany({
       where: {
@@ -820,13 +849,14 @@ async function processAggregation(job: any) {
     const dailyMap = new Map<string, any>()
 
     for (const item of orderItems) {
-      const date = new Date(item.order.purchaseDate)
-      date.setHours(0, 0, 0, 0)
-      const key = `${date.toISOString().split('T')[0]}|${item.masterSku}`
+      // Use PST day boundaries for grouping - critical for Railway vs local consistency
+      const pstDayStart = toPSTDayStart(new Date(item.order.purchaseDate))
+      const dateStr = toZonedTime(pstDayStart, AMAZON_TIMEZONE).toISOString().split('T')[0]
+      const key = `${dateStr}|${item.masterSku}`
 
       if (!dailyMap.has(key)) {
         dailyMap.set(key, {
-          date,
+          date: pstDayStart,
           masterSku: item.masterSku,
           unitsSold: 0,
           revenue: 0,
@@ -1204,12 +1234,12 @@ async function processAdsReportsSync(job: any) {
 
     if (activePending === 0) {
       console.log('  Requesting new SP reports (campaign + product)...')
-      
+
       const freshCreds = await getAdsCredentials()
       if (freshCreds?.accessToken) {
-        const yesterday = new Date()
-        yesterday.setDate(yesterday.getDate() - 1)
-        const dateStr = yesterday.toISOString().split('T')[0]
+        // Use PST day boundaries for ads reports
+        const { startDate: yesterdayStart } = getPSTDateRange(1)
+        const dateStr = toZonedTime(yesterdayStart, AMAZON_TIMEZONE).toISOString().split('T')[0]
 
         const headers = {
           'Authorization': `Bearer ${freshCreds.accessToken}`,

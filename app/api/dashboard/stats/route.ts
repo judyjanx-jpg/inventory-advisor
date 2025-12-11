@@ -1,14 +1,24 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+import { startOfDay, subDays } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Amazon uses PST/PDT (America/Los_Angeles) for day boundaries
+ */
+const AMAZON_TIMEZONE = 'America/Los_Angeles'
+
 export async function GET() {
   try {
-    // Get date range (last 30 days)
-    const endDate = new Date()
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - 30)
+    // Get date range (last 30 days) using PST day boundaries
+    const nowUTC = new Date()
+    const nowInPST = toZonedTime(nowUTC, AMAZON_TIMEZONE)
+    const startInPST = startOfDay(subDays(nowInPST, 30))
+
+    const endDate = fromZonedTime(nowInPST, AMAZON_TIMEZONE)
+    const startDate = fromZonedTime(startInPST, AMAZON_TIMEZONE)
 
     // First, check if DailySummary has data
     let dailySummaries = await prisma.dailySummary.findMany({
