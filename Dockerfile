@@ -17,6 +17,10 @@ RUN npx prisma generate
 # Copy ALL source files
 COPY . .
 
+# Build args for Next.js build (Railway passes these from env vars)
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
+
 # Build the Next.js app
 RUN npm run build
 
