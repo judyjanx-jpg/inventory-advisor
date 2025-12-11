@@ -94,7 +94,7 @@ export async function GET() {
       GROUP BY o.status
       ORDER BY orders DESC
     `
-    results.yesterdayByStatus = yesterdayByStatus.map((row: { status: string; orders: bigint; units: bigint | null; sales: number | null }) => ({
+    results.yesterdayByStatus = yesterdayByStatus.map((row: { status: string | null; orders: bigint; units: bigint | null; sales: number | null }) => ({
       status: row.status,
       orders: Number(row.orders),
       units: Number(row.units || 0),
@@ -152,7 +152,7 @@ export async function GET() {
         AND (oi.item_price = 0 OR oi.item_price IS NULL)
       GROUP BY o.status
     `
-    results.zeroPriceItemsByStatus = zeroPriceItems.map((row: { status: string; items: bigint; units: bigint | null }) => ({
+    results.zeroPriceItemsByStatus = zeroPriceItems.map((row: { status: string | null; items: bigint; units: bigint | null }) => ({
       status: row.status,
       items: Number(row.items),
       units: Number(row.units || 0)
@@ -211,7 +211,7 @@ export async function GET() {
       GROUP BY o.status
       ORDER BY order_count DESC
     `
-    results.ordersByStatusBreakdown = ordersByStatus.map((row: { status: string; order_count: bigint; orders_with_items: bigint; orders_without_items: bigint }) => ({
+    results.ordersByStatusBreakdown = ordersByStatus.map((row: { status: string | null; order_count: bigint; orders_with_items: bigint; orders_without_items: bigint }) => ({
       status: row.status,
       order_count: Number(row.order_count),
       orders_with_items: Number(row.orders_with_items),
