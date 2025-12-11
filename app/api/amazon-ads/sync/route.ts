@@ -30,6 +30,89 @@ function getPSTDateRange(daysBack: number): { startDate: Date; endDate: Date } {
   }
 }
 
+/**
+ * Aggregate ad spend data from adProductSpend into advertising_daily
+ */
+async function aggregateAdsToDaily(startDateStr: string, endDateStr: string) {
+  try {
+    const { query } = await import('@/lib/db')
+
+    const aggregated = await query<{
+      date: string
+      total_impressions: string
+      total_clicks: string
+      total_spend: string
+      total_sales14d: string
+      total_orders14d: string
+      total_units14d: string
+    }>(`
+      SELECT
+        DATE(aps.start_date)::text as date,
+        SUM(aps.impressions)::text as total_impressions,
+        SUM(aps.clicks)::text as total_clicks,
+        SUM(aps.spend)::text as total_spend,
+        SUM(aps.sales)::text as total_sales14d,
+        SUM(aps.orders)::text as total_orders14d,
+        SUM(aps.units)::text as total_units14d
+      FROM ad_product_spend aps
+      WHERE aps.start_date >= $1::date
+        AND aps.start_date <= $2::date
+      GROUP BY DATE(aps.start_date)
+    `, [startDateStr, endDateStr])
+
+    let updated = 0
+    for (const row of aggregated) {
+      const spend = parseFloat(row.total_spend || '0')
+      const sales14d = parseFloat(row.total_sales14d || '0')
+      const impressions = parseInt(row.total_impressions || '0', 10)
+      const clicks = parseInt(row.total_clicks || '0', 10)
+      const orders14d = parseInt(row.total_orders14d || '0', 10)
+      const units14d = parseInt(row.total_units14d || '0', 10)
+
+      await prisma.advertisingDaily.upsert({
+        where: {
+          date_campaignType: {
+            date: new Date(row.date),
+            campaignType: 'SP',
+          },
+        },
+        update: {
+          impressions,
+          clicks,
+          spend,
+          sales14d: sales14d > 0 ? sales14d : null,
+          orders14d: orders14d > 0 ? orders14d : null,
+          unitsSold14d: units14d > 0 ? units14d : null,
+          acos: sales14d > 0 ? (spend / sales14d) * 100 : null,
+          roas: spend > 0 ? sales14d / spend : null,
+          ctr: impressions > 0 ? (clicks / impressions) * 100 : null,
+          cpc: clicks > 0 ? spend / clicks : null,
+          updatedAt: new Date(),
+        },
+        create: {
+          date: new Date(row.date),
+          campaignType: 'SP',
+          impressions,
+          clicks,
+          spend,
+          sales14d: sales14d > 0 ? sales14d : null,
+          orders14d: orders14d > 0 ? orders14d : null,
+          unitsSold14d: units14d > 0 ? units14d : null,
+          acos: sales14d > 0 ? (spend / sales14d) * 100 : null,
+          roas: spend > 0 ? sales14d / spend : null,
+          ctr: impressions > 0 ? (clicks / impressions) * 100 : null,
+          cpc: clicks > 0 ? spend / clicks : null,
+        },
+      })
+      updated++
+    }
+    return updated
+  } catch (error: any) {
+    console.error('Failed to aggregate to advertising_daily:', error.message)
+    return 0
+  }
+}
+
 // GET: Check sync status and pending reports
 export async function GET() {
   try {
@@ -154,10 +237,18 @@ export async function POST(request: NextRequest) {
           const jsonBuffer = gunzipSync(Buffer.from(gzipBuffer))
           const data = JSON.parse(jsonBuffer.toString('utf-8'))
 
-          // Parse date range from report
-          const dateRangeParts = report.dateRange?.split(' to ') || []
-          const startDateStr = dateRangeParts[0] || new Date().toISOString().split('T')[0]
-          const endDateStr = dateRangeParts[1] || startDateStr
+          // Parse date range from report - handle both "date" and "date to date" formats
+          let startDateStr: string
+          let endDateStr: string
+          if (report.dateRange?.includes(' to ')) {
+            const dateRangeParts = report.dateRange.split(' to ')
+            startDateStr = dateRangeParts[0]
+            endDateStr = dateRangeParts[1]
+          } else {
+            // Single date format (legacy) - use same date for start and end
+            startDateStr = report.dateRange || new Date().toISOString().split('T')[0]
+            endDateStr = startDateStr
+          }
 
           if (Array.isArray(data)) {
             // Handle based on report type
@@ -260,6 +351,12 @@ export async function POST(request: NextRequest) {
             data: { status: 'COMPLETED', completedAt: new Date() },
           })
           results.completed++
+
+          // Aggregate to advertising_daily after processing product reports
+          if (report.reportType === 'SP_PRODUCTS') {
+            const dailyUpdated = await aggregateAdsToDaily(startDateStr, endDateStr)
+            results.dailyAggregated = (results.dailyAggregated || 0) + dailyUpdated
+          }
 
         } else if (status.status === 'FAILED') {
           await prisma.adsPendingReport.update({
