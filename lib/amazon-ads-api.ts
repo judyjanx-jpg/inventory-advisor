@@ -1,7 +1,7 @@
 // lib/amazon-ads-api.ts
 // Amazon Ads API client and helpers
 
-import { prisma } from './prisma'
+import { prisma, withRetry } from './prisma'
 
 // Amazon Ads API endpoints
 const ADS_API_BASE = 'https://advertising-api.amazon.com'
@@ -134,9 +134,12 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
 
 // Get stored Ads credentials
 export async function getAdsCredentials(): Promise<AdsCredentials | null> {
-  const connection = await prisma.apiConnection.findFirst({
-    where: { platform: 'amazon_ads' },
-  })
+  // Use retry logic to handle transient Railway database connection issues
+  const connection = await withRetry(async () =>
+    prisma.apiConnection.findFirst({
+      where: { platform: 'amazon_ads' },
+    })
+  )
 
   if (!connection?.credentials || !connection.isConnected) {
     return null
@@ -151,23 +154,26 @@ export async function getAdsCredentials(): Promise<AdsCredentials | null> {
 
 // Save Ads credentials
 export async function saveAdsCredentials(credentials: AdsCredentials): Promise<void> {
-  await prisma.apiConnection.upsert({
-    where: { platform: 'amazon_ads' },
-    create: {
-      platform: 'amazon_ads',
-      isConnected: true,
-      isPrimary: false,
-      provides: JSON.stringify(['advertising']),
-      credentials: JSON.stringify(credentials),
-      syncEnabled: true,
-      syncFrequencyMinutes: 1440, // Daily
-    },
-    update: {
-      isConnected: true,
-      credentials: JSON.stringify(credentials),
-      updatedAt: new Date(),
-    },
-  })
+  // Use retry logic to handle transient Railway database connection issues
+  await withRetry(async () =>
+    prisma.apiConnection.upsert({
+      where: { platform: 'amazon_ads' },
+      create: {
+        platform: 'amazon_ads',
+        isConnected: true,
+        isPrimary: false,
+        provides: JSON.stringify(['advertising']),
+        credentials: JSON.stringify(credentials),
+        syncEnabled: true,
+        syncFrequencyMinutes: 1440, // Daily
+      },
+      update: {
+        isConnected: true,
+        credentials: JSON.stringify(credentials),
+        updatedAt: new Date(),
+      },
+    })
+  )
 }
 
 // Get valid access token (refreshes if expired)
