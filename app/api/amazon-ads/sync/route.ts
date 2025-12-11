@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAdsCredentials } from '@/lib/amazon-ads-api'
+import { getAdsCredentials, refreshAccessToken, saveAdsCredentials } from '@/lib/amazon-ads-api'
 import { gunzipSync } from 'zlib'
 import { toZonedTime, fromZonedTime } from 'date-fns-tz'
 import { startOfDay, subDays } from 'date-fns'
@@ -14,6 +14,37 @@ const ADS_API_BASE = 'https://advertising-api.amazon.com'
  * Amazon uses PST/PDT (America/Los_Angeles) for day boundaries
  */
 const AMAZON_TIMEZONE = 'America/Los_Angeles'
+
+/**
+ * Get a fresh access token, refreshing if needed
+ */
+async function getFreshAccessToken(credentials: {
+  refreshToken: string
+  accessToken?: string
+  accessTokenExpiry?: number
+  clientId: string
+  clientSecret: string
+  profileId?: string
+}): Promise<string> {
+  const now = Date.now()
+
+  // Check if current token is still valid (with 5 min buffer)
+  if (credentials.accessToken && credentials.accessTokenExpiry && credentials.accessTokenExpiry > now + 300000) {
+    return credentials.accessToken
+  }
+
+  // Refresh the token
+  console.log('[ads-sync] Refreshing access token...')
+  const { accessToken, expiresIn } = await refreshAccessToken(credentials.refreshToken)
+
+  // Update stored credentials
+  credentials.accessToken = accessToken
+  credentials.accessTokenExpiry = now + (expiresIn * 1000)
+  await saveAdsCredentials(credentials as any)
+
+  console.log('[ads-sync] Token refreshed successfully')
+  return accessToken
+}
 
 /**
  * Get a date range in UTC that corresponds to PST day boundaries
@@ -172,12 +203,15 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}))
-    const action = body.action || 'sync' // 'sync', 'request', 'check', 'seed'
+    const action = body.action || 'sync' // 'sync', 'request', 'check', 'seed', 'clear'
 
     const credentials = await getAdsCredentials()
-    if (!credentials?.profileId || !credentials.accessToken) {
+    if (!credentials?.profileId || !credentials.refreshToken) {
       return NextResponse.json({ error: 'Not connected to Amazon Ads' }, { status: 400 })
     }
+
+    // Get a fresh access token (refreshes if expired)
+    const accessToken = await getFreshAccessToken(credentials as any)
 
     const profileId = credentials.profileId
     const results: any = { action }
@@ -239,7 +273,7 @@ export async function POST(request: NextRequest) {
 
         const statusResponse = await fetch(`${ADS_API_BASE}/reporting/reports/${report.reportId}`, {
           headers: {
-            'Authorization': `Bearer ${credentials.accessToken}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
             'Amazon-Advertising-API-Scope': profileId,
             'Accept': 'application/json',
@@ -499,7 +533,7 @@ export async function POST(request: NextRequest) {
       }
 
       const headers = {
-        'Authorization': `Bearer ${credentials.accessToken}`,
+        'Authorization': `Bearer ${accessToken}`,
         'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
         'Amazon-Advertising-API-Scope': profileId,
         'Content-Type': 'application/json',
