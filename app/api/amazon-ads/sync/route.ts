@@ -203,6 +203,26 @@ export async function POST(request: NextRequest) {
       results.seeded = seeded
     }
 
+    // Action: Clear stuck pending reports (older than specified hours)
+    if (action === 'clear') {
+      const hoursOld = body.hoursOld || 24 // Default to 24 hours
+      const cutoffDate = new Date(Date.now() - hoursOld * 60 * 60 * 1000)
+
+      const stuckReports = await prisma.adsPendingReport.updateMany({
+        where: {
+          status: 'PENDING',
+          createdAt: { lt: cutoffDate },
+        },
+        data: {
+          status: 'FAILED',
+          failureReason: `Marked as failed - stuck pending for over ${hoursOld} hours`,
+        },
+      })
+
+      results.cleared = stuckReports.count
+      results.message = `Cleared ${stuckReports.count} stuck reports older than ${hoursOld} hours`
+    }
+
     // Action: Check all pending reports
     if (action === 'sync' || action === 'check') {
       const pendingReports = await prisma.adsPendingReport.findMany({
