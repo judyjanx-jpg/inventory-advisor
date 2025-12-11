@@ -931,11 +931,12 @@ const ADS_API_BASE = 'https://advertising-api.amazon.com'
 async function aggregateAdsToDaily(startDateStr: string, endDateStr: string) {
   try {
     console.log(`    Aggregating ads data to advertising_daily for ${startDateStr} to ${endDateStr}...`)
-    
+
     const { query } = await import('@/lib/db')
-    
+
     // Query aggregated data from adProductSpend for the date range
-    // Since adProductSpend has date ranges, we aggregate by start_date
+    // For single-day reports (start_date = end_date), we need to match exactly
+    // For multi-day reports, we aggregate by the date that overlaps
     const aggregated = await query<{
       date: string
       campaign_type: string
@@ -946,7 +947,7 @@ async function aggregateAdsToDaily(startDateStr: string, endDateStr: string) {
       total_orders14d: string
       total_units14d: string
     }>(`
-      SELECT 
+      SELECT
         DATE(aps.start_date)::text as date,
         'SP' as campaign_type,
         SUM(aps.impressions)::text as total_impressions,
@@ -957,7 +958,7 @@ async function aggregateAdsToDaily(startDateStr: string, endDateStr: string) {
         SUM(aps.units)::text as total_units14d
       FROM ad_product_spend aps
       WHERE aps.start_date >= $1::date
-        AND aps.end_date <= $2::date
+        AND aps.start_date <= $2::date
       GROUP BY DATE(aps.start_date)
     `, [startDateStr, endDateStr])
 
@@ -1084,17 +1085,26 @@ async function processAdsReportsSync(job: any) {
 
         if (status.status === 'COMPLETED' && status.url) {
           console.log(`    Report ${report.reportId.substring(0, 8)}... COMPLETED - downloading`)
-          
+
           // Download and process the report
           const downloadResponse = await fetch(status.url)
           const gzipBuffer = await downloadResponse.arrayBuffer()
           const jsonBuffer = gunzipSync(Buffer.from(gzipBuffer))
           const data = JSON.parse(jsonBuffer.toString('utf-8'))
 
-          // Parse date range from report
-          const dateRangeParts = report.dateRange?.split(' to ') || []
-          const startDateStr = dateRangeParts[0] || new Date().toISOString().split('T')[0]
-          const endDateStr = dateRangeParts[1] || startDateStr
+          // Parse date range from report - handle both "date" and "date to date" formats
+          let startDateStr: string
+          let endDateStr: string
+          if (report.dateRange?.includes(' to ')) {
+            const dateRangeParts = report.dateRange.split(' to ')
+            startDateStr = dateRangeParts[0]
+            endDateStr = dateRangeParts[1]
+          } else {
+            // Single date format (legacy) - use same date for start and end
+            startDateStr = report.dateRange || new Date().toISOString().split('T')[0]
+            endDateStr = startDateStr
+          }
+          console.log(`    Date range: ${startDateStr} to ${endDateStr}`)
 
           if (Array.isArray(data)) {
             // Handle based on report type
@@ -1330,7 +1340,7 @@ async function processAdsReportsSync(job: any) {
                   profileId,
                   reportType: 'SP_CAMPAIGNS',
                   status: 'PENDING',
-                  dateRange: dateStr,
+                  dateRange: `${dateStr} to ${dateStr}`,  // Consistent format for parsing
                 },
               })
               newReportRequested = true
@@ -1351,7 +1361,7 @@ async function processAdsReportsSync(job: any) {
 
           const productResponseText = await productResponse.text()
           let productReportId: string | null = null
-          
+
           if (productResponse.status === 425) {
             const match = productResponseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
             if (match) productReportId = match[1]
@@ -1371,7 +1381,7 @@ async function processAdsReportsSync(job: any) {
                   profileId,
                   reportType: 'SP_PRODUCTS',
                   status: 'PENDING',
-                  dateRange: dateStr,
+                  dateRange: `${dateStr} to ${dateStr}`,  // Consistent format for parsing
                 },
               })
               newReportRequested = true
