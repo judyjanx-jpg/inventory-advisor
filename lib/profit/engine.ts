@@ -203,7 +203,8 @@ export function getCustomDateRange(startDateStr: string, endDateStr: string): {
  * 2. gross_revenue calculated from orders API
  * 3. item_price + shipping_price + gift_wrap_price
  * 4. Average unit price from last 30 days × quantity
- * 5. Catalog price × 0.95 × quantity
+ * 5. ALL-TIME average unit price × quantity (for SKUs without recent sales)
+ * 6. Catalog price × 0.95 × quantity
  */
 export async function getPeriodData(
   startDate: Date,
@@ -227,6 +228,7 @@ export async function getPeriodData(
     actual_revenue_total: string
   }>(`
     WITH recent_avg_prices AS (
+      -- Recent 30-day average prices (preferred for active products)
       SELECT
         oi.master_sku,
         AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
@@ -234,6 +236,18 @@ export async function getPeriodData(
       JOIN orders o ON oi.order_id = o.id
       WHERE o.purchase_date >= NOW() - INTERVAL '30 days'
         AND oi.item_price > 0
+        AND oi.quantity > 0
+        AND o.status NOT IN ('Cancelled', 'Canceled')
+      GROUP BY oi.master_sku
+    ),
+    historical_avg_prices AS (
+      -- ALL-TIME average prices (fallback for products without recent sales)
+      SELECT
+        oi.master_sku,
+        AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      WHERE oi.item_price > 0
         AND oi.quantity > 0
         AND o.status NOT IN ('Cancelled', 'Canceled')
       GROUP BY oi.master_sku
@@ -251,9 +265,13 @@ export async function getPeriodData(
           -- Priority 3: Calculate from item components
           WHEN oi.item_price > 0
           THEN oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
-          -- Price estimation fallback chain: avg price → catalog × 0.95 → 0
+          -- Priority 4: Recent 30-day avg price
           WHEN COALESCE(rap.avg_unit_price, 0) > 0
           THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          -- Priority 5: ALL-TIME historical avg price (NEW - fixes Pending order estimation)
+          WHEN COALESCE(hap.avg_unit_price, 0) > 0
+          THEN (hap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+          -- Priority 6: Catalog price × 0.95
           WHEN COALESCE(p.price, 0) > 0
           THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
           ELSE COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
@@ -268,9 +286,11 @@ export async function getPeriodData(
           THEN CASE
             WHEN oi.item_price > 0
             THEN ROUND((oi.item_price * 0.15) + (3.50 * oi.quantity), 2)
-            -- Fee estimation fallback chain: avg price → catalog × 0.95 → 0
+            -- Fee estimation fallback chain: recent avg → historical avg → catalog × 0.95 → 0
             WHEN COALESCE(rap.avg_unit_price, 0) > 0
             THEN ROUND((rap.avg_unit_price * oi.quantity * 0.15) + (3.50 * oi.quantity), 2)
+            WHEN COALESCE(hap.avg_unit_price, 0) > 0
+            THEN ROUND((hap.avg_unit_price * oi.quantity * 0.15) + (3.50 * oi.quantity), 2)
             WHEN COALESCE(p.price, 0) > 0
             THEN ROUND((p.price * oi.quantity * 0.95 * 0.15) + (3.50 * oi.quantity), 2)
             ELSE 0
@@ -290,6 +310,8 @@ export async function getPeriodData(
           THEN CASE
             WHEN COALESCE(rap.avg_unit_price, 0) > 0
             THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+            WHEN COALESCE(hap.avg_unit_price, 0) > 0
+            THEN (hap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
             WHEN COALESCE(p.price, 0) > 0
             THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
             ELSE COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
@@ -303,6 +325,7 @@ export async function getPeriodData(
     FROM order_items oi
     INNER JOIN orders o ON oi.order_id = o.id
     LEFT JOIN recent_avg_prices rap ON oi.master_sku = rap.master_sku
+    LEFT JOIN historical_avg_prices hap ON oi.master_sku = hap.master_sku
     LEFT JOIN products p ON oi.master_sku = p.sku
     WHERE o.purchase_date >= $1::timestamp
       AND o.purchase_date < $2::timestamp

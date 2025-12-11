@@ -111,6 +111,7 @@ export async function GET(request: NextRequest) {
       items_with_actual_revenue: string
     }>(`
       WITH recent_avg_prices AS (
+        -- Recent 30-day average prices (preferred for active products)
         SELECT
           oi.master_sku,
           AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
@@ -118,6 +119,18 @@ export async function GET(request: NextRequest) {
         JOIN orders o ON oi.order_id = o.id
         WHERE o.purchase_date >= NOW() - INTERVAL '30 days'
           AND oi.item_price > 0
+          AND oi.quantity > 0
+          AND o.status NOT IN ('Cancelled', 'Canceled')
+        GROUP BY oi.master_sku
+      ),
+      historical_avg_prices AS (
+        -- ALL-TIME average prices (fallback for products without recent sales)
+        SELECT
+          oi.master_sku,
+          AVG(oi.item_price / NULLIF(oi.quantity, 0)) as avg_unit_price
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE oi.item_price > 0
           AND oi.quantity > 0
           AND o.status NOT IN ('Cancelled', 'Canceled')
         GROUP BY oi.master_sku
@@ -144,9 +157,13 @@ export async function GET(request: NextRequest) {
             -- Priority 3: Calculate from item components
             WHEN oi.item_price > 0
             THEN oi.item_price + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
-            -- Price estimation fallback chain: avg price → catalog × 0.95 → 0
+            -- Priority 4: Recent 30-day avg price
             WHEN COALESCE(rap.avg_unit_price, 0) > 0
             THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+            -- Priority 5: ALL-TIME historical avg price (fixes Pending order estimation)
+            WHEN COALESCE(hap.avg_unit_price, 0) > 0
+            THEN (hap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+            -- Priority 6: Catalog price × 0.95
             WHEN COALESCE(p.price, 0) > 0
             THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
             ELSE COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
@@ -161,6 +178,8 @@ export async function GET(request: NextRequest) {
             THEN CASE
               WHEN COALESCE(rap.avg_unit_price, 0) > 0
               THEN (rap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
+              WHEN COALESCE(hap.avg_unit_price, 0) > 0
+              THEN (hap.avg_unit_price * oi.quantity) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
               WHEN COALESCE(p.price, 0) > 0
               THEN (p.price * oi.quantity * 0.95) + COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
               ELSE COALESCE(oi.shipping_price, 0) + COALESCE(oi.gift_wrap_price, 0)
@@ -178,6 +197,7 @@ export async function GET(request: NextRequest) {
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
       LEFT JOIN recent_avg_prices rap ON oi.master_sku = rap.master_sku
+      LEFT JOIN historical_avg_prices hap ON oi.master_sku = hap.master_sku
       LEFT JOIN products p ON oi.master_sku = p.sku
       LEFT JOIN products parent_p ON p.parent_sku = parent_p.sku
       LEFT JOIN suppliers s ON p.supplier_id = s.id
@@ -191,6 +211,7 @@ export async function GET(request: NextRequest) {
           WHEN COALESCE(oi.gross_revenue, 0) > 0 THEN oi.gross_revenue
           WHEN oi.item_price > 0 THEN oi.item_price
           WHEN COALESCE(rap.avg_unit_price, 0) > 0 THEN rap.avg_unit_price * oi.quantity
+          WHEN COALESCE(hap.avg_unit_price, 0) > 0 THEN hap.avg_unit_price * oi.quantity
           WHEN COALESCE(p.price, 0) > 0 THEN p.price * oi.quantity * 0.95
           ELSE 0
         END
