@@ -330,6 +330,7 @@ export async function getPeriodData(
     WHERE o.purchase_date >= $1::timestamp
       AND o.purchase_date < $2::timestamp
       AND o.status NOT IN ('Cancelled', 'Canceled')
+      AND (o.sales_channel IS NULL OR o.sales_channel = 'Amazon.com')  -- Exclude MCF orders from other channels
   `, [startDate, endDate])
 
   const totalSales = parseFloat(summaryData?.total_sales || '0')
