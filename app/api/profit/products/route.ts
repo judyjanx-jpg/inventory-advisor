@@ -112,15 +112,23 @@ export async function GET(request: NextRequest) {
     }>(`
       WITH most_recent_prices AS (
         -- Most recent price per SKU (preferred for pending orders)
-        SELECT DISTINCT ON (oi.master_sku)
-          oi.master_sku,
-          (oi.item_price / NULLIF(oi.quantity, 0)) as recent_unit_price
-        FROM order_items oi
-        JOIN orders o ON oi.order_id = o.id
-        WHERE oi.item_price > 0
-          AND oi.quantity > 0
-          AND o.status NOT IN ('Cancelled', 'Canceled')
-        ORDER BY oi.master_sku, o.purchase_date DESC
+        -- Limited to last 90 days for performance
+        SELECT
+          master_sku,
+          recent_unit_price
+        FROM (
+          SELECT
+            oi.master_sku,
+            (oi.item_price / NULLIF(oi.quantity, 0)) as recent_unit_price,
+            ROW_NUMBER() OVER (PARTITION BY oi.master_sku ORDER BY o.purchase_date DESC) as rn
+          FROM order_items oi
+          JOIN orders o ON oi.order_id = o.id
+          WHERE o.purchase_date >= NOW() - INTERVAL '90 days'
+            AND oi.item_price > 0
+            AND oi.quantity > 0
+            AND o.status NOT IN ('Cancelled', 'Canceled')
+        ) ranked
+        WHERE rn = 1
       ),
       recent_avg_prices AS (
         -- Recent 30-day average prices (fallback for products without recent sales)
