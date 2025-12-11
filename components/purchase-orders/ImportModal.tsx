@@ -40,6 +40,129 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
   const [warnings, setWarnings] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Enhanced CSV parser that handles quoted fields, commas in values, etc.
+  const parseCSV = (text: string): string[][] => {
+    const lines: string[] = []
+    let currentLine = ''
+    let inQuotes = false
+    
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i]
+      const nextChar = text[i + 1]
+      
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          // Escaped quote
+          currentLine += '"'
+          i++ // Skip next quote
+        } else {
+          // Toggle quote state
+          inQuotes = !inQuotes
+        }
+      } else if (char === '\n' && !inQuotes) {
+        // End of line
+        lines.push(currentLine)
+        currentLine = ''
+      } else if (char === '\r' && nextChar === '\n' && !inQuotes) {
+        // Windows line ending
+        lines.push(currentLine)
+        currentLine = ''
+        i++ // Skip \n
+      } else {
+        currentLine += char
+      }
+    }
+    
+    // Add last line if not empty
+    if (currentLine.trim()) {
+      lines.push(currentLine)
+    }
+    
+    // Parse each line into columns
+    return lines.map(line => {
+      const columns: string[] = []
+      let currentCol = ''
+      let inQuotes = false
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i]
+        const nextChar = line[i + 1]
+        
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            currentCol += '"'
+            i++
+          } else {
+            inQuotes = !inQuotes
+          }
+        } else if (char === ',' && !inQuotes) {
+          columns.push(currentCol.trim())
+          currentCol = ''
+        } else {
+          currentCol += char
+        }
+      }
+      
+      // Add last column
+      columns.push(currentCol.trim())
+      return columns
+    })
+  }
+
+  // Auto-detect column mappings based on common column name patterns
+  const autoDetectMappings = (headers: string[]): ColumnMapping => {
+    const normalizedHeaders = headers.map(h => h.toLowerCase().trim())
+    
+    const mapping: ColumnMapping = {
+      sku: null,
+      quantity: null,
+      unitCost: null,
+      productName: null,
+    }
+    
+    // SKU patterns
+    const skuPatterns = ['sku', 'master_sku', 'master sku', 'product_sku', 'product sku', 'item_sku', 'item sku', 'code', 'product_code', 'product code']
+    for (const pattern of skuPatterns) {
+      const index = normalizedHeaders.findIndex(h => h.includes(pattern))
+      if (index >= 0) {
+        mapping.sku = headers[index]
+        break
+      }
+    }
+    
+    // Quantity patterns
+    const qtyPatterns = ['quantity', 'qty', 'qty_ordered', 'qty ordered', 'quantity_ordered', 'quantity ordered', 'ordered', 'amount', 'units']
+    for (const pattern of qtyPatterns) {
+      const index = normalizedHeaders.findIndex(h => h.includes(pattern))
+      if (index >= 0) {
+        mapping.quantity = headers[index]
+        break
+      }
+    }
+    
+    // Unit Cost patterns
+    const costPatterns = ['cost', 'unit_cost', 'unit cost', 'price', 'unit_price', 'unit price', 'unitcost', 'unitprice', 'each', 'per_unit', 'per unit']
+    for (const pattern of costPatterns) {
+      const index = normalizedHeaders.findIndex(h => h.includes(pattern))
+      if (index >= 0) {
+        mapping.unitCost = headers[index]
+        break
+      }
+    }
+    
+    // Product Name patterns
+    const namePatterns = ['product', 'name', 'title', 'description', 'product_name', 'product name', 'product_title', 'product title', 'item_name', 'item name']
+    for (const pattern of namePatterns) {
+      const index = normalizedHeaders.findIndex(h => h.includes(pattern))
+      if (index >= 0) {
+        mapping.productName = headers[index]
+        break
+      }
+    }
+    
+    return mapping
+  }
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0]
     if (!selectedFile) return
@@ -54,12 +177,7 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
 
       if (selectedFile.name.endsWith('.csv')) {
         const text = await selectedFile.text()
-        const lines = text.split('\n').map(line => line.trim()).filter(line => line)
-        jsonData = lines.map(line => {
-          // Handle CSV parsing (simple version, can be enhanced)
-          const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
-          return values
-        })
+        jsonData = parseCSV(text)
       } else {
         const workbook = XLSX.read(arrayBuffer, { type: 'array' })
         const sheetName = workbook.SheetNames[0]
@@ -72,8 +190,16 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
         return
       }
 
-      setHeaders(jsonData[0] || [])
-      setRawData(jsonData.slice(1).filter(row => row.some(cell => cell !== '' && cell !== undefined)))
+      const fileHeaders = jsonData[0] || []
+      const fileData = jsonData.slice(1).filter(row => row.some(cell => cell !== '' && cell !== undefined && cell !== null))
+      
+      setHeaders(fileHeaders)
+      setRawData(fileData)
+      
+      // Auto-detect column mappings
+      const autoMapped = autoDetectMappings(fileHeaders)
+      setColumnMapping(autoMapped)
+      
       setStep(2)
     } catch (error) {
       console.error('Error parsing file:', error)
@@ -112,30 +238,61 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
     const costIndex = columnMapping.unitCost ? headers.indexOf(columnMapping.unitCost) : -1
     const nameIndex = columnMapping.productName ? headers.indexOf(columnMapping.productName) : -1
 
+    if (skuIndex < 0 || qtyIndex < 0) {
+      alert('Invalid column mapping. Please reselect columns.')
+      return
+    }
+
     const items: ImportedItem[] = []
     const warningsList: string[] = []
 
     rawData.forEach((row, index) => {
+      // Handle rows that might be shorter than expected
+      if (row.length <= Math.max(skuIndex, qtyIndex)) {
+        warningsList.push(`Row ${index + 2}: Insufficient columns, skipped`)
+        return
+      }
+
       const sku = String(row[skuIndex] || '').trim()
-      const qty = parseInt(String(row[qtyIndex] || '0')) || 0
+      const qtyStr = String(row[qtyIndex] || '0').trim().replace(/[,$]/g, '') // Remove commas and dollar signs
+      const qty = parseFloat(qtyStr) || parseInt(qtyStr) || 0
 
       if (!sku) {
         warningsList.push(`Row ${index + 2}: Missing SKU, skipped`)
         return
       }
 
-      if (qty <= 0) {
-        warningsList.push(`Row ${index + 2}: Invalid quantity (${qty}), skipped`)
+      if (qty <= 0 || isNaN(qty)) {
+        warningsList.push(`Row ${index + 2}: Invalid quantity (${row[qtyIndex]}), skipped`)
         return
       }
+
+      // Parse cost - handle currency symbols, commas, etc.
+      let unitCost: number | undefined = undefined
+      if (costIndex >= 0 && row[costIndex] !== undefined && row[costIndex] !== null && row[costIndex] !== '') {
+        const costStr = String(row[costIndex]).trim().replace(/[$,\s]/g, '')
+        const parsed = parseFloat(costStr)
+        if (!isNaN(parsed) && parsed >= 0) {
+          unitCost = parsed
+        }
+      }
+
+      const productName = nameIndex >= 0 && row[nameIndex] !== undefined && row[nameIndex] !== null
+        ? String(row[nameIndex]).trim()
+        : undefined
 
       items.push({
         sku,
         quantity: qty,
-        unitCost: costIndex >= 0 ? parseFloat(String(row[costIndex] || '0')) || undefined : undefined,
-        productName: nameIndex >= 0 ? String(row[nameIndex] || '').trim() : undefined,
+        unitCost,
+        productName,
       })
     })
+
+    if (items.length === 0) {
+      alert('No valid items found. Please check your file and column mappings.')
+      return
+    }
 
     setImportedItems(items)
     setWarnings(warningsList)
@@ -226,8 +383,17 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
         {/* Step 2: Map Columns */}
         {step === 2 && (
           <>
+            <div className="bg-slate-800/50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-slate-400">
+                <strong className="text-slate-300">File:</strong> {file?.name} ({rawData.length} rows found)
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                Columns detected: {headers.length}. Auto-mapping applied where possible.
+              </p>
+            </div>
+
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
                     SKU <span className="text-red-400">*</span>
@@ -239,9 +405,14 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                   >
                     <option value="">Select column...</option>
                     {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
+                      <option key={index} value={header}>
+                        {header || `Column ${index + 1}`}
+                      </option>
                     ))}
                   </select>
+                  {columnMapping.sku && (
+                    <p className="text-xs text-slate-500 mt-1">Mapped to: {columnMapping.sku}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -254,13 +425,20 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                   >
                     <option value="">Select column...</option>
                     {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
+                      <option key={index} value={header}>
+                        {header || `Column ${index + 1}`}
+                      </option>
                     ))}
                   </select>
+                  {columnMapping.quantity && (
+                    <p className="text-xs text-slate-500 mt-1">Mapped to: {columnMapping.quantity}</p>
+                  )}
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Unit Cost
+                    Unit Cost (optional)
                   </label>
                   <select
                     value={columnMapping.unitCost || ''}
@@ -269,25 +447,50 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                   >
                     <option value="">Select column...</option>
                     {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
+                      <option key={index} value={header}>
+                        {header || `Column ${index + 1}`}
+                      </option>
                     ))}
                   </select>
+                  {columnMapping.unitCost && (
+                    <p className="text-xs text-slate-500 mt-1">Mapped to: {columnMapping.unitCost}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Product Name (optional)
+                  </label>
+                  <select
+                    value={columnMapping.productName || ''}
+                    onChange={(e) => handleMappingChange('productName', e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option value="">Select column...</option>
+                    {headers.map((header, index) => (
+                      <option key={index} value={header}>
+                        {header || `Column ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  {columnMapping.productName && (
+                    <p className="text-xs text-slate-500 mt-1">Mapped to: {columnMapping.productName}</p>
+                  )}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Product Name
-                </label>
-                <select
-                  value={columnMapping.productName || ''}
-                  onChange={(e) => handleMappingChange('productName', e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  <option value="">Select column...</option>
-                  {headers.map((header, index) => (
-                    <option key={index} value={header}>{header}</option>
-                  ))}
-                </select>
+            </div>
+
+            {/* Show all available columns */}
+            <div className="mt-4">
+              <p className="text-sm font-medium text-slate-300 mb-2">Available columns in file:</p>
+              <div className="flex flex-wrap gap-2">
+                {headers.map((header, index) => (
+                  <span
+                    key={index}
+                    className="px-2 py-1 text-xs bg-slate-700 text-slate-300 rounded"
+                  >
+                    {header || `Column ${index + 1}`}
+                  </span>
+                ))}
               </div>
             </div>
 
