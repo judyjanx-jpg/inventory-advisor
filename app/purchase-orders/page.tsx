@@ -851,10 +851,6 @@ export default function PurchaseOrdersPage() {
                           </div>
                         </div>
 
-                        {/* Status Display */}
-                        <div className="mb-4" onClick={(e) => e.stopPropagation()}>
-                          <StatusButton status={po.status} poId={po.id} />
-                        </div>
 
                         {/* Footer Row */}
                         <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">

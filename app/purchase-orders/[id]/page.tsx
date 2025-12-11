@@ -498,27 +498,6 @@ export default function PurchaseOrderDetailPage() {
           </div>
         </div>
 
-        {/* Status Display */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Status:</span>
-                <StatusButton status={po.status} poId={po.id} />
-              </div>
-              {po.createdDate && (
-                <div className="text-sm text-gray-600">
-                  Created: {new Date(po.createdDate).toLocaleDateString()}
-                </div>
-              )}
-              {po.expectedArrivalDate && (
-                <div className="text-sm text-gray-600">
-                  Expected: {new Date(po.expectedArrivalDate).toLocaleDateString()}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
 
         {/* PO Info Grid */}
         <Card>
