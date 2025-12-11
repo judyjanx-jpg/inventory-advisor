@@ -85,7 +85,9 @@ export async function GET(request: NextRequest) {
     const periodsToFetch = periodPresets[preset] || periodPresets.default
 
     // Build period data for each requested period
-    const periodPromises = periodsToFetch.map(async (period) => {
+    // Process sequentially to avoid PostgreSQL shared memory issues
+    const periodsData = []
+    for (const period of periodsToFetch) {
       const range = getDateRangeForPeriod(period)
 
       // Special handling for forecast - it's based on MTD extrapolated
@@ -95,7 +97,7 @@ export async function GET(request: NextRequest) {
         const dayOfMonth = currentPST.getDate()
         const forecastMultiplier = daysInMonth / dayOfMonth
 
-        return {
+        periodsData.push({
           period: 'forecast',
           dateRange: `${format(monthStartPST, 'd')}-${format(endOfMonth(currentPST), 'd MMMM yyyy')}`,
           sales: mtdData.sales * forecastMultiplier,
@@ -114,18 +116,16 @@ export async function GET(request: NextRequest) {
           cogs: mtdData.cogs * forecastMultiplier,
           feeEstimationRate: mtdData.feeEstimationRate,
           debug: mtdData.debug,
-        }
+        })
+      } else {
+        const data = await getPeriodData(range.start, range.end, includeDebug)
+        periodsData.push({
+          period,
+          dateRange: range.label,
+          ...data,
+        })
       }
-
-      const data = await getPeriodData(range.start, range.end, includeDebug)
-      return {
-        period,
-        dateRange: range.label,
-        ...data,
-      }
-    })
-
-    const periodsData = await Promise.all(periodPromises)
+    }
 
     // Build the final periods array with metrics
     const periods: PeriodSummary[] = periodsData.map((periodData, index) => {
