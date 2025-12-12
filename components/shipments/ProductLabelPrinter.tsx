@@ -316,7 +316,7 @@ export default function ProductLabelPrinter({
             height: ${heightIn}in;
             display: flex;
             flex-direction: row;
-            overflow: hidden;
+            overflow: visible;
             background: #fff;
             page-break-after: always;
             page-break-inside: avoid;
@@ -437,36 +437,48 @@ export default function ProductLabelPrinter({
             display: block;
           }
           
-          .fnsku-text {
+          .fnsku-text-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            flex: 1;
+            width: 100%;
+            overflow: visible;
+            line-height: 1.15;
+          }
+
+          .fnsku-text-line {
+            padding: 1px 0;
+            width: 100%;
+            text-align: center;
+          }
+
+          .fnsku-code {
             font-size: 6pt;
             font-weight: bold;
             color: #000;
-            margin-top: 0.005in;
-            margin-bottom: 0.02in;
             letter-spacing: 0.15px;
             word-break: break-word;
-            text-align: center;
           }
-          
-          .product-name {
+
+          .fnsku-title {
             font-size: 4.5pt;
             color: #333;
-            text-align: center;
-            max-width: 100%;
-            line-height: 1.1;
-            margin-top: 0.01in;
+            line-height: 1.15;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
             white-space: normal;
+            margin-top: 0.01in;
           }
-          
-          .condition {
+
+          .fnsku-condition {
             font-size: 6pt;
             font-weight: bold;
             color: #000;
-            margin-top: 0.02in;
+            margin-top: 0.015in;
           }
           
           /* ========== TP ONLY LABEL (1x1) ========== */
@@ -546,9 +558,11 @@ export default function ProductLabelPrinter({
                 <div class="fnsku-section">
                   ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                   <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
-                  <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                  <div class="product-name">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
-                  <div class="condition">New</div>
+                  <div class="fnsku-text-wrapper">
+                    <div class="fnsku-text-line fnsku-code">${item.fnsku || item.masterSku}</div>
+                    <div class="fnsku-text-line fnsku-title">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
+                    <div class="fnsku-text-line fnsku-condition">New</div>
+                  </div>
                 </div>
               </div>
             `
@@ -560,9 +574,11 @@ export default function ProductLabelPrinter({
               <div class="fnsku-section" style="width: 100%;">
                 ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                 <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
-                <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                <div class="product-name">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
-                <div class="condition">New</div>
+                <div class="fnsku-text-wrapper">
+                  <div class="fnsku-text-line fnsku-code">${item.fnsku || item.masterSku}</div>
+                  <div class="fnsku-text-line fnsku-title">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
+                  <div class="fnsku-text-line fnsku-condition">New</div>
+                </div>
               </div>
             </div>
           `
