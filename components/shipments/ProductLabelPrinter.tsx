@@ -437,48 +437,42 @@ export default function ProductLabelPrinter({
             display: block;
           }
           
-          .fnsku-text-wrapper {
+          .fnsku-block {
             display: flex;
             flex-direction: column;
+            justify-content: center;
             align-items: center;
-            justify-content: flex-start;
-            flex: 1;
+            height: 50px;
             width: 100%;
             overflow: visible;
-            line-height: 1.15;
           }
 
-          .fnsku-text-line {
-            padding: 1px 0;
+          .fnsku-line {
+            line-height: 1.2;
+            padding: 2px 0;
             width: 100%;
             text-align: center;
           }
 
-          .fnsku-code {
+          .fnsku-line.code {
             font-size: 6pt;
             font-weight: bold;
             color: #000;
             letter-spacing: 0.15px;
-            word-break: break-word;
           }
 
-          .fnsku-title {
-            font-size: 4.5pt;
+          .fnsku-line.title {
+            font-size: 5pt;
             color: #333;
-            line-height: 1.15;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
+            white-space: nowrap;
             overflow: hidden;
-            white-space: normal;
-            margin-top: 0.01in;
+            text-overflow: ellipsis;
           }
 
-          .fnsku-condition {
+          .fnsku-line.condition {
             font-size: 6pt;
             font-weight: bold;
             color: #000;
-            margin-top: 0.015in;
           }
           
           /* ========== TP ONLY LABEL (1x1) ========== */
@@ -558,10 +552,10 @@ export default function ProductLabelPrinter({
                 <div class="fnsku-section">
                   ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                   <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
-                  <div class="fnsku-text-wrapper">
-                    <div class="fnsku-text-line fnsku-code">${item.fnsku || item.masterSku}</div>
-                    <div class="fnsku-text-line fnsku-title">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
-                    <div class="fnsku-text-line fnsku-condition">New</div>
+                  <div class="fnsku-block">
+                    <div class="fnsku-line code">${item.fnsku || item.masterSku}</div>
+                    <div class="fnsku-line title">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
+                    <div class="fnsku-line condition">New</div>
                   </div>
                 </div>
               </div>
@@ -574,10 +568,10 @@ export default function ProductLabelPrinter({
               <div class="fnsku-section" style="width: 100%;">
                 ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                 <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
-                <div class="fnsku-text-wrapper">
-                  <div class="fnsku-text-line fnsku-code">${item.fnsku || item.masterSku}</div>
-                  <div class="fnsku-text-line fnsku-title">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
-                  <div class="fnsku-text-line fnsku-condition">New</div>
+                <div class="fnsku-block">
+                  <div class="fnsku-line code">${item.fnsku || item.masterSku}</div>
+                  <div class="fnsku-line title">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
+                  <div class="fnsku-line condition">New</div>
                 </div>
               </div>
             </div>
