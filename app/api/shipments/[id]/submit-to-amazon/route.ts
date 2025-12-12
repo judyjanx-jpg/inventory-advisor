@@ -159,23 +159,39 @@ export async function POST(
       ? MARKETPLACES.UK
       : MARKETPLACES.US
 
-    // Build source address from warehouse
+    // Validate warehouse has complete address for Amazon
     const warehouse = shipment.fromLocation
+    const missingFields: string[] = []
+    if (!warehouse.address) missingFields.push('address')
+    if (!warehouse.city) missingFields.push('city')
+    if (!warehouse.state) missingFields.push('state')
+    if (!warehouse.zipCode) missingFields.push('zip code')
+    if (!warehouse.contactPhone) missingFields.push('contact phone')
+
+    if (missingFields.length > 0) {
+      return NextResponse.json({
+        error: `Warehouse "${warehouse.name}" is missing required address fields: ${missingFields.join(', ')}`,
+        hint: 'Please update the warehouse address in Settings > Warehouses before submitting to Amazon.',
+        missingFields,
+      }, { status: 400 })
+    }
+
+    // Build source address from warehouse
     const sourceAddress: SourceAddress = {
       name: warehouse.contactName || warehouse.name,
       companyName: warehouse.name,
-      addressLine1: warehouse.address || '',
-      city: warehouse.city || '',
-      stateOrProvinceCode: warehouse.state || '',
+      addressLine1: warehouse.address!,
+      city: warehouse.city!,
+      stateOrProvinceCode: warehouse.state!,
       countryCode: warehouse.country || 'US',
-      postalCode: warehouse.zipCode || '',
+      postalCode: warehouse.zipCode!,
     }
 
     // Contact info from warehouse
     const contactInfo: ContactInformation = {
       name: warehouse.contactName || undefined,
-      email: warehouse.contactEmail || 'shipping@example.com',
-      phoneNumber: warehouse.contactPhone || '0000000000',
+      email: warehouse.contactEmail || 'noreply@example.com',
+      phoneNumber: warehouse.contactPhone!,
     }
 
     let result: any = { shipmentId: id }
