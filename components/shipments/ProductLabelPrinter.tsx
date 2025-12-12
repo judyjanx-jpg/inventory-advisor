@@ -433,7 +433,7 @@ export default function ProductLabelPrinter({
           .barcode-container svg {
             width: auto;
             max-width: 100%;
-            height: 0.28in;
+            height: 0.24in;
             display: block;
           }
           
@@ -449,22 +449,24 @@ export default function ProductLabelPrinter({
           }
           
           .product-name {
-            font-size: 5pt;
+            font-size: 4.5pt;
             color: #333;
             text-align: center;
             max-width: 100%;
             line-height: 1.1;
-            margin-top: 0.005in;
-            white-space: nowrap;
+            margin-top: 0.01in;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
           }
           
           .condition {
             font-size: 6pt;
             font-weight: bold;
             color: #000;
-            margin-top: auto;
+            margin-top: 0.02in;
           }
           
           /* ========== TP ONLY LABEL (1x1) ========== */
@@ -572,7 +574,7 @@ export default function ProductLabelPrinter({
             JsBarcode("#barcode-${i}", "${barcodeValue}", {
               format: "CODE128",
               width: 1.0,
-              height: 26,
+              height: 22,
               displayValue: false,
               margin: 0,
               background: "#ffffff",
