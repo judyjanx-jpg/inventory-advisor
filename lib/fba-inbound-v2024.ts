@@ -115,7 +115,8 @@ export interface DeliveryWindowOption {
 export interface ShipmentSplit {
   shipmentId: string
   shipmentConfirmationId?: string
-  status?: string // WORKING, READY_TO_SHIP, SHIPPED, IN_TRANSIT, DELIVERED, CHECKED_IN, RECEIVING, CLOSED, CANCELLED
+  /** Amazon shipment status: WORKING, READY_TO_SHIP, SHIPPED, IN_TRANSIT, DELIVERED, CHECKED_IN, RECEIVING, CLOSED, CANCELLED */
+  status?: string
   trackingId?: string
   destination?: {
     address: {
