@@ -35,6 +35,7 @@ import ImportModal from '@/components/purchase-orders/ImportModal'
 import ExportDropdown from '@/components/purchase-orders/ExportDropdown'
 import AdditionalCostsSection from '@/components/purchase-orders/AdditionalCostsSection'
 import EmailComposerModal from '@/components/purchase-orders/EmailComposerModal'
+import ProgressTimeline from '@/components/purchase-orders/ProgressTimeline'
 
 interface PurchaseOrderItem {
   id: number
@@ -498,6 +499,21 @@ export default function PurchaseOrderDetailPage() {
           </div>
         </div>
 
+        {/* Progress Timeline */}
+        <Card>
+          <CardContent className="py-6">
+            <ProgressTimeline
+              status={po.status}
+              createdDate={po.createdDate}
+              orderDate={po.orderDate}
+              confirmedDate={po.confirmedDate}
+              shippedDate={po.actualShipDate}
+              receivedDate={po.actualArrivalDate}
+              expectedDate={po.expectedArrivalDate}
+              compact={false}
+            />
+          </CardContent>
+        </Card>
 
         {/* PO Info Grid */}
         <Card>
