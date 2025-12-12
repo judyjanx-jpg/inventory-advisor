@@ -440,16 +440,16 @@ export default function ProductLabelPrinter({
           .fnsku-block {
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
-            height: 50px;
+            flex: 1;
             width: 100%;
             overflow: visible;
           }
 
           .fnsku-line {
             line-height: 1.2;
-            padding: 2px 0;
+            padding: 1px 0;
             width: 100%;
             text-align: center;
           }
@@ -462,17 +462,19 @@ export default function ProductLabelPrinter({
           }
 
           .fnsku-line.title {
-            font-size: 5pt;
+            font-size: 4.5pt;
             color: #333;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            max-width: 100%;
           }
 
           .fnsku-line.condition {
             font-size: 6pt;
             font-weight: bold;
             color: #000;
+            margin-top: auto;
           }
           
           /* ========== TP ONLY LABEL (1x1) ========== */
