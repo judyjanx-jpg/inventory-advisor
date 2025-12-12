@@ -162,17 +162,24 @@ export async function POST(
     // Validate warehouse has complete address for Amazon
     const warehouse = shipment.fromLocation
     const missingFields: string[] = []
-    if (!warehouse.address) missingFields.push('address')
-    if (!warehouse.city) missingFields.push('city')
-    if (!warehouse.state) missingFields.push('state')
-    if (!warehouse.zipCode) missingFields.push('zip code')
-    if (!warehouse.contactPhone) missingFields.push('contact phone')
+    if (!warehouse.address?.trim()) missingFields.push('address')
+    if (!warehouse.city?.trim()) missingFields.push('city')
+    if (!warehouse.state?.trim()) missingFields.push('state')
+    if (!warehouse.zipCode?.trim()) missingFields.push('zip code')
+    if (!warehouse.contactPhone?.trim()) missingFields.push('contact phone')
 
     if (missingFields.length > 0) {
       return NextResponse.json({
         error: `Warehouse "${warehouse.name}" is missing required address fields: ${missingFields.join(', ')}`,
         hint: 'Please update the warehouse address in Settings > Warehouses before submitting to Amazon.',
         missingFields,
+        warehouseData: {
+          address: warehouse.address || '(empty)',
+          city: warehouse.city || '(empty)',
+          state: warehouse.state || '(empty)',
+          zipCode: warehouse.zipCode || '(empty)',
+          contactPhone: warehouse.contactPhone || '(empty)',
+        }
       }, { status: 400 })
     }
 
