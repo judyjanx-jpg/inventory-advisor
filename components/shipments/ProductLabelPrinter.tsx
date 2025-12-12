@@ -449,7 +449,7 @@ export default function ProductLabelPrinter({
           }
 
           .fnsku-line {
-            line-height: 1.4;
+            line-height: 1.6;
             padding: 1px 0;
             width: 100%;
             text-align: center;
