@@ -243,6 +243,8 @@ export default function ShipmentDetailPage() {
   }
 
   // Submit to Amazon (before shipping)
+  const [submittingToAmazon, setSubmittingToAmazon] = useState(false)
+
   const submitToAmazon = async () => {
     if (!shipment) return
 
@@ -267,7 +269,7 @@ export default function ShipmentDetailPage() {
       return
     }
 
-    const allBoxesComplete = shipment.boxes.every(box => 
+    const allBoxesComplete = shipment.boxes.every(box =>
       box.lengthInches && box.widthInches && box.heightInches && box.weightLbs
     )
 
@@ -276,29 +278,33 @@ export default function ShipmentDetailPage() {
       return
     }
 
-    if (!confirm('Submit this shipment to Amazon? After submission, you will receive box labels from Amazon.')) {
+    if (!confirm('Submit this shipment to Amazon? This will create an inbound plan and generate shipping labels.')) {
       return
     }
 
+    setSubmittingToAmazon(true)
+
     try {
-      // For now, we just update the status to 'submitted'
-      // In the future, this would call Amazon's API
-      const res = await fetch(`/api/shipments/${shipmentId}`, {
-        method: 'PUT',
+      // Call the Amazon submission API
+      const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'submitted' }),
       })
 
+      const data = await res.json()
+
       if (res.ok) {
-        alert('Shipment submitted to Amazon! You can now mark it as shipped once you receive box labels and ship the boxes.')
+        const splitCount = data.splits?.length || 0
+        alert(`Shipment submitted to Amazon!\n\nInbound Plan: ${data.shipment?.amazonInboundPlanId}\nFC Splits: ${splitCount}\n\nYou can now download labels and mark as shipped.`)
         await fetchShipment()
       } else {
-        const data = await res.json()
-        alert(`Error: ${data.error}`)
+        alert(`Error submitting to Amazon:\n${data.error}\n\n${data.details || ''}`)
       }
     } catch (error) {
       console.error('Error submitting to Amazon:', error)
-      alert('Failed to submit to Amazon')
+      alert('Failed to submit to Amazon. Check console for details.')
+    } finally {
+      setSubmittingToAmazon(false)
     }
   }
 
@@ -565,9 +571,9 @@ export default function ShipmentDetailPage() {
                   {saving ? 'Saving...' : 'Save'}
                 </Button>
                 {shipment.status === 'draft' ? (
-                  <Button onClick={submitToAmazon}>
+                  <Button onClick={submitToAmazon} disabled={submittingToAmazon}>
                     <Package className="w-4 h-4 mr-2" />
-                    Submit to Amazon
+                    {submittingToAmazon ? 'Submitting...' : 'Submit to Amazon'}
                   </Button>
                 ) : shipment.status === 'submitted' ? (
                   <Button onClick={markAsShipped}>
@@ -763,9 +769,9 @@ export default function ShipmentDetailPage() {
                 {saving ? 'Saving...' : 'Save'}
               </Button>
               {shipment.status === 'draft' ? (
-                <Button onClick={submitToAmazon}>
+                <Button onClick={submitToAmazon} disabled={submittingToAmazon}>
                   <Package className="w-4 h-4 mr-2" />
-                  Submit to Amazon
+                  {submittingToAmazon ? 'Submitting...' : 'Submit to Amazon'}
                 </Button>
               ) : shipment.status === 'submitted' ? (
                 <Button onClick={markAsShipped}>
