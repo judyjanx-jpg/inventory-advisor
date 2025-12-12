@@ -342,16 +342,16 @@ export default function ProductLabelPrinter({
           }
           
           .tp-icon {
-            width: 16px;
-            height: 16px;
+            width: 12px;
+            height: 12px;
             flex-shrink: 0;
           }
-          
+
           .tp-header-text {
-            font-size: 6pt;
+            font-size: 5pt;
             font-weight: 500;
             color: #000;
-            line-height: 1.15;
+            line-height: 1.1;
           }
           
           .qr-container {
@@ -424,31 +424,30 @@ export default function ProductLabelPrinter({
           }
 
           .barcode-container svg {
-            width: 100%;
-            height: 0.38in;
+            width: auto;
+            max-width: 100%;
+            height: 0.32in;
             display: block;
           }
           
           .fnsku-text {
-            font-size: 9pt;
+            font-size: 7pt;
             font-weight: bold;
             color: #000;
             margin-top: 0.01in;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.2px;
           }
           
           .product-name {
-            font-size: 6pt;
+            font-size: 5pt;
             color: #333;
             text-align: center;
             max-width: 100%;
-            line-height: 1.2;
-            margin-top: 0.01in;
+            line-height: 1.1;
+            margin-top: 0.005in;
             overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            word-break: break-word;
+            white-space: nowrap;
+            text-overflow: ellipsis;
           }
           
           .condition {
@@ -536,13 +535,13 @@ export default function ProductLabelPrinter({
                   ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                   <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                   <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                  <div class="product-name">${item.productName.substring(0, 80)}</div>
+                  <div class="product-name">${item.productName.length > 35 ? item.productName.substring(0, 35) + '...' : item.productName}</div>
                   <div class="condition">New</div>
                 </div>
               </div>
             `
           }
-          
+
           // FNSKU only
           return `
             <div class="label">
@@ -550,7 +549,7 @@ export default function ProductLabelPrinter({
                 ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                 <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                 <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                <div class="product-name">${item.productName.substring(0, 80)}</div>
+                <div class="product-name">${item.productName.length > 35 ? item.productName.substring(0, 35) + '...' : item.productName}</div>
                 <div class="condition">New</div>
               </div>
             </div>
@@ -562,8 +561,8 @@ export default function ProductLabelPrinter({
             return `
             JsBarcode("#barcode-${i}", "${barcodeValue}", {
               format: "CODE128",
-              width: 2,
-              height: 38,
+              width: 1.3,
+              height: 32,
               displayValue: false,
               margin: 0,
               background: "#ffffff",
