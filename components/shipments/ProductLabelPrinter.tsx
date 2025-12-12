@@ -199,6 +199,11 @@ export default function ProductLabelPrinter({
     await generatePDF(html, item, labelType, quantity, width, height)
   }
 
+  // Helper to truncate SKU for vertical display
+  const formatVerticalSku = (sku: string, max = 10) => {
+    return sku.length > max ? sku.substring(0, max) + '…' : sku
+  }
+
   /**
    * Generate label HTML that matches the reference image:
    * - Blue/gray header on LEFT with Transparency icon
@@ -385,14 +390,17 @@ export default function ProductLabelPrinter({
           }
           
           .tp-code-vertical {
-            font-size: 7pt;
+            font-size: 5pt;
             font-weight: normal;
             color: #000;
-            letter-spacing: 0.5px;
-            white-space: nowrap;
+            letter-spacing: 0.2px;
+            white-space: normal;
+            word-break: break-all;
             transform: rotate(90deg);
-            margin-left: -0.15in;
-            margin-right: -0.15in;
+            margin: 0;
+            max-height: 0.8in;
+            line-height: 1.1;
+            text-align: center;
           }
           
           /* ========== FNSKU SECTION (RIGHT) ========== */
@@ -531,7 +539,7 @@ export default function ProductLabelPrinter({
                   </div>
                   <div class="qr-container">
                     ${qrImage ? `<div class="qr-code"><img src="${qrImage}" alt="QR Code" /></div>` : '<div class="qr-code"></div>'}
-                    <div class="tp-code-vertical">${item.masterSku}</div>
+                    <div class="tp-code-vertical">${formatVerticalSku(item.masterSku)}</div>
                   </div>
                 </div>
                 <div class="fnsku-section">
