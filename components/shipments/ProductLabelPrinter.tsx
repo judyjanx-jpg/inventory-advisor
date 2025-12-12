@@ -436,6 +436,7 @@ export default function ProductLabelPrinter({
             color: #000;
             margin-top: 0.01in;
             letter-spacing: 0.2px;
+            word-break: break-word;
           }
           
           .product-name {
@@ -445,9 +446,11 @@ export default function ProductLabelPrinter({
             max-width: 100%;
             line-height: 1.1;
             margin-top: 0.005in;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            white-space: nowrap;
-            text-overflow: ellipsis;
+            white-space: normal;
           }
           
           .condition {
@@ -535,7 +538,7 @@ export default function ProductLabelPrinter({
                   ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                   <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                   <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                  <div class="product-name">${item.productName.length > 35 ? item.productName.substring(0, 35) + '...' : item.productName}</div>
+                  <div class="product-name">${item.productName}</div>
                   <div class="condition">New</div>
                 </div>
               </div>
@@ -549,7 +552,7 @@ export default function ProductLabelPrinter({
                 ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                 <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                 <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                <div class="product-name">${item.productName.length > 35 ? item.productName.substring(0, 35) + '...' : item.productName}</div>
+                <div class="product-name">${item.productName}</div>
                 <div class="condition">New</div>
               </div>
             </div>
@@ -561,7 +564,7 @@ export default function ProductLabelPrinter({
             return `
             JsBarcode("#barcode-${i}", "${barcodeValue}", {
               format: "CODE128",
-              width: 1.3,
+              width: 1.0,
               height: 32,
               displayValue: false,
               margin: 0,
