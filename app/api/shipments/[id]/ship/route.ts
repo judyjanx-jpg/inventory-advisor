@@ -4,6 +4,12 @@ import { prisma } from '@/lib/prisma'
 /**
  * POST /api/shipments/:id/ship
  * Mark shipment as shipped and decrement inventory
+ *
+ * Body:
+ * - trackingNumber: Optional tracking number (for non-Amazon shipments)
+ * - carrier: Optional carrier name
+ * - skipAmazonValidation: boolean - Skip validation that shipment was submitted to Amazon
+ * - splitTrackingNumbers: Array of { amazonShipmentId, trackingNumber } for per-split tracking
  */
 export async function POST(
   request: NextRequest,
@@ -16,9 +22,14 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { trackingNumber, carrier } = body
+    const {
+      trackingNumber,
+      carrier,
+      skipAmazonValidation = false,
+      splitTrackingNumbers = [],
+    } = body
 
-    // Get the shipment with items and boxes
+    // Get the shipment with items, boxes, and Amazon splits
     const shipment = await prisma.shipment.findUnique({
       where: { id },
       include: {
@@ -28,6 +39,7 @@ export async function POST(
             items: true,
           },
         },
+        amazonSplits: true,
       },
     })
 
@@ -37,6 +49,19 @@ export async function POST(
 
     if (shipment.status === 'shipped') {
       return NextResponse.json({ error: 'Shipment already shipped' }, { status: 400 })
+    }
+
+    // Validate Amazon submission if shipment has an inbound plan
+    if (shipment.amazonInboundPlanId && !skipAmazonValidation) {
+      const validSteps = ['labels_ready', 'transport_confirmed']
+      if (!validSteps.includes(shipment.amazonWorkflowStep || '')) {
+        return NextResponse.json({
+          error: 'Shipment must complete Amazon submission workflow before shipping',
+          currentStep: shipment.amazonWorkflowStep,
+          requiredSteps: validSteps,
+          hint: 'Use skipAmazonValidation: true to override (not recommended)',
+        }, { status: 400 })
+      }
     }
 
     // Validate all items are assigned to boxes
@@ -113,6 +138,25 @@ export async function POST(
       }
     }
 
+    // Update Amazon shipment splits if they exist
+    if (shipment.amazonSplits.length > 0) {
+      for (const split of shipment.amazonSplits) {
+        // Find tracking number for this split
+        const splitTracking = splitTrackingNumbers.find(
+          (st: any) => st.amazonShipmentId === split.amazonShipmentId
+        )
+
+        await prisma.amazonShipmentSplit.update({
+          where: { id: split.id },
+          data: {
+            status: 'shipped',
+            trackingNumber: splitTracking?.trackingNumber || trackingNumber || split.trackingNumber,
+            carrier: carrier || split.carrier,
+          },
+        })
+      }
+    }
+
     // Update shipment status
     const updatedShipment = await prisma.shipment.update({
       where: { id },
@@ -121,6 +165,7 @@ export async function POST(
         shippedAt: new Date(),
         carrier: carrier || null,
         trackingNumber: trackingNumber || null,
+        amazonWorkflowStep: shipment.amazonInboundPlanId ? 'shipped' : shipment.amazonWorkflowStep,
       },
       include: {
         fromLocation: true,
@@ -131,6 +176,7 @@ export async function POST(
             items: true,
           },
         },
+        amazonSplits: true,
       },
     })
 
@@ -138,6 +184,13 @@ export async function POST(
       success: true,
       message: 'Shipment marked as shipped. Inventory has been decremented.',
       shipment: updatedShipment,
+      amazonSplits: updatedShipment.amazonSplits?.map(split => ({
+        amazonShipmentId: split.amazonShipmentId,
+        destinationFc: split.destinationFc,
+        status: split.status,
+        carrier: split.carrier,
+        trackingNumber: split.trackingNumber,
+      })),
     })
   } catch (error: any) {
     console.error('Error marking shipment as shipped:', error)

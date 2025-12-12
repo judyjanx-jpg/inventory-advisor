@@ -57,6 +57,10 @@ model Product {
   labelingRequired Boolean @default(false) @map("labeling_required")
   unitsPerCase     Int?    @map("units_per_case")
 
+  // FBA Inbound Settings (for Amazon SP-API v2024)
+  prepOwner  String @default("SELLER") @map("prep_owner") // AMAZON, SELLER, NONE
+  labelOwner String @default("SELLER") @map("label_owner") // AMAZON, SELLER, NONE
+
   // FBA Shipment Settings
   transparencyEnabled Boolean @default(false) @map("transparency_enabled")
   warehouseLocation   String? @map("warehouse_location") // Bin/Rack location for picking
@@ -796,11 +800,19 @@ model Shipment {
   // Optimal Placement
   optimalPlacementEnabled Boolean @default(true) @map("optimal_placement_enabled")
 
-  // Amazon Integration
+  // Amazon Integration - FBA Inbound v2024
   amazonShipmentId    String? @map("amazon_shipment_id")
   amazonInboundPlanId String? @map("amazon_inbound_plan_id")
   destinationFc       String? @map("destination_fc")
   destinationName     String? @map("destination_name")
+
+  // FBA v2024 Workflow State
+  amazonWorkflowStep        String? @map("amazon_workflow_step") // plan_created, packing_set, placement_confirmed, transport_confirmed, labels_ready
+  amazonPackingOptionId     String? @map("amazon_packing_option_id")
+  amazonPlacementOptionId   String? @map("amazon_placement_option_id")
+  amazonShipmentSplits      String? @map("amazon_shipment_splits") @db.Text // JSON array of {shipmentId, destinationFc, items}
+  amazonLastOperationId     String? @map("amazon_last_operation_id")
+  amazonWorkflowError       String? @map("amazon_workflow_error") @db.Text
 
   // Dates
   submittedAt DateTime? @map("submitted_at")
@@ -815,6 +827,7 @@ model Shipment {
   items             ShipmentItem[]
   boxes             ShipmentBox[]
   transparencyCodes ShipmentTransparencyCode[]
+  amazonSplits      AmazonShipmentSplit[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -860,7 +873,8 @@ model ShipmentBox {
   weightLbs    Decimal? @map("weight_lbs") @db.Decimal(6, 2)
 
   // Amazon
-  amazonBoxId String? @map("amazon_box_id")
+  amazonBoxId     String? @map("amazon_box_id")
+  amazonPackageId String? @map("amazon_package_id") // Package ID for label retrieval
 
   // Relations
   items ShipmentBoxItem[]
@@ -900,6 +914,43 @@ model ShipmentTransparencyCode {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("shipment_transparency_codes")
+}
+
+// Amazon Shipment Splits - tracks each FC destination from one inbound plan
+model AmazonShipmentSplit {
+  id         Int      @id @default(autoincrement())
+  shipmentId Int      @map("shipment_id")
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  // Amazon IDs
+  amazonShipmentId            String  @unique @map("amazon_shipment_id") // FBA123ABC format
+  amazonShipmentConfirmationId String? @map("amazon_shipment_confirmation_id")
+
+  // Destination
+  destinationFc   String? @map("destination_fc") // e.g., "PHX6"
+  destinationName String? @map("destination_name")
+  destinationAddress String? @map("destination_address") @db.Text // JSON
+
+  // Transport & Delivery
+  transportationOptionId String? @map("transportation_option_id")
+  deliveryWindowOptionId String? @map("delivery_window_option_id")
+  deliveryWindowStart    DateTime? @map("delivery_window_start")
+  deliveryWindowEnd      DateTime? @map("delivery_window_end")
+
+  // Carrier info (after transport confirmation)
+  carrier        String?
+  trackingNumber String? @map("tracking_number")
+
+  // Status
+  status String @default("pending") // pending, transport_confirmed, labels_ready, shipped, in_transit, receiving, received
+
+  // Items in this split (JSON array of {msku, quantity})
+  items String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("amazon_shipment_splits")
 }
 
 // Legacy FBA Shipment models (keep for backward compatibility)
