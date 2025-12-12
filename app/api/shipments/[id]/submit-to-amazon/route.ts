@@ -87,6 +87,19 @@ export async function POST(
       return NextResponse.json({ error: 'Shipment not found' }, { status: 404 })
     }
 
+    // Debug: Log what we got from the database
+    console.log(`[${id}] Shipment loaded:`, {
+      id: shipment.id,
+      status: shipment.status,
+      itemCount: shipment.items?.length || 0,
+      boxCount: shipment.boxes?.length || 0,
+      boxes: shipment.boxes?.map(b => ({
+        id: b.id,
+        boxNumber: b.boxNumber,
+        itemCount: b.items?.length || 0,
+      })),
+    })
+
     // Validate shipment is ready for submission
     if (!shipment.fromLocation) {
       return NextResponse.json(
@@ -102,9 +115,16 @@ export async function POST(
       )
     }
 
-    if (!shipment.boxes.length) {
+    if (!shipment.boxes || !shipment.boxes.length) {
       return NextResponse.json(
-        { error: 'Shipment must have at least one box with items' },
+        {
+          error: 'Shipment must have at least one box with items',
+          debug: {
+            shipmentId: id,
+            boxesLoaded: shipment.boxes,
+            itemsCount: shipment.items.length,
+          }
+        },
         { status: 400 }
       )
     }
