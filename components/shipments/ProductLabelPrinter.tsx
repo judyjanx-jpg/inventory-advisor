@@ -393,14 +393,13 @@ export default function ProductLabelPrinter({
             font-size: 5pt;
             font-weight: normal;
             color: #000;
-            letter-spacing: 0.2px;
-            white-space: normal;
-            word-break: break-all;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            word-break: normal;
             transform: rotate(90deg);
-            margin: 0;
-            max-height: 0.8in;
-            line-height: 1.1;
-            text-align: center;
+            margin-left: -0.12in;
+            margin-right: -0.12in;
+            line-height: 1;
           }
           
           /* ========== FNSKU SECTION (RIGHT) ========== */
@@ -412,7 +411,7 @@ export default function ProductLabelPrinter({
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding: 0.02in 0.03in 0.02in 0.03in;
+            padding: 0.02in 0.03in 0.03in 0.03in;
             overflow: visible;
           }
           
@@ -443,29 +442,29 @@ export default function ProductLabelPrinter({
             font-weight: bold;
             color: #000;
             margin-top: 0.005in;
+            margin-bottom: 0.02in;
             letter-spacing: 0.15px;
             word-break: break-word;
+            text-align: center;
           }
           
           .product-name {
-            font-size: 4.8pt;
+            font-size: 5pt;
             color: #333;
             text-align: center;
             max-width: 100%;
             line-height: 1.1;
-            margin-top: 0.01in;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
+            margin-top: 0.005in;
+            white-space: nowrap;
             overflow: hidden;
-            white-space: normal;
+            text-overflow: ellipsis;
           }
           
           .condition {
             font-size: 6pt;
             font-weight: bold;
             color: #000;
-            margin-top: 0.005in;
+            margin-top: auto;
           }
           
           /* ========== TP ONLY LABEL (1x1) ========== */
@@ -539,14 +538,14 @@ export default function ProductLabelPrinter({
                   </div>
                   <div class="qr-container">
                     ${qrImage ? `<div class="qr-code"><img src="${qrImage}" alt="QR Code" /></div>` : '<div class="qr-code"></div>'}
-                    <div class="tp-code-vertical">${formatVerticalSku(item.masterSku)}</div>
+                    <div class="tp-code-vertical">${item.masterSku}</div>
                   </div>
                 </div>
                 <div class="fnsku-section">
                   ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                   <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                   <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                  <div class="product-name">${item.productName}</div>
+                  <div class="product-name">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
                   <div class="condition">New</div>
                 </div>
               </div>
@@ -560,7 +559,7 @@ export default function ProductLabelPrinter({
                 ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                 <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                 <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                <div class="product-name">${item.productName}</div>
+                <div class="product-name">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
                 <div class="condition">New</div>
               </div>
             </div>
