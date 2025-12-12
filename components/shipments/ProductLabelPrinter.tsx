@@ -404,8 +404,8 @@ export default function ProductLabelPrinter({
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding: 0.03in 0.04in 0.02in 0.04in;
-            overflow: hidden;
+            padding: 0.02in 0.03in 0.02in 0.03in;
+            overflow: visible;
           }
           
           .brand-logo {
@@ -426,28 +426,28 @@ export default function ProductLabelPrinter({
           .barcode-container svg {
             width: auto;
             max-width: 100%;
-            height: 0.32in;
+            height: 0.28in;
             display: block;
           }
           
           .fnsku-text {
-            font-size: 7pt;
+            font-size: 6pt;
             font-weight: bold;
             color: #000;
-            margin-top: 0.01in;
-            letter-spacing: 0.2px;
+            margin-top: 0.005in;
+            letter-spacing: 0.15px;
             word-break: break-word;
           }
           
           .product-name {
-            font-size: 5pt;
+            font-size: 4.8pt;
             color: #333;
             text-align: center;
             max-width: 100%;
             line-height: 1.1;
-            margin-top: 0.005in;
+            margin-top: 0.01in;
             display: -webkit-box;
-            -webkit-line-clamp: 3;
+            -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
             white-space: normal;
@@ -565,7 +565,7 @@ export default function ProductLabelPrinter({
             JsBarcode("#barcode-${i}", "${barcodeValue}", {
               format: "CODE128",
               width: 1.0,
-              height: 32,
+              height: 26,
               displayValue: false,
               margin: 0,
               background: "#ffffff",
