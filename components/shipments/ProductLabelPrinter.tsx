@@ -234,7 +234,7 @@ export default function ProductLabelPrinter({
     const qrCodeImages: string[] = []
     if (isTpOnly || isCombo) {
       const qrOptions = {
-        width: 180, // Higher resolution
+        width: 300, // Higher resolution for sharp printing
         margin: 1,
         errorCorrectionLevel: 'M' as const,
         color: {
@@ -323,14 +323,15 @@ export default function ProductLabelPrinter({
           
           /* ========== TRANSPARENCY SECTION (LEFT) ========== */
           .tp-section {
-            width: ${isCombo ? '35%' : '100%'};
+            width: ${isCombo ? '38%' : '100%'};
             height: 100%;
             background: #ffffff;
             display: flex;
             flex-direction: column;
-            padding: 0.05in 0.04in;
+            padding: 0.04in 0.03in;
             position: relative;
             border-right: 1px dashed #999;
+            overflow: visible;
           }
           
           .tp-header {
@@ -362,21 +363,25 @@ export default function ProductLabelPrinter({
           }
           
           .qr-code {
-            width: 0.55in;
-            height: 0.55in;
+            width: 0.65in;
+            height: 0.65in;
+            min-width: 0.65in;
+            min-height: 0.65in;
             background: #fff;
             padding: 0;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-left: 0.02in;
+            flex-shrink: 0;
           }
-          
+
           .qr-code img {
             width: 100%;
             height: 100%;
             object-fit: contain;
             image-rendering: crisp-edges;
+            image-rendering: pixelated;
           }
           
           .tp-code-vertical {
@@ -392,14 +397,15 @@ export default function ProductLabelPrinter({
           
           /* ========== FNSKU SECTION (RIGHT) ========== */
           .fnsku-section {
-            width: ${isCombo ? '65%' : '100%'};
+            width: ${isCombo ? '62%' : '100%'};
             height: 100%;
             background: #fff;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding: 0.03in 0.05in 0.02in 0.05in;
+            padding: 0.03in 0.04in 0.02in 0.04in;
+            overflow: hidden;
           }
           
           .brand-logo {
@@ -414,11 +420,12 @@ export default function ProductLabelPrinter({
             display: flex;
             justify-content: center;
             margin: 0;
+            overflow: visible;
           }
-          
+
           .barcode-container svg {
-            max-width: 100%;
-            height: 0.28in;
+            width: 100%;
+            height: 0.38in;
             display: block;
           }
           
@@ -431,15 +438,17 @@ export default function ProductLabelPrinter({
           }
           
           .product-name {
-            font-size: 5pt;
+            font-size: 6pt;
             color: #333;
             text-align: center;
             max-width: 100%;
-            line-height: 1.15;
-            margin-top: 0.005in;
-            white-space: nowrap;
+            line-height: 1.2;
+            margin-top: 0.01in;
             overflow: hidden;
-            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            word-break: break-word;
           }
           
           .condition {
@@ -464,10 +473,12 @@ export default function ProductLabelPrinter({
           .tp-only-label .tp-header {
             margin-bottom: 0.03in;
           }
-          
+
           .tp-only-label .qr-code {
-            width: 0.7in;
-            height: 0.7in;
+            width: 0.75in;
+            height: 0.75in;
+            min-width: 0.75in;
+            min-height: 0.75in;
           }
         </style>
       </head>
@@ -525,7 +536,7 @@ export default function ProductLabelPrinter({
                   ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                   <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                   <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                  <div class="product-name">${item.productName.length > 50 ? item.productName.substring(0, 50) + '...' : item.productName}</div>
+                  <div class="product-name">${item.productName.substring(0, 80)}</div>
                   <div class="condition">New</div>
                 </div>
               </div>
@@ -539,7 +550,7 @@ export default function ProductLabelPrinter({
                 ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                 <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
                 <div class="fnsku-text">${item.fnsku || item.masterSku}</div>
-                <div class="product-name">${item.productName}</div>
+                <div class="product-name">${item.productName.substring(0, 80)}</div>
                 <div class="condition">New</div>
               </div>
             </div>
@@ -551,8 +562,8 @@ export default function ProductLabelPrinter({
             return `
             JsBarcode("#barcode-${i}", "${barcodeValue}", {
               format: "CODE128",
-              width: 1.5,
-              height: 29,
+              width: 2,
+              height: 38,
               displayValue: false,
               margin: 0,
               background: "#ffffff",

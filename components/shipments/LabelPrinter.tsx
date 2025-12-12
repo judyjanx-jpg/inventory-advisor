@@ -128,16 +128,21 @@ export default function LabelPrinter({
             border: 1px dashed #ccc;
           }
           .label svg {
+            width: 100%;
             max-width: 100%;
             height: auto;
           }
           .label-title {
             font-size: ${labelStyles.titleSize};
             text-align: center;
-            margin-top: 2px;
-            line-height: 1.1;
-            max-height: 2.2em;
+            margin-top: 3px;
+            line-height: 1.2;
+            max-height: 2.4em;
             overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            word-break: break-word;
           }
           .label-sku {
             font-size: ${labelStyles.skuSize};
@@ -159,7 +164,7 @@ export default function LabelPrinter({
           ${labelsToprint.map((label, i) => `
             <div class="label">
               <svg id="barcode-${i}"></svg>
-              <div class="label-title">${label.title.slice(0, 50)}${label.title.length > 50 ? '...' : ''}</div>
+              <div class="label-title">${label.title.slice(0, 80)}</div>
               <div class="label-sku">${label.sku}</div>
               <div class="label-condition">New</div>
             </div>
@@ -169,8 +174,8 @@ export default function LabelPrinter({
           ${labelsToprint.map((label, i) => `
             JsBarcode("#barcode-${i}", "${label.fnsku}", {
               format: "CODE128",
-              width: 1.5,
-              height: 30,
+              width: 2,
+              height: 40,
               displayValue: true,
               fontSize: 10,
               margin: 0
