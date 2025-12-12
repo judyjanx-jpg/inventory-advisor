@@ -285,6 +285,27 @@ export default function ShipmentDetailPage() {
     setSubmittingToAmazon(true)
 
     try {
+      // First, save the shipment to ensure all boxes are persisted
+      const saveRes = await fetch(`/api/shipments/${shipmentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boxes: shipment.boxes,
+          items: shipment.items.map(item => ({
+            id: item.id,
+            adjustedQty: item.adjustedQty,
+            requestedQty: item.requestedQty,
+            pickStatus: item.pickStatus,
+          })),
+        }),
+      })
+
+      if (!saveRes.ok) {
+        const saveData = await saveRes.json()
+        alert(`Failed to save shipment before submission: ${saveData.error}`)
+        return
+      }
+
       // Call the Amazon submission API
       const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon`, {
         method: 'POST',
@@ -298,7 +319,9 @@ export default function ShipmentDetailPage() {
         alert(`Shipment submitted to Amazon!\n\nInbound Plan: ${data.shipment?.amazonInboundPlanId}\nFC Splits: ${splitCount}\n\nYou can now download labels and mark as shipped.`)
         await fetchShipment()
       } else {
-        alert(`Error submitting to Amazon:\n${data.error}\n\n${data.details || ''}`)
+        console.error('Submit to Amazon error:', data)
+        const debugInfo = data.debug ? `\n\nDebug: ${JSON.stringify(data.debug, null, 2)}` : ''
+        alert(`Error submitting to Amazon:\n${data.error}\n\n${data.details || ''}${debugInfo}`)
       }
     } catch (error) {
       console.error('Error submitting to Amazon:', error)
