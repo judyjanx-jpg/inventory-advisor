@@ -411,7 +411,7 @@ export default function ProductLabelPrinter({
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding: 0.02in 0.03in 0.03in 0.03in;
+            padding: 0.02in 0.03in 0.02in 0.03in;
             overflow: visible;
           }
           
