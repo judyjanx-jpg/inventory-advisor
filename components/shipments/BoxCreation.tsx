@@ -299,7 +299,7 @@ export default function BoxCreation({
   const skuTotals = getSkuTotals()
   const totalAssigned = Object.values(skuTotals).reduce((sum, t) => sum + t.assigned, 0)
   const totalNeeded = Object.values(skuTotals).reduce((sum, t) => sum + t.needed, 0)
-  const totalWeight = boxes.reduce((sum, b) => sum + (b.weightLbs || 0), 0)
+  const totalWeight = boxes.reduce((sum, b) => sum + (Number(b.weightLbs) || 0), 0)
 
   return (
     <Card>
