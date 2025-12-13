@@ -58,8 +58,8 @@ model Product {
   unitsPerCase     Int?    @map("units_per_case")
 
   // FBA Inbound Settings (for Amazon SP-API v2024)
-  prepOwner  String @default("SELLER") @map("prep_owner") // AMAZON, SELLER, NONE
-  labelOwner String @default("SELLER") @map("label_owner") // AMAZON, SELLER, NONE
+  prepOwner  String @default("NONE") @map("prep_owner") // AMAZON, SELLER, NONE
+  labelOwner String @default("NONE") @map("label_owner") // AMAZON, SELLER, NONE
 
   // FBA Shipment Settings
   transparencyEnabled Boolean @default(false) @map("transparency_enabled")
