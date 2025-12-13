@@ -226,11 +226,12 @@ export async function POST(
         result.inboundPlanId = shipment.amazonInboundPlanId
       } else {
         // Build items list for Amazon
+        // Default to NONE for prepOwner/labelOwner - Amazon rejects SELLER for products that don't need prep
         const items: InboundItem[] = shipment.items.map(item => ({
           msku: item.masterSku,
           quantity: item.adjustedQty,
-          prepOwner: (item.product?.prepOwner as 'AMAZON' | 'SELLER' | 'NONE') || 'SELLER',
-          labelOwner: (item.product?.labelOwner as 'AMAZON' | 'SELLER' | 'NONE') || 'SELLER',
+          prepOwner: (item.product?.prepOwner as 'AMAZON' | 'SELLER' | 'NONE') || 'NONE',
+          labelOwner: (item.product?.labelOwner as 'AMAZON' | 'SELLER' | 'NONE') || 'NONE',
         }))
 
         console.log(`[${id}] Creating inbound plan with ${items.length} items...`)
