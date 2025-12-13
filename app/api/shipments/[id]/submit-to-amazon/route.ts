@@ -226,23 +226,58 @@ export async function POST(
         result.inboundPlanId = shipment.amazonInboundPlanId
       } else {
         // Build items list for Amazon
-        // Default to NONE for prepOwner/labelOwner - Amazon rejects SELLER for products that don't need prep
+        // ALWAYS use NONE - Amazon validates and rejects SELLER for products without prep requirements
+        // If a product needs prep, Amazon will tell us in the error response
         const items: InboundItem[] = shipment.items.map(item => ({
           msku: item.masterSku,
           quantity: item.adjustedQty,
-          prepOwner: (item.product?.prepOwner as 'AMAZON' | 'SELLER' | 'NONE') || 'NONE',
-          labelOwner: (item.product?.labelOwner as 'AMAZON' | 'SELLER' | 'NONE') || 'NONE',
+          prepOwner: 'NONE' as const,
+          labelOwner: 'NONE' as const,
         }))
 
         console.log(`[${id}] Creating inbound plan with ${items.length} items...`)
+        console.log(`[${id}] Items:`, JSON.stringify(items))
 
-        const planResult = await createInboundPlan(
-          marketplaceId,
-          sourceAddress,
-          items,
-          contactInfo,
-          `${shipment.internalId || `SHP-${id}`} - ${new Date().toISOString().split('T')[0]}`
-        )
+        let planResult: { operationId: string; inboundPlanId: string }
+
+        try {
+          planResult = await createInboundPlan(
+            marketplaceId,
+            sourceAddress,
+            items,
+            contactInfo,
+            `${shipment.internalId || `SHP-${id}`} - ${new Date().toISOString().split('T')[0]}`
+          )
+        } catch (apiError: any) {
+          // Parse Amazon API error for helpful info
+          const errorMessage = apiError.message || 'Unknown API error'
+
+          // Extract "Accepted values: [...]" from error message
+          const acceptedMatch = errorMessage.match(/Accepted values:\s*\[([^\]]+)\]/i)
+          const acceptedValues = acceptedMatch ? acceptedMatch[1].split(',').map((v: string) => v.trim()) : null
+
+          // Extract SKU from error message
+          const skuMatch = errorMessage.match(/ERROR:\s*(\S+)\s+does not require/i)
+          const problemSku = skuMatch ? skuMatch[1] : null
+
+          await prisma.shipment.update({
+            where: { id },
+            data: {
+              amazonWorkflowError: errorMessage,
+            },
+          })
+
+          return NextResponse.json({
+            error: 'Amazon rejected the inbound plan',
+            details: errorMessage,
+            problemSku,
+            acceptedValues,
+            hint: acceptedValues
+              ? `Set prepOwner/labelOwner to one of: ${acceptedValues.join(', ')}`
+              : 'Check the error details above',
+            items: items.map(i => ({ msku: i.msku, prepOwner: i.prepOwner, labelOwner: i.labelOwner })),
+          }, { status: 400 })
+        }
 
         // Wait for plan creation to complete
         const planStatus = await waitForOperation(
@@ -267,6 +302,7 @@ export async function POST(
             error: 'Failed to create inbound plan',
             details: errorMsg,
             operationId: planResult.operationId,
+            problems: planStatus.operationProblems,
           }, { status: 500 })
         }
 
