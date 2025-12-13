@@ -39,6 +39,7 @@ export interface SourceAddress {
   countryCode: string
   postalCode: string
   companyName?: string
+  phoneNumber?: string  // Required by Amazon
 }
 
 export interface ContactInformation {
