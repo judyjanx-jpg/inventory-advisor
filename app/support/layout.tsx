@@ -85,7 +85,7 @@ export default function SupportLayout({ children }: { children: ReactNode }) {
               <div>
                 <h3 className="text-white font-semibold mb-3">About {branding.brandName}</h3>
                 <p className="text-sm text-slate-400">Quality jewelry with lifetime warranty. We stand behind every piece we sell.</p>
-                {branding.supportEmail && <p className="text-sm text-slate-400 mt-2"><a href={mailto:${branding.supportEmail}} className="hover:text-emerald-400">{branding.supportEmail}</a></p>}
+                {branding.supportEmail && <p className="text-sm text-slate-400 mt-2"><a href={`mailto:${branding.supportEmail}`} className="hover:text-emerald-400">{branding.supportEmail}</a></p>}
               </div>
             </div>
             <div className="mt-8 pt-6 border-t border-slate-800/50 text-center text-xs text-slate-500">Copyright {new Date().getFullYear()} {branding.brandName}. All rights reserved.</div>
