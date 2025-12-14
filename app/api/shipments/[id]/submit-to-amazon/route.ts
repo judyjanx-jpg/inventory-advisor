@@ -376,7 +376,13 @@ export async function POST(
 
         // Use first packing option and get all packing groups
         const selectedPackingOption = packingOptions[0]
-        const packingGroups = selectedPackingOption.packingGroups || []
+        console.log(`[${id}] Packing option response:`, JSON.stringify(selectedPackingOption, null, 2))
+
+        // packingGroups might be array of strings or array of objects
+        const rawPackingGroups = selectedPackingOption.packingGroups || []
+        const packingGroups = rawPackingGroups.map((pg: any) =>
+          typeof pg === 'string' ? { packingGroupId: pg } : pg
+        )
         console.log(`[${id}] Using packing option ${selectedPackingOption.packingOptionId} with ${packingGroups.length} groups`)
 
         if (!packingGroups.length) {
