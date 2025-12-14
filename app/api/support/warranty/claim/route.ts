@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { sendWarrantyConfirmation } from '@/lib/email'
 
 // Generate a unique claim number
 function generateClaimNumber(): string {
@@ -192,7 +193,23 @@ export async function POST(request: NextRequest) {
       // Continue without label - user can generate it manually
     }
 
-    // TODO: Send email notification with return label
+    // Send confirmation email with return label (non-blocking)
+    if (customerEmail) {
+      // Get the label URL for email (either generated or claim status page)
+      const updatedClaim = await prisma.warrantyClaim.findUnique({
+        where: { claimNumber },
+        select: { returnLabelUrl: true }
+      })
+
+      sendWarrantyConfirmation({
+        to: customerEmail,
+        customerName: shippingAddress?.name || '',
+        claimNumber,
+        claimType,
+        productName: claim.productName || undefined,
+        returnLabelUrl: updatedClaim?.returnLabelUrl || undefined,
+      }).catch(err => console.error('[Warranty] Email failed:', err))
+    }
 
     return NextResponse.json({
       success: true,

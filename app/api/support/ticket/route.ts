@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { sendTicketConfirmation } from '@/lib/email'
 
 // Generate a unique ticket number
 function generateTicketNumber(): string {
@@ -69,8 +70,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Support] Created ticket ${ticketNumber} from ${email}`)
 
-    // TODO: Send confirmation email to customer
-    // TODO: Notify support team of new ticket
+    // Send confirmation email to customer (non-blocking)
+    sendTicketConfirmation({
+      to: email,
+      customerName: name || '',
+      ticketNumber,
+      subject,
+    }).catch(err => console.error('[Support] Email failed:', err))
 
     return NextResponse.json({
       success: true,
