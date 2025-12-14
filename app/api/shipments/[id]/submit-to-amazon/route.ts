@@ -4,6 +4,7 @@ import {
   createInboundPlan,
   generatePackingOptions,
   listPackingOptions,
+  listPackingGroupItems,
   confirmPackingOption,
   setPackingInformation,
   generatePlacementOptions,
@@ -378,9 +379,22 @@ export async function POST(
         const packingGroups = selectedPackingOption.packingGroups || []
         console.log(`[${id}] Using packing option ${selectedPackingOption.packingOptionId} with ${packingGroups.length} groups`)
 
-        // Step 2c: Set packing information BEFORE confirming
-        // Build boxes for each packing group
-        const boxes: BoxInput[] = shipment.boxes.map(box => ({
+        if (!packingGroups.length) {
+          return NextResponse.json({
+            error: 'No packing groups found in packing option',
+          }, { status: 500 })
+        }
+
+        // Step 2c: Get items for each packing group to know which boxes go where
+        const packingGroupItemsMap = new Map<string, Set<string>>()
+        for (const group of packingGroups) {
+          const { items } = await listPackingGroupItems(inboundPlanId, group.packingGroupId)
+          packingGroupItemsMap.set(group.packingGroupId, new Set(items.map(i => i.msku)))
+          console.log(`[${id}] Packing group ${group.packingGroupId} contains SKUs: ${items.map(i => i.msku).join(', ')}`)
+        }
+
+        // Step 2d: Build boxes and assign to correct packing groups
+        const allBoxes: BoxInput[] = shipment.boxes.map(box => ({
           weight: {
             unit: 'LB' as const,
             value: Number(box.weightLbs),
@@ -401,19 +415,36 @@ export async function POST(
           })),
         }))
 
-        // Create package groupings - use the first packing group for all boxes
-        if (!packingGroups.length) {
-          return NextResponse.json({
-            error: 'No packing groups found in packing option',
-          }, { status: 500 })
+        // Assign boxes to packing groups based on item SKUs
+        const packageGroupings: Array<{ packingGroupId: string; boxes: BoxInput[] }> = []
+
+        for (const group of packingGroups) {
+          const groupSkus = packingGroupItemsMap.get(group.packingGroupId) || new Set()
+
+          // Find boxes that contain items from this packing group
+          const groupBoxes = allBoxes.filter(box =>
+            box.items.some(item => groupSkus.has(item.msku))
+          )
+
+          if (groupBoxes.length > 0) {
+            packageGroupings.push({
+              packingGroupId: group.packingGroupId,
+              boxes: groupBoxes,
+            })
+            console.log(`[${id}] Assigned ${groupBoxes.length} boxes to packing group ${group.packingGroupId}`)
+          }
         }
 
-        const packageGroupings = [{
-          packingGroupId: packingGroups[0].packingGroupId,
-          boxes: boxes,
-        }]
+        // If no boxes assigned (shouldn't happen), use first group with all boxes
+        if (packageGroupings.length === 0) {
+          console.log(`[${id}] No boxes matched packing groups, assigning all to first group`)
+          packageGroupings.push({
+            packingGroupId: packingGroups[0].packingGroupId,
+            boxes: allBoxes,
+          })
+        }
 
-        console.log(`[${id}] Setting packing info with ${boxes.length} boxes...`)
+        console.log(`[${id}] Setting packing info with ${allBoxes.length} boxes across ${packageGroupings.length} groups...`)
 
         const packingResult = await setPackingInformation(inboundPlanId, {
           packageGroupings,
