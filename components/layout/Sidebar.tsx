@@ -23,6 +23,7 @@ import {
   ClipboardCheck,
   Sun,
   Moon,
+  Headphones,
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -39,6 +40,7 @@ const navigation = [
   { name: 'Profit', href: '/profit', icon: TrendingUp },
   { name: 'Audit', href: '/audit', icon: ClipboardCheck },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
+  { name: 'Customer Support', href: '/app/support', icon: Headphones },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
