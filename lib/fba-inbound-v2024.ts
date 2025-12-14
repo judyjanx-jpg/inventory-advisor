@@ -364,21 +364,6 @@ export async function getShipment(
 }
 
 /**
- * List all shipments in an inbound plan
- */
-export async function listShipments(
-  inboundPlanId: string
-): Promise<{ shipments: ShipmentSplit[] }> {
-  const client = await createSpApiClient()
-
-  const response = await callFbaInboundApi(client, 'listInboundPlanShipments', {
-    path: { inboundPlanId },
-  })
-
-  return { shipments: response.shipments || [] }
-}
-
-/**
  * Step 5a: Generate transportation options
  */
 export async function generateTransportationOptions(
