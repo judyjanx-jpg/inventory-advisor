@@ -226,13 +226,13 @@ export async function POST(
         result.inboundPlanId = shipment.amazonInboundPlanId
       } else {
         // Build items list for Amazon
-        // ALWAYS use NONE - Amazon validates and rejects SELLER for products without prep requirements
-        // If a product needs prep, Amazon will tell us in the error response
+        // prepOwner: NONE for products without prep requirements (most products)
+        // labelOwner: SELLER for products that need FNSKU labeling (most FBA products)
         const items: InboundItem[] = shipment.items.map(item => ({
           msku: item.masterSku,
           quantity: item.adjustedQty,
           prepOwner: 'NONE' as const,
-          labelOwner: 'NONE' as const,
+          labelOwner: 'SELLER' as const,  // Most FBA products require seller labeling (FNSKU)
         }))
 
         console.log(`[${id}] Creating inbound plan with ${items.length} items...`)

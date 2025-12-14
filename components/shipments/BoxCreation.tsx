@@ -93,6 +93,49 @@ export default function BoxCreation({
     }
   }, [])
 
+  // Sync dimensions from saved boxes when they load
+  useEffect(() => {
+    if (boxes.length > 0) {
+      setNumBoxes(boxes.length)
+
+      // Extract unique dimension sets from saved boxes
+      const dimensionMap = new Map<string, { dim: BoxDimension; boxes: number[] }>()
+
+      boxes.forEach(box => {
+        if (box.lengthInches && box.widthInches && box.heightInches) {
+          const key = `${box.lengthInches}-${box.widthInches}-${box.heightInches}`
+          if (dimensionMap.has(key)) {
+            dimensionMap.get(key)!.boxes.push(box.boxNumber)
+          } else {
+            dimensionMap.set(key, {
+              dim: {
+                id: box.boxNumber,
+                length: Number(box.lengthInches),
+                width: Number(box.widthInches),
+                height: Number(box.heightInches),
+                applyToBoxes: [box.boxNumber],
+              },
+              boxes: [box.boxNumber],
+            })
+          }
+        }
+      })
+
+      if (dimensionMap.size > 0) {
+        const newDimensions: BoxDimension[] = []
+        let id = 1
+        dimensionMap.forEach(({ dim, boxes: boxNums }) => {
+          newDimensions.push({
+            ...dim,
+            id: id++,
+            applyToBoxes: boxNums,
+          })
+        })
+        setDimensions(newDimensions)
+      }
+    }
+  }, []) // Only run once on mount
+
   // Auto-split on first load if enabled and items exist
   useEffect(() => {
     if (autoSplitEnabled && !hasAutoSplit && boxes.length > 0 && shipmentItems.length > 0) {
