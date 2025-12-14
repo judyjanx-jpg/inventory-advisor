@@ -70,9 +70,10 @@ export interface BoxInput {
 }
 
 export interface PackingInput {
-  packageGroupingInput: {
-    boxConfigs: BoxInput[]
-  }
+  packageGroupings: Array<{
+    packingGroupId: string
+    boxes: BoxInput[]
+  }>
 }
 
 export interface PlacementOption {
@@ -217,7 +218,53 @@ export async function createInboundPlan(
 }
 
 /**
- * Step 2: Set packing information (box contents)
+ * Step 2a: Generate packing options
+ */
+export async function generatePackingOptions(
+  inboundPlanId: string
+): Promise<{ operationId: string }> {
+  const client = await createSpApiClient()
+
+  const response = await callFbaInboundApi(client, 'generatePackingOptions', {
+    path: { inboundPlanId },
+  })
+
+  return { operationId: response.operationId }
+}
+
+/**
+ * Step 2b: List packing options to get packingGroupId
+ */
+export async function listPackingOptions(
+  inboundPlanId: string
+): Promise<{ packingOptions: Array<{ packingOptionId: string; packingGroups: Array<{ packingGroupId: string }> }> }> {
+  const client = await createSpApiClient()
+
+  const response = await callFbaInboundApi(client, 'listPackingOptions', {
+    path: { inboundPlanId },
+  })
+
+  return { packingOptions: response.packingOptions || [] }
+}
+
+/**
+ * Step 2c: Confirm packing option
+ */
+export async function confirmPackingOption(
+  inboundPlanId: string,
+  packingOptionId: string
+): Promise<{ operationId: string }> {
+  const client = await createSpApiClient()
+
+  const response = await callFbaInboundApi(client, 'confirmPackingOption', {
+    path: { inboundPlanId, packingOptionId },
+  })
+
+  return { operationId: response.operationId }
+}
+
+/**
+ * Step 2d: Set packing information (box contents)
  */
 export async function setPackingInformation(
   inboundPlanId: string,

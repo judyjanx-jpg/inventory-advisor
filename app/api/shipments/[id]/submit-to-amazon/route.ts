@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
   createInboundPlan,
+  generatePackingOptions,
+  listPackingOptions,
+  confirmPackingOption,
   setPackingInformation,
   generatePlacementOptions,
   listPlacementOptions,
@@ -338,53 +341,92 @@ export async function POST(
     }
 
     // ========================================
-    // STEP 2: Set Packing Information
+    // STEP 2: Packing Options & Information
     // ========================================
     if (step === 'all' || step === 'set_packing') {
       if (shipment.amazonWorkflowStep === 'packing_set' && step !== 'set_packing') {
         // Already done, skip
       } else {
-        // Group boxes by dimensions to create box configs
-        const boxConfigMap = new Map<string, BoxInput>()
+        // Step 2a: Generate packing options
+        console.log(`[${id}] Generating packing options...`)
+        const genPackingResult = await generatePackingOptions(inboundPlanId)
 
-        for (const box of shipment.boxes) {
-          const key = `${box.lengthInches}-${box.widthInches}-${box.heightInches}-${box.weightLbs}`
+        const genPackingStatus = await waitForOperation(
+          await createSpApiClient(),
+          genPackingResult.operationId
+        )
 
-          const boxItems = box.items.map(item => ({
-            msku: item.masterSku,
-            quantity: item.quantity,
-          }))
-
-          if (boxConfigMap.has(key)) {
-            // Same dimensions - increment quantity and merge items
-            const existing = boxConfigMap.get(key)!
-            existing.quantity += 1
-            // For simplicity, if boxes have same dimensions, assume same contents
-            // In reality, you'd need to handle different contents per box
-          } else {
-            boxConfigMap.set(key, {
-              weight: {
-                unit: 'LB',
-                value: Number(box.weightLbs),
-              },
-              dimensions: {
-                unitOfMeasurement: 'IN',
-                length: Number(box.lengthInches),
-                width: Number(box.widthInches),
-                height: Number(box.heightInches),
-              },
-              quantity: 1,
-              contentInformationSource: 'BOX_CONTENT_PROVIDED',
-              items: boxItems,
-            })
-          }
+        if (genPackingStatus.operationStatus === 'FAILED') {
+          return NextResponse.json({
+            error: 'Failed to generate packing options',
+            details: genPackingStatus.operationProblems,
+          }, { status: 500 })
         }
 
-        const boxConfigs = Array.from(boxConfigMap.values())
-        console.log(`[${id}] Setting packing info with ${boxConfigs.length} box configs...`)
+        // Step 2b: List packing options to get packingGroupId
+        const { packingOptions } = await listPackingOptions(inboundPlanId)
+        console.log(`[${id}] Found ${packingOptions.length} packing options`)
+
+        if (!packingOptions.length) {
+          return NextResponse.json({
+            error: 'No packing options available from Amazon',
+          }, { status: 500 })
+        }
+
+        // Use first packing option and get all packing groups
+        const selectedPackingOption = packingOptions[0]
+        const packingGroups = selectedPackingOption.packingGroups || []
+        console.log(`[${id}] Using packing option ${selectedPackingOption.packingOptionId} with ${packingGroups.length} groups`)
+
+        // Step 2c: Confirm packing option
+        const confirmPackingResult = await confirmPackingOption(
+          inboundPlanId,
+          selectedPackingOption.packingOptionId
+        )
+
+        const confirmPackingStatus = await waitForOperation(
+          await createSpApiClient(),
+          confirmPackingResult.operationId
+        )
+
+        if (confirmPackingStatus.operationStatus === 'FAILED') {
+          return NextResponse.json({
+            error: 'Failed to confirm packing option',
+            details: confirmPackingStatus.operationProblems,
+          }, { status: 500 })
+        }
+
+        // Step 2d: Set packing information for each packing group
+        // Build boxes for each packing group
+        const boxes: BoxInput[] = shipment.boxes.map(box => ({
+          weight: {
+            unit: 'LB' as const,
+            value: Number(box.weightLbs),
+          },
+          dimensions: {
+            unitOfMeasurement: 'IN' as const,
+            length: Number(box.lengthInches),
+            width: Number(box.widthInches),
+            height: Number(box.heightInches),
+          },
+          quantity: 1,
+          contentInformationSource: 'BOX_CONTENT_PROVIDED' as const,
+          items: box.items.map(item => ({
+            msku: item.masterSku,
+            quantity: item.quantity,
+          })),
+        }))
+
+        // Create package groupings for each packing group
+        const packageGroupings = packingGroups.map(group => ({
+          packingGroupId: group.packingGroupId,
+          boxes: boxes,  // All boxes go to each group for now
+        }))
+
+        console.log(`[${id}] Setting packing info with ${boxes.length} boxes across ${packageGroupings.length} groups...`)
 
         const packingResult = await setPackingInformation(inboundPlanId, {
-          packageGroupingInput: { boxConfigs },
+          packageGroupings,
         })
 
         // Wait for packing to complete
@@ -409,8 +451,18 @@ export async function POST(
           return NextResponse.json({
             error: 'Failed to set packing information',
             details: errorMsg,
+            problems: packingStatus.operationProblems,
           }, { status: 500 })
         }
+
+        await prisma.shipment.update({
+          where: { id },
+          data: {
+            amazonPackingOptionId: selectedPackingOption.packingOptionId,
+          },
+        })
+
+        console.log(`[${id}] Packing information set successfully`)
 
         await prisma.shipment.update({
           where: { id },
