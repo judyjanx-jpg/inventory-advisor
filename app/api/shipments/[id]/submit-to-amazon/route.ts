@@ -347,20 +347,32 @@ export async function POST(
       if (shipment.amazonWorkflowStep === 'packing_set' && step !== 'set_packing') {
         // Already done, skip
       } else {
-        // Step 2a: Generate packing options
-        console.log(`[${id}] Generating packing options...`)
-        const genPackingResult = await generatePackingOptions(inboundPlanId)
+        // Step 2a: Generate packing options (may already be done from previous attempt)
+        let packingAlreadyConfirmed = false
 
-        const genPackingStatus = await waitForOperation(
-          await createSpApiClient(),
-          genPackingResult.operationId
-        )
+        try {
+          console.log(`[${id}] Generating packing options...`)
+          const genPackingResult = await generatePackingOptions(inboundPlanId)
 
-        if (genPackingStatus.operationStatus === 'FAILED') {
-          return NextResponse.json({
-            error: 'Failed to generate packing options',
-            details: genPackingStatus.operationProblems,
-          }, { status: 500 })
+          const genPackingStatus = await waitForOperation(
+            await createSpApiClient(),
+            genPackingResult.operationId
+          )
+
+          if (genPackingStatus.operationStatus === 'FAILED') {
+            return NextResponse.json({
+              error: 'Failed to generate packing options',
+              details: genPackingStatus.operationProblems,
+            }, { status: 500 })
+          }
+        } catch (genError: any) {
+          // Check if packing is already confirmed from a previous attempt
+          if (genError.message?.includes('packing option is already confirmed')) {
+            console.log(`[${id}] Packing already confirmed from previous attempt, skipping generation`)
+            packingAlreadyConfirmed = true
+          } else {
+            throw genError
+          }
         }
 
         // Step 2b: List packing options to get packingGroupId
@@ -390,25 +402,29 @@ export async function POST(
           }, { status: 500 })
         }
 
-        // Step 2c: FIRST confirm packing option (required before accessing packing groups)
-        console.log(`[${id}] Confirming packing option...`)
-        const confirmPackingResult = await confirmPackingOption(
-          inboundPlanId,
-          selectedPackingOption.packingOptionId
-        )
+        // Step 2c: Confirm packing option (skip if already confirmed)
+        if (!packingAlreadyConfirmed) {
+          console.log(`[${id}] Confirming packing option...`)
+          const confirmPackingResult = await confirmPackingOption(
+            inboundPlanId,
+            selectedPackingOption.packingOptionId
+          )
 
-        const confirmPackingStatus = await waitForOperation(
-          await createSpApiClient(),
-          confirmPackingResult.operationId
-        )
+          const confirmPackingStatus = await waitForOperation(
+            await createSpApiClient(),
+            confirmPackingResult.operationId
+          )
 
-        if (confirmPackingStatus.operationStatus === 'FAILED') {
-          return NextResponse.json({
-            error: 'Failed to confirm packing option',
-            details: confirmPackingStatus.operationProblems,
-          }, { status: 500 })
+          if (confirmPackingStatus.operationStatus === 'FAILED') {
+            return NextResponse.json({
+              error: 'Failed to confirm packing option',
+              details: confirmPackingStatus.operationProblems,
+            }, { status: 500 })
+          }
+          console.log(`[${id}] Packing option confirmed`)
+        } else {
+          console.log(`[${id}] Packing already confirmed, skipping confirmation step`)
         }
-        console.log(`[${id}] Packing option confirmed`)
 
         // Step 2d: Get items for each packing group to know which boxes go where
         const packingGroupItemsMap = new Map<string, Set<string>>()
