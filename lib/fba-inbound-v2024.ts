@@ -250,6 +250,22 @@ export async function listPackingOptions(
 }
 
 /**
+ * Step 2b-2: List items in a packing group (to know which SKUs go in which group)
+ */
+export async function listPackingGroupItems(
+  inboundPlanId: string,
+  packingGroupId: string
+): Promise<{ items: Array<{ msku: string; quantity: number }> }> {
+  const client = await createSpApiClient()
+
+  const response = await callFbaInboundApi(client, 'listPackingGroupItems', {
+    path: { inboundPlanId, packingGroupId },
+  })
+
+  return { items: response.items || [] }
+}
+
+/**
  * Step 2c: Confirm packing option
  */
 export async function confirmPackingOption(
