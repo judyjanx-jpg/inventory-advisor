@@ -13,16 +13,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Search for replacement/return by ID
+    // Return model uses: returnId (unique), orderId, masterSku, disposition
     const returnRecord = await prisma.return.findFirst({
       where: replacementId
         ? {
             OR: [
               { id: parseInt(replacementId.replace(/\D/g, '')) || -1 },
-              { amazonReturnId: replacementId },
+              { returnId: replacementId },
             ]
           }
         : {
-            amazonOrderId: orderId
+            orderId: orderId
           },
       include: {
         product: {
@@ -35,18 +36,13 @@ export async function POST(request: NextRequest) {
     })
 
     if (!returnRecord) {
-      // Try to find in backorders as replacement
+      // Try to find in backorders as replacement (for PO-related backorders)
       const backorder = await prisma.backorder.findFirst({
-        where: orderId
-          ? { amazonOrderId: orderId }
-          : { id: parseInt(replacementId?.replace(/\D/g, '') || '0') || -1 },
-        include: {
-          product: {
-            select: {
-              title: true,
-              sku: true,
-            }
-          }
+        where: {
+          OR: [
+            { id: parseInt((replacementId || orderId)?.replace(/\D/g, '') || '0') || -1 },
+            { poNumber: orderId || '' },
+          ]
         }
       })
 
@@ -57,21 +53,27 @@ export async function POST(request: NextRequest) {
         }, { status: 404 })
       }
 
+      // Get product info separately
+      const product = await prisma.product.findFirst({
+        where: { sku: backorder.masterSku },
+        select: { title: true, sku: true }
+      })
+
       // Return backorder as replacement info
       return NextResponse.json({
         success: true,
         replacement: {
           replacementId: `RPL-${backorder.id}`,
-          originalOrderId: backorder.amazonOrderId || 'N/A',
+          originalOrderId: backorder.poNumber || 'N/A',
           requestDate: backorder.createdAt.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
             day: 'numeric'
           }),
           status: mapBackorderStatus(backorder.status),
-          reason: 'Replacement requested',
+          reason: 'Backorder replacement',
           items: [{
-            name: backorder.product?.title || backorder.masterSku,
+            name: product?.title || backorder.masterSku,
             quantity: backorder.quantity,
             sku: backorder.masterSku,
           }],
@@ -81,11 +83,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Return replacement/return info
+    // Note: Return model uses 'disposition' instead of 'status'
     return NextResponse.json({
       success: true,
       replacement: {
-        replacementId: returnRecord.amazonReturnId || `RPL-${returnRecord.id}`,
-        originalOrderId: returnRecord.amazonOrderId || 'N/A',
+        replacementId: returnRecord.returnId || `RPL-${returnRecord.id}`,
+        originalOrderId: returnRecord.orderId || 'N/A',
         requestDate: returnRecord.returnDate
           ? new Date(returnRecord.returnDate).toLocaleDateString('en-US', {
               year: 'numeric',
@@ -97,7 +100,7 @@ export async function POST(request: NextRequest) {
               month: 'long',
               day: 'numeric'
             }),
-        status: mapReturnStatus(returnRecord.status),
+        status: mapReturnStatus(returnRecord.disposition),
         reason: returnRecord.reason || 'Customer requested replacement',
         items: [{
           name: returnRecord.product?.title || returnRecord.masterSku,
@@ -117,16 +120,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function mapReturnStatus(status: string | null): 'pending_approval' | 'approved' | 'processing' | 'shipped' | 'delivered' | 'denied' {
-  if (!status) return 'pending_approval'
+function mapReturnStatus(disposition: string | null): 'pending_approval' | 'approved' | 'processing' | 'shipped' | 'delivered' | 'denied' {
+  if (!disposition) return 'pending_approval'
 
-  const s = status.toLowerCase()
-  if (s.includes('pending')) return 'pending_approval'
-  if (s.includes('approved') || s.includes('authorized')) return 'approved'
-  if (s.includes('processing') || s.includes('received')) return 'processing'
-  if (s.includes('shipped') || s.includes('sent')) return 'shipped'
-  if (s.includes('complete') || s.includes('closed') || s.includes('refunded')) return 'delivered'
-  if (s.includes('denied') || s.includes('rejected')) return 'denied'
+  const d = disposition.toLowerCase()
+  // disposition values: sellable, damaged, customer_damaged, defective
+  if (d.includes('sellable')) return 'delivered'
+  if (d.includes('damaged') || d.includes('defective')) return 'processing'
   return 'processing'
 }
 
@@ -135,18 +135,16 @@ function mapBackorderStatus(status: string | null): 'pending_approval' | 'approv
 
   const s = status.toLowerCase()
   if (s.includes('pending')) return 'pending_approval'
-  if (s.includes('ordered') || s.includes('awaiting')) return 'approved'
-  if (s.includes('shipped')) return 'shipped'
-  if (s.includes('fulfilled') || s.includes('complete')) return 'delivered'
+  if (s.includes('received')) return 'delivered'
   if (s.includes('cancelled')) return 'denied'
   return 'processing'
 }
 
-function buildReturnTimeline(record: any): Array<{ status: string; date: string; note?: string }> {
+function buildReturnTimeline(record: { returnDate: Date; createdAt: Date; updatedAt: Date; reason?: string | null; disposition: string }): Array<{ status: string; date: string; note?: string }> {
   const timeline: Array<{ status: string; date: string; note?: string }> = []
 
   timeline.push({
-    status: 'Replacement Requested',
+    status: 'Return Initiated',
     date: record.returnDate
       ? new Date(record.returnDate).toLocaleDateString('en-US', {
           year: 'numeric',
@@ -161,33 +159,11 @@ function buildReturnTimeline(record: any): Array<{ status: string; date: string;
     note: record.reason || undefined,
   })
 
-  const status = mapReturnStatus(record.status)
-
-  if (['approved', 'processing', 'shipped', 'delivered'].includes(status)) {
-    timeline.unshift({
-      status: 'Request Approved',
-      date: record.updatedAt.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      }),
-    })
-  }
+  const status = mapReturnStatus(record.disposition)
 
   if (['processing', 'shipped', 'delivered'].includes(status)) {
     timeline.unshift({
-      status: 'Replacement Being Processed',
-      date: record.updatedAt.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      }),
-    })
-  }
-
-  if (['shipped', 'delivered'].includes(status)) {
-    timeline.unshift({
-      status: 'Replacement Shipped',
+      status: 'Return Received',
       date: record.updatedAt.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
@@ -198,30 +174,20 @@ function buildReturnTimeline(record: any): Array<{ status: string; date: string;
 
   if (status === 'delivered') {
     timeline.unshift({
-      status: 'Replacement Completed',
+      status: 'Return Processed',
       date: record.updatedAt.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
       }),
-    })
-  }
-
-  if (status === 'denied') {
-    timeline.unshift({
-      status: 'Request Denied',
-      date: record.updatedAt.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      }),
+      note: `Disposition: ${record.disposition}`,
     })
   }
 
   return timeline
 }
 
-function buildBackorderTimeline(record: any): Array<{ status: string; date: string; note?: string }> {
+function buildBackorderTimeline(record: { createdAt: Date; updatedAt: Date; status: string; expectedDate?: Date | null; receivedDate?: Date | null }): Array<{ status: string; date: string; note?: string }> {
   const timeline: Array<{ status: string; date: string; note?: string }> = []
 
   timeline.push({
@@ -233,12 +199,23 @@ function buildBackorderTimeline(record: any): Array<{ status: string; date: stri
     }),
   })
 
+  if (record.expectedDate) {
+    timeline.unshift({
+      status: 'Expected Arrival',
+      date: record.expectedDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      }),
+    })
+  }
+
   const status = mapBackorderStatus(record.status)
 
-  if (['approved', 'processing', 'shipped', 'delivered'].includes(status)) {
+  if (status === 'delivered' && record.receivedDate) {
     timeline.unshift({
-      status: 'Stock Ordered',
-      date: record.updatedAt.toLocaleDateString('en-US', {
+      status: 'Received',
+      date: record.receivedDate.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
@@ -246,20 +223,9 @@ function buildBackorderTimeline(record: any): Array<{ status: string; date: stri
     })
   }
 
-  if (['shipped', 'delivered'].includes(status)) {
+  if (status === 'denied') {
     timeline.unshift({
-      status: 'Replacement Shipped',
-      date: record.updatedAt.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      }),
-    })
-  }
-
-  if (status === 'delivered') {
-    timeline.unshift({
-      status: 'Fulfilled',
+      status: 'Cancelled',
       date: record.updatedAt.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',

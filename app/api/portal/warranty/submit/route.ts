@@ -49,18 +49,52 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Get a valid product SKU - use found product, provided SKU, or first item from order
+    let validSku = product?.sku || productSku
+    if (!validSku && order) {
+      const orderItem = await prisma.orderItem.findFirst({
+        where: { orderId: order.id },
+        select: { masterSku: true }
+      })
+      validSku = orderItem?.masterSku
+    }
+
+    // If still no SKU, we can't create a return record - log instead
+    if (!validSku) {
+      // Log the warranty claim for manual processing
+      console.log('Warranty claim submitted (no product found):', {
+        claimId,
+        orderNumber,
+        email,
+        name,
+        phone,
+        productSku,
+        purchaseDate,
+        issueType,
+        issueDescription,
+        preferredResolution,
+      })
+
+      return NextResponse.json({
+        success: true,
+        claimId,
+        message: 'Your warranty claim has been submitted for manual review. We will contact you within 1-2 business days.',
+      })
+    }
+
     // Create a return/warranty claim record
+    // Return model requires: returnId, orderId, masterSku, returnDate, quantity, disposition, refundAmount
     const warrantyClaim = await prisma.return.create({
       data: {
-        amazonOrderId: order?.amazonOrderId || orderNumber,
-        amazonReturnId: claimId,
-        masterSku: product?.sku || productSku || 'UNKNOWN',
-        productId: product?.id || null,
+        returnId: claimId,
+        orderId: order?.amazonOrderId || orderNumber,
+        masterSku: validSku,
         quantity: 1,
         reason: `${issueType}: ${issueDescription}`,
-        status: 'Pending Review',
+        customerComments: `Contact: ${name}, ${email}${phone ? `, ${phone}` : ''}\nPreferred Resolution: ${preferredResolution}`,
+        disposition: 'pending_review', // Custom status for warranty claims
+        refundAmount: 0, // Will be determined during review
         returnDate: new Date(),
-        // Store additional claim info in a JSON field if available, otherwise use reason
       }
     })
 
