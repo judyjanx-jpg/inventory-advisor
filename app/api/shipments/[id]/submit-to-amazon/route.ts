@@ -445,7 +445,9 @@ export async function POST(
         }
 
         // Step 2e: Build boxes and assign to correct packing groups
-        const allBoxes: BoxInput[] = shipment.boxes.map((box: { weightLbs: number; lengthInches: number; widthInches: number; heightInches: number; items: Array<{ masterSku: string; quantity: number }> }) => ({
+        type ShipmentBox = typeof shipment.boxes[number]
+        type BoxItem = ShipmentBox['items'][number]
+        const allBoxes: BoxInput[] = shipment.boxes.map((box: ShipmentBox) => ({
           weight: {
             unit: 'LB' as const,
             value: Number(box.weightLbs),
@@ -458,7 +460,7 @@ export async function POST(
           },
           quantity: 1,
           contentInformationSource: 'BOX_CONTENT_PROVIDED' as const,
-          items: box.items.map((item: { masterSku: string; quantity: number }) => ({
+          items: box.items.map((item: BoxItem) => ({
             msku: item.masterSku,
             quantity: item.quantity,
             prepOwner: 'NONE' as const,
