@@ -28,6 +28,25 @@ interface AmazonMessageData {
   messageType?: string
 }
 
+// Amazon Messaging API response type
+interface MessagingApiResponse {
+  _embedded?: {
+    actions?: Array<{
+      _embedded?: {
+        message?: {
+          messageId?: string
+          senderType?: 'BUYER' | 'SELLER'
+          subject?: string
+          body?: string
+          text?: string
+          createdDate?: string
+          attachments?: any[]
+        }
+      }
+    }>
+  }
+}
+
 // Generate a unique ticket number
 function generateTicketNumber(): string {
   const random = Math.floor(Math.random() * 900000) + 100000
@@ -57,9 +76,10 @@ async function syncOrderMessages(
     // The actual message content requires calling getAttributes
     // For each embedded action link
     const messages: AmazonMessageData[] = []
+    const typedResponse = response as MessagingApiResponse
 
-    if (response?._embedded?.actions) {
-      for (const action of response._embedded.actions) {
+    if (typedResponse?._embedded?.actions) {
+      for (const action of typedResponse._embedded.actions) {
         if (action._embedded?.message) {
           const msg = action._embedded.message
           messages.push({
