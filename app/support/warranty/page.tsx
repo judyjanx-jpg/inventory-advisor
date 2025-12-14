@@ -363,9 +363,9 @@ export default function WarrantyPage() {
       <div className="p-4 bg-slate-800/30 border border-slate-700/50 rounded-xl text-sm text-slate-400">
         <p className="font-medium text-slate-300 mb-1">How it works:</p>
         <ol className="list-decimal list-inside space-y-1">
-          <li>We'll email you a prepaid return shipping label</li>
+          <li>We will email you a prepaid return shipping label</li>
           <li>Ship the item back using the provided label</li>
-          <li>Once received, we'll process your {claimType === 'REFUND' ? 'refund' : 'replacement'}</li>
+          <li>Once received, we will process your {claimType === 'REFUND' ? 'refund' : 'replacement'}</li>
         </ol>
       </div>
     </div>
@@ -389,8 +389,8 @@ export default function WarrantyPage() {
 
         <p className="text-sm text-slate-400 mb-6">
           {claimType === 'REFUND' 
-            ? 'We'll send the return label to this address.'
-            : 'We'll send your replacement to this address.'}
+            ? "We'll send the return label to this address."
+            : "We'll send your replacement to this address."}
         </p>
 
         <div className="space-y-4">
@@ -528,7 +528,7 @@ export default function WarrantyPage() {
           <li>Check your email for the prepaid return label</li>
           <li>Package the item securely</li>
           <li>Drop it off at any USPS location</li>
-          <li>We'll process your {claimType === 'REFUND' ? 'refund' : 'replacement'} once received</li>
+          <li>We will process your {claimType === 'REFUND' ? 'refund' : 'replacement'} once received</li>
         </ol>
       </div>
 
