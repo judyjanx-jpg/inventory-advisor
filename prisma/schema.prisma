@@ -2511,3 +2511,18 @@ model KnowledgeArticle {
   @@index([isPublished])
   @@map("knowledge_articles")
 }
+
+// ============================================
+// SETTINGS (Key-Value Store)
+// ============================================
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String @db.Text
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("settings")
+}

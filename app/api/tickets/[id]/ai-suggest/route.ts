@@ -109,7 +109,7 @@ ${similarTickets.map(t => `- Subject: ${t.subject}\n  Resolution: ${t.resolution
       // Ignore errors fetching similar tickets
     }
 
-    const systemPrompt = `You are a helpful customer support agent for CHOE Jewelers (also sold under KISPER brand). Generate a professional, empathetic response to the customer's inquiry.
+    const systemPrompt = `You are a helpful customer support agent for KISPER Jewelry. Generate a professional, empathetic response to the customer's inquiry.
 
 COMPANY POLICIES:
 - Lifetime warranty on all jewelry
@@ -170,4 +170,5 @@ Generate a helpful response to send to the customer. Do not include a subject li
     )
   }
 }
+
 

@@ -24,7 +24,7 @@ async function buildSupportContext(sessionId: string, orderContext?: string): Pr
   let context = `SUPPORT KNOWLEDGE BASE:
 
 COMPANY INFO:
-- Company: CHOE Jewelers (also sold under KISPER brand)
+- Company: KISPER (Fine Jewelry)
 - Products: Fashion jewelry, rings, necklaces, bracelets, earrings
 - Platform: Amazon FBA
 
@@ -314,7 +314,7 @@ export async function POST(request: NextRequest) {
       orderContext || session.orderContextId || undefined
     )
 
-    const systemPrompt = `You are a friendly, helpful customer support assistant for CHOE Jewelers (also known as KISPER).
+    const systemPrompt = `You are a friendly, helpful customer support assistant for KISPER Jewelry.
 
 ${supportContext}
 

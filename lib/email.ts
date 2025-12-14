@@ -6,7 +6,7 @@
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.SUPPORT_FROM_EMAIL || 'support@choejewelers.com'
-const FROM_NAME = process.env.SUPPORT_FROM_NAME || 'CHOE Jewelers Support'
+const FROM_NAME = process.env.SUPPORT_FROM_NAME || 'KISPER Support'
 
 interface EmailParams {
   to: string
@@ -135,13 +135,13 @@ const baseTemplate = (content: string) => `
 <body>
   <div class="container">
     <div class="header">
-      <h1>CHOE Jewelers</h1>
+      <h1>KISPER</h1>
     </div>
     <div class="content">
       ${content}
     </div>
     <div class="footer">
-      <p>CHOE Jewelers / KISPER</p>
+      <p>KISPER Jewelry</p>
       <p>Questions? Visit our <a href="${process.env.NEXT_PUBLIC_SUPPORT_URL || '/support'}">Support Center</a></p>
     </div>
   </div>
