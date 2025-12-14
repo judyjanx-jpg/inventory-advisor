@@ -51,6 +51,8 @@ export interface ContactInformation {
 export interface BoxContent {
   msku: string
   quantity: number
+  prepOwner: 'AMAZON' | 'SELLER' | 'NONE'
+  labelOwner: 'AMAZON' | 'SELLER' | 'NONE'
 }
 
 export interface BoxInput {

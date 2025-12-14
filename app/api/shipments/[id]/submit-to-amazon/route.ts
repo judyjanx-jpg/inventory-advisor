@@ -414,6 +414,8 @@ export async function POST(
           items: box.items.map(item => ({
             msku: item.masterSku,
             quantity: item.quantity,
+            prepOwner: 'NONE' as const,
+            labelOwner: 'SELLER' as const,
           })),
         }))
 
