@@ -346,9 +346,13 @@ export async function POST(
     if (step === 'all' || step === 'set_packing') {
       if (shipment.amazonWorkflowStep === 'packing_set' && step !== 'set_packing') {
         // Already done, skip
+      } else if (shipment.amazonWorkflowStep === 'placement_confirmed') {
+        // Placement already confirmed, skip packing step entirely
+        console.log(`[${id}] Placement already confirmed (from DB), skipping packing step`)
       } else {
         // Step 2a: Generate packing options (may already be done from previous attempt)
         let packingAlreadyConfirmed = false
+        let skipPackingStep = false
 
         try {
           console.log(`[${id}] Generating packing options...`)
@@ -368,13 +372,19 @@ export async function POST(
         } catch (genError: any) {
           // Check if packing is already confirmed from a previous attempt
           if (genError.message?.includes('packing option is already confirmed')) {
-            console.log(`[${id}] Packing already confirmed from previous attempt, skipping generation`)
+            console.log(`[${id}] Packing already confirmed from previous attempt`)
             packingAlreadyConfirmed = true
+          } else if (genError.message?.includes('placement option is already confirmed')) {
+            // Placement already confirmed means we're past the packing step entirely
+            console.log(`[${id}] Placement already confirmed, skipping packing step entirely`)
+            skipPackingStep = true
           } else {
             throw genError
           }
         }
 
+        // If placement is already confirmed, skip rest of packing step
+        if (!skipPackingStep) {
         // Step 2b: List packing options to get packingGroupId
         const { packingOptions } = await listPackingOptions(inboundPlanId)
         console.log(`[${id}] Found ${packingOptions.length} packing options`)
@@ -530,6 +540,7 @@ export async function POST(
 
         result.packingOperationId = packingResult.operationId
         console.log(`[${id}] Packing complete`)
+        } // end if (!skipPackingStep)
       }
 
       if (step === 'set_packing') {
