@@ -12,13 +12,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Search for warranty claim by claim ID or order ID
+    // Search for warranty claim by claim number or order ID
     const claim = await prisma.warrantyClaim.findFirst({
       where: replacementId
         ? {
             OR: [
-              { claimId: replacementId },
-              { claimId: { contains: replacementId.replace(/^WC-/i, '') } },
+              { claimNumber: replacementId },
+              { claimNumber: { contains: replacementId.replace(/^WC-/i, '') } },
             ]
           }
         : {
@@ -34,21 +34,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Get product info if we have a SKU
-    let productName = claim.productSku || 'Product'
-    if (claim.productSku) {
+    let productName = claim.productName || claim.masterSku || 'Product'
+    if (claim.masterSku) {
       const product = await prisma.product.findFirst({
-        where: { sku: claim.productSku },
-        select: { title: true }
+        where: { sku: claim.masterSku },
+        select: { title: true, displayName: true }
       })
-      if (product?.title) {
-        productName = product.title
+      if (product) {
+        productName = product.displayName || product.title
       }
     }
 
     return NextResponse.json({
       success: true,
       replacement: {
-        replacementId: claim.claimId,
+        replacementId: claim.claimNumber,
         originalOrderId: claim.orderId || 'N/A',
         requestDate: claim.createdAt.toLocaleDateString('en-US', {
           year: 'numeric',
@@ -56,23 +56,22 @@ export async function POST(request: NextRequest) {
           day: 'numeric'
         }),
         status: mapClaimStatus(claim.status),
-        reason: `${claim.issueType}: ${claim.description.substring(0, 100)}${claim.description.length > 100 ? '...' : ''}`,
+        reason: claim.customerNotes || 'Warranty claim',
         claimType: claim.claimType,
         // Return tracking info
         returnTrackingNumber: claim.returnTrackingNumber || undefined,
         returnCarrier: claim.returnCarrier || undefined,
         // Replacement tracking info
-        newTrackingNumber: claim.replacementTrackingNumber || undefined,
-        estimatedDelivery: undefined, // Would need to be added if tracking integration exists
+        newTrackingNumber: claim.replacementTracking || undefined,
+        estimatedDelivery: undefined,
         items: [{
           name: productName,
-          quantity: 1,
-          sku: claim.productSku || 'N/A',
+          quantity: claim.quantity || 1,
+          sku: claim.masterSku || 'N/A',
         }],
         timeline: buildClaimTimeline(claim),
-        resolution: claim.resolutionType ? {
-          type: claim.resolutionType,
-          notes: claim.resolutionNotes,
+        resolution: claim.status === 'COMPLETED' ? {
+          type: claim.claimType,
           refundAmount: claim.refundAmount ? Number(claim.refundAmount) : undefined,
         } : undefined,
       }
@@ -89,15 +88,12 @@ export async function POST(request: NextRequest) {
 
 function mapClaimStatus(status: string): 'pending_approval' | 'approved' | 'processing' | 'shipped' | 'delivered' | 'denied' {
   const statusMap: Record<string, 'pending_approval' | 'approved' | 'processing' | 'shipped' | 'delivered' | 'denied'> = {
-    'PENDING_REVIEW': 'pending_approval',
-    'APPROVED': 'approved',
-    'RETURN_LABEL_SENT': 'approved',
+    'PENDING_RETURN': 'approved',
     'RETURN_SHIPPED': 'processing',
     'RETURN_DELIVERED': 'processing',
     'PROCESSING': 'processing',
-    'REPLACEMENT_SHIPPED': 'shipped',
     'COMPLETED': 'delivered',
-    'DENIED': 'denied',
+    'CANCELLED': 'denied',
   }
   return statusMap[status] || 'pending_approval'
 }
@@ -106,14 +102,13 @@ interface ClaimRecord {
   status: string
   createdAt: Date
   updatedAt: Date
-  issueType: string
+  customerNotes?: string | null
   returnTrackingNumber?: string | null
   returnShippedAt?: Date | null
   returnDeliveredAt?: Date | null
-  replacementTrackingNumber?: string | null
-  resolvedAt?: Date | null
-  resolutionType?: string | null
-  resolutionNotes?: string | null
+  replacementTracking?: string | null
+  replacementShippedAt?: Date | null
+  refundProcessedAt?: Date | null
 }
 
 function buildClaimTimeline(claim: ClaimRecord): Array<{ status: string; date: string; note?: string }> {
@@ -127,28 +122,16 @@ function buildClaimTimeline(claim: ClaimRecord): Array<{ status: string; date: s
       month: 'short',
       day: 'numeric'
     }),
-    note: claim.issueType,
+    note: claim.customerNotes || undefined,
   })
 
   const status = claim.status
 
-  // Approved
-  if (['APPROVED', 'RETURN_LABEL_SENT', 'RETURN_SHIPPED', 'RETURN_DELIVERED', 'PROCESSING', 'REPLACEMENT_SHIPPED', 'COMPLETED'].includes(status)) {
-    timeline.unshift({
-      status: 'Claim Approved',
-      date: claim.updatedAt.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      }),
-    })
-  }
-
-  // Return label sent
-  if (['RETURN_LABEL_SENT', 'RETURN_SHIPPED', 'RETURN_DELIVERED', 'PROCESSING', 'REPLACEMENT_SHIPPED', 'COMPLETED'].includes(status)) {
+  // Return label sent (PENDING_RETURN means label was generated)
+  if (['PENDING_RETURN', 'RETURN_SHIPPED', 'RETURN_DELIVERED', 'PROCESSING', 'COMPLETED'].includes(status)) {
     timeline.unshift({
       status: 'Return Label Sent',
-      date: claim.updatedAt.toLocaleDateString('en-US', {
+      date: claim.createdAt.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
@@ -157,7 +140,7 @@ function buildClaimTimeline(claim: ClaimRecord): Array<{ status: string; date: s
   }
 
   // Return shipped
-  if (['RETURN_SHIPPED', 'RETURN_DELIVERED', 'PROCESSING', 'REPLACEMENT_SHIPPED', 'COMPLETED'].includes(status)) {
+  if (['RETURN_SHIPPED', 'RETURN_DELIVERED', 'PROCESSING', 'COMPLETED'].includes(status)) {
     timeline.unshift({
       status: 'Return Shipped',
       date: (claim.returnShippedAt || claim.updatedAt).toLocaleDateString('en-US', {
@@ -170,7 +153,7 @@ function buildClaimTimeline(claim: ClaimRecord): Array<{ status: string; date: s
   }
 
   // Return delivered
-  if (['RETURN_DELIVERED', 'PROCESSING', 'REPLACEMENT_SHIPPED', 'COMPLETED'].includes(status)) {
+  if (['RETURN_DELIVERED', 'PROCESSING', 'COMPLETED'].includes(status)) {
     timeline.unshift({
       status: 'Return Received',
       date: (claim.returnDeliveredAt || claim.updatedAt).toLocaleDateString('en-US', {
@@ -181,16 +164,28 @@ function buildClaimTimeline(claim: ClaimRecord): Array<{ status: string; date: s
     })
   }
 
-  // Replacement shipped
-  if (['REPLACEMENT_SHIPPED', 'COMPLETED'].includes(status)) {
+  // Processing
+  if (['PROCESSING', 'COMPLETED'].includes(status)) {
     timeline.unshift({
-      status: 'Replacement Shipped',
+      status: 'Processing',
       date: claim.updatedAt.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
       }),
-      note: claim.replacementTrackingNumber ? `Tracking: ${claim.replacementTrackingNumber}` : undefined,
+    })
+  }
+
+  // Replacement shipped (if applicable)
+  if (claim.replacementTracking && ['COMPLETED'].includes(status)) {
+    timeline.unshift({
+      status: 'Replacement Shipped',
+      date: (claim.replacementShippedAt || claim.updatedAt).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      }),
+      note: `Tracking: ${claim.replacementTracking}`,
     })
   }
 
@@ -198,25 +193,23 @@ function buildClaimTimeline(claim: ClaimRecord): Array<{ status: string; date: s
   if (status === 'COMPLETED') {
     timeline.unshift({
       status: 'Claim Resolved',
-      date: (claim.resolvedAt || claim.updatedAt).toLocaleDateString('en-US', {
+      date: (claim.refundProcessedAt || claim.updatedAt).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
       }),
-      note: claim.resolutionNotes || undefined,
     })
   }
 
-  // Denied
-  if (status === 'DENIED') {
+  // Cancelled
+  if (status === 'CANCELLED') {
     timeline.unshift({
-      status: 'Claim Denied',
+      status: 'Claim Cancelled',
       date: claim.updatedAt.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
       }),
-      note: claim.resolutionNotes || undefined,
     })
   }
 

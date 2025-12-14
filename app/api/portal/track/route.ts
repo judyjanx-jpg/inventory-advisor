@@ -39,8 +39,8 @@ export async function POST(request: NextRequest) {
       const fbaShipment = await prisma.fbaShipment.findFirst({
         where: {
           OR: [
-            { amazonShipmentId: orderNumber },
-            { shipmentName: { contains: orderNumber } },
+            { shipmentId: orderNumber },
+            { internalId: { contains: orderNumber } },
           ]
         },
         include: {
@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         order: {
-          orderId: fbaShipment.amazonShipmentId || fbaShipment.shipmentName || `FBA-${fbaShipment.id}`,
-          orderDate: fbaShipment.createdAt.toLocaleDateString('en-US', {
+          orderId: fbaShipment.shipmentId || fbaShipment.internalId || `FBA-${fbaShipment.id}`,
+          orderDate: fbaShipment.createdDate.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
             day: 'numeric'
@@ -211,12 +211,12 @@ function buildOrderTimeline(order: { purchaseDate: Date; shipDate?: Date | null;
   return timeline.reverse()
 }
 
-function buildFbaTimeline(shipment: { createdAt: Date; updatedAt: Date; status?: string | null; destinationFc?: string | null }): Array<{ status: string; date: string; location?: string }> {
+function buildFbaTimeline(shipment: { createdDate: Date; updatedAt: Date; status?: string | null; destinationFc?: string | null }): Array<{ status: string; date: string; location?: string }> {
   const timeline: Array<{ status: string; date: string; location?: string }> = []
 
   timeline.push({
     status: 'Shipment Created',
-    date: shipment.createdAt.toLocaleDateString('en-US', {
+    date: shipment.createdDate.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
