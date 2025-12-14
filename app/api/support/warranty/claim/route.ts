@@ -121,18 +121,82 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // TODO: Integrate with shipping API to generate return label
-    // TODO: Send email notification with return label
-
     console.log(`[Warranty] Created claim ${claimNumber} for order ${orderId}`)
+
+    // Try to auto-generate return label if ShipStation is configured
+    let labelInfo = null
+    try {
+      const { shipstation, getWarehouseAddress } = await import('@/lib/shipstation')
+      
+      if (shipstation.isConfigured() && shippingAddress?.street1) {
+        const warehouseAddress = getWarehouseAddress()
+        
+        if (warehouseAddress.street1 && warehouseAddress.city) {
+          const isTest = process.env.NODE_ENV !== 'production' || process.env.SHIPSTATION_TEST_MODE === 'true'
+          
+          const label = await shipstation.createReturnLabel({
+            customerAddress: {
+              name: shippingAddress.name || 'Customer',
+              street1: shippingAddress.street1,
+              street2: shippingAddress.street2 || '',
+              city: shippingAddress.city,
+              state: shippingAddress.state,
+              postalCode: shippingAddress.zip,
+              country: 'US',
+            },
+            warehouseAddress: {
+              name: warehouseAddress.name,
+              company: warehouseAddress.company,
+              street1: warehouseAddress.street1,
+              street2: warehouseAddress.street2 || '',
+              city: warehouseAddress.city,
+              state: warehouseAddress.state,
+              postalCode: warehouseAddress.postalCode,
+              country: 'US',
+              phone: warehouseAddress.phone,
+            },
+            weight: { value: 8, units: 'ounces' },
+            testLabel: isTest,
+          })
+
+          // Update claim with label info
+          const labelDataUrl = `data:application/pdf;base64,${label.labelData}`
+          await prisma.warrantyClaim.update({
+            where: { claimNumber },
+            data: {
+              returnTrackingNumber: label.trackingNumber,
+              returnLabelUrl: labelDataUrl,
+              returnCarrier: 'USPS',
+            }
+          })
+
+          labelInfo = {
+            trackingNumber: label.trackingNumber,
+            carrier: 'USPS',
+          }
+
+          console.log(`[Warranty] Auto-generated return label for ${claimNumber}: ${label.trackingNumber}`)
+        }
+      }
+    } catch (labelError: any) {
+      console.warn(`[Warranty] Could not auto-generate label for ${claimNumber}:`, labelError.message)
+      // Continue without label - user can generate it manually
+    }
+
+    // TODO: Send email notification with return label
 
     return NextResponse.json({
       success: true,
       claimNumber: claim.claimNumber,
       status: claim.status,
-      message: claimType === 'REFUND' 
-        ? 'Your refund claim has been submitted. We will email you a prepaid return label within 24 hours.'
-        : 'Your replacement claim has been submitted. We will email you a prepaid return label within 24 hours.'
+      labelGenerated: !!labelInfo,
+      trackingNumber: labelInfo?.trackingNumber,
+      carrier: labelInfo?.carrier,
+      message: labelInfo 
+        ? 'Your claim has been submitted and your return label is ready! Check the claim status page to download it.'
+        : claimType === 'REFUND' 
+          ? 'Your refund claim has been submitted. We will email you a prepaid return label within 24 hours.'
+          : 'Your replacement claim has been submitted. We will email you a prepaid return label within 24 hours.'
     })
   } catch (error) {
     console.error('Warranty claim error:', error)
