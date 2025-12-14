@@ -582,6 +582,8 @@ export async function POST(
         console.log(`[${id}] Selected placement ${optimalPlacement.placementOptionId} with ${optimalPlacement.shipmentIds.length} shipments`)
 
         // Confirm placement (skip if already confirmed)
+        let lastOperationId: string | null = null
+
         if (!placementAlreadyConfirmed) {
           const confirmResult = await confirmPlacementOption(
             inboundPlanId,
@@ -599,6 +601,8 @@ export async function POST(
               details: confirmStatus.operationProblems,
             }, { status: 500 })
           }
+
+          lastOperationId = confirmResult.operationId
         } else {
           console.log(`[${id}] Placement already confirmed, skipping confirmation step`)
         }
@@ -638,7 +642,7 @@ export async function POST(
             amazonWorkflowStep: 'placement_confirmed',
             amazonPlacementOptionId: optimalPlacement.placementOptionId,
             amazonShipmentSplits: JSON.stringify(shipmentDetails),
-            amazonLastOperationId: confirmResult.operationId,
+            amazonLastOperationId: lastOperationId,
           },
         })
 
