@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+// Map form claim type to database claim type
+const claimTypeMap: Record<string, string> = {
+  'Replacement': 'REPLACEMENT',
+  'Refund': 'REFUND',
+  'Repair': 'REPAIR',
+  'Exchange for different product': 'EXCHANGE',
+  'Store credit': 'REFUND',
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -10,7 +19,6 @@ export async function POST(request: NextRequest) {
     const name = formData.get('name') as string
     const phone = formData.get('phone') as string
     const productSku = formData.get('productSku') as string
-    const purchaseDate = formData.get('purchaseDate') as string
     const issueType = formData.get('issueType') as string
     const issueDescription = formData.get('issueDescription') as string
     const preferredResolution = formData.get('preferredResolution') as string
@@ -26,91 +34,53 @@ export async function POST(request: NextRequest) {
     // Generate claim ID
     const claimId = `WC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
 
-    // Try to find the order
-    const order = await prisma.order.findFirst({
-      where: {
-        OR: [
-          { amazonOrderId: orderNumber },
-          { amazonOrderId: { contains: orderNumber } },
-        ]
-      }
-    })
-
-    // Try to find product by SKU
-    let product = null
-    if (productSku) {
-      product = await prisma.product.findFirst({
+    // Try to find the order to get product SKU if not provided
+    let resolvedProductSku = productSku
+    if (!resolvedProductSku) {
+      const order = await prisma.order.findFirst({
         where: {
           OR: [
-            { sku: productSku },
-            { sku: { contains: productSku } },
+            { id: orderNumber },
+            { id: { contains: orderNumber } },
           ]
+        },
+        include: {
+          orderItems: {
+            take: 1,
+            select: { masterSku: true }
+          }
         }
       })
+      if (order?.orderItems?.[0]) {
+        resolvedProductSku = order.orderItems[0].masterSku
+      }
     }
 
-    // Get a valid product SKU - use found product, provided SKU, or first item from order
-    let validSku = product?.sku || productSku
-    if (!validSku && order) {
-      const orderItem = await prisma.orderItem.findFirst({
-        where: { orderId: order.id },
-        select: { masterSku: true }
-      })
-      validSku = orderItem?.masterSku
-    }
-
-    // If still no SKU, we can't create a return record - log instead
-    if (!validSku) {
-      // Log the warranty claim for manual processing
-      console.log('Warranty claim submitted (no product found):', {
-        claimId,
-        orderNumber,
-        email,
-        name,
-        phone,
-        productSku,
-        purchaseDate,
-        issueType,
-        issueDescription,
-        preferredResolution,
-      })
-
-      return NextResponse.json({
-        success: true,
-        claimId,
-        message: 'Your warranty claim has been submitted for manual review. We will contact you within 1-2 business days.',
-      })
-    }
-
-    // Create a return/warranty claim record
-    // Return model requires: returnId, orderId, masterSku, returnDate, quantity, disposition, refundAmount
-    const warrantyClaim = await prisma.return.create({
+    // Create warranty claim record
+    const warrantyClaim = await prisma.warrantyClaim.create({
       data: {
-        returnId: claimId,
-        orderId: order?.amazonOrderId || orderNumber,
-        masterSku: validSku,
-        quantity: 1,
-        reason: `${issueType}: ${issueDescription}`,
-        customerComments: `Contact: ${name}, ${email}${phone ? `, ${phone}` : ''}\nPreferred Resolution: ${preferredResolution}`,
-        disposition: 'pending_review', // Custom status for warranty claims
-        refundAmount: 0, // Will be determined during review
-        returnDate: new Date(),
+        claimId,
+        orderId: orderNumber,
+        productSku: resolvedProductSku || null,
+        customerName: name,
+        customerEmail: email,
+        customerPhone: phone || null,
+        claimType: claimTypeMap[preferredResolution] || 'REPLACEMENT',
+        issueType: issueType,
+        description: issueDescription,
+        status: 'PENDING_REVIEW',
       }
     })
 
     // Log the warranty claim for processing
-    console.log('Warranty claim submitted:', {
+    console.log('Warranty claim created:', {
       claimId,
+      recordId: warrantyClaim.id,
       orderNumber,
       email,
       name,
-      phone,
-      productSku,
-      purchaseDate,
       issueType,
-      issueDescription,
       preferredResolution,
-      recordId: warrantyClaim.id,
     })
 
     return NextResponse.json({

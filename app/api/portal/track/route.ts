@@ -12,16 +12,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Search for order by Amazon order ID or internal order ID
+    // Search for order by Amazon order ID (Order.id is the Amazon order ID)
     const order = await prisma.order.findFirst({
       where: {
         OR: [
-          { amazonOrderId: orderNumber },
-          { amazonOrderId: { contains: orderNumber } },
+          { id: orderNumber },
+          { id: { contains: orderNumber } },
         ]
       },
       include: {
-        items: {
+        orderItems: {
           include: {
             product: {
               select: {
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       order: {
-        orderId: order.amazonOrderId,
+        orderId: order.id,
         orderDate: order.purchaseDate
           ? new Date(order.purchaseDate).toLocaleDateString('en-US', {
               year: 'numeric',
@@ -109,15 +109,9 @@ export async function POST(request: NextRequest) {
             })
           : 'Unknown',
         status,
-        carrier: order.shipServiceLevel || undefined,
+        carrier: order.fulfillmentChannel || undefined,
         trackingNumber: undefined, // Would need to be stored separately
-        estimatedDelivery: order.latestShipDate
-          ? new Date(order.latestShipDate).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })
-          : undefined,
+        estimatedDelivery: undefined, // Not stored in Order model
         deliveredDate: status === 'delivered' && order.shipDate
           ? new Date(order.shipDate).toLocaleDateString('en-US', {
               year: 'numeric',
@@ -125,17 +119,17 @@ export async function POST(request: NextRequest) {
               day: 'numeric'
             })
           : undefined,
-        items: order.items.map((item: { product?: { title?: string } | null; masterSku: string; quantityOrdered: number }) => ({
+        items: order.orderItems.map((item: { product?: { title?: string } | null; masterSku: string; quantity: number }) => ({
           name: item.product?.title || item.masterSku,
-          quantity: item.quantityOrdered,
+          quantity: item.quantity,
           sku: item.masterSku,
         })),
         timeline: buildOrderTimeline(order),
-        shippingAddress: order.city && order.state && order.postalCode
+        shippingAddress: order.shipCity && order.shipState && order.shipPostalCode
           ? {
-              city: order.city,
-              state: order.state,
-              zip: order.postalCode,
+              city: order.shipCity,
+              state: order.shipState,
+              zip: order.shipPostalCode,
             }
           : undefined,
       }
@@ -171,7 +165,7 @@ function mapFbaStatus(status: string | null): 'processing' | 'shipped' | 'in_tra
   return 'shipped'
 }
 
-function buildOrderTimeline(order: any): Array<{ status: string; date: string; location?: string }> {
+function buildOrderTimeline(order: { purchaseDate: Date; shipDate?: Date | null; status: string; shipCity?: string | null; shipState?: string | null }): Array<{ status: string; date: string; location?: string }> {
   const timeline: Array<{ status: string; date: string; location?: string }> = []
 
   // Add events based on available dates
@@ -210,14 +204,14 @@ function buildOrderTimeline(order: any): Array<{ status: string; date: string; l
         month: 'short',
         day: 'numeric'
       }),
-      location: order.city && order.state ? `${order.city}, ${order.state}` : undefined,
+      location: order.shipCity && order.shipState ? `${order.shipCity}, ${order.shipState}` : undefined,
     })
   }
 
   return timeline.reverse()
 }
 
-function buildFbaTimeline(shipment: any): Array<{ status: string; date: string; location?: string }> {
+function buildFbaTimeline(shipment: { createdAt: Date; updatedAt: Date; status?: string | null; destinationFc?: string | null }): Array<{ status: string; date: string; location?: string }> {
   const timeline: Array<{ status: string; date: string; location?: string }> = []
 
   timeline.push({
