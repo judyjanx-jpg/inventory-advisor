@@ -677,7 +677,26 @@ export async function POST(
         }, { status: 400 })
       }
 
-      const placementOptionId = shipment.amazonPlacementOptionId
+      // Get the placement option ID - use result from step 3 or fetch from DB
+      let placementOptionId = result.placementOptionId || shipment.amazonPlacementOptionId
+
+      // If still not found, re-fetch the shipment to get latest data
+      if (!placementOptionId) {
+        const refreshedShipment = await prisma.shipment.findUnique({
+          where: { id },
+          select: { amazonPlacementOptionId: true },
+        })
+        placementOptionId = refreshedShipment?.amazonPlacementOptionId
+      }
+
+      if (!placementOptionId) {
+        return NextResponse.json({
+          error: 'No placement option ID found. Run confirm_placement first.',
+        }, { status: 400 })
+      }
+
+      console.log(`[${id}] Using placement option ID: ${placementOptionId}`)
+
       const transportSelections: Array<{ shipmentId: string; transportationOptionId: string }> = []
 
       for (const split of splits) {
@@ -689,7 +708,7 @@ export async function POST(
         const genTransportResult = await generateTransportationOptions(
           inboundPlanId,
           split.amazonShipmentId,
-          placementOptionId!
+          placementOptionId
         )
 
         await waitForOperation(
@@ -701,7 +720,7 @@ export async function POST(
         const { transportationOptions } = await listTransportationOptions(
           inboundPlanId,
           split.amazonShipmentId,
-          placementOptionId!
+          placementOptionId
         )
 
         // Find SPD partnered carrier option
