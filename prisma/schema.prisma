@@ -2402,7 +2402,8 @@ model SupportTicket {
   
   // Relations
   messages        TicketMessage[]
-  
+  amazonMessages  AmazonMessage[]
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   
@@ -2475,6 +2476,52 @@ model ChatMessage {
   
   @@index([sessionId])
   @@map("chat_messages")
+}
+
+// Amazon buyer-seller messages synced from SP-API
+model AmazonMessage {
+  id                  Int      @id @default(autoincrement())
+  amazonMessageId     String   @unique @map("amazon_message_id")
+  amazonOrderId       String?  @map("amazon_order_id")
+
+  // Thread tracking
+  threadId            String?  @map("thread_id")
+  parentMessageId     String?  @map("parent_message_id")
+
+  // Sender info
+  senderType          String   @map("sender_type") // BUYER, SELLER
+  senderEmail         String?  @map("sender_email")
+
+  // Content
+  subject             String?
+  body                String   @db.Text
+
+  // Attachments (JSON array of attachment info)
+  attachments         String?  @db.Text
+
+  // Status
+  isRead              Boolean  @default(false) @map("is_read")
+  isReplied           Boolean  @default(false) @map("is_replied")
+  requiresResponse    Boolean  @default(false) @map("requires_response")
+  responseDeadline    DateTime? @map("response_deadline")
+
+  // Link to support ticket (if escalated/converted)
+  supportTicketId     Int?     @map("support_ticket_id")
+  supportTicket       SupportTicket? @relation(fields: [supportTicketId], references: [id])
+
+  // Amazon metadata
+  marketplace         String   @default("ATVPDKIKX0DER")
+  messageType         String?  @map("message_type") // e.g., ORDER_INQUIRY, SHIPPING_INQUIRY
+
+  // Timestamps
+  amazonCreatedAt     DateTime @map("amazon_created_at")
+  syncedAt            DateTime @default(now()) @map("synced_at")
+
+  @@index([amazonOrderId])
+  @@index([supportTicketId])
+  @@index([isRead, requiresResponse])
+  @@index([amazonCreatedAt])
+  @@map("amazon_messages")
 }
 
 // Knowledge base articles for FAQ/help center
