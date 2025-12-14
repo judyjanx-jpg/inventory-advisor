@@ -76,26 +76,42 @@ export default function SupportDashboardPage() {
   const fetchDashboardData = async () => {
     setLoading(true)
     try {
-      // Fetch tickets
-      const ticketsRes = await fetch('/api/tickets?status=OPEN,PENDING&limit=10')
+      // Fetch tickets and claims in parallel
+      const [ticketsRes, claimsRes, metricsRes] = await Promise.all([
+        fetch('/api/tickets?status=OPEN,PENDING&limit=10'),
+        fetch('/api/warranty-claims?status=PENDING_RETURN,RETURN_SHIPPED,PROCESSING&limit=10'),
+        fetch('/api/support/metrics'),
+      ])
+
+      let ticketsList: TicketSummary[] = []
+      let claimsList: ClaimSummary[] = []
+      let resolvedToday = 0
+      let avgResponseTime = '< 4h'
+
       if (ticketsRes.ok) {
         const ticketsData = await ticketsRes.json()
-        setTickets(ticketsData.tickets || [])
+        ticketsList = ticketsData.tickets || []
+        setTickets(ticketsList)
       }
 
-      // Fetch warranty claims
-      const claimsRes = await fetch('/api/warranty-claims?status=PENDING_RETURN,RETURN_SHIPPED,PROCESSING&limit=10')
       if (claimsRes.ok) {
         const claimsData = await claimsRes.json()
-        setClaims(claimsData.claims || [])
+        claimsList = claimsData.claims || []
+        setClaims(claimsList)
       }
 
-      // Calculate stats
+      if (metricsRes.ok) {
+        const metricsData = await metricsRes.json()
+        resolvedToday = metricsData.resolvedToday || 0
+        avgResponseTime = metricsData.avgResponseTime || '< 4h'
+      }
+
+      // Calculate stats using fetched data directly
       setStats({
-        openTickets: tickets.length,
-        pendingClaims: claims.length,
-        resolvedToday: 0, // Would come from API
-        avgResponseTime: '< 4h',
+        openTickets: ticketsList.length,
+        pendingClaims: claimsList.length,
+        resolvedToday,
+        avgResponseTime,
       })
     } catch (error) {
       console.error('Error fetching dashboard data:', error)

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useBranding } from './layout'
 import { 
   Shield, 
@@ -20,7 +21,15 @@ import {
 
 export default function SupportPage() {
   const [searchQuery, setSearchQuery] = useState('')
+  const router = useRouter()
   const branding = useBranding()
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      router.push(`/support/faq?q=${encodeURIComponent(searchQuery.trim())}`)
+    }
+  }
 
   const quickActions = [
     {
@@ -37,11 +46,12 @@ export default function SupportPage() {
       icon: Package,
       title: 'Track Order',
       description: 'Check your order status and tracking',
-      href: '/support/warranty',
+      href: 'https://www.amazon.com/gp/your-account/order-history',
       bgColor: 'bg-blue-50',
       iconBg: 'bg-blue-100',
       iconColor: 'text-blue-600',
       hoverBorder: 'hover:border-blue-200',
+      external: true,
     },
     {
       icon: Mail,
@@ -95,7 +105,7 @@ export default function SupportPage() {
             </p>
 
             {/* Search Bar */}
-            <div className="max-w-2xl mx-auto">
+            <form onSubmit={handleSearch} className="max-w-2xl mx-auto">
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -106,7 +116,7 @@ export default function SupportPage() {
                   className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-lg"
                 />
               </div>
-            </div>
+            </form>
           </div>
         </div>
       </section>
@@ -114,24 +124,30 @@ export default function SupportPage() {
       {/* Quick Actions */}
       <section className="max-w-6xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {quickActions.map((action) => (
-            <Link
-              key={action.title}
-              href={action.href}
-              className={`group relative rounded-2xl ${action.bgColor} border border-transparent ${action.hoverBorder} p-6 transition-all hover:shadow-lg`}
-            >
-              <div className={`w-12 h-12 rounded-xl ${action.iconBg} flex items-center justify-center mb-4`}>
-                <action.icon className={`w-6 h-6 ${action.iconColor}`} />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-gray-700">
-                {action.title}
-              </h3>
-              <p className="text-sm text-gray-500">
-                {action.description}
-              </p>
-              <ChevronRight className="absolute bottom-6 right-6 w-5 h-5 text-gray-300 group-hover:text-gray-500 group-hover:translate-x-1 transition-all" />
-            </Link>
-          ))}
+          {quickActions.map((action) => {
+            const linkProps = (action as any).external
+              ? { target: '_blank', rel: 'noopener noreferrer' }
+              : {}
+            return (
+              <Link
+                key={action.title}
+                href={action.href}
+                {...linkProps}
+                className={`group relative rounded-2xl ${action.bgColor} border border-transparent ${action.hoverBorder} p-6 transition-all hover:shadow-lg`}
+              >
+                <div className={`w-12 h-12 rounded-xl ${action.iconBg} flex items-center justify-center mb-4`}>
+                  <action.icon className={`w-6 h-6 ${action.iconColor}`} />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-gray-700">
+                  {action.title}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {action.description}
+                </p>
+                <ChevronRight className="absolute bottom-6 right-6 w-5 h-5 text-gray-300 group-hover:text-gray-500 group-hover:translate-x-1 transition-all" />
+              </Link>
+            )
+          })}
         </div>
       </section>
 

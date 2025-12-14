@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireInternalAccess } from '@/lib/internal-auth'
 
 // GET - List support tickets (internal)
 export async function GET(request: NextRequest) {
+  const authError = requireInternalAccess(request)
+  if (authError) return authError
+
   try {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // comma-separated list

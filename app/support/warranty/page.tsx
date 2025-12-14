@@ -48,7 +48,7 @@ export default function WarrantyPage() {
   const [order, setOrder] = useState<OrderDetails | null>(null)
   const [selectedItem, setSelectedItem] = useState<OrderItem | null>(null)
   const [claimType, setClaimType] = useState<'REFUND' | 'REPLACEMENT' | null>(null)
-  const [address, setAddress] = useState({ name: '', street1: '', street2: '', city: '', state: '', zip: '' })
+  const [address, setAddress] = useState({ name: '', email: '', street1: '', street2: '', city: '', state: '', zip: '' })
   const [claimId, setClaimId] = useState<string | null>(null)
 
   const lookupOrder = async () => {
@@ -85,7 +85,7 @@ export default function WarrantyPage() {
       const res = await fetch('/api/support/warranty/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.orderId, sku: selectedItem.sku, productName: selectedItem.name, claimType, shippingAddress: address }),
+        body: JSON.stringify({ orderId: order.orderId, sku: selectedItem.sku, productName: selectedItem.name, claimType, customerEmail: address.email, shippingAddress: address }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -302,6 +302,11 @@ export default function WarrantyPage() {
             <input type="text" value={address.name} onChange={(e) => setAddress({ ...address, name: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500" />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+            <input type="email" value={address.email} onChange={(e) => setAddress({ ...address, email: e.target.value })} placeholder="you@example.com" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500" />
+            <p className="text-xs text-gray-400 mt-1">We'll send your return label and claim updates to this email</p>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
             <input type="text" value={address.street1} onChange={(e) => setAddress({ ...address, street1: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500" />
           </div>
@@ -334,9 +339,9 @@ export default function WarrantyPage() {
 
         <button
           onClick={submitClaim}
-          disabled={loading || !address.name || !address.street1 || !address.city || !address.state || !address.zip}
+          disabled={loading || !address.name || !address.email || !address.street1 || !address.city || !address.state || !address.zip}
           className="w-full mt-6 py-3 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:bg-gray-300"
-          style={{ backgroundColor: loading || !address.name || !address.street1 || !address.city || !address.state || !address.zip ? undefined : branding.primaryColor }}
+          style={{ backgroundColor: loading || !address.name || !address.email || !address.street1 || !address.city || !address.state || !address.zip ? undefined : branding.primaryColor }}
         >
           {loading ? <><Loader2 className="w-5 h-5 animate-spin" />Submitting claim...</> : <><CheckCircle2 className="w-5 h-5" />Submit Warranty Claim</>}
         </button>

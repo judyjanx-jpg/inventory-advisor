@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { 
   Search, 
   ChevronDown, 
@@ -170,9 +171,19 @@ const faqData: FAQCategory[] = [
 ]
 
 export default function FAQPage() {
+  const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedCategory, setExpandedCategory] = useState<string | null>('shipping')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+
+  // Initialize search from URL query parameter
+  useEffect(() => {
+    const q = searchParams.get('q')
+    if (q) {
+      setSearchQuery(q)
+      setExpandedCategory(null) // Show all matching results
+    }
+  }, [searchParams])
 
   const toggleItem = (categoryId: string, index: number) => {
     const key = `${categoryId}-${index}`
@@ -200,31 +211,31 @@ export default function FAQPage() {
     <div className="max-w-4xl mx-auto px-4 py-12">
       <Link
         href="/support"
-        className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors"
+        className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-900 mb-8 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Support
       </Link>
 
       <div className="text-center mb-10">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/20">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mx-auto mb-4 shadow-lg">
           <HelpCircle className="w-8 h-8 text-white" />
         </div>
-        <h1 className="text-3xl font-bold text-white mb-2">Frequently Asked Questions</h1>
-        <p className="text-slate-400">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Frequently Asked Questions</h1>
+        <p className="text-gray-500">
           Find answers to common questions about our products and services.
         </p>
       </div>
 
       {/* Search */}
       <div className="relative mb-8">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search FAQs..."
-          className="w-full pl-12 pr-4 py-4 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+          className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
         />
       </div>
 
@@ -239,8 +250,8 @@ export default function FAQPage() {
             }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
               expandedCategory === category.id && !searchQuery
-                ? 'bg-amber-500 text-slate-900'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             <category.icon className="w-4 h-4" />
@@ -252,46 +263,46 @@ export default function FAQPage() {
       {/* FAQ Categories */}
       <div className="space-y-6">
         {filteredData.map(category => (
-          <div 
+          <div
             key={category.id}
-            className={`bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden ${
+            className={`bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm ${
               !searchQuery && expandedCategory !== category.id ? 'hidden' : ''
             }`}
           >
             <button
               onClick={() => setExpandedCategory(expandedCategory === category.id ? null : category.id)}
-              className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-800/50 transition-colors"
+              className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center">
-                  <category.icon className="w-5 h-5 text-amber-400" />
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <category.icon className="w-5 h-5 text-emerald-500" />
                 </div>
-                <h2 className="text-lg font-semibold text-white">{category.title}</h2>
-                <span className="text-sm text-slate-500">({category.items.length})</span>
+                <h2 className="text-lg font-semibold text-gray-900">{category.title}</h2>
+                <span className="text-sm text-gray-400">({category.items.length})</span>
               </div>
-              <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${
+              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${
                 searchQuery || expandedCategory === category.id ? 'rotate-180' : ''
               }`} />
             </button>
 
             {(searchQuery || expandedCategory === category.id) && (
-              <div className="border-t border-slate-700">
+              <div className="border-t border-gray-100">
                 {category.items.map((item, index) => {
                   const isExpanded = expandedItems.has(`${category.id}-${index}`)
                   return (
-                    <div key={index} className="border-b border-slate-700/50 last:border-0">
+                    <div key={index} className="border-b border-gray-100 last:border-0">
                       <button
                         onClick={() => toggleItem(category.id, index)}
-                        className="w-full flex items-start justify-between p-5 text-left hover:bg-slate-800/30 transition-colors"
+                        className="w-full flex items-start justify-between p-5 text-left hover:bg-gray-50 transition-colors"
                       >
-                        <span className="text-slate-200 font-medium pr-4">{item.question}</span>
-                        <ChevronRight className={`w-5 h-5 text-slate-500 flex-shrink-0 mt-0.5 transition-transform ${
+                        <span className="text-gray-800 font-medium pr-4">{item.question}</span>
+                        <ChevronRight className={`w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5 transition-transform ${
                           isExpanded ? 'rotate-90' : ''
                         }`} />
                       </button>
                       {isExpanded && (
                         <div className="px-5 pb-5 -mt-2">
-                          <p className="text-slate-400 text-sm leading-relaxed">{item.answer}</p>
+                          <p className="text-gray-600 text-sm leading-relaxed">{item.answer}</p>
                         </div>
                       )}
                     </div>
@@ -305,10 +316,10 @@ export default function FAQPage() {
 
       {filteredData.length === 0 && searchQuery && (
         <div className="text-center py-12">
-          <p className="text-slate-400 mb-4">No results found for "{searchQuery}"</p>
+          <p className="text-gray-500 mb-4">No results found for "{searchQuery}"</p>
           <Link
             href="/support/contact"
-            className="inline-flex items-center gap-2 text-amber-400 hover:text-amber-300"
+            className="inline-flex items-center gap-2 text-emerald-600 hover:text-emerald-700"
           >
             Contact us for help
             <ChevronRight className="w-4 h-4" />
@@ -317,14 +328,14 @@ export default function FAQPage() {
       )}
 
       {/* Still Need Help */}
-      <div className="mt-12 text-center bg-slate-800/30 border border-slate-700/50 rounded-2xl p-8">
-        <h3 className="text-xl font-semibold text-white mb-2">Still have questions?</h3>
-        <p className="text-slate-400 mb-6">
+      <div className="mt-12 text-center bg-gray-50 border border-gray-200 rounded-2xl p-8">
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">Still have questions?</h3>
+        <p className="text-gray-500 mb-6">
           Can't find what you're looking for? We're here to help.
         </p>
         <Link
           href="/support/contact"
-          className="inline-flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-xl transition-colors"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-colors"
         >
           Contact Support
           <ChevronRight className="w-4 h-4" />

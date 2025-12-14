@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { strictRateLimit } from '@/lib/rate-limit'
 
-// Public API - no auth required
+// Public API - no auth required but rate limited
 export async function GET(request: NextRequest) {
+  // Rate limit: 5 requests per minute per IP
+  const rateLimitError = strictRateLimit(request)
+  if (rateLimitError) return rateLimitError
+
   try {
     const { searchParams } = new URL(request.url)
     const orderId = searchParams.get('orderId')?.trim()

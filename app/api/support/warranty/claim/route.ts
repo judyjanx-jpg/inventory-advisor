@@ -12,7 +12,7 @@ function generateClaimNumber(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { orderId, sku, productName, claimType, shippingAddress, customerNotes } = body
+    const { orderId, sku, productName, claimType, customerEmail, shippingAddress, customerNotes } = body
 
     // Validate required fields
     if (!orderId || !claimType) {
@@ -25,6 +25,15 @@ export async function POST(request: NextRequest) {
     if (!['REFUND', 'REPLACEMENT'].includes(claimType)) {
       return NextResponse.json(
         { error: 'Invalid claim type. Must be REFUND or REPLACEMENT.' },
+        { status: 400 }
+      )
+    }
+
+    // Validate email if provided
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (customerEmail && !emailRegex.test(customerEmail)) {
+      return NextResponse.json(
+        { error: 'Please provide a valid email address' },
         { status: 400 }
       )
     }
@@ -109,7 +118,7 @@ export async function POST(request: NextRequest) {
       data: {
         claimNumber,
         orderId,
-        customerEmail: '', // Will be populated via separate email collection or Amazon data
+        customerEmail: customerEmail || '',
         customerName: shippingAddress?.name || null,
         claimType,
         status: 'PENDING_RETURN',

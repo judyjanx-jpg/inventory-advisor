@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireInternalAccess } from '@/lib/internal-auth'
 
 // GET - List warranty claims (internal)
 export async function GET(request: NextRequest) {
+  const authError = requireInternalAccess(request)
+  if (authError) return authError
+
   try {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // comma-separated list
@@ -70,6 +74,9 @@ export async function GET(request: NextRequest) {
 
 // PATCH - Update warranty claim status (internal)
 export async function PATCH(request: NextRequest) {
+  const authError = requireInternalAccess(request)
+  if (authError) return authError
+
   try {
     const body = await request.json()
     const { claimNumber, status, refundAmount, replacementOrderId, replacementTracking, internalNotes } = body
