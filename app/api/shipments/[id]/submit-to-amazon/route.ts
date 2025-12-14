@@ -10,7 +10,6 @@ import {
   generatePlacementOptions,
   listPlacementOptions,
   confirmPlacementOption,
-  listShipments,
   getShipment,
   generateTransportationOptions,
   listTransportationOptions,
@@ -534,20 +533,32 @@ export async function POST(
       if (shipment.amazonWorkflowStep === 'placement_confirmed' && step !== 'confirm_placement') {
         // Already done, skip
       } else {
-        // Generate placement options
-        console.log(`[${id}] Generating placement options...`)
-        const genPlacementResult = await generatePlacementOptions(inboundPlanId)
+        // Generate placement options (may already be done from previous attempt)
+        let placementAlreadyConfirmed = false
 
-        const genPlacementStatus = await waitForOperation(
-          await createSpApiClient(),
-          genPlacementResult.operationId
-        )
+        try {
+          console.log(`[${id}] Generating placement options...`)
+          const genPlacementResult = await generatePlacementOptions(inboundPlanId)
 
-        if (genPlacementStatus.operationStatus === 'FAILED') {
-          return NextResponse.json({
-            error: 'Failed to generate placement options',
-            details: genPlacementStatus.operationProblems,
-          }, { status: 500 })
+          const genPlacementStatus = await waitForOperation(
+            await createSpApiClient(),
+            genPlacementResult.operationId
+          )
+
+          if (genPlacementStatus.operationStatus === 'FAILED') {
+            return NextResponse.json({
+              error: 'Failed to generate placement options',
+              details: genPlacementStatus.operationProblems,
+            }, { status: 500 })
+          }
+        } catch (genError: any) {
+          // Check if placement is already confirmed from a previous attempt
+          if (genError.message?.includes('placement option is already confirmed')) {
+            console.log(`[${id}] Placement already confirmed from previous attempt, skipping generation`)
+            placementAlreadyConfirmed = true
+          } else {
+            throw genError
+          }
         }
 
         // List placement options
@@ -560,7 +571,7 @@ export async function POST(
           }, { status: 500 })
         }
 
-        // Find optimal placement (lowest fees)
+        // Find optimal placement (lowest fees) or the already confirmed one
         const optimalPlacement = findOptimalPlacementOption(placementOptions)
         if (!optimalPlacement) {
           return NextResponse.json({
@@ -570,35 +581,41 @@ export async function POST(
 
         console.log(`[${id}] Selected placement ${optimalPlacement.placementOptionId} with ${optimalPlacement.shipmentIds.length} shipments`)
 
-        // Confirm placement
-        const confirmResult = await confirmPlacementOption(
-          inboundPlanId,
-          optimalPlacement.placementOptionId
-        )
+        // Confirm placement (skip if already confirmed)
+        if (!placementAlreadyConfirmed) {
+          const confirmResult = await confirmPlacementOption(
+            inboundPlanId,
+            optimalPlacement.placementOptionId
+          )
 
-        const confirmStatus = await waitForOperation(
-          await createSpApiClient(),
-          confirmResult.operationId
-        )
+          const confirmStatus = await waitForOperation(
+            await createSpApiClient(),
+            confirmResult.operationId
+          )
 
-        if (confirmStatus.operationStatus === 'FAILED') {
-          return NextResponse.json({
-            error: 'Failed to confirm placement option',
-            details: confirmStatus.operationProblems,
-          }, { status: 500 })
+          if (confirmStatus.operationStatus === 'FAILED') {
+            return NextResponse.json({
+              error: 'Failed to confirm placement option',
+              details: confirmStatus.operationProblems,
+            }, { status: 500 })
+          }
+        } else {
+          console.log(`[${id}] Placement already confirmed, skipping confirmation step`)
         }
 
-        // Get shipment details and save splits
-        const { shipments } = await listShipments(inboundPlanId)
+        // Get shipment details using shipmentIds from placement option
+        const shipmentIds = optimalPlacement.shipmentIds || []
+        console.log(`[${id}] Processing ${shipmentIds.length} shipments from placement option`)
 
         // Save shipment splits to database
-        for (const split of shipments) {
-          const splitDetail = await getShipment(inboundPlanId, split.shipmentId)
+        const shipmentDetails: Array<{ shipmentId: string; shipmentConfirmationId?: string }> = []
+        for (const amazonShipmentId of shipmentIds) {
+          const splitDetail = await getShipment(inboundPlanId, amazonShipmentId)
 
           await prisma.amazonShipmentSplit.create({
             data: {
               shipmentId: id,
-              amazonShipmentId: split.shipmentId,
+              amazonShipmentId: amazonShipmentId,
               amazonShipmentConfirmationId: splitDetail.shipmentConfirmationId || null,
               destinationFc: splitDetail.destination?.warehouseId || null,
               destinationAddress: splitDetail.destination?.address
@@ -608,6 +625,11 @@ export async function POST(
               status: 'pending',
             },
           })
+
+          shipmentDetails.push({
+            shipmentId: amazonShipmentId,
+            shipmentConfirmationId: splitDetail.shipmentConfirmationId,
+          })
         }
 
         await prisma.shipment.update({
@@ -615,20 +637,15 @@ export async function POST(
           data: {
             amazonWorkflowStep: 'placement_confirmed',
             amazonPlacementOptionId: optimalPlacement.placementOptionId,
-            amazonShipmentSplits: JSON.stringify(
-              shipments.map(s => ({
-                shipmentId: s.shipmentId,
-                shipmentConfirmationId: s.shipmentConfirmationId,
-              }))
-            ),
+            amazonShipmentSplits: JSON.stringify(shipmentDetails),
             amazonLastOperationId: confirmResult.operationId,
           },
         })
 
         result.placementOptionId = optimalPlacement.placementOptionId
-        result.shipmentSplits = shipments.map(s => s.shipmentId)
+        result.shipmentSplits = shipmentIds
         result.fees = optimalPlacement.fees
-        console.log(`[${id}] Placement confirmed, ${shipments.length} shipment splits created`)
+        console.log(`[${id}] Placement confirmed, ${shipmentIds.length} shipment splits created`)
       }
 
       if (step === 'confirm_placement') {

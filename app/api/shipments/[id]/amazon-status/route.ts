@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
   getInboundPlan,
-  listShipments,
   getShipment,
 } from '@/lib/fba-inbound-v2024'
 
@@ -56,20 +55,28 @@ export async function GET(
       }, { status: 500 })
     }
 
-    // Fetch all shipment splits from Amazon
-    const { shipments: amazonShipments } = await listShipments(inboundPlanId)
+    // Use shipment splits from our database (saved during submission)
+    const amazonSplits = shipment.amazonSplits || []
 
-    // Update each split with latest status
+    if (!amazonSplits.length) {
+      return NextResponse.json({
+        success: true,
+        shipmentId: id,
+        localStatus: shipment.status,
+        amazonInboundPlanId: inboundPlanId,
+        amazonPlanStatus: inboundPlan.status,
+        workflowStep: shipment.amazonWorkflowStep,
+        splits: [],
+        message: 'No shipment splits found - placement may not be confirmed yet',
+      })
+    }
+
+    // Update each split with latest status from Amazon
     const splitStatuses: any[] = []
 
-    for (const amazonSplit of amazonShipments) {
+    for (const localSplit of amazonSplits) {
       try {
-        const splitDetail = await getShipment(inboundPlanId, amazonSplit.shipmentId)
-
-        // Find matching local split
-        const localSplit = shipment.amazonSplits.find(
-          s => s.amazonShipmentId === amazonSplit.shipmentId
-        )
+        const splitDetail = await getShipment(inboundPlanId, localSplit.amazonShipmentId)
 
         // Map Amazon status to our status
         const amazonStatus = splitDetail.status || 'UNKNOWN'
@@ -118,7 +125,7 @@ export async function GET(
         }
 
         splitStatuses.push({
-          amazonShipmentId: amazonSplit.shipmentId,
+          amazonShipmentId: localSplit.amazonShipmentId,
           shipmentConfirmationId: splitDetail.shipmentConfirmationId,
           amazonStatus,
           mappedStatus,
@@ -126,9 +133,9 @@ export async function GET(
           trackingId: splitDetail.trackingId,
         })
       } catch (error: any) {
-        console.error(`Error fetching split ${amazonSplit.shipmentId}:`, error)
+        console.error(`Error fetching split ${localSplit.amazonShipmentId}:`, error)
         splitStatuses.push({
-          amazonShipmentId: amazonSplit.shipmentId,
+          amazonShipmentId: localSplit.amazonShipmentId,
           error: error.message,
         })
       }
