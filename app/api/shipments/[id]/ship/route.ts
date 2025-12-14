@@ -184,7 +184,7 @@ export async function POST(
       success: true,
       message: 'Shipment marked as shipped. Inventory has been decremented.',
       shipment: updatedShipment,
-      amazonSplits: updatedShipment.amazonSplits?.map(split => ({
+      amazonSplits: updatedShipment.amazonSplits?.map((split: { amazonShipmentId: string; destinationFc: string | null; status: string; carrier: string | null; trackingNumber: string | null }) => ({
         amazonShipmentId: split.amazonShipmentId,
         destinationFc: split.destinationFc,
         status: split.status,
