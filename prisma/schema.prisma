@@ -2312,3 +2312,64 @@ model Goal {
   @@index([userId])
   @@map("goals")
 }
+
+// ============================================
+// CUSTOMER WARRANTY CLAIMS (Internal Processing)
+// ============================================
+// Separate from Amazon Returns - these are direct customer warranty/support requests
+// that you process internally (generate return labels, track returns, issue refunds/replacements)
+
+model WarrantyClaim {
+  id Int @id @default(autoincrement())
+
+  // Claim identifier
+  claimId String @unique @map("claim_id") // WC-XXXXX format
+
+  // Original order reference (may not exist in our DB)
+  orderId    String? @map("order_id") // Amazon order ID or other order reference
+  productSku String? @map("product_sku")
+
+  // Customer contact info
+  customerName  String  @map("customer_name")
+  customerEmail String  @map("customer_email")
+  customerPhone String? @map("customer_phone")
+
+  // Claim details
+  claimType   String @default("REPLACEMENT") @map("claim_type") // REFUND, REPLACEMENT, REPAIR, EXCHANGE
+  issueType   String @map("issue_type") // Product not working, Physical damage, Missing parts, etc.
+  description String @db.Text
+
+  // Status workflow: PENDING_REVIEW → APPROVED → RETURN_LABEL_SENT → RETURN_SHIPPED →
+  //                  RETURN_DELIVERED → PROCESSING → COMPLETED or DENIED
+  status String @default("PENDING_REVIEW")
+
+  // Return tracking (when customer sends item back)
+  returnTrackingNumber String? @map("return_tracking_number")
+  returnCarrier        String? @map("return_carrier")
+  returnLabelUrl       String? @map("return_label_url") @db.Text
+  returnShippedAt      DateTime? @map("return_shipped_at")
+  returnDeliveredAt    DateTime? @map("return_delivered_at")
+
+  // Resolution
+  resolutionType   String? @map("resolution_type") // REFUND, REPLACEMENT_SENT, REPAIRED, EXCHANGED, DENIED
+  resolutionNotes  String? @map("resolution_notes") @db.Text
+  refundAmount     Decimal? @map("refund_amount") @db.Decimal(10, 2)
+  replacementOrderId String? @map("replacement_order_id")
+  replacementTrackingNumber String? @map("replacement_tracking_number")
+
+  // Shipping address for replacement
+  shippingAddress String? @map("shipping_address") @db.Text // JSON
+
+  // Images/attachments (stored as JSON array of URLs)
+  attachments String? @db.Text // JSON array of image URLs
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  @@index([status])
+  @@index([customerEmail])
+  @@index([orderId])
+  @@map("warranty_claims")
+}
