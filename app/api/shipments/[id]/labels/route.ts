@@ -62,7 +62,7 @@ export async function GET(
 
     // Get labels for specific split or all splits
     const splits = splitId
-      ? shipment.amazonSplits.filter(s => s.amazonShipmentId === splitId)
+      ? shipment.amazonSplits.filter((s: { amazonShipmentId: string }) => s.amazonShipmentId === splitId)
       : shipment.amazonSplits
 
     if (!splits.length) {

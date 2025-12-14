@@ -96,7 +96,7 @@ export async function POST(
       status: shipment.status,
       itemCount: shipment.items?.length || 0,
       boxCount: shipment.boxes?.length || 0,
-      boxes: shipment.boxes?.map(b => ({
+      boxes: shipment.boxes?.map((b: { id: number; boxNumber: number; items?: unknown[] }) => ({
         id: b.id,
         boxNumber: b.boxNumber,
         itemCount: b.items?.length || 0,
@@ -134,8 +134,8 @@ export async function POST(
 
     // Check all items are assigned to boxes
     for (const item of shipment.items) {
-      const boxTotal = shipment.boxes.reduce((sum, box) => {
-        const boxItem = box.items.find(bi => bi.masterSku === item.masterSku)
+      const boxTotal = shipment.boxes.reduce((sum: number, box: { items: Array<{ masterSku: string; quantity: number }> }) => {
+        const boxItem = box.items.find((bi: { masterSku: string }) => bi.masterSku === item.masterSku)
         return sum + (boxItem?.quantity || 0)
       }, 0)
 
@@ -231,7 +231,7 @@ export async function POST(
         // Build items list for Amazon
         // prepOwner: NONE for products without prep requirements (most products)
         // labelOwner: SELLER for products that need FNSKU labeling (most FBA products)
-        const items: InboundItem[] = shipment.items.map(item => ({
+        const items: InboundItem[] = shipment.items.map((item: { masterSku: string; adjustedQty: number }) => ({
           msku: item.masterSku,
           quantity: item.adjustedQty,
           prepOwner: 'NONE' as const,
@@ -445,7 +445,7 @@ export async function POST(
         }
 
         // Step 2e: Build boxes and assign to correct packing groups
-        const allBoxes: BoxInput[] = shipment.boxes.map(box => ({
+        const allBoxes: BoxInput[] = shipment.boxes.map((box: { weightLbs: number; lengthInches: number; widthInches: number; heightInches: number; items: Array<{ masterSku: string; quantity: number }> }) => ({
           weight: {
             unit: 'LB' as const,
             value: Number(box.weightLbs),
@@ -458,7 +458,7 @@ export async function POST(
           },
           quantity: 1,
           contentInformationSource: 'BOX_CONTENT_PROVIDED' as const,
-          items: box.items.map(item => ({
+          items: box.items.map((item: { masterSku: string; quantity: number }) => ({
             msku: item.masterSku,
             quantity: item.quantity,
             prepOwner: 'NONE' as const,
@@ -726,6 +726,13 @@ export async function POST(
 
       const transportSelections: Array<{ shipmentId: string; transportationOptionId: string }> = []
 
+      // Check if all splits are already confirmed
+      const unconfirmedSplits = splits.filter((s: { status: string }) => s.status !== 'transport_confirmed')
+      if (unconfirmedSplits.length === 0) {
+        console.log(`[${id}] All ${splits.length} splits already have transport confirmed, skipping transportation step`)
+      } else {
+        console.log(`[${id}] Processing ${unconfirmedSplits.length} unconfirmed splits out of ${splits.length} total`)
+
       for (const split of splits) {
         if (split.status === 'transport_confirmed') continue
 
@@ -847,7 +854,15 @@ export async function POST(
         })
 
         console.log(`[${id}] Transportation confirmed for ${transportSelections.length} shipments`)
+      } else if (unconfirmedSplits.length > 0) {
+        // We had unconfirmed splits but no transport selections were made
+        console.warn(`[${id}] No SPD options were available for any shipment`)
+        return NextResponse.json({
+          error: 'No transportation options available. SPD partnered carrier may not be available for this shipment.',
+          hint: 'Try using your own carrier instead.',
+        }, { status: 400 })
       }
+      } // end else block for unconfirmedSplits > 0
 
       // Update shipment status
       await prisma.shipment.update({
@@ -880,7 +895,7 @@ export async function POST(
         amazonInboundPlanId: finalShipment?.amazonInboundPlanId,
         amazonWorkflowStep: finalShipment?.amazonWorkflowStep,
       },
-      splits: finalShipment?.amazonSplits.map(s => ({
+      splits: finalShipment?.amazonSplits.map((s: { amazonShipmentId: string; destinationFc: string | null; status: string; carrier: string | null; deliveryWindowStart: Date | null; deliveryWindowEnd: Date | null }) => ({
         amazonShipmentId: s.amazonShipmentId,
         destinationFc: s.destinationFc,
         status: s.status,
