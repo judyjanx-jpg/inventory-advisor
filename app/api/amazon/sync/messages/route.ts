@@ -118,7 +118,7 @@ async function syncMessagesViaReports(client: any, daysBack: number = 7): Promis
       },
     }, 30000)
 
-    console.log('[Amazon Messages] Report requested:', reportResponse?.reportId)
+    console.log('[Amazon Messages] Report requested:', (reportResponse as { reportId?: string })?.reportId)
     return 0 // Would need to poll for completion
   } catch (error: any) {
     console.warn('[Amazon Messages] Report-based sync not available:', error.message)
