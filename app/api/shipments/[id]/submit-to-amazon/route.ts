@@ -419,11 +419,18 @@ export async function POST(
           })),
         }))
 
-        // Create package groupings for each packing group
-        const packageGroupings = packingGroups.map(group => ({
-          packingGroupId: group.packingGroupId,
-          boxes: boxes,  // All boxes go to each group for now
-        }))
+        // Create package groupings - use the first packing group for all boxes
+        // (For simple shipments, Amazon typically returns one packing group)
+        if (!packingGroups.length) {
+          return NextResponse.json({
+            error: 'No packing groups found in packing option',
+          }, { status: 500 })
+        }
+
+        const packageGroupings = [{
+          packingGroupId: packingGroups[0].packingGroupId,
+          boxes: boxes,
+        }]
 
         console.log(`[${id}] Setting packing info with ${boxes.length} boxes across ${packageGroupings.length} groups...`)
 
