@@ -1,0 +1,88 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+// Generate a unique ticket number
+function generateTicketNumber(): string {
+  const random = Math.floor(Math.random() * 900000) + 100000 // 6-digit random
+  return `TKT-${random}`
+}
+
+// Public API - Create support ticket
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { name, email, orderId, category, subject, message } = body
+
+    // Validate required fields
+    if (!email || !subject || !message) {
+      return NextResponse.json(
+        { error: 'Email, subject, and message are required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: 'Please provide a valid email address' },
+        { status: 400 }
+      )
+    }
+
+    // Generate unique ticket number
+    let ticketNumber = generateTicketNumber()
+    let attempts = 0
+    while (attempts < 10) {
+      const existing = await prisma.supportTicket.findUnique({
+        where: { ticketNumber }
+      })
+      if (!existing) break
+      ticketNumber = generateTicketNumber()
+      attempts++
+    }
+
+    // Create the ticket
+    const ticket = await prisma.supportTicket.create({
+      data: {
+        ticketNumber,
+        customerEmail: email,
+        customerName: name || null,
+        orderId: orderId || null,
+        category: category || 'OTHER',
+        channel: 'FORM',
+        subject,
+        status: 'OPEN',
+        priority: 'MEDIUM',
+      }
+    })
+
+    // Create the initial message
+    await prisma.ticketMessage.create({
+      data: {
+        ticketId: ticket.id,
+        senderType: 'CUSTOMER',
+        senderName: name || email,
+        content: message,
+      }
+    })
+
+    console.log(`[Support] Created ticket ${ticketNumber} from ${email}`)
+
+    // TODO: Send confirmation email to customer
+    // TODO: Notify support team of new ticket
+
+    return NextResponse.json({
+      success: true,
+      ticketNumber: ticket.ticketNumber,
+      message: 'Your message has been received. We will respond within 24 hours.'
+    })
+  } catch (error) {
+    console.error('Ticket creation error:', error)
+    return NextResponse.json(
+      { error: 'Unable to submit your message. Please try again.' },
+      { status: 500 }
+    )
+  }
+}
+

@@ -66,6 +66,11 @@ model Product {
   warehouseLocation   String? @map("warehouse_location") // Bin/Rack location for picking
   labelType           String  @default("fnsku_only") @map("label_type") // fnsku_tp, fnsku_only, tp_only
 
+  // Customer Support & Warranty
+  isWarrantied     Boolean @default(true) @map("is_warrantied") // Eligible for warranty claims
+  careInstructions String? @map("care_instructions") @db.Text // For AI/support reference
+  sizingGuide      String? @map("sizing_guide") @db.Text // Product-specific sizing info
+
   // Status
   status     String    @default("active") // active, discontinued, seasonal, liquidate
   launchDate DateTime? @map("launch_date")
@@ -2311,4 +2316,198 @@ model Goal {
 
   @@index([userId])
   @@map("goals")
+}
+
+// ============================================
+// CUSTOMER SUPPORT & WARRANTY PORTAL
+// ============================================
+
+// Warranty claims from customers
+model WarrantyClaim {
+  id              Int      @id @default(autoincrement())
+  claimNumber     String   @unique @map("claim_number") // WC-2025-001234
+  orderId         String   @map("order_id") // Amazon order ID
+  customerEmail   String   @map("customer_email")
+  customerName    String?  @map("customer_name")
+  
+  // Claim type and status
+  claimType       String   @map("claim_type") // REFUND, REPLACEMENT
+  status          String   @default("PENDING_RETURN") // PENDING_RETURN, RETURN_SHIPPED, RETURN_DELIVERED, PROCESSING, COMPLETED, CANCELLED
+  
+  // Product info
+  masterSku       String?  @map("master_sku")
+  productName     String?  @map("product_name")
+  quantity        Int      @default(1)
+  
+  // Return shipping
+  returnTrackingNumber String?   @map("return_tracking_number")
+  returnLabelUrl       String?   @map("return_label_url") @db.Text
+  returnCarrier        String?   @map("return_carrier")
+  returnShippedAt      DateTime? @map("return_shipped_at")
+  returnDeliveredAt    DateTime? @map("return_delivered_at")
+  
+  // Replacement (if applicable)
+  replacementOrderId   String?   @map("replacement_order_id")
+  replacementTracking  String?   @map("replacement_tracking")
+  replacementShippedAt DateTime? @map("replacement_shipped_at")
+  
+  // Refund (if applicable)
+  refundAmount         Decimal?  @map("refund_amount") @db.Decimal(10, 2)
+  refundProcessedAt    DateTime? @map("refund_processed_at")
+  
+  // Customer shipping address (JSON)
+  shippingAddress      String?   @map("shipping_address") @db.Text
+  
+  // Notes
+  customerNotes        String?   @map("customer_notes") @db.Text
+  internalNotes        String?   @map("internal_notes") @db.Text
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@index([orderId])
+  @@index([customerEmail])
+  @@index([status])
+  @@map("warranty_claims")
+}
+
+// Support tickets
+model SupportTicket {
+  id              Int      @id @default(autoincrement())
+  ticketNumber    String   @unique @map("ticket_number") // TKT-001234
+  
+  // Status and priority
+  status          String   @default("OPEN") // OPEN, PENDING, RESOLVED, CLOSED
+  priority        String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  category        String   @default("OTHER") // WARRANTY, ORDER, SHIPPING, PRODUCT, OTHER
+  channel         String   @default("FORM") // CHAT, FORM, EMAIL, AMAZON
+  
+  // Customer info
+  customerEmail   String   @map("customer_email")
+  customerName    String?  @map("customer_name")
+  
+  // Related order (optional)
+  orderId         String?  @map("order_id")
+  
+  // Ticket content
+  subject         String
+  aiSummary       String?  @map("ai_summary") @db.Text
+  resolutionNotes String?  @map("resolution_notes") @db.Text
+  
+  // Assignment
+  assignedTo      String?  @map("assigned_to")
+  
+  // Timestamps
+  resolvedAt      DateTime? @map("resolved_at")
+  
+  // Relations
+  messages        TicketMessage[]
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@index([status])
+  @@index([customerEmail])
+  @@index([category])
+  @@map("support_tickets")
+}
+
+// Messages within a support ticket
+model TicketMessage {
+  id              Int           @id @default(autoincrement())
+  ticketId        Int           @map("ticket_id")
+  ticket          SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  senderType      String        @map("sender_type") // CUSTOMER, AGENT, AI
+  senderName      String?       @map("sender_name")
+  content         String        @db.Text
+  
+  // Attachments (JSON array of URLs)
+  attachments     String?       @db.Text
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@index([ticketId])
+  @@map("ticket_messages")
+}
+
+// AI chat sessions
+model ChatSession {
+  id              Int      @id @default(autoincrement())
+  sessionToken    String   @unique @map("session_token")
+  
+  // Customer info (may be anonymous initially)
+  customerEmail   String?  @map("customer_email")
+  customerName    String?  @map("customer_name")
+  
+  // Context
+  orderContextId  String?  @map("order_context_id") // If discussing a specific order
+  
+  // Escalation
+  escalatedToTicketId Int? @map("escalated_to_ticket_id")
+  
+  // Timestamps
+  startedAt       DateTime @default(now()) @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  
+  // Relations
+  messages        ChatMessage[]
+  
+  @@index([customerEmail])
+  @@index([sessionToken])
+  @@map("chat_sessions")
+}
+
+// Messages within a chat session
+model ChatMessage {
+  id              Int         @id @default(autoincrement())
+  sessionId       Int         @map("session_id")
+  session         ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  role            String      // USER, ASSISTANT
+  content         String      @db.Text
+  
+  // For AI responses, track confidence/escalation signals
+  confidence      Decimal?    @db.Decimal(3, 2) // 0-1
+  shouldEscalate  Boolean     @default(false) @map("should_escalate")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@index([sessionId])
+  @@map("chat_messages")
+}
+
+// Knowledge base articles for FAQ/help center
+model KnowledgeArticle {
+  id              Int      @id @default(autoincrement())
+  title           String
+  slug            String   @unique
+  category        String   // SHIPPING, RETURNS, SIZING, CARE, WARRANTY, GENERAL
+  
+  // Content
+  contentMarkdown String   @map("content_markdown") @db.Text
+  excerpt         String?  @db.Text // Short summary for listings
+  
+  // SEO
+  metaTitle       String?  @map("meta_title")
+  metaDescription String?  @map("meta_description") @db.Text
+  
+  // Status
+  isPublished     Boolean  @default(false) @map("is_published")
+  publishedAt     DateTime? @map("published_at")
+  
+  // Analytics
+  viewCount       Int      @default(0) @map("view_count")
+  helpfulCount    Int      @default(0) @map("helpful_count")
+  notHelpfulCount Int      @default(0) @map("not_helpful_count")
+  
+  // Ordering
+  sortOrder       Int      @default(0) @map("sort_order")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@index([category])
+  @@index([isPublished])
+  @@map("knowledge_articles")
 }
