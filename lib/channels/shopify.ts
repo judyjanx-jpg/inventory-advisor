@@ -90,12 +90,15 @@ export const shopifyAdapter: ChannelAdapter = {
     const orderFilter = orderId ? `/${orderId}.json` : `.json?status=any&limit=50${sinceParam}`
 
     try {
-      const ordersData = await shopifyRequest<{ orders: any[] }>(
+      const ordersData = await shopifyRequest<{ orders?: any[]; order?: any }>(
         credentials,
         `orders${orderFilter}`
       )
 
-      for (const order of ordersData.orders || [ordersData.order].filter(Boolean)) {
+      // Handle both single order and multiple orders responses
+      const orders = ordersData.orders || (ordersData.order ? [ordersData.order] : [])
+
+      for (const order of orders) {
         // Check for customer notes
         if (order.note) {
           messages.push({
