@@ -1,38 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 import { shipstation } from '@/lib/shipstation'
 
-// GET - Check ShipStation connection status
+/**
+ * GET /api/settings/shipstation
+ * Get ShipStation API settings and connection status
+ */
 export async function GET() {
   try {
-    const isConfigured = shipstation.isConfigured()
+    // First check if configured via environment
+    const isEnvConfigured = shipstation.isConfigured()
     
-    if (!isConfigured) {
+    // Also check database for credentials
+    const connection = await prisma.apiConnection.findFirst({
+      where: { platform: 'shipstation' }
+    })
+
+    if (!isEnvConfigured && !connection) {
       return NextResponse.json({
         connected: false,
+        configured: false,
         message: 'ShipStation API credentials not configured',
         carriers: [],
       })
     }
 
-    // Try to fetch carriers to verify connection
-    try {
-      const carriers = await shipstation.getCarriers()
-      return NextResponse.json({
-        connected: true,
-        message: 'Connected to ShipStation',
-        carriers: carriers.map(c => ({
-          name: c.name,
-          code: c.code,
-          balance: c.balance,
-        })),
-      })
-    } catch (error: any) {
-      return NextResponse.json({
-        connected: false,
-        message: `Connection failed: ${error.message}`,
-        carriers: [],
-      })
+    // If env configured, test connection
+    if (isEnvConfigured) {
+      try {
+        const carriers = await shipstation.getCarriers()
+        return NextResponse.json({
+          connected: true,
+          configured: true,
+          message: 'Connected to ShipStation',
+          carriers: carriers.map(c => ({
+            name: c.name,
+            code: c.code,
+            balance: c.balance,
+          })),
+        })
+      } catch (error: any) {
+        return NextResponse.json({
+          connected: false,
+          configured: true,
+          message: `Connection failed: ${error.message}`,
+          carriers: [],
+        })
+      }
     }
+
+    // Return database connection status
+    return NextResponse.json({
+      connected: connection?.isConnected || false,
+      configured: true,
+      lastSyncAt: connection?.lastSyncAt,
+      lastSyncStatus: connection?.lastSyncStatus,
+      carriers: [],
+    })
   } catch (error) {
     console.error('[ShipStation Settings] Error:', error)
     return NextResponse.json(
@@ -42,7 +66,10 @@ export async function GET() {
   }
 }
 
-// POST - Test ShipStation connection with provided credentials
+/**
+ * POST /api/settings/shipstation
+ * Test and save ShipStation API credentials
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -50,48 +77,116 @@ export async function POST(request: NextRequest) {
 
     if (!apiKey || !apiSecret) {
       return NextResponse.json(
-        { error: 'API Key and Secret are required' },
+        { error: 'API Key and API Secret are required' },
         { status: 400 }
       )
     }
 
-    // Test connection with provided credentials
-    const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
-    const response = await fetch('https://ssapi.shipstation.com/carriers', {
-      headers: {
-        'Authorization': `Basic ${auth}`,
+    // Test the credentials with ShipStation API
+    const authString = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
+    let verified = false
+    let verifyError = ''
+    let carriers: any[] = []
+
+    try {
+      const testRes = await fetch('https://ssapi.shipstation.com/carriers', {
+        headers: {
+          'Authorization': `Basic ${authString}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (testRes.ok) {
+        verified = true
+        carriers = await testRes.json()
+      } else {
+        const errorText = await testRes.text()
+        verifyError = `ShipStation returned ${testRes.status}: ${errorText}`
       }
+    } catch (fetchError: any) {
+      verifyError = fetchError.message
+    }
+
+    // Save credentials to database
+    const existing = await prisma.apiConnection.findFirst({
+      where: { platform: 'shipstation' }
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      return NextResponse.json({
-        success: false,
-        message: `Authentication failed: ${response.status}`,
-        error: errorText,
+    const credentialsJson = JSON.stringify({
+      apiKey,
+      apiSecret,
+    })
+
+    if (existing) {
+      await prisma.apiConnection.update({
+        where: { id: existing.id },
+        data: {
+          credentials: credentialsJson,
+          isConnected: verified,
+          lastSyncStatus: verified ? 'success' : 'error',
+          lastSyncError: verifyError || null,
+        },
+      })
+    } else {
+      await prisma.apiConnection.create({
+        data: {
+          platform: 'shipstation',
+          credentials: credentialsJson,
+          isConnected: verified,
+          lastSyncStatus: verified ? 'success' : 'error',
+          lastSyncError: verifyError || null,
+        },
       })
     }
 
-    const carriers = await response.json()
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Connection successful!',
-      carriers: carriers.map((c: any) => ({
-        name: c.name,
-        code: c.code,
-        balance: c.balance,
-      })),
-      instructions: 'Add these environment variables to your deployment:\n' +
-        `SHIPSTATION_API_KEY=${apiKey}\n` +
-        `SHIPSTATION_API_SECRET=${apiSecret}`
-    })
+    if (verified) {
+      return NextResponse.json({
+        success: true,
+        message: 'ShipStation connected successfully!',
+        carriers: carriers.map((c: any) => ({
+          name: c.name,
+          code: c.code,
+          balance: c.balance,
+        })),
+        instructions: 'Add these environment variables to your deployment:\n' +
+          `SHIPSTATION_API_KEY=${apiKey}\n` +
+          `SHIPSTATION_API_SECRET=${apiSecret}`
+      })
+    } else {
+      return NextResponse.json({
+        success: false,
+        warning: true,
+        message: `Credentials saved but verification failed: ${verifyError}`,
+      })
+    }
   } catch (error: any) {
-    console.error('[ShipStation Settings] Test error:', error)
-    return NextResponse.json({
-      success: false,
-      message: error.message || 'Connection test failed',
-    })
+    console.error('[ShipStation Settings] Error:', error)
+    return NextResponse.json(
+      { error: `Failed to save settings: ${error.message}` },
+      { status: 500 }
+    )
   }
 }
 
+/**
+ * DELETE /api/settings/shipstation
+ * Remove ShipStation API credentials
+ */
+export async function DELETE() {
+  try {
+    await prisma.apiConnection.deleteMany({
+      where: { platform: 'shipstation' }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'ShipStation credentials removed',
+    })
+  } catch (error) {
+    console.error('Error deleting shipstation settings:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete settings' },
+      { status: 500 }
+    )
+  }
+}

@@ -23,6 +23,14 @@ const SETTINGS_SECTIONS = [
     status: 'Configure',
   },
   {
+    id: 'shipstation',
+    name: 'ShipStation',
+    description: 'Shipping labels, tracking, and order management',
+    icon: '🚢',
+    href: '/settings/shipstation',
+    status: 'Configure',
+  },
+  {
     id: 'transparency',
     name: 'Transparency API',
     description: 'Amazon Transparency codes for product labels',
