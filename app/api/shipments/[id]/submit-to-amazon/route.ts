@@ -391,7 +391,27 @@ export async function POST(
           }, { status: 500 })
         }
 
-        // Step 2c: Get items for each packing group to know which boxes go where
+        // Step 2c: FIRST confirm packing option (required before accessing packing groups)
+        console.log(`[${id}] Confirming packing option...`)
+        const confirmPackingResult = await confirmPackingOption(
+          inboundPlanId,
+          selectedPackingOption.packingOptionId
+        )
+
+        const confirmPackingStatus = await waitForOperation(
+          await createSpApiClient(),
+          confirmPackingResult.operationId
+        )
+
+        if (confirmPackingStatus.operationStatus === 'FAILED') {
+          return NextResponse.json({
+            error: 'Failed to confirm packing option',
+            details: confirmPackingStatus.operationProblems,
+          }, { status: 500 })
+        }
+        console.log(`[${id}] Packing option confirmed`)
+
+        // Step 2d: Get items for each packing group to know which boxes go where
         const packingGroupItemsMap = new Map<string, Set<string>>()
         for (const group of packingGroups) {
           const { items } = await listPackingGroupItems(inboundPlanId, group.packingGroupId)
@@ -399,7 +419,7 @@ export async function POST(
           console.log(`[${id}] Packing group ${group.packingGroupId} contains SKUs: ${items.map(i => i.msku).join(', ')}`)
         }
 
-        // Step 2d: Build boxes and assign to correct packing groups
+        // Step 2e: Build boxes and assign to correct packing groups
         const allBoxes: BoxInput[] = shipment.boxes.map(box => ({
           weight: {
             unit: 'LB' as const,
@@ -484,35 +504,17 @@ export async function POST(
 
         console.log(`[${id}] Packing information set successfully`)
 
-        // Step 2d: NOW confirm packing option (after setting packing info)
-        const confirmPackingResult = await confirmPackingOption(
-          inboundPlanId,
-          selectedPackingOption.packingOptionId
-        )
-
-        const confirmPackingStatus = await waitForOperation(
-          await createSpApiClient(),
-          confirmPackingResult.operationId
-        )
-
-        if (confirmPackingStatus.operationStatus === 'FAILED') {
-          return NextResponse.json({
-            error: 'Failed to confirm packing option',
-            details: confirmPackingStatus.operationProblems,
-          }, { status: 500 })
-        }
-
         await prisma.shipment.update({
           where: { id },
           data: {
             amazonPackingOptionId: selectedPackingOption.packingOptionId,
             amazonWorkflowStep: 'packing_set',
-            amazonLastOperationId: confirmPackingResult.operationId,
+            amazonLastOperationId: packingResult.operationId,
           },
         })
 
         result.packingOperationId = packingResult.operationId
-        console.log(`[${id}] Packing confirmed`)
+        console.log(`[${id}] Packing complete`)
       }
 
       if (step === 'set_packing') {
