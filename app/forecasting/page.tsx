@@ -3,16 +3,25 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
-import { 
+import {
   Package, Truck, AlertTriangle, TrendingUp, TrendingDown, Clock,
   ShoppingCart, ArrowRight, RefreshCw, ChevronDown, ChevronUp,
   Filter, Download, Info, Calendar, Settings, Plus, Check, X,
-  BarChart3, AlertCircle, Zap, History, Brain, Target, Edit3, GripVertical
+  BarChart3, AlertCircle, Zap, History, Brain, Target, Edit3, GripVertical,
+  Bell, Shield, Activity, Cpu
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, AreaChart, Area, ReferenceLine
 } from 'recharts'
+import {
+  ModelBreakdown,
+  AlertCenter,
+  SeasonalityManager,
+  SupplierScorecard,
+  SafetyStockView,
+  KPIDashboard
+} from '@/components/forecasting'
 
 // ==========================================
 // Types
@@ -134,10 +143,10 @@ export default function ForecastingPage() {
         } catch {}
       }
     }
-    return ['trends', 'purchasing', 'fba', 'stockouts']
+    return ['trends', 'purchasing', 'fba', 'stockouts', 'ai-engine', 'alerts', 'seasonality', 'suppliers', 'safety-stock', 'kpis']
   })
-  
-  const [activeTab, setActiveTab] = useState<'trends' | 'purchasing' | 'fba' | 'stockouts'>(() => {
+
+  const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('forecastingTabOrder')
       if (saved) {
@@ -168,6 +177,9 @@ export default function ForecastingPage() {
   
   // Trend view state (multi-select for Trends tab)
   const [trendSelectedSkus, setTrendSelectedSkus] = useState<string[]>([])
+
+  // AI Engine state
+  const [aiEngineSelectedSku, setAiEngineSelectedSku] = useState<string | null>(null)
 
   // Save tab order to localStorage whenever it changes
   useEffect(() => {
@@ -385,12 +397,12 @@ export default function ForecastingPage() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-2 border-b border-slate-700 pb-4">
+        <div className="flex gap-2 border-b border-slate-700 pb-4 overflow-x-auto">
           {tabOrder.map((tabId) => {
             const tabConfig: Record<string, { icon: React.ReactNode; label: string; count?: number; color: string }> = {
               trends: {
                 icon: <BarChart3 className="w-5 h-5" />,
-                label: "Trends & Analysis",
+                label: "Trends",
                 color: "bg-indigo-600"
               },
               purchasing: {
@@ -401,14 +413,44 @@ export default function ForecastingPage() {
               },
               fba: {
                 icon: <Truck className="w-5 h-5" />,
-                label: "FBA Replenishment",
+                label: "FBA",
                 color: "bg-purple-600"
               },
               stockouts: {
                 icon: <AlertCircle className="w-5 h-5" />,
-                label: "Stockout Analysis",
+                label: "Stockouts",
                 count: stockouts.filter(s => !s.resolved).length,
                 color: "bg-red-600"
+              },
+              'ai-engine': {
+                icon: <Cpu className="w-5 h-5" />,
+                label: "AI Engine",
+                color: "bg-emerald-600"
+              },
+              alerts: {
+                icon: <Bell className="w-5 h-5" />,
+                label: "Alerts",
+                color: "bg-orange-600"
+              },
+              seasonality: {
+                icon: <Calendar className="w-5 h-5" />,
+                label: "Seasonality",
+                color: "bg-blue-600"
+              },
+              suppliers: {
+                icon: <Truck className="w-5 h-5" />,
+                label: "Suppliers",
+                color: "bg-amber-600"
+              },
+              'safety-stock': {
+                icon: <Shield className="w-5 h-5" />,
+                label: "Safety Stock",
+                color: "bg-pink-600"
+              },
+              kpis: {
+                icon: <Target className="w-5 h-5" />,
+                label: "KPIs",
+                color: "bg-teal-600"
               }
             }
             
@@ -485,6 +527,33 @@ export default function ForecastingPage() {
 
         {activeTab === 'stockouts' && (
           <StockoutsTab stockouts={stockouts} onRefresh={fetchData} />
+        )}
+
+        {activeTab === 'ai-engine' && (
+          <ModelBreakdown
+            selectedSku={aiEngineSelectedSku}
+            onSelectSku={setAiEngineSelectedSku}
+          />
+        )}
+
+        {activeTab === 'alerts' && (
+          <AlertCenter />
+        )}
+
+        {activeTab === 'seasonality' && (
+          <SeasonalityManager />
+        )}
+
+        {activeTab === 'suppliers' && (
+          <SupplierScorecard />
+        )}
+
+        {activeTab === 'safety-stock' && (
+          <SafetyStockView />
+        )}
+
+        {activeTab === 'kpis' && (
+          <KPIDashboard />
         )}
       </div>
     </MainLayout>
