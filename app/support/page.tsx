@@ -1,4 +1,5 @@
 'use client'
+// Public Support Portal v4 - Customer-facing only
 
 import { useState } from 'react'
 import Link from 'next/link'
