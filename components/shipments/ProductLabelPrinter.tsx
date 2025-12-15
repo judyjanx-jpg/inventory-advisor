@@ -779,6 +779,9 @@ export default function ProductLabelPrinter({
     widthIn: number,
     heightIn: number
   ) => {
+    // Import html2canvas once at the start
+    const { default: html2canvas } = await import('html2canvas')
+
     // Create a temporary iframe to render the HTML
     const iframe = document.createElement('iframe')
     iframe.style.position = 'absolute'
@@ -786,30 +789,30 @@ export default function ProductLabelPrinter({
     iframe.style.width = `${widthIn * 96}px`
     iframe.style.height = `${heightIn * 96}px`
     document.body.appendChild(iframe)
-    
+
     const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
     if (!iframeDoc) {
       alert('Failed to create PDF - browser security restrictions')
       document.body.removeChild(iframe)
       return
     }
-    
+
     iframeDoc.open()
     iframeDoc.write(html)
     iframeDoc.close()
-    
+
     // Wait for content to load
     await new Promise<void>(resolve => {
       let loadedCount = 0
       const totalToLoad = iframeDoc.images.length + (labelType === 'fnsku_only' || labelType === 'fnsku_tp' ? quantity : 0)
-      
+
       const checkComplete = () => {
         loadedCount++
         if (loadedCount >= totalToLoad) {
           resolve()
         }
       }
-      
+
       Array.from(iframeDoc.images).forEach(img => {
         if (img.complete) {
           checkComplete()
@@ -818,14 +821,15 @@ export default function ProductLabelPrinter({
           img.onerror = checkComplete
         }
       })
-      
+
       if (labelType === 'fnsku_only' || labelType === 'fnsku_tp') {
         iframe.contentWindow?.addEventListener('jsbarcode-rendered', checkComplete)
       }
-      
-      setTimeout(() => resolve(), 3000)
+
+      // Shorter timeout since we're optimizing for speed
+      setTimeout(() => resolve(), 1500)
     })
-    
+
     // Create PDF with correct page size
     // For jsPDF: format is [smaller, larger], orientation determines which is width vs height
     const widthMm = widthIn * 25.4
@@ -841,35 +845,44 @@ export default function ProductLabelPrinter({
       compress: true,
     })
 
-    // Generate each label as a separate page
-    for (let i = 0; i < quantity; i++) {
-      if (i > 0) {
-        pdf.addPage([smallerDim, largerDim], isLandscape ? 'landscape' : 'portrait')
-      }
-      
-      const labelElement = iframeDoc.querySelectorAll('.label')[i] as HTMLElement
+    // Get all label elements
+    const labelElements = Array.from(iframeDoc.querySelectorAll('.label')) as HTMLElement[]
+
+    // Render all canvases in parallel for much faster performance
+    const canvasPromises = labelElements.slice(0, quantity).map((labelElement, i) => {
       if (!labelElement) {
         console.warn(`Label ${i} not found`)
-        continue
+        return Promise.resolve(null)
       }
-      
-      const { default: html2canvas } = await import('html2canvas')
-      const canvas = await html2canvas(labelElement, {
+
+      return html2canvas(labelElement, {
         width: widthIn * 96,
         height: heightIn * 96,
-        scale: 3, // Higher scale for better quality
+        scale: 2, // Reduced from 3 for faster rendering while maintaining quality
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
       })
-      
-      const imgData = canvas.toDataURL('image/png', 1.0)
+    })
+
+    // Wait for all canvases to render in parallel
+    const canvases = await Promise.all(canvasPromises)
+
+    // Add canvases to PDF sequentially (PDF pages must be added in order)
+    canvases.forEach((canvas, i) => {
+      if (!canvas) return
+
+      if (i > 0) {
+        pdf.addPage([smallerDim, largerDim], isLandscape ? 'landscape' : 'portrait')
+      }
+
+      const imgData = canvas.toDataURL('image/png', 0.92) // Slightly lower quality for faster encoding
       pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'FAST')
-    }
-    
+    })
+
     // Clean up
     document.body.removeChild(iframe)
-    
+
     // Auto-download PDF
     const fileName = `Labels-${item.masterSku}-${new Date().getTime()}.pdf`
     pdf.save(fileName)
