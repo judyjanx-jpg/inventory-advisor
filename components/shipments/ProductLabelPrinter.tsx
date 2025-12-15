@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Printer, Tag, X, AlertCircle, Check, Loader2, Download } from 'lucide-react'
+import { Printer, Tag, X, AlertCircle, Check, Loader2, Download, RotateCcw, Plus } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import QRCode from 'qrcode'
@@ -30,6 +30,16 @@ interface LabelSettings {
   tpOnlyLabelSize: string
 }
 
+interface PrintedLabelData {
+  quantity: number
+  tpCodes: string[]
+  html: string
+  labelType: LabelType
+  widthIn: number
+  heightIn: number
+  printedAt: Date
+}
+
 export default function ProductLabelPrinter({
   shipmentId,
   shipmentInternalId,
@@ -44,6 +54,11 @@ export default function ProductLabelPrinter({
   })
   const [loadingTp, setLoadingTp] = useState<string | null>(null)
   const [tpCodes, setTpCodes] = useState<Record<string, string[]>>({})
+
+  // Track printed labels and show confirmation
+  const [printedLabels, setPrintedLabels] = useState<Record<string, PrintedLabelData>>({})
+  const [showConfirm, setShowConfirm] = useState<string | null>(null) // SKU being confirmed
+  const [requestMoreQty, setRequestMoreQty] = useState<number>(1)
 
   // Load settings from localStorage
   useEffect(() => {
@@ -144,10 +159,10 @@ export default function ProductLabelPrinter({
     }
   }
 
-  const printLabels = async (item: ShipmentItem) => {
+  const printLabels = async (item: ShipmentItem, forceNewCodes = true) => {
     const labelType = getLabelType(item)
     const quantity = labelCounts[item.masterSku] || item.adjustedQty
-    
+
     // Warn if no FNSKU for FNSKU-type labels
     if ((labelType === 'fnsku_only' || labelType === 'fnsku_tp') && !item.fnsku) {
       const proceed = confirm(
@@ -158,45 +173,104 @@ export default function ProductLabelPrinter({
       )
       if (!proceed) return
     }
-    
+
     let transparencyCodes: string[] = []
-    
-    // ALWAYS request fresh codes - don't use cached codes
-    if (labelType === 'fnsku_tp' || labelType === 'tp_only') {
+
+    // Request fresh codes if needed (for TP labels)
+    if ((labelType === 'fnsku_tp' || labelType === 'tp_only') && forceNewCodes) {
       console.log(`[Label Print] Requesting fresh Transparency codes for ${item.masterSku}, quantity: ${quantity}`)
-      
+
       // Clear any existing codes for this SKU
       setTpCodes(prev => {
         const updated = { ...prev }
         delete updated[item.masterSku]
         return updated
       })
-      
+
       // Request fresh codes
       transparencyCodes = await requestTransparencyCodes(item.masterSku, quantity)
-      
+
       if (transparencyCodes.length < quantity) {
         alert(`Warning: Only received ${transparencyCodes.length} Transparency codes but need ${quantity}. Some labels may be missing QR codes.`)
       }
-      
+
       // Pad with empty strings if needed
       while (transparencyCodes.length < quantity) {
         transparencyCodes.push('')
       }
-      
+
       console.log(`[Label Print] Received ${transparencyCodes.length} codes for ${item.masterSku}. First code: "${transparencyCodes[0]?.substring(0, 20)}..."`)
     }
 
-    const labelSize = labelType === 'tp_only' 
-      ? labelSettings.tpOnlyLabelSize 
+    const labelSize = labelType === 'tp_only'
+      ? labelSettings.tpOnlyLabelSize
       : labelSettings.fnskuLabelSize
 
     const [width, height] = labelSize.split('x').map(s => parseFloat(s))
 
     const html = await generateLabelHTML(item, labelType, quantity, transparencyCodes, width, height)
-    
+
     // Generate and auto-download PDF
     await generatePDF(html, item, labelType, quantity, width, height)
+
+    // Store print data for reprint/confirmation
+    setPrintedLabels(prev => ({
+      ...prev,
+      [item.masterSku]: {
+        quantity,
+        tpCodes: transparencyCodes,
+        html,
+        labelType,
+        widthIn: width,
+        heightIn: height,
+        printedAt: new Date()
+      }
+    }))
+
+    // Show confirmation modal
+    setShowConfirm(item.masterSku)
+    setRequestMoreQty(1)
+  }
+
+  // Reprint using stored data (no new TP codes)
+  const reprintLabels = async (item: ShipmentItem) => {
+    const printData = printedLabels[item.masterSku]
+    if (!printData) {
+      alert('No previous print data found. Please print first.')
+      return
+    }
+
+    // Regenerate PDF from stored HTML
+    await generatePDF(
+      printData.html,
+      item,
+      printData.labelType,
+      printData.quantity,
+      printData.widthIn,
+      printData.heightIn
+    )
+  }
+
+  // Request more labels with NEW transparency codes
+  const requestMoreLabels = async (item: ShipmentItem, additionalQty: number) => {
+    // Update the label count to the new quantity
+    setLabelCounts(prev => ({
+      ...prev,
+      [item.masterSku]: additionalQty
+    }))
+
+    // Close confirmation first
+    setShowConfirm(null)
+
+    // Wait for state to update, then print with new codes
+    setTimeout(() => {
+      printLabels(item, true)
+    }, 100)
+  }
+
+  // Confirm print was successful
+  const confirmPrinted = (sku: string) => {
+    setShowConfirm(null)
   }
 
   // Helper to truncate SKU for vertical display
@@ -805,17 +879,15 @@ export default function ProductLabelPrinter({
             const hasTpCodes = tpCodes[item.masterSku]?.length > 0
             
             return (
-              <div 
-                key={item.masterSku}
-                className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-white">{item.masterSku}</div>
-                  <div className="text-xs text-slate-500 font-mono">
-                    FNSKU: {item.fnsku || <span className="text-amber-400">Not set</span>}
+              <div key={item.masterSku} className="space-y-2">
+                <div className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-white">{item.masterSku}</div>
+                    <div className="text-xs text-slate-500 font-mono">
+                      FNSKU: {item.fnsku || <span className="text-amber-400">Not set</span>}
+                    </div>
+                    <div className="text-sm text-slate-400 truncate">{item.productName}</div>
                   </div>
-                  <div className="text-sm text-slate-400 truncate">{item.productName}</div>
-                </div>
                 
                 <div className="text-center">
                   <div className="text-sm text-slate-400">Units</div>
@@ -841,13 +913,21 @@ export default function ProductLabelPrinter({
                   </div>
                 )}
 
+                {/* Show printed status */}
+                {printedLabels[item.masterSku] && (
+                  <div className="text-xs text-emerald-400 flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    {printedLabels[item.masterSku].quantity} printed
+                  </div>
+                )}
+
                 {labelType === 'none' ? (
                   <div className="text-sm text-slate-400 italic">
                     Pre-labeled
                   </div>
                 ) : (
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     variant="outline"
                     onClick={() => printLabels(item)}
                     disabled={loadingTp === item.masterSku}
@@ -865,6 +945,72 @@ export default function ProductLabelPrinter({
                     )}
                   </Button>
                 )}
+              </div>
+
+              {/* Confirmation Modal */}
+              {showConfirm === item.masterSku && (
+                <div className="mt-3 p-3 bg-slate-900 rounded-lg border border-slate-600">
+                  <div className="text-sm text-white mb-3 flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    PDF downloaded for {printedLabels[item.masterSku]?.quantity} labels
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Confirm printed */}
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => confirmPrinted(item.masterSku)}
+                    >
+                      <Check className="w-4 h-4 mr-1" />
+                      Printed OK
+                    </Button>
+
+                    {/* Reprint same labels */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => reprintLabels(item)}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-1" />
+                      Reprint
+                    </Button>
+
+                    {/* Request more with input */}
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="1"
+                        value={requestMoreQty}
+                        onChange={(e) => setRequestMoreQty(parseInt(e.target.value) || 1)}
+                        className="w-14 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => requestMoreLabels(item, requestMoreQty)}
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        More
+                      </Button>
+                    </div>
+
+                    {/* Close */}
+                    <button
+                      onClick={() => setShowConfirm(null)}
+                      className="ml-auto text-slate-400 hover:text-white p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {(labelType === 'fnsku_tp' || labelType === 'tp_only') && (
+                    <p className="text-xs text-slate-500 mt-2">
+                      "Reprint" uses same TP codes • "More" requests new TP codes
+                    </p>
+                  )}
+                </div>
+              )}
               </div>
             )
           })}
