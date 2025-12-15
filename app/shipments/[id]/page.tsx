@@ -365,9 +365,54 @@ export default function ShipmentDetailPage() {
       }
 
       setInboundPlanId(data.inboundPlanId)
-      setPlacementOptions(data.placementOptions)
-      setSelectedPlacementId(data.recommendedOptionId)
-      setSubmissionStep('selecting_placement')
+
+      // Check if shipment is already fully submitted
+      if (data.alreadySubmitted) {
+        console.log('Shipment already submitted to Amazon')
+        setConfirmedShipments(data.shipments)
+        setSubmissionStep('done')
+        return
+      }
+
+      // Check if we should skip to transport (placement already confirmed)
+      if (data.skipToTransport) {
+        console.log('Placement already confirmed, skipping to transport selection')
+        setSelectedPlacementId(data.placementOptionId)
+        // Automatically proceed to get transport options
+        setSubmissionStep('selecting_transport')
+
+        const transportRes = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon?step=select_placement`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ placementOptionId: data.placementOptionId }),
+        })
+
+        const transportData = await transportRes.json()
+
+        if (!transportRes.ok) {
+          throw new Error(transportData.error || 'Failed to get transport options')
+        }
+
+        setShipmentSplits(transportData.shipments)
+
+        // Auto-select transport options
+        const autoSelected: Record<string, string> = {}
+        for (const split of transportData.shipments) {
+          const partnered = split.transportationOptions.find(
+            (t: TransportOption) => t.shippingSolution === 'AMAZON_PARTNERED_CARRIER' && t.shippingMode === 'GROUND_SMALL_PARCEL'
+          )
+          if (partnered) {
+            autoSelected[split.amazonShipmentId] = partnered.transportationOptionId
+          } else if (split.transportationOptions.length > 0) {
+            autoSelected[split.amazonShipmentId] = split.transportationOptions[0].transportationOptionId
+          }
+        }
+        setSelectedTransports(autoSelected)
+      } else {
+        setPlacementOptions(data.placementOptions)
+        setSelectedPlacementId(data.recommendedOptionId)
+        setSubmissionStep('selecting_placement')
+      }
     } catch (error: any) {
       console.error('Error getting placement options:', error)
       setSubmissionError(error.message || 'Failed to get placement options')
