@@ -241,6 +241,56 @@ export async function POST(
     // Creates plan + packing, returns placement options for user selection
     // ========================================
     if (step === 'get_placement_options') {
+      // Check if transport is already confirmed - shipment is complete
+      if (shipment.amazonWorkflowStep === 'transport_confirmed') {
+        // Get existing shipment splits to show
+        const existingSplits = await prisma.amazonShipmentSplit.findMany({
+          where: { shipmentId: id },
+        })
+
+        return NextResponse.json({
+          success: true,
+          step: 'get_placement_options',
+          alreadySubmitted: true,
+          inboundPlanId: shipment.amazonInboundPlanId,
+          shipments: existingSplits.map(s => ({
+            amazonShipmentId: s.amazonShipmentId,
+            amazonShipmentConfirmationId: s.amazonShipmentConfirmationId,
+            destinationFc: s.destinationFc,
+            carrier: s.carrier,
+            deliveryWindow: s.deliveryWindowStart && s.deliveryWindowEnd
+              ? `${s.deliveryWindowStart.toISOString().split('T')[0]} - ${s.deliveryWindowEnd.toISOString().split('T')[0]}`
+              : null,
+            labelUrl: s.labelUrl,
+          })),
+          message: 'Shipment already submitted to Amazon.',
+          duration: Date.now() - startTime,
+        })
+      }
+
+      // Check if placement is already confirmed - need to resume from transport step
+      if (shipment.amazonWorkflowStep === 'placement_confirmed') {
+        const inboundPlanId = shipment.amazonInboundPlanId
+        const placementOptionId = shipment.amazonPlacementOptionId
+
+        if (!inboundPlanId || !placementOptionId) {
+          return NextResponse.json({
+            error: 'Shipment has inconsistent state - placement confirmed but missing IDs',
+          }, { status: 400 })
+        }
+
+        // Return indicator that we should skip to transport selection
+        return NextResponse.json({
+          success: true,
+          step: 'get_placement_options',
+          skipToTransport: true,
+          inboundPlanId,
+          placementOptionId,
+          message: 'Placement already confirmed. Proceeding to transport selection.',
+          duration: Date.now() - startTime,
+        })
+      }
+
       // Step 1: Create or reuse inbound plan
       let inboundPlanId = shipment.amazonInboundPlanId
 
@@ -426,16 +476,24 @@ export async function POST(
         }, { status: 400 })
       }
 
-      // Confirm the selected placement option
-      console.log(`[${id}] Confirming placement option: ${placementOptionId}`)
-      const confirmResult = await confirmPlacementOption(inboundPlanId, placementOptionId)
-      const confirmStatus = await waitForOperation(await createSpApiClient(), confirmResult.operationId)
+      // Check if placement is already confirmed (resuming workflow)
+      const placementAlreadyConfirmed = shipment.amazonWorkflowStep === 'placement_confirmed' ||
+                                         shipment.amazonWorkflowStep === 'transport_confirmed'
 
-      if (confirmStatus.operationStatus === 'FAILED') {
-        return NextResponse.json({
-          error: 'Failed to confirm placement option',
-          details: confirmStatus.operationProblems,
-        }, { status: 500 })
+      if (!placementAlreadyConfirmed) {
+        // Confirm the selected placement option
+        console.log(`[${id}] Confirming placement option: ${placementOptionId}`)
+        const confirmResult = await confirmPlacementOption(inboundPlanId, placementOptionId)
+        const confirmStatus = await waitForOperation(await createSpApiClient(), confirmResult.operationId)
+
+        if (confirmStatus.operationStatus === 'FAILED') {
+          return NextResponse.json({
+            error: 'Failed to confirm placement option',
+            details: confirmStatus.operationProblems,
+          }, { status: 500 })
+        }
+      } else {
+        console.log(`[${id}] Placement already confirmed, skipping confirmation step`)
       }
 
       // Get the placement options to find shipment IDs
