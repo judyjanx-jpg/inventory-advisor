@@ -815,8 +815,12 @@ export default function ProductLabelPrinter({
     widthIn: number,
     heightIn: number
   ) => {
+    console.log(`[PDF Gen] Starting for ${item.masterSku}, ${quantity} labels, size: ${widthIn}x${heightIn}in`)
+
+    try {
     // Import html2canvas once at the start
     const { default: html2canvas } = await import('html2canvas')
+    console.log('[PDF Gen] html2canvas loaded')
 
     // Create a temporary iframe to render the HTML
     const iframe = document.createElement('iframe')
@@ -836,6 +840,7 @@ export default function ProductLabelPrinter({
     iframeDoc.open()
     iframeDoc.write(html)
     iframeDoc.close()
+    console.log('[PDF Gen] HTML written to iframe')
 
     // Wait for content to load
     await new Promise<void>(resolve => {
@@ -865,6 +870,7 @@ export default function ProductLabelPrinter({
       // Shorter timeout since we're optimizing for speed
       setTimeout(() => resolve(), 1500)
     })
+    console.log('[PDF Gen] Content loaded, creating PDF')
 
     // Create PDF with correct page size
     // For jsPDF: format is [smaller, larger], orientation determines which is width vs height
@@ -884,6 +890,7 @@ export default function ProductLabelPrinter({
     // Get all label elements
     const labelElements = Array.from(iframeDoc.querySelectorAll('.label')) as HTMLElement[]
     const elementsToProcess = labelElements.slice(0, quantity)
+    console.log(`[PDF Gen] Found ${labelElements.length} label elements, processing ${elementsToProcess.length}`)
 
     // Process in batches to avoid memory issues on lower-end machines
     const BATCH_SIZE = 5
@@ -892,6 +899,7 @@ export default function ProductLabelPrinter({
     for (let batchStart = 0; batchStart < elementsToProcess.length; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, elementsToProcess.length)
       const batch = elementsToProcess.slice(batchStart, batchEnd)
+      console.log(`[PDF Gen] Processing batch ${batchStart / BATCH_SIZE + 1}/${Math.ceil(elementsToProcess.length / BATCH_SIZE)}`)
 
       // Render this batch in parallel
       const canvasPromises = batch.map((labelElement, i) => {
@@ -901,8 +909,8 @@ export default function ProductLabelPrinter({
         }
 
         return html2canvas(labelElement, {
-          width: widthIn * 96,
-          height: heightIn * 96,
+          width: Math.round(widthIn * 96),
+          height: Math.round(heightIn * 96),
           scale: 2,
           useCORS: true,
           logging: false,
@@ -932,7 +940,14 @@ export default function ProductLabelPrinter({
 
     // Auto-download PDF
     const fileName = `Labels-${item.masterSku}-${new Date().getTime()}.pdf`
+    console.log(`[PDF Gen] Saving PDF: ${fileName} with ${pageIndex} pages`)
     pdf.save(fileName)
+    console.log('[PDF Gen] PDF save called successfully')
+
+    } catch (error: any) {
+      console.error('[PDF Gen] Error generating PDF:', error)
+      alert(`Failed to generate PDF: ${error.message}\n\nCheck the browser console for details.`)
+    }
   }
 
   // Group items by label type
