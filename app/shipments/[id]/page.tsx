@@ -36,6 +36,8 @@ interface ShipmentItem {
   warehouseLocation?: string | null
   labelType?: string
   transparencyEnabled?: boolean
+  prepOwner?: 'AMAZON' | 'SELLER' | 'NONE'
+  labelOwner?: 'AMAZON' | 'SELLER' | 'NONE'
 }
 
 interface Box {
@@ -113,6 +115,8 @@ export default function ShipmentDetailPage() {
             warehouseLocation: item.product?.warehouseLocation || null,
             labelType: item.product?.labelType || 'fnsku_only',
             transparencyEnabled: item.product?.transparencyEnabled || false,
+            prepOwner: item.product?.prepOwner || 'NONE',
+            labelOwner: item.product?.labelOwner || 'SELLER',
           })),
           boxes: (shipmentData.boxes || []).map((box: any) => ({
             id: box.id,
@@ -193,9 +197,21 @@ export default function ShipmentDetailPage() {
     if (!shipment) return
     setShipment({
       ...shipment,
-      items: shipment.items.map(item => 
-        item.id === itemId 
+      items: shipment.items.map(item =>
+        item.id === itemId
           ? { ...item, adjustedQty: newQty, requestedQty: newQty }
+          : item
+      ),
+    })
+  }
+
+  const updateItemPrepSetting = (sku: string, field: 'prepOwner' | 'labelOwner', value: 'AMAZON' | 'SELLER' | 'NONE') => {
+    if (!shipment) return
+    setShipment({
+      ...shipment,
+      items: shipment.items.map(item =>
+        item.masterSku === sku
+          ? { ...item, [field]: value }
           : item
       ),
     })
@@ -306,10 +322,19 @@ export default function ShipmentDetailPage() {
         return
       }
 
-      // Call the Amazon submission API
+      // Call the Amazon submission API with prep/label settings
       const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemSettings: shipment.items.reduce((acc, item) => {
+            acc[item.masterSku] = {
+              prepOwner: item.prepOwner || 'NONE',
+              labelOwner: item.labelOwner || 'SELLER',
+            }
+            return acc
+          }, {} as Record<string, { prepOwner: string; labelOwner: string }>),
+        }),
       })
 
       const data = await res.json()
@@ -726,9 +751,12 @@ export default function ShipmentDetailPage() {
               sku: i.masterSku,
               productName: i.productName,
               adjustedQty: i.adjustedQty,
+              prepOwner: i.prepOwner,
+              labelOwner: i.labelOwner,
             }))}
             boxes={shipment.boxes}
             onBoxesChange={(boxes) => setShipment({ ...shipment, boxes })}
+            onItemPrepChange={updateItemPrepSetting}
             autoSplitEnabled={shipment.optimalPlacementEnabled}
           />
         </div>
