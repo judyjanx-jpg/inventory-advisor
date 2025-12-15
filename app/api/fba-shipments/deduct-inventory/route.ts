@@ -1,6 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createSpApiClient } from '@/lib/amazon-sp-api'
+import {
+  listInboundPlans,
+  getShipment,
+} from '@/lib/fba-inbound-v2024'
+
+const API_VERSION = '2024-03-20'
+
+// Helper to call the Fulfillment Inbound v2024 API
+async function callFbaInboundApi(
+  client: any,
+  operation: string,
+  params: {
+    path?: Record<string, string>
+    query?: Record<string, any>
+    body?: any
+  } = {}
+): Promise<any> {
+  return client.callAPI({
+    operation,
+    endpoint: 'fulfillmentInbound',
+    options: { version: API_VERSION },
+    path: params.path,
+    query: params.query,
+    body: params.body,
+  })
+}
+
+/**
+ * Find a shipment across all inbound plans
+ * Returns { inboundPlanId, shipment } if found
+ */
+async function findShipmentInPlans(
+  client: any,
+  targetShipmentId: string
+): Promise<{ inboundPlanId: string; shipment: any } | null> {
+  let paginationToken: string | undefined
+
+  // Search through all inbound plans
+  do {
+    const plansResponse = await listInboundPlans({
+      pageSize: 20,
+      paginationToken,
+    })
+
+    for (const plan of plansResponse.inboundPlans) {
+      // For each plan, list its shipments
+      try {
+        const shipmentsResponse = await callFbaInboundApi(client, 'listInboundPlanShipments', {
+          path: { inboundPlanId: plan.inboundPlanId },
+        })
+
+        const shipments = shipmentsResponse.shipments || []
+
+        // Check if our target shipment is in this plan
+        for (const shipment of shipments) {
+          if (shipment.shipmentId === targetShipmentId) {
+            // Found it! Get the full shipment details
+            const fullShipment = await getShipment(plan.inboundPlanId, targetShipmentId)
+            return {
+              inboundPlanId: plan.inboundPlanId,
+              shipment: fullShipment,
+            }
+          }
+        }
+      } catch (error) {
+        // Plan might not have shipments yet, continue searching
+        console.log(`Error listing shipments for plan ${plan.inboundPlanId}:`, error)
+      }
+    }
+
+    paginationToken = plansResponse.pagination?.token
+  } while (paginationToken)
+
+  return null
+}
 
 /**
  * POST /api/fba-shipments/deduct-inventory
@@ -11,12 +86,13 @@ import { createSpApiClient } from '@/lib/amazon-sp-api'
  * Body:
  * - amazonShipmentId: string - The FBA shipment ID (e.g., "FBA15X123ABC")
  * - warehouseId: number - The warehouse to deduct inventory from
+ * - inboundPlanId: string (optional) - If known, speeds up lookup
  * - dryRun: boolean - If true, preview changes without applying them
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { amazonShipmentId, warehouseId, dryRun = false } = body
+    const { amazonShipmentId, warehouseId, inboundPlanId: providedPlanId, dryRun = false } = body
 
     if (!amazonShipmentId) {
       return NextResponse.json({ error: 'Amazon Shipment ID is required' }, { status: 400 })
@@ -35,34 +111,63 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Warehouse not found' }, { status: 404 })
     }
 
-    // Fetch shipment items from Amazon using the legacy FBA Inbound API (v0)
     const client = await createSpApiClient()
 
-    let shipmentItems: any[] = []
-    let nextToken: string | undefined
+    let inboundPlanId: string | null = providedPlanId || null
+    let shipmentItems: Array<{ msku: string; quantity: number }> = []
 
-    // Paginate through all shipment items
-    do {
-      const params: any = {
-        operation: 'getShipmentItemsByShipmentId',
-        endpoint: 'fulfillmentInboundShipment',
-        path: { shipmentId: amazonShipmentId },
-        query: nextToken ? { NextToken: nextToken } : {},
+    // First, check if we have this shipment stored locally
+    const localShipment = await prisma.amazonShipmentSplit.findUnique({
+      where: { amazonShipmentId },
+      include: {
+        shipment: {
+          include: {
+            items: true,
+          },
+        },
+      },
+    })
+
+    if (localShipment?.shipment?.amazonInboundPlanId) {
+      // We have the inbound plan ID stored locally
+      inboundPlanId = localShipment.shipment.amazonInboundPlanId
+    }
+
+    // If we have an inbound plan ID, get the shipment directly
+    if (inboundPlanId) {
+      try {
+        const shipment = await getShipment(inboundPlanId, amazonShipmentId)
+        shipmentItems = shipment.items || []
+      } catch (error: any) {
+        console.log('Error getting shipment with provided plan ID:', error.message)
+        // Fall through to search
+        inboundPlanId = null
       }
+    }
 
-      const response = await client.callAPI(params)
+    // If we still don't have items, search through all inbound plans
+    if (shipmentItems.length === 0 && !inboundPlanId) {
+      const found = await findShipmentInPlans(client, amazonShipmentId)
 
-      if (response.ItemData) {
-        shipmentItems = shipmentItems.concat(response.ItemData)
+      if (found) {
+        inboundPlanId = found.inboundPlanId
+        shipmentItems = found.shipment.items || []
       }
+    }
 
-      nextToken = response.NextToken
-    } while (nextToken)
+    // If still no items, try to get items from local shipment record
+    if (shipmentItems.length === 0 && localShipment?.shipment?.items) {
+      shipmentItems = localShipment.shipment.items.map(item => ({
+        msku: item.masterSku,
+        quantity: item.adjustedQty,
+      }))
+    }
 
     if (shipmentItems.length === 0) {
       return NextResponse.json({
-        error: 'No items found in this shipment. Please check the shipment ID.',
+        error: 'No items found for this shipment. The shipment may not exist or may not have been submitted to Amazon yet.',
         amazonShipmentId,
+        hint: 'Make sure the shipment has been submitted to Amazon and has items assigned.',
       }, { status: 404 })
     }
 
@@ -87,17 +192,15 @@ export async function POST(request: NextRequest) {
     let itemsAlreadyDeducted: string[] = []
 
     for (const item of shipmentItems) {
-      const sellerSku = item.SellerSKU
-      const fnsku = item.FulfillmentNetworkSKU
-      const quantityShipped = item.QuantityShipped || 0
-      const quantityReceived = item.QuantityReceived || 0
+      const sellerSku = item.msku
+      const quantityShipped = item.quantity || 0
 
-      // Try to find the product by sellerSKU or FNSKU
+      // Try to find the product by SKU
       let product = await prisma.childProduct.findFirst({
         where: {
           OR: [
             { masterSku: sellerSku },
-            { fnsku: fnsku },
+            { fnsku: sellerSku },
           ],
         },
       })
@@ -108,7 +211,7 @@ export async function POST(request: NextRequest) {
           where: {
             OR: [
               { masterSku: { equals: sellerSku, mode: 'insensitive' } },
-              { fnsku: { equals: fnsku, mode: 'insensitive' } },
+              { fnsku: { equals: sellerSku, mode: 'insensitive' } },
             ],
           },
         })
@@ -119,10 +222,10 @@ export async function POST(request: NextRequest) {
         deductions.push({
           masterSku: sellerSku,
           sellerSku,
-          fnsku: fnsku || '',
-          productName: item.ProductName || 'Unknown',
+          fnsku: '',
+          productName: 'Unknown',
           quantityShipped,
-          quantityReceived,
+          quantityReceived: 0,
           quantityToDeduct: quantityShipped,
           warehouseInventoryBefore: 0,
           warehouseInventoryAfter: 0,
@@ -148,10 +251,10 @@ export async function POST(request: NextRequest) {
         deductions.push({
           masterSku,
           sellerSku,
-          fnsku: fnsku || product.fnsku || '',
-          productName: product.title || item.ProductName || 'Unknown',
+          fnsku: product.fnsku || '',
+          productName: product.title || 'Unknown',
           quantityShipped,
-          quantityReceived,
+          quantityReceived: 0,
           quantityToDeduct: 0,
           warehouseInventoryBefore: 0,
           warehouseInventoryAfter: 0,
@@ -178,10 +281,10 @@ export async function POST(request: NextRequest) {
       deductions.push({
         masterSku,
         sellerSku,
-        fnsku: fnsku || product.fnsku || '',
-        productName: product.title || item.ProductName || 'Unknown',
+        fnsku: product.fnsku || '',
+        productName: product.title || 'Unknown',
         quantityShipped,
-        quantityReceived,
+        quantityReceived: 0,
         quantityToDeduct,
         warehouseInventoryBefore: currentAvailable,
         warehouseInventoryAfter: newAvailable,
@@ -199,6 +302,7 @@ export async function POST(request: NextRequest) {
         success: true,
         dryRun: true,
         amazonShipmentId,
+        inboundPlanId,
         warehouse: {
           id: warehouse.id,
           name: warehouse.name,
@@ -278,6 +382,7 @@ export async function POST(request: NextRequest) {
       success: true,
       dryRun: false,
       amazonShipmentId,
+      inboundPlanId,
       warehouse: {
         id: warehouse.id,
         name: warehouse.name,
@@ -302,6 +407,13 @@ export async function POST(request: NextRequest) {
     console.error('Error deducting FBA shipment inventory:', error)
 
     // Handle specific Amazon API errors
+    if (error.message?.includes('No endpoint found')) {
+      return NextResponse.json({
+        error: 'Amazon API configuration error. Please check your API credentials.',
+        details: error.message,
+      }, { status: 500 })
+    }
+
     if (error.code === 'InvalidInput' || error.message?.includes('Invalid')) {
       return NextResponse.json({
         error: 'Invalid shipment ID. Please check the format and try again.',
@@ -330,12 +442,14 @@ export async function POST(request: NextRequest) {
  * Query params:
  * - amazonShipmentId: string
  * - warehouseId: number
+ * - inboundPlanId: string (optional)
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const amazonShipmentId = searchParams.get('amazonShipmentId')
     const warehouseId = searchParams.get('warehouseId')
+    const inboundPlanId = searchParams.get('inboundPlanId')
 
     if (!amazonShipmentId) {
       return NextResponse.json({ error: 'Amazon Shipment ID is required' }, { status: 400 })
@@ -350,6 +464,7 @@ export async function GET(request: NextRequest) {
       json: async () => ({
         amazonShipmentId,
         warehouseId: parseInt(warehouseId),
+        inboundPlanId: inboundPlanId || undefined,
         dryRun: true,
       }),
     } as NextRequest
