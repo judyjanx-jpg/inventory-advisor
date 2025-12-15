@@ -15,6 +15,14 @@ import {
 
 const SETTINGS_SECTIONS = [
   {
+    id: 'sync-logs',
+    name: 'Sync Logs',
+    description: 'Monitor API sync activity, orders, ads, and financial data',
+    icon: '📊',
+    href: '/settings/sync-logs',
+    status: 'View',
+  },
+  {
     id: 'amazon',
     name: 'Amazon SP-API',
     description: 'Connect and manage your Amazon seller account',
