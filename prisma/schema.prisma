@@ -945,6 +945,7 @@ model AmazonShipmentSplit {
   // Carrier info (after transport confirmation)
   carrier        String?
   trackingNumber String? @map("tracking_number")
+  labelUrl       String? @map("label_url") @db.Text // URL to download shipping labels
 
   // Status
   status String @default("pending") // pending, transport_confirmed, labels_ready, shipped, in_transit, receiving, received
