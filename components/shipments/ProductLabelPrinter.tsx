@@ -67,6 +67,9 @@ export default function ProductLabelPrinter({
   // Show "print more" input for specific SKU
   const [showPrintMore, setShowPrintMore] = useState<string | null>(null)
   const [printMoreQty, setPrintMoreQty] = useState<number>(1)
+  // Track label type overrides (for immediate UI update before API confirms)
+  const [labelTypeOverrides, setLabelTypeOverrides] = useState<Record<string, LabelType>>({})
+  const [savingLabelType, setSavingLabelType] = useState<string | null>(null)
 
   // Load settings and printed counts from localStorage
   useEffect(() => {
@@ -113,9 +116,42 @@ export default function ProductLabelPrinter({
   }, [printedCounts, shipmentInternalId])
 
   const getLabelType = (item: ShipmentItem): LabelType => {
+    // Check for local override first (for immediate UI update)
+    if (labelTypeOverrides[item.masterSku]) return labelTypeOverrides[item.masterSku]
     if (item.labelType) return item.labelType as LabelType
     if (item.transparencyEnabled) return 'fnsku_tp'
     return 'fnsku_only'
+  }
+
+  // Handle label type change from dropdown
+  const handleLabelTypeChange = async (sku: string, newLabelType: LabelType) => {
+    // Update local state immediately for responsive UI
+    setLabelTypeOverrides(prev => ({ ...prev, [sku]: newLabelType }))
+    setSavingLabelType(sku)
+
+    try {
+      const res = await fetch(`/api/products/${encodeURIComponent(sku)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ labelType: newLabelType }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update label type')
+      }
+    } catch (error: any) {
+      console.error('Error updating label type:', error)
+      // Revert on error
+      setLabelTypeOverrides(prev => {
+        const updated = { ...prev }
+        delete updated[sku]
+        return updated
+      })
+      alert(`Failed to update label type: ${error.message}`)
+    } finally {
+      setSavingLabelType(null)
+    }
   }
 
   const getLabelTypeDisplay = (type: LabelType) => {
@@ -951,8 +987,28 @@ export default function ProductLabelPrinter({
                   />
                 </div>
 
-                <div className={`px-2 py-1 rounded text-xs font-medium ${display.bg} ${display.color}`}>
-                  {display.label}
+                <div className="relative">
+                  <select
+                    value={labelType}
+                    onChange={(e) => handleLabelTypeChange(item.masterSku, e.target.value as LabelType)}
+                    disabled={savingLabelType === item.masterSku}
+                    className={`px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer appearance-none pr-6 ${display.bg} ${display.color} focus:outline-none focus:ring-1 focus:ring-slate-500`}
+                    style={{ backgroundImage: 'none' }}
+                  >
+                    <option value="fnsku_tp" className="bg-slate-800 text-purple-400">FNSKU + TP</option>
+                    <option value="fnsku_only" className="bg-slate-800 text-cyan-400">FNSKU</option>
+                    <option value="tp_only" className="bg-slate-800 text-amber-400">TP Only</option>
+                    <option value="none" className="bg-slate-800 text-slate-400">Pre-labeled</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-1 flex items-center pointer-events-none">
+                    {savingLabelType === item.masterSku ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </div>
                 </div>
 
                 {labelType === 'none' ? (
