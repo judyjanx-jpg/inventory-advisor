@@ -70,6 +70,7 @@ export default function FbaShipmentsPage() {
   const [deductionPreview, setDeductionPreview] = useState<DeductionPreview | null>(null)
   const [deductionError, setDeductionError] = useState<string | null>(null)
   const [deductionSuccess, setDeductionSuccess] = useState<string | null>(null)
+  const [showImportSection, setShowImportSection] = useState(false)
 
   useEffect(() => {
     fetchShipments()
@@ -249,13 +250,23 @@ export default function FbaShipmentsPage() {
             <h1 className="text-3xl font-bold text-white">FBA Shipments</h1>
             <p className="text-slate-400 mt-1">Manage shipments to Amazon fulfillment centers</p>
           </div>
-          <Button onClick={() => window.location.href = '/shipments/new'}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create Shipment
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant={showImportSection ? 'default' : 'outline'}
+              onClick={() => setShowImportSection(!showImportSection)}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Import Shipment
+            </Button>
+            <Button onClick={() => window.location.href = '/shipments/new'}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create Shipment
+            </Button>
+          </div>
         </div>
 
         {/* Import FBA Shipment & Deduct Inventory */}
+        {showImportSection && (
         <Card>
           <CardHeader className="pb-4">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -453,6 +464,7 @@ export default function FbaShipmentsPage() {
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
