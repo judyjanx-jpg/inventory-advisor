@@ -728,26 +728,21 @@ export default function ProductLabelPrinter({
     })
     
     // Create PDF with correct page size
-    // IMPORTANT: For jsPDF, when width > height, use 'landscape' orientation
+    // Use exact dimensions directly - no landscape/portrait swapping needed
     const widthMm = widthIn * 25.4
     const heightMm = heightIn * 25.4
-    const isLandscape = widthIn > heightIn
-    
-    // For jsPDF with custom format, always pass [smaller, larger] and use orientation
-    const smallerDim = Math.min(widthMm, heightMm)
-    const largerDim = Math.max(widthMm, heightMm)
-    
+
     const pdf = new jsPDF({
-      orientation: isLandscape ? 'landscape' : 'portrait',
+      orientation: 'portrait',
       unit: 'mm',
-      format: [smallerDim, largerDim],
+      format: [widthMm, heightMm],  // Direct width × height for 3x1 horizontal label
       compress: true,
     })
     
     // Generate each label as a separate page
     for (let i = 0; i < quantity; i++) {
       if (i > 0) {
-        pdf.addPage([smallerDim, largerDim], isLandscape ? 'landscape' : 'portrait')
+        pdf.addPage([widthMm, heightMm], 'portrait')
       }
       
       const labelElement = iframeDoc.querySelectorAll('.label')[i] as HTMLElement
