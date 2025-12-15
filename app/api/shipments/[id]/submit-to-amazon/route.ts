@@ -17,6 +17,7 @@ import {
   listDeliveryWindowOptions,
   confirmDeliveryWindowOptions,
   confirmTransportationOptions,
+  getLabels,
   waitForOperation,
   findOptimalPlacementOption,
   findCheapestSpdOption,
@@ -33,16 +34,15 @@ import { createSpApiClient } from '@/lib/amazon-sp-api'
  * POST /api/shipments/:id/submit-to-amazon
  *
  * Submits a shipment to Amazon using the FBA Inbound v2024 API.
- * Executes the full workflow:
- * 1. Create inbound plan
- * 2. Set packing information
- * 3. Generate and confirm placement (Optimal Placement)
- * 4. Generate and confirm transportation (SPD)
- * 5. Generate and confirm delivery windows
  *
- * Query params:
- * - step: 'all' (default) | 'create_plan' | 'set_packing' | 'confirm_placement' | 'confirm_transport'
- *   Allows step-by-step execution for debugging or resuming failed workflows
+ * INTERACTIVE WORKFLOW (recommended):
+ * - step: 'get_placement_options' - Create plan + packing, return placement options for user selection
+ * - step: 'select_placement' - Confirm user's placement choice, return transport options with costs
+ * - step: 'confirm_transport' - Confirm transport, get labels and shipment IDs
+ *
+ * AUTOMATIC WORKFLOW (legacy):
+ * - step: 'all' (default) - Auto-select optimal placement and cheapest transport
+ * - step: 'create_plan' | 'set_packing' | 'confirm_placement' | 'confirm_transport' - Individual steps
  */
 export async function POST(
   request: NextRequest,
@@ -219,6 +219,518 @@ export async function POST(
     }
 
     let result: any = { shipmentId: id }
+
+    // Get request body for interactive steps
+    let body: any = {}
+    try {
+      body = await request.json()
+    } catch {
+      // No body is fine for some steps
+    }
+
+    // Build items list for Amazon (reused by multiple steps)
+    const buildInboundItems = () => shipment.items.map((item: { masterSku: string; adjustedQty: number; product?: { prepOwner?: string; labelOwner?: string } }) => ({
+      msku: item.masterSku,
+      quantity: item.adjustedQty,
+      prepOwner: (item.product?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE',
+      labelOwner: (item.product?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE',
+    }))
+
+    // ========================================
+    // INTERACTIVE STEP: Get Placement Options
+    // Creates plan + packing, returns placement options for user selection
+    // ========================================
+    if (step === 'get_placement_options') {
+      // Step 1: Create or reuse inbound plan
+      let inboundPlanId = shipment.amazonInboundPlanId
+
+      if (!inboundPlanId) {
+        const items = buildInboundItems()
+        console.log(`[${id}] Creating inbound plan with ${items.length} items...`)
+
+        const planResult = await createInboundPlan(
+          marketplaceId,
+          sourceAddress,
+          items,
+          contactInfo,
+          `${shipment.internalId || `SHP-${id}`} - ${new Date().toISOString().split('T')[0]}`
+        )
+
+        const planStatus = await waitForOperation(
+          await createSpApiClient(),
+          planResult.operationId
+        )
+
+        if (planStatus.operationStatus === 'FAILED') {
+          return NextResponse.json({
+            error: 'Failed to create inbound plan',
+            details: planStatus.operationProblems,
+          }, { status: 500 })
+        }
+
+        inboundPlanId = planResult.inboundPlanId
+
+        await prisma.shipment.update({
+          where: { id },
+          data: {
+            amazonInboundPlanId: inboundPlanId,
+            amazonWorkflowStep: 'plan_created',
+          },
+        })
+
+        console.log(`[${id}] Inbound plan created: ${inboundPlanId}`)
+      }
+
+      // Step 2: Set packing information if not already done
+      if (shipment.amazonWorkflowStep !== 'packing_set' && shipment.amazonWorkflowStep !== 'placement_confirmed') {
+        // Generate packing options
+        console.log(`[${id}] Generating packing options...`)
+        const genPackingResult = await generatePackingOptions(inboundPlanId)
+        await waitForOperation(await createSpApiClient(), genPackingResult.operationId)
+
+        // List and confirm first packing option
+        const { packingOptions } = await listPackingOptions(inboundPlanId)
+        if (!packingOptions.length) {
+          return NextResponse.json({ error: 'No packing options available' }, { status: 500 })
+        }
+
+        const selectedPackingOption = packingOptions[0]
+        const rawPackingGroups = selectedPackingOption.packingGroups || []
+        const packingGroups = rawPackingGroups.map((pg: any) =>
+          typeof pg === 'string' ? { packingGroupId: pg } : pg
+        )
+
+        // Confirm packing option
+        const confirmPackingResult = await confirmPackingOption(inboundPlanId, selectedPackingOption.packingOptionId)
+        await waitForOperation(await createSpApiClient(), confirmPackingResult.operationId)
+
+        // Get items per packing group
+        const packingGroupItemsMap = new Map<string, Set<string>>()
+        for (const group of packingGroups) {
+          const { items } = await listPackingGroupItems(inboundPlanId, group.packingGroupId)
+          packingGroupItemsMap.set(group.packingGroupId, new Set(items.map(i => i.msku)))
+        }
+
+        // Build boxes
+        type ShipmentBox = typeof shipment.boxes[number]
+        type BoxItem = ShipmentBox['items'][number]
+        const allBoxes: BoxInput[] = shipment.boxes.map((box: ShipmentBox) => ({
+          weight: { unit: 'LB' as const, value: Number(box.weightLbs) },
+          dimensions: {
+            unitOfMeasurement: 'IN' as const,
+            length: Number(box.lengthInches),
+            width: Number(box.widthInches),
+            height: Number(box.heightInches),
+          },
+          quantity: 1,
+          contentInformationSource: 'BOX_CONTENT_PROVIDED' as const,
+          items: box.items.map((item: BoxItem) => ({
+            msku: item.masterSku,
+            quantity: item.quantity,
+            prepOwner: 'NONE' as const,
+            labelOwner: 'SELLER' as const,
+          })),
+        }))
+
+        // Assign boxes to packing groups
+        const packageGroupings: Array<{ packingGroupId: string; boxes: BoxInput[] }> = []
+        for (const group of packingGroups) {
+          const groupSkus = packingGroupItemsMap.get(group.packingGroupId) || new Set()
+          const groupBoxes = allBoxes.filter(box => box.items.some(item => groupSkus.has(item.msku)))
+          if (groupBoxes.length > 0) {
+            packageGroupings.push({ packingGroupId: group.packingGroupId, boxes: groupBoxes })
+          }
+        }
+        if (packageGroupings.length === 0) {
+          packageGroupings.push({ packingGroupId: packingGroups[0].packingGroupId, boxes: allBoxes })
+        }
+
+        // Set packing information
+        const packingResult = await setPackingInformation(inboundPlanId, { packageGroupings })
+        const packingStatus = await waitForOperation(await createSpApiClient(), packingResult.operationId)
+
+        if (packingStatus.operationStatus === 'FAILED') {
+          return NextResponse.json({
+            error: 'Failed to set packing information',
+            details: packingStatus.operationProblems,
+          }, { status: 500 })
+        }
+
+        await prisma.shipment.update({
+          where: { id },
+          data: {
+            amazonPackingOptionId: selectedPackingOption.packingOptionId,
+            amazonWorkflowStep: 'packing_set',
+          },
+        })
+
+        console.log(`[${id}] Packing information set`)
+      }
+
+      // Step 3: Generate placement options (but don't confirm yet)
+      console.log(`[${id}] Generating placement options...`)
+      const genPlacementResult = await generatePlacementOptions(inboundPlanId)
+      await waitForOperation(await createSpApiClient(), genPlacementResult.operationId)
+
+      // List placement options
+      const { placementOptions } = await listPlacementOptions(inboundPlanId)
+
+      if (!placementOptions.length) {
+        return NextResponse.json({ error: 'No placement options available' }, { status: 500 })
+      }
+
+      // Format placement options for UI
+      const formattedOptions = placementOptions.map((opt: any) => ({
+        placementOptionId: opt.placementOptionId,
+        shipmentIds: opt.shipmentIds || [],
+        status: opt.status,
+        fees: opt.fees || [],
+        discounts: opt.discounts || [],
+        // Calculate total fee
+        totalFee: (opt.fees || []).reduce((sum: number, fee: any) => {
+          return sum + (fee.value?.amount || 0)
+        }, 0),
+        // FC destinations will be filled in next step after confirmation
+      }))
+
+      // Sort by total fee (cheapest first)
+      formattedOptions.sort((a: any, b: any) => a.totalFee - b.totalFee)
+
+      return NextResponse.json({
+        success: true,
+        step: 'get_placement_options',
+        inboundPlanId,
+        placementOptions: formattedOptions,
+        recommendedOptionId: formattedOptions[0]?.placementOptionId,
+        duration: Date.now() - startTime,
+      })
+    }
+
+    // ========================================
+    // INTERACTIVE STEP: Select Placement
+    // Confirms user's placement choice, returns transport options with costs
+    // ========================================
+    if (step === 'select_placement') {
+      const { placementOptionId } = body
+
+      if (!placementOptionId) {
+        return NextResponse.json({
+          error: 'placementOptionId is required in request body',
+        }, { status: 400 })
+      }
+
+      const inboundPlanId = shipment.amazonInboundPlanId
+      if (!inboundPlanId) {
+        return NextResponse.json({
+          error: 'No inbound plan found. Run get_placement_options first.',
+        }, { status: 400 })
+      }
+
+      // Confirm the selected placement option
+      console.log(`[${id}] Confirming placement option: ${placementOptionId}`)
+      const confirmResult = await confirmPlacementOption(inboundPlanId, placementOptionId)
+      const confirmStatus = await waitForOperation(await createSpApiClient(), confirmResult.operationId)
+
+      if (confirmStatus.operationStatus === 'FAILED') {
+        return NextResponse.json({
+          error: 'Failed to confirm placement option',
+          details: confirmStatus.operationProblems,
+        }, { status: 500 })
+      }
+
+      // Get the placement options to find shipment IDs
+      const { placementOptions } = await listPlacementOptions(inboundPlanId)
+      const selectedPlacement = placementOptions.find((p: any) => p.placementOptionId === placementOptionId)
+      const shipmentIds = selectedPlacement?.shipmentIds || []
+
+      // Save shipment splits
+      const shipmentDetails: Array<{
+        amazonShipmentId: string
+        destinationFc: string | null
+        transportationOptions: any[]
+      }> = []
+
+      for (const amazonShipmentId of shipmentIds) {
+        // Get shipment details (destination FC)
+        const splitDetail = await getShipment(inboundPlanId, amazonShipmentId)
+
+        // Save to database
+        await prisma.amazonShipmentSplit.upsert({
+          where: {
+            shipmentId_amazonShipmentId: {
+              shipmentId: id,
+              amazonShipmentId: amazonShipmentId,
+            },
+          },
+          update: {
+            destinationFc: splitDetail.destination?.warehouseId || null,
+            destinationAddress: splitDetail.destination?.address
+              ? JSON.stringify(splitDetail.destination.address)
+              : null,
+            items: splitDetail.items ? JSON.stringify(splitDetail.items) : null,
+            status: 'pending',
+          },
+          create: {
+            shipmentId: id,
+            amazonShipmentId: amazonShipmentId,
+            amazonShipmentConfirmationId: splitDetail.shipmentConfirmationId || null,
+            destinationFc: splitDetail.destination?.warehouseId || null,
+            destinationAddress: splitDetail.destination?.address
+              ? JSON.stringify(splitDetail.destination.address)
+              : null,
+            items: splitDetail.items ? JSON.stringify(splitDetail.items) : null,
+            status: 'pending',
+          },
+        })
+
+        // Generate transportation options for this shipment
+        console.log(`[${id}] Generating transport options for ${amazonShipmentId}...`)
+        const genTransportResult = await generateTransportationOptions(
+          inboundPlanId,
+          amazonShipmentId,
+          placementOptionId
+        )
+        await waitForOperation(await createSpApiClient(), genTransportResult.operationId)
+
+        // List transportation options
+        const { transportationOptions } = await listTransportationOptions(
+          inboundPlanId,
+          amazonShipmentId,
+          placementOptionId
+        )
+
+        shipmentDetails.push({
+          amazonShipmentId,
+          destinationFc: splitDetail.destination?.warehouseId || null,
+          transportationOptions: transportationOptions.map((opt: any) => ({
+            transportationOptionId: opt.transportationOptionId,
+            shippingMode: opt.shippingMode,
+            shippingSolution: opt.shippingSolution,
+            carrier: opt.carrier,
+            quote: opt.quote,
+          })),
+        })
+      }
+
+      // Update shipment
+      await prisma.shipment.update({
+        where: { id },
+        data: {
+          amazonPlacementOptionId: placementOptionId,
+          amazonWorkflowStep: 'placement_confirmed',
+          amazonShipmentSplits: JSON.stringify(shipmentDetails.map(s => ({
+            shipmentId: s.amazonShipmentId,
+          }))),
+        },
+      })
+
+      console.log(`[${id}] Placement confirmed, ${shipmentDetails.length} shipment splits created`)
+
+      return NextResponse.json({
+        success: true,
+        step: 'select_placement',
+        inboundPlanId,
+        placementOptionId,
+        shipments: shipmentDetails,
+        duration: Date.now() - startTime,
+      })
+    }
+
+    // ========================================
+    // INTERACTIVE STEP: Confirm Transport
+    // Takes user's transport selections, confirms delivery windows, gets labels
+    // ========================================
+    if (step === 'confirm_transport_interactive') {
+      const { transportSelections } = body as {
+        transportSelections: Array<{ amazonShipmentId: string; transportationOptionId: string }>
+      }
+
+      if (!transportSelections || !Array.isArray(transportSelections) || transportSelections.length === 0) {
+        return NextResponse.json({
+          error: 'transportSelections array is required in request body',
+          example: { transportSelections: [{ amazonShipmentId: 'SHIP123', transportationOptionId: 'TRANS456' }] },
+        }, { status: 400 })
+      }
+
+      const inboundPlanId = shipment.amazonInboundPlanId
+      const placementOptionId = shipment.amazonPlacementOptionId
+
+      if (!inboundPlanId || !placementOptionId) {
+        return NextResponse.json({
+          error: 'No inbound plan or placement option found. Run get_placement_options and select_placement first.',
+        }, { status: 400 })
+      }
+
+      console.log(`[${id}] Confirming transport for ${transportSelections.length} shipments...`)
+
+      const confirmedShipments: Array<{
+        amazonShipmentId: string
+        amazonShipmentConfirmationId: string | null
+        destinationFc: string | null
+        carrier: string | null
+        deliveryWindow: string | null
+        labelUrl: string | null
+      }> = []
+
+      // Step 1: Generate and confirm delivery windows for each shipment
+      for (const selection of transportSelections) {
+        const { amazonShipmentId, transportationOptionId } = selection
+
+        console.log(`[${id}] Processing ${amazonShipmentId}...`)
+
+        // Generate delivery window options
+        const genWindowResult = await generateDeliveryWindowOptions(
+          inboundPlanId,
+          amazonShipmentId
+        )
+        await waitForOperation(await createSpApiClient(), genWindowResult.operationId)
+
+        // List delivery windows
+        const { deliveryWindowOptions } = await listDeliveryWindowOptions(
+          inboundPlanId,
+          amazonShipmentId
+        )
+
+        const deliveryWindow = findEarliestDeliveryWindow(deliveryWindowOptions, amazonShipmentId)
+
+        if (!deliveryWindow) {
+          console.warn(`[${id}] No delivery window available for ${amazonShipmentId}`)
+          return NextResponse.json({
+            error: `No delivery window available for shipment ${amazonShipmentId}`,
+          }, { status: 400 })
+        }
+
+        // Confirm delivery window
+        const confirmWindowResult = await confirmDeliveryWindowOptions(
+          inboundPlanId,
+          amazonShipmentId,
+          deliveryWindow.deliveryWindowOptionId
+        )
+        await waitForOperation(await createSpApiClient(), confirmWindowResult.operationId)
+
+        // Update the split record
+        await prisma.amazonShipmentSplit.update({
+          where: {
+            shipmentId_amazonShipmentId: {
+              shipmentId: id,
+              amazonShipmentId: amazonShipmentId,
+            },
+          },
+          data: {
+            transportationOptionId: transportationOptionId,
+            deliveryWindowOptionId: deliveryWindow.deliveryWindowOptionId,
+            deliveryWindowStart: new Date(deliveryWindow.startDate),
+            deliveryWindowEnd: new Date(deliveryWindow.endDate),
+          },
+        })
+
+        console.log(`[${id}] Delivery window confirmed for ${amazonShipmentId}`)
+      }
+
+      // Step 2: Confirm all transportation options at once
+      console.log(`[${id}] Confirming ${transportSelections.length} transportation selections...`)
+      const confirmTransportResult = await confirmTransportationOptions(
+        inboundPlanId,
+        transportSelections.map(s => ({
+          shipmentId: s.amazonShipmentId,
+          transportationOptionId: s.transportationOptionId,
+        }))
+      )
+
+      const transportStatus = await waitForOperation(
+        await createSpApiClient(),
+        confirmTransportResult.operationId
+      )
+
+      if (transportStatus.operationStatus === 'FAILED') {
+        return NextResponse.json({
+          error: 'Failed to confirm transportation options',
+          details: transportStatus.operationProblems,
+        }, { status: 500 })
+      }
+
+      console.log(`[${id}] Transportation confirmed, getting labels...`)
+
+      // Step 3: Get labels and shipment details for each
+      for (const selection of transportSelections) {
+        const { amazonShipmentId } = selection
+
+        // Get updated shipment details (to get confirmation ID)
+        const shipmentDetail = await getShipment(inboundPlanId, amazonShipmentId)
+
+        // Get shipping labels
+        let labelUrl: string | null = null
+        try {
+          const labelResult = await getLabels(
+            inboundPlanId,
+            amazonShipmentId,
+            'PACKAGE_LABEL',
+            'PLAIN_PAPER'
+          )
+          labelUrl = labelResult.downloadUrl
+          console.log(`[${id}] Labels retrieved for ${amazonShipmentId}`)
+        } catch (labelError: any) {
+          console.warn(`[${id}] Could not get labels for ${amazonShipmentId}: ${labelError.message}`)
+        }
+
+        // Get the split record for carrier info
+        const split = await prisma.amazonShipmentSplit.findUnique({
+          where: {
+            shipmentId_amazonShipmentId: {
+              shipmentId: id,
+              amazonShipmentId: amazonShipmentId,
+            },
+          },
+        })
+
+        // Update split with final info
+        await prisma.amazonShipmentSplit.update({
+          where: {
+            shipmentId_amazonShipmentId: {
+              shipmentId: id,
+              amazonShipmentId: amazonShipmentId,
+            },
+          },
+          data: {
+            status: 'transport_confirmed',
+            amazonShipmentConfirmationId: shipmentDetail.shipmentConfirmationId || null,
+            labelUrl: labelUrl,
+          },
+        })
+
+        confirmedShipments.push({
+          amazonShipmentId,
+          amazonShipmentConfirmationId: shipmentDetail.shipmentConfirmationId || null,
+          destinationFc: shipmentDetail.destination?.warehouseId || null,
+          carrier: split?.carrier || 'Amazon Partnered Carrier',
+          deliveryWindow: split?.deliveryWindowStart && split?.deliveryWindowEnd
+            ? `${split.deliveryWindowStart.toISOString().split('T')[0]} - ${split.deliveryWindowEnd.toISOString().split('T')[0]}`
+            : null,
+          labelUrl,
+        })
+      }
+
+      // Update main shipment status
+      await prisma.shipment.update({
+        where: { id },
+        data: {
+          amazonWorkflowStep: 'transport_confirmed',
+          status: 'submitted',
+          submittedAt: new Date(),
+        },
+      })
+
+      console.log(`[${id}] FBA submission complete - ${confirmedShipments.length} shipments confirmed`)
+
+      return NextResponse.json({
+        success: true,
+        step: 'confirm_transport_interactive',
+        inboundPlanId,
+        shipments: confirmedShipments,
+        message: `Successfully submitted ${confirmedShipments.length} shipment(s) to Amazon`,
+        duration: Date.now() - startTime,
+      })
+    }
 
     // ========================================
     // STEP 1: Create Inbound Plan

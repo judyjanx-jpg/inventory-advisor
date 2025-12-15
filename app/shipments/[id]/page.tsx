@@ -38,6 +38,31 @@ interface ShipmentItem {
   transparencyEnabled?: boolean
 }
 
+// Types for interactive FBA submission workflow
+interface PlacementOption {
+  placementOptionId: string
+  shipmentIds: string[]
+  status: string
+  fees: Array<{ type: string; value: { amount: number; code: string } }>
+  totalFee: number
+}
+
+interface TransportOption {
+  transportationOptionId: string
+  shippingMode: string
+  shippingSolution: string
+  carrier?: { name: string }
+  quote?: { cost: { amount: number; code: string } }
+}
+
+interface ShipmentSplit {
+  amazonShipmentId: string
+  destinationFc: string | null
+  transportationOptions: TransportOption[]
+}
+
+type SubmissionStep = 'idle' | 'getting_options' | 'selecting_placement' | 'selecting_transport' | 'confirming' | 'done' | 'error'
+
 interface Box {
   id: number
   boxNumber: number
@@ -242,9 +267,26 @@ export default function ShipmentDetailPage() {
     }
   }
 
-  // Submit to Amazon (before shipping)
+  // Interactive FBA submission workflow
   const [submittingToAmazon, setSubmittingToAmazon] = useState(false)
+  const [submissionStep, setSubmissionStep] = useState<SubmissionStep>('idle')
+  const [submissionError, setSubmissionError] = useState<string | null>(null)
+  const [inboundPlanId, setInboundPlanId] = useState<string | null>(null)
+  const [placementOptions, setPlacementOptions] = useState<PlacementOption[]>([])
+  const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null)
+  const [shipmentSplits, setShipmentSplits] = useState<ShipmentSplit[]>([])
+  const [selectedTransports, setSelectedTransports] = useState<Record<string, string>>({})
+  const [confirmedShipments, setConfirmedShipments] = useState<Array<{
+    amazonShipmentId: string
+    amazonShipmentConfirmationId: string | null
+    destinationFc: string | null
+    carrier: string | null
+    deliveryWindow: string | null
+    labelUrl: string | null
+  }>>([])
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false)
 
+  // Start the interactive submission workflow
   const submitToAmazon = async () => {
     if (!shipment) return
 
@@ -278,10 +320,15 @@ export default function ShipmentDetailPage() {
       return
     }
 
-    if (!confirm('Submit this shipment to Amazon? This will create an inbound plan and generate shipping labels.')) {
-      return
-    }
-
+    // Reset state and show modal
+    setSubmissionStep('getting_options')
+    setSubmissionError(null)
+    setPlacementOptions([])
+    setSelectedPlacementId(null)
+    setShipmentSplits([])
+    setSelectedTransports({})
+    setConfirmedShipments([])
+    setShowSubmissionModal(true)
     setSubmittingToAmazon(true)
 
     try {
@@ -302,33 +349,139 @@ export default function ShipmentDetailPage() {
 
       if (!saveRes.ok) {
         const saveData = await saveRes.json()
-        alert(`Failed to save shipment before submission: ${saveData.error}`)
-        return
+        throw new Error(`Failed to save shipment: ${saveData.error}`)
       }
 
-      // Call the Amazon submission API
-      const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon`, {
+      // Step 1: Get placement options from Amazon
+      const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon?step=get_placement_options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
 
       const data = await res.json()
 
-      if (res.ok) {
-        const splitCount = data.splits?.length || 0
-        alert(`Shipment submitted to Amazon!\n\nInbound Plan: ${data.shipment?.amazonInboundPlanId}\nFC Splits: ${splitCount}\n\nYou can now download labels and mark as shipped.`)
-        await fetchShipment()
-      } else {
-        console.error('Submit to Amazon error:', data)
-        const debugInfo = data.debug ? `\n\nDebug: ${JSON.stringify(data.debug, null, 2)}` : ''
-        alert(`Error submitting to Amazon:\n${data.error}\n\n${data.details || ''}${debugInfo}`)
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to get placement options')
       }
-    } catch (error) {
-      console.error('Error submitting to Amazon:', error)
-      alert('Failed to submit to Amazon. Check console for details.')
+
+      setInboundPlanId(data.inboundPlanId)
+      setPlacementOptions(data.placementOptions)
+      setSelectedPlacementId(data.recommendedOptionId)
+      setSubmissionStep('selecting_placement')
+    } catch (error: any) {
+      console.error('Error getting placement options:', error)
+      setSubmissionError(error.message || 'Failed to get placement options')
+      setSubmissionStep('error')
     } finally {
       setSubmittingToAmazon(false)
     }
+  }
+
+  // Step 2: Confirm placement selection and get transport options
+  const confirmPlacementSelection = async () => {
+    if (!selectedPlacementId) return
+
+    setSubmittingToAmazon(true)
+    setSubmissionStep('selecting_transport')
+
+    try {
+      const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon?step=select_placement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placementOptionId: selectedPlacementId }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to confirm placement')
+      }
+
+      setShipmentSplits(data.shipments)
+
+      // Auto-select the first transport option for each shipment (usually cheapest SPD)
+      const autoSelected: Record<string, string> = {}
+      for (const split of data.shipments) {
+        // Prefer AMAZON_PARTNERED_CARRIER with SPD mode
+        const partnered = split.transportationOptions.find(
+          (t: TransportOption) => t.shippingSolution === 'AMAZON_PARTNERED_CARRIER' && t.shippingMode === 'GROUND_SMALL_PARCEL'
+        )
+        if (partnered) {
+          autoSelected[split.amazonShipmentId] = partnered.transportationOptionId
+        } else if (split.transportationOptions.length > 0) {
+          autoSelected[split.amazonShipmentId] = split.transportationOptions[0].transportationOptionId
+        }
+      }
+      setSelectedTransports(autoSelected)
+    } catch (error: any) {
+      console.error('Error confirming placement:', error)
+      setSubmissionError(error.message || 'Failed to confirm placement')
+      setSubmissionStep('error')
+    } finally {
+      setSubmittingToAmazon(false)
+    }
+  }
+
+  // Step 3: Confirm transport selections and get labels
+  const confirmTransportSelections = async () => {
+    // Validate all shipments have a transport selected
+    const allSelected = shipmentSplits.every(s => selectedTransports[s.amazonShipmentId])
+    if (!allSelected) {
+      alert('Please select a shipping option for all shipments')
+      return
+    }
+
+    setSubmittingToAmazon(true)
+    setSubmissionStep('confirming')
+
+    try {
+      const transportSelections = shipmentSplits.map(s => ({
+        amazonShipmentId: s.amazonShipmentId,
+        transportationOptionId: selectedTransports[s.amazonShipmentId],
+      }))
+
+      const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon?step=confirm_transport_interactive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transportSelections }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to confirm transport')
+      }
+
+      setConfirmedShipments(data.shipments)
+      setSubmissionStep('done')
+      await fetchShipment()
+    } catch (error: any) {
+      console.error('Error confirming transport:', error)
+      setSubmissionError(error.message || 'Failed to confirm transport')
+      setSubmissionStep('error')
+    } finally {
+      setSubmittingToAmazon(false)
+    }
+  }
+
+  // Close modal and reset
+  const closeSubmissionModal = () => {
+    setShowSubmissionModal(false)
+    setSubmissionStep('idle')
+    setSubmissionError(null)
+  }
+
+  // Calculate total shipping cost
+  const calculateTotalShippingCost = () => {
+    let total = 0
+    for (const split of shipmentSplits) {
+      const selectedId = selectedTransports[split.amazonShipmentId]
+      const option = split.transportationOptions.find(t => t.transportationOptionId === selectedId)
+      if (option?.quote?.cost?.amount) {
+        total += option.quote.cost.amount
+      }
+    }
+    return total
   }
 
   const markAsShipped = async () => {
@@ -802,6 +955,268 @@ export default function ShipmentDetailPage() {
                   Mark as Shipped
                 </Button>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Submission Modal */}
+      {showSubmissionModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="border-b border-slate-700 p-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">Submit to Amazon FBA</h2>
+              {submissionStep !== 'confirming' && submissionStep !== 'getting_options' && (
+                <button onClick={closeSubmissionModal} className="text-slate-400 hover:text-white">
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              {/* Loading / Getting Options */}
+              {submissionStep === 'getting_options' && (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+                  <p className="text-slate-300">Creating inbound plan and getting placement options...</p>
+                  <p className="text-slate-500 text-sm mt-2">This may take a minute</p>
+                </div>
+              )}
+
+              {/* Error State */}
+              {submissionStep === 'error' && (
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertTriangle className="w-6 h-6 text-red-400" />
+                  </div>
+                  <p className="text-red-400 font-medium mb-2">Submission Failed</p>
+                  <p className="text-slate-400 text-sm mb-4">{submissionError}</p>
+                  <Button variant="outline" onClick={closeSubmissionModal}>
+                    Close
+                  </Button>
+                </div>
+              )}
+
+              {/* Step 1: Select Placement Option */}
+              {submissionStep === 'selecting_placement' && (
+                <div>
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 bg-cyan-500 rounded-full flex items-center justify-center text-white text-sm font-bold">1</span>
+                      <h3 className="text-lg font-medium text-white">Select Placement Option</h3>
+                    </div>
+                    <p className="text-slate-400 text-sm ml-8">Choose how Amazon will split your shipment across fulfillment centers</p>
+                  </div>
+
+                  <div className="space-y-3 mb-6">
+                    {placementOptions.map((option, index) => (
+                      <label
+                        key={option.placementOptionId}
+                        className={`block p-4 rounded-lg border cursor-pointer transition-all ${
+                          selectedPlacementId === option.placementOptionId
+                            ? 'border-cyan-500 bg-cyan-500/10'
+                            : 'border-slate-600 hover:border-slate-500'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="radio"
+                            name="placement"
+                            value={option.placementOptionId}
+                            checked={selectedPlacementId === option.placementOptionId}
+                            onChange={() => setSelectedPlacementId(option.placementOptionId)}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-white">
+                                {option.shipmentIds.length} Fulfillment Center{option.shipmentIds.length !== 1 ? 's' : ''}
+                                {index === 0 && <span className="ml-2 text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded">Recommended</span>}
+                              </span>
+                              <span className={`font-bold ${option.totalFee > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                {option.totalFee > 0 ? `$${option.totalFee.toFixed(2)} fee` : 'No fee'}
+                              </span>
+                            </div>
+                            {option.fees.length > 0 && (
+                              <div className="text-xs text-slate-500 mt-1">
+                                {option.fees.map((fee, i) => (
+                                  <span key={i}>
+                                    {fee.type}: ${fee.value?.amount?.toFixed(2) || '0.00'}
+                                    {i < option.fees.length - 1 ? ', ' : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button variant="outline" onClick={closeSubmissionModal}>
+                      Cancel
+                    </Button>
+                    <Button onClick={confirmPlacementSelection} disabled={!selectedPlacementId || submittingToAmazon}>
+                      {submittingToAmazon ? 'Loading...' : 'Continue to Shipping'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Select Transport Options */}
+              {submissionStep === 'selecting_transport' && (
+                <div>
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 bg-cyan-500 rounded-full flex items-center justify-center text-white text-sm font-bold">2</span>
+                      <h3 className="text-lg font-medium text-white">Select Shipping Options</h3>
+                    </div>
+                    <p className="text-slate-400 text-sm ml-8">Choose shipping method for each fulfillment center</p>
+                  </div>
+
+                  <div className="space-y-4 mb-6">
+                    {shipmentSplits.map((split) => (
+                      <div key={split.amazonShipmentId} className="border border-slate-700 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="font-medium text-white">Ship to: {split.destinationFc || 'Unknown FC'}</span>
+                            <span className="text-slate-500 text-sm ml-2">({split.amazonShipmentId})</span>
+                          </div>
+                        </div>
+
+                        {split.transportationOptions.length > 0 ? (
+                          <div className="space-y-2">
+                            {split.transportationOptions.map((option) => (
+                              <label
+                                key={option.transportationOptionId}
+                                className={`flex items-center justify-between p-3 rounded border cursor-pointer transition-all ${
+                                  selectedTransports[split.amazonShipmentId] === option.transportationOptionId
+                                    ? 'border-cyan-500 bg-cyan-500/10'
+                                    : 'border-slate-600 hover:border-slate-500'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="radio"
+                                    name={`transport-${split.amazonShipmentId}`}
+                                    value={option.transportationOptionId}
+                                    checked={selectedTransports[split.amazonShipmentId] === option.transportationOptionId}
+                                    onChange={() => setSelectedTransports(prev => ({
+                                      ...prev,
+                                      [split.amazonShipmentId]: option.transportationOptionId,
+                                    }))}
+                                  />
+                                  <div>
+                                    <span className="text-white">
+                                      {option.carrier?.name || option.shippingSolution}
+                                    </span>
+                                    <span className="text-slate-500 text-sm ml-2">
+                                      ({option.shippingMode === 'GROUND_SMALL_PARCEL' ? 'SPD' : option.shippingMode})
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="font-bold text-white">
+                                  {option.quote?.cost?.amount
+                                    ? `$${option.quote.cost.amount.toFixed(2)}`
+                                    : 'Quote TBD'}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-amber-400 text-sm">
+                            No Amazon partnered shipping available. You'll need to use your own carrier.
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Total Cost Summary */}
+                  <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-300">Estimated Total Shipping</span>
+                      <span className="text-xl font-bold text-white">
+                        ${calculateTotalShippingCost().toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button variant="outline" onClick={closeSubmissionModal}>
+                      Cancel
+                    </Button>
+                    <Button onClick={confirmTransportSelections} disabled={submittingToAmazon}>
+                      {submittingToAmazon ? 'Confirming...' : 'Confirm & Get Labels'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Confirming State */}
+              {submissionStep === 'confirming' && (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+                  <p className="text-slate-300">Confirming shipment and generating labels...</p>
+                  <p className="text-slate-500 text-sm mt-2">This may take a few minutes</p>
+                </div>
+              )}
+
+              {/* Step 3: Done - Show Results */}
+              {submissionStep === 'done' && (
+                <div>
+                  <div className="text-center mb-6">
+                    <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-white mb-2">Shipment Submitted Successfully!</h3>
+                    <p className="text-slate-400 text-sm">Your shipment has been submitted to Amazon FBA</p>
+                  </div>
+
+                  <div className="space-y-3 mb-6">
+                    {confirmedShipments.map((ship) => (
+                      <div key={ship.amazonShipmentId} className="border border-slate-700 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <span className="font-medium text-white">
+                              {ship.destinationFc || 'Unknown FC'}
+                            </span>
+                            <span className="text-slate-500 text-sm ml-2">
+                              {ship.amazonShipmentConfirmationId || ship.amazonShipmentId}
+                            </span>
+                          </div>
+                          <span className="text-emerald-400 text-sm">✓ Confirmed</span>
+                        </div>
+                        {ship.deliveryWindow && (
+                          <p className="text-slate-400 text-sm">
+                            Delivery Window: {ship.deliveryWindow}
+                          </p>
+                        )}
+                        {ship.labelUrl && (
+                          <a
+                            href={ship.labelUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 mt-2 px-3 py-1.5 bg-cyan-500/20 text-cyan-400 rounded text-sm hover:bg-cyan-500/30"
+                          >
+                            <Printer className="w-4 h-4" />
+                            Download Labels
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button onClick={closeSubmissionModal}>
+                      Done
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
