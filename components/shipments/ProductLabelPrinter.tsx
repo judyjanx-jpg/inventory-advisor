@@ -504,10 +504,10 @@ export default function ProductLabelPrinter({
           }
 
           .tp-only-label .qr-code {
-            width: 0.75in;
-            height: 0.75in;
-            min-width: 0.75in;
-            min-height: 0.75in;
+            width: 0.6in;
+            height: 0.6in;
+            min-width: 0.6in;
+            min-height: 0.6in;
           }
 
           .tp-only-label .tp-code-vertical {
