@@ -108,51 +108,87 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate internal ID
+    // Generate unique internal ID with retry for race conditions
     const year = new Date().getFullYear()
-    const count = await prisma.shipment.count({
-      where: {
-        createdAt: {
-          gte: new Date(`${year}-01-01`),
-        },
-      },
-    })
-    const internalId = `SHP-${year}-${String(count + 1).padStart(3, '0')}`
+    let shipment = null
+    let retries = 5
 
-    // Create shipment with items
-    const shipment = await prisma.shipment.create({
-      data: {
-        internalId,
-        fromLocationId,
-        destinationFc: destInfo.fc,
-        destinationName: destInfo.name,
-        optimalPlacementEnabled,
-        status: 'draft',
-        items: {
-          create: items.map((item: any) => ({
-            masterSku: item.sku,
-            fnsku: item.fnsku,
-            productName: item.productName,
-            requestedQty: item.requestedQty || item.qty || 0,
-            adjustedQty: item.adjustedQty || item.qty || 0,
-          })),
-        },
-      },
-      include: {
-        fromLocation: true,
-        items: {
+    while (retries > 0 && !shipment) {
+      try {
+        // Get the highest existing number for this year
+        const lastShipment = await prisma.shipment.findFirst({
+          where: {
+            internalId: {
+              startsWith: `SHP-${year}-`,
+            },
+          },
+          orderBy: {
+            internalId: 'desc',
+          },
+          select: {
+            internalId: true,
+          },
+        })
+
+        // Extract the number and increment
+        let nextNum = 1
+        if (lastShipment) {
+          const match = lastShipment.internalId.match(/SHP-\d+-(\d+)/)
+          if (match) {
+            nextNum = parseInt(match[1], 10) + 1
+          }
+        }
+
+        const internalId = `SHP-${year}-${String(nextNum).padStart(3, '0')}`
+
+        // Create shipment with items
+        shipment = await prisma.shipment.create({
+          data: {
+            internalId,
+            fromLocationId,
+            destinationFc: destInfo.fc,
+            destinationName: destInfo.name,
+            optimalPlacementEnabled,
+            status: 'draft',
+            items: {
+              create: items.map((item: any) => ({
+                masterSku: item.sku,
+                fnsku: item.fnsku,
+                productName: item.productName,
+                requestedQty: item.requestedQty || item.qty || 0,
+                adjustedQty: item.adjustedQty || item.qty || 0,
+              })),
+            },
+          },
           include: {
-            product: {
-              select: {
-                sku: true,
-                title: true,
-                fnsku: true,
+            fromLocation: true,
+            items: {
+              include: {
+                product: {
+                  select: {
+                    sku: true,
+                    title: true,
+                    fnsku: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-    })
+        })
+      } catch (err: any) {
+        // If it's a unique constraint error, retry with a new ID
+        if (err.code === 'P2002' && err.meta?.target?.includes('internal_id')) {
+          retries--
+          if (retries === 0) {
+            throw new Error('Failed to generate unique shipment ID after multiple retries')
+          }
+          // Small delay before retry
+          await new Promise(resolve => setTimeout(resolve, 100))
+        } else {
+          throw err
+        }
+      }
+    }
 
     return NextResponse.json({ shipment }, { status: 201 })
   } catch (error: any) {
