@@ -353,7 +353,7 @@ export default function ProductLabelPrinter({
           }
 
           .tp-header-text {
-            font-size: 5pt;
+            font-size: 4pt;
             font-weight: 500;
             color: #000;
             line-height: 1.1;
@@ -494,11 +494,33 @@ export default function ProductLabelPrinter({
             margin-bottom: 0.03in;
           }
 
+          .tp-only-label .qr-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 2px;
+            justify-content: flex-start;
+            margin-left: -0.05in;
+          }
+
           .tp-only-label .qr-code {
             width: 0.75in;
             height: 0.75in;
             min-width: 0.75in;
             min-height: 0.75in;
+          }
+
+          .tp-only-label .tp-code-vertical {
+            font-size: 5pt;
+            font-weight: normal;
+            color: #000;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            word-break: normal;
+            transform: rotate(90deg);
+            margin-left: -0.12in;
+            margin-right: -0.12in;
+            line-height: 1;
           }
         </style>
       </head>
@@ -524,7 +546,10 @@ export default function ProductLabelPrinter({
                   </svg>
                   <span class="tp-header-text">Scan with the<br/>Transparency app</span>
                 </div>
-                ${qrImage ? `<div class="qr-code"><img src="${qrImage}" alt="QR Code" /></div>` : '<div class="qr-code"></div>'}
+                <div class="qr-container">
+                  ${qrImage ? `<div class="qr-code"><img src="${qrImage}" alt="QR Code" /></div>` : '<div class="qr-code"></div>'}
+                  <div class="tp-code-vertical">${item.masterSku}</div>
+                </div>
               </div>
             `
           }
