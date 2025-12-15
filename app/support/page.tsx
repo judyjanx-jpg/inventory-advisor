@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useBranding } from './layout'
+import { useBranding } from '@/contexts/BrandingContext'
 import { 
   Shield, 
   Package, 
