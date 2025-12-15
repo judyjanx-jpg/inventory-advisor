@@ -57,47 +57,98 @@ function PublicPageStyles() {
     document.documentElement.classList.add('light')
     document.documentElement.setAttribute('data-theme', 'light')
 
+    // Force light background on body
+    document.body.style.setProperty('background', '#f9fafb', 'important')
+    document.body.style.setProperty('background-image', 'none', 'important')
+
     // Clean up on unmount - restore previous theme
     return () => {
       const storedTheme = localStorage.getItem('theme') || 'dark'
       document.documentElement.classList.remove('light', 'dark')
       document.documentElement.classList.add(storedTheme)
       document.documentElement.setAttribute('data-theme', storedTheme)
+      document.body.style.removeProperty('background')
+      document.body.style.removeProperty('background-image')
     }
   }, [])
 
   return (
     <style jsx global>{`
-      /* Hide admin sidebar and floating elements on public support pages */
-      .public-support-page ~ div > div:first-child > div[class*="w-64"][class*="fixed"],
-      body > div > div > div[class*="w-64"][class*="fixed"],
-      div[class*="sidebar"],
-      div[class*="Sidebar"] {
+      /* === HIDE ALL ADMIN UI ELEMENTS === */
+
+      /* Hide sidebar completely */
+      .w-64.fixed,
+      div[class*="w-64"][class*="fixed"],
+      [class*="sidebar"],
+      [class*="Sidebar"] {
         display: none !important;
+        visibility: hidden !important;
       }
 
-      /* Remove any left margin that might be applied for sidebar */
-      .public-support-page ~ div main[class*="ml-64"],
-      .public-support-page main[class*="ml-64"],
-      main[class*="ml-64"] {
+      /* Remove sidebar margin from main content */
+      .ml-64,
+      main[class*="ml-64"],
+      [class*="ml-64"] {
         margin-left: 0 !important;
       }
 
-      /* Hide floating AI orb on public pages */
-      .public-support-page ~ div > div[class*="fixed"][class*="bottom"],
-      div[class*="FloatingOrb"] {
+      /* Hide floating AI orb */
+      [class*="FloatingOrb"],
+      .fixed.rounded-full {
         display: none !important;
       }
 
-      /* Force light background on public support pages */
+      /* Hide sync bar */
+      [class*="GlobalSyncBar"],
+      .fixed.top-0[class*="z-50"] {
+        display: none !important;
+      }
+
+      /* === FORCE LIGHT THEME === */
+
+      html, body {
+        background: #f9fafb !important;
+        background-image: none !important;
+      }
+
       .public-support-page {
-        --background: #f8fafc !important;
-        --foreground: #0f172a !important;
+        --background: #f9fafb !important;
+        --foreground: #111827 !important;
         --card: #ffffff !important;
-        --card-foreground: #0f172a !important;
-        --border: #e2e8f0 !important;
-        --muted: #f1f5f9 !important;
-        --muted-foreground: #64748b !important;
+        --card-bg: #ffffff !important;
+        --card-foreground: #111827 !important;
+        --border: #e5e7eb !important;
+        --muted: #f3f4f6 !important;
+        --muted-foreground: #6b7280 !important;
+        --primary: #10b981 !important;
+        --sidebar-bg: transparent !important;
+        --hover-bg: #f3f4f6 !important;
+        background: #f9fafb !important;
+        background-image: none !important;
+      }
+
+      /* Remove any diagonal lines or pattern backgrounds */
+      .public-support-page *,
+      .public-support-page *::before,
+      .public-support-page *::after {
+        background-image: none !important;
+      }
+
+      /* Override dark theme card backgrounds */
+      .public-support-page [class*="bg-slate-9"],
+      .public-support-page [class*="bg-gray-9"],
+      .public-support-page [class*="bg-\\[var\\(--card"] {
+        background-color: #ffffff !important;
+        background-image: none !important;
+      }
+
+      /* Override dark theme text colors */
+      .public-support-page [class*="text-\\[var\\(--foreground"] {
+        color: #111827 !important;
+      }
+
+      .public-support-page [class*="text-\\[var\\(--muted-foreground"] {
+        color: #6b7280 !important;
       }
     `}</style>
   )
