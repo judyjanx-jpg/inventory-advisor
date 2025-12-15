@@ -1,17 +1,33 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import Sidebar from './Sidebar'
+import { cn } from '@/lib/utils'
+import Sidebar, { useSidebar } from './Sidebar'
 import { useSyncContext } from '@/components/sync/SyncProvider'
 import FloatingOrb from '@/components/floating-ai/FloatingOrb'
 
 // Public routes where admin layout should not be applied
 const PUBLIC_ROUTES = ['/support', '/portal', '/warranty', '/faq', '/track']
 
-export default function MainLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
+function MainContent({ children }: { children: React.ReactNode }) {
+  const { collapsed } = useSidebar()
   const { syncState } = useSyncContext()
   const isSyncing = syncState.status === 'syncing' || syncState.status === 'success' || syncState.status === 'error'
+
+  return (
+    <main className={cn(
+      "flex-1 transition-all duration-300",
+      collapsed ? "ml-16" : "ml-64"
+    )}>
+      <div className={`p-8 ${isSyncing ? 'pt-20' : ''}`}>
+        {children}
+      </div>
+    </main>
+  )
+}
+
+export default function MainLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
 
   // Check if we're on a public route - if so, render without admin layout
   const isPublicRoute = PUBLIC_ROUTES.some(route => pathname?.startsWith(route))
@@ -22,11 +38,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="flex min-h-screen bg-[var(--background)]">
       <Sidebar />
-      <main className="flex-1 ml-64">
-        <div className={`p-8 ${isSyncing ? 'pt-20' : ''}`}>
-          {children}
-        </div>
-      </main>
+      <MainContent>
+        {children}
+      </MainContent>
       <FloatingOrb />
     </div>
   )

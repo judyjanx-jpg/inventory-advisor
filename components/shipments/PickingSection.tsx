@@ -103,21 +103,25 @@ export default function PickingSection({
           .label:last-child { page-break-after: auto; }
           .header {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: flex-start;
             margin-bottom: 0.2in;
           }
+          .qty-section {
+            text-align: right;
+          }
+          .sku-info {
+            margin-top: 0.15in;
+            text-align: left;
+          }
           .sku {
-            font-size: 22pt;
+            font-size: 18pt;
             font-weight: bold;
           }
           .fnsku {
-            font-size: 14pt;
+            font-size: 12pt;
             color: #666;
             margin-top: 0.05in;
-          }
-          .qty-section {
-            text-align: right;
           }
           .qty-box {
             border: 3px solid #000;
@@ -180,13 +184,13 @@ export default function PickingSection({
           return `
           <div class="label">
             <div class="header">
-              <div>
-                <div class="sku">${item.masterSku}</div>
-                ${item.fnsku ? `<div class="fnsku">FNSKU: ${item.fnsku}</div>` : ''}
-              </div>
               <div class="qty-section">
                 <div class="qty-box">${item.adjustedQty}</div>
                 <div class="qty-per-box">${qtyPerBox}/box</div>
+                <div class="sku-info">
+                  <div class="sku">${item.masterSku}</div>
+                  ${item.fnsku ? `<div class="fnsku">FNSKU: ${item.fnsku}</div>` : ''}
+                </div>
               </div>
             </div>
             <div class="barcode-container">
