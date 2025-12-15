@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Printer, Smartphone, Check, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Edit3, RotateCcw, ArrowRight } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Printer, Smartphone, Check, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Edit3, RotateCcw, ArrowRight, Camera, X } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 
@@ -55,6 +55,14 @@ export default function PickingSection({
   const [adjustType, setAdjustType] = useState<'shipment' | 'inventory'>('shipment')
   const [adjustQty, setAdjustQty] = useState(0)
   const [adjustReason, setAdjustReason] = useState('')
+  
+  // Camera scanning
+  const [showCamera, setShowCamera] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const allPicked = items.every(i => i.pickStatus === 'picked' || i.pickStatus === 'skipped')
   const pickedCount = items.filter(i => i.pickStatus === 'picked').length
@@ -69,6 +77,9 @@ export default function PickingSection({
       alert('Please allow popups to print labels')
       return
     }
+
+    // Calculate shipment total
+    const shipmentTotal = items.reduce((sum, item) => sum + item.adjustedQty, 0)
 
     const html = `
       <!DOCTYPE html>
@@ -97,8 +108,13 @@ export default function PickingSection({
             margin-bottom: 0.2in;
           }
           .sku {
-            font-size: 28pt;
+            font-size: 22pt;
             font-weight: bold;
+          }
+          .fnsku {
+            font-size: 14pt;
+            color: #666;
+            margin-top: 0.05in;
           }
           .qty-section {
             text-align: right;
@@ -121,7 +137,7 @@ export default function PickingSection({
           }
           .barcode-container svg {
             max-width: 100%;
-            height: 80px;
+            height: 60px;
           }
           .location-section {
             text-align: center;
@@ -146,6 +162,11 @@ export default function PickingSection({
             padding-top: 0.15in;
             margin-top: 0.15in;
           }
+          .shipment-total {
+            font-size: 10pt;
+            color: #666;
+            margin-top: 0.05in;
+          }
           @media print {
             .label { border: none; }
             .location-section { background: #f5f5f5; -webkit-print-color-adjust: exact; }
@@ -159,7 +180,10 @@ export default function PickingSection({
           return `
           <div class="label">
             <div class="header">
-              <div class="sku">${item.masterSku}</div>
+              <div>
+                <div class="sku">${item.masterSku}</div>
+                ${item.fnsku ? `<div class="fnsku">FNSKU: ${item.fnsku}</div>` : ''}
+              </div>
               <div class="qty-section">
                 <div class="qty-box">${item.adjustedQty}</div>
                 <div class="qty-per-box">${qtyPerBox}/box</div>
@@ -175,7 +199,10 @@ export default function PickingSection({
             </div>
             ` : ''}
             <div class="footer">
-              <div>${shipmentInternalId}</div>
+              <div>
+                <div>${shipmentInternalId}</div>
+                <div class="shipment-total">Shipment Total: ${shipmentTotal}</div>
+              </div>
               <div>Pick Label</div>
             </div>
           </div>
@@ -185,7 +212,7 @@ export default function PickingSection({
             JsBarcode("#barcode-${i}", "${item.masterSku}", {
               format: "CODE128",
               width: 2,
-              height: 40,
+              height: 30,
               displayValue: false,
               margin: 0
             });
@@ -203,8 +230,11 @@ export default function PickingSection({
   // Handle barcode scan in interactive mode
   const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return
-    
-    const scannedValue = scanInput.trim().toUpperCase()
+    processScannedValue(scanInput.trim().toUpperCase())
+  }
+
+  // Process scanned value (from keyboard or camera)
+  const processScannedValue = (scannedValue: string) => {
     const currentItem = pendingItems[currentPickIndex]
     
     if (!currentItem) return
@@ -215,6 +245,9 @@ export default function PickingSection({
       playSound('success')
       setConfirmedItem(currentItem)
       setConfirmedQty(currentItem.adjustedQty)
+      
+      // Close camera if open
+      stopCamera()
       
       // Show confirmation after brief flash
       setTimeout(() => {
@@ -231,6 +264,108 @@ export default function PickingSection({
       }, 2000)
     }
   }
+
+  // Start camera for barcode scanning
+  const startCamera = async () => {
+    try {
+      setCameraError(null)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment', // Use back camera on mobile
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      })
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        streamRef.current = stream
+        setShowCamera(true)
+        
+        // Start scanning for barcodes
+        startBarcodeScanning()
+      }
+    } catch (error: any) {
+      console.error('Error accessing camera:', error)
+      setCameraError(error.message || 'Failed to access camera. Please allow camera permissions.')
+    }
+  }
+
+  // Stop camera
+  const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current)
+      scanIntervalRef.current = null
+    }
+    
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    
+    setShowCamera(false)
+    setCameraError(null)
+  }
+
+  // Start barcode scanning using BarcodeDetector API or canvas analysis
+  const startBarcodeScanning = () => {
+    if (!videoRef.current || !canvasRef.current) return
+
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+
+    if (!ctx) return
+
+    // Check if BarcodeDetector is available (Chrome, Edge, Safari iOS 16.4+)
+    const hasBarcodeDetector = 'BarcodeDetector' in window
+
+    const scan = async () => {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        try {
+          if (hasBarcodeDetector) {
+            // Use native BarcodeDetector API
+            const detector = new (window as any).BarcodeDetector({
+              formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e']
+            })
+            const barcodes = await detector.detect(canvas)
+            
+            if (barcodes && barcodes.length > 0) {
+              const detectedCode = barcodes[0].rawValue
+              if (detectedCode) {
+                processScannedValue(detectedCode.toUpperCase())
+                return
+              }
+            }
+          } else {
+            // Fallback: Try to read from canvas (basic OCR-like approach)
+            // For now, we'll rely on manual input or suggest using a barcode scanner app
+            // In production, you might want to use a library like ZXing
+          }
+        } catch (error) {
+          console.error('Error detecting barcode:', error)
+        }
+      }
+    }
+
+    // Scan every 200ms
+    scanIntervalRef.current = setInterval(scan, 200)
+  }
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera()
+    }
+  }, [])
 
   const playSound = (type: 'success' | 'error') => {
     try {
@@ -505,34 +640,37 @@ export default function PickingSection({
       return (
         <div className="fixed inset-0 bg-emerald-900 z-50 flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-emerald-700">
-            <h1 className="text-xl font-bold text-white">✓ Scanned</h1>
+          <div className="flex items-center justify-between p-3 sm:p-4 border-b border-emerald-700">
+            <h1 className="text-lg sm:text-xl font-bold text-white">✓ Scanned</h1>
             <button 
               onClick={() => {
+                stopCamera()
                 setShowConfirmation(false)
                 setConfirmedItem(null)
                 setScanResult(null)
                 setShowInteractivePick(false)
               }}
-              className="text-emerald-300 hover:text-white text-2xl"
+              className="text-emerald-300 hover:text-white text-2xl sm:text-3xl p-2 -mr-2"
+              aria-label="Close"
             >
               ✕
             </button>
           </div>
 
           {/* Confirmed Item */}
-          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-            <div className="text-7xl font-bold text-white mb-8">
+          <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 text-center">
+            <div className="text-4xl sm:text-7xl font-bold text-white mb-6 sm:mb-8 break-all px-2">
               {confirmedItem.masterSku}
             </div>
             
             {/* Qty with edit option */}
-            <div className="mb-8">
-              <div className="text-sm text-emerald-300 mb-2">QUANTITY</div>
-              <div className="flex items-center gap-4">
+            <div className="mb-6 sm:mb-8">
+              <div className="text-xs sm:text-sm text-emerald-300 mb-2">QUANTITY</div>
+              <div className="flex items-center gap-3 sm:gap-4">
                 <button
                   onClick={() => setConfirmedQty(Math.max(0, confirmedQty - 1))}
-                  className="w-16 h-16 text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-white"
+                  className="w-14 h-14 sm:w-16 sm:h-16 text-3xl sm:text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-white touch-manipulation"
+                  aria-label="Decrease quantity"
                 >
                   −
                 </button>
@@ -540,48 +678,49 @@ export default function PickingSection({
                   type="number"
                   value={confirmedQty}
                   onChange={(e) => setConfirmedQty(parseInt(e.target.value) || 0)}
-                  className="w-32 h-20 text-5xl font-bold text-center bg-emerald-800 border-2 border-emerald-600 rounded-lg text-white"
+                  className="w-28 sm:w-32 h-16 sm:h-20 text-3xl sm:text-5xl font-bold text-center bg-emerald-800 border-2 border-emerald-600 rounded-lg text-white"
                 />
                 <button
                   onClick={() => setConfirmedQty(confirmedQty + 1)}
-                  className="w-16 h-16 text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-white"
+                  className="w-14 h-14 sm:w-16 sm:h-16 text-3xl sm:text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-white touch-manipulation"
+                  aria-label="Increase quantity"
                 >
                   +
                 </button>
               </div>
-              <div className="text-lg text-emerald-300 mt-2">
+              <div className="text-base sm:text-lg text-emerald-300 mt-2">
                 {Math.ceil(confirmedQty / 5)}/box
               </div>
             </div>
           </div>
 
           {/* Next Button */}
-          <div className="p-6 bg-emerald-800 border-t border-emerald-700">
+          <div className="p-4 sm:p-6 bg-emerald-800 border-t border-emerald-700">
             <div className="max-w-md mx-auto space-y-3">
               {/* Update Warehouse Qty Button */}
               {onInventoryAdjust && (
                 <Button 
                   variant="outline" 
                   onClick={handleUpdateWarehouseQty}
-                  className="w-full border-amber-500 text-amber-300 hover:bg-amber-700/20"
+                  className="w-full border-amber-500 text-amber-300 hover:bg-amber-700/20 py-3 sm:py-2 text-base sm:text-sm"
                 >
                   Update Warehouse Qty
                 </Button>
               )}
               
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
                 <Button 
                   variant="outline" 
                   onClick={skipItem}
-                  className="flex-1 border-emerald-600 text-emerald-300 hover:bg-emerald-700"
+                  className="flex-1 border-emerald-600 text-emerald-300 hover:bg-emerald-700 py-3 sm:py-2 text-base sm:text-sm"
                 >
                   Skip
                 </Button>
                 <Button 
                   onClick={proceedToNext}
-                  className="flex-1 bg-white text-emerald-900 hover:bg-emerald-100 text-xl py-4"
+                  className="flex-1 bg-white text-emerald-900 hover:bg-emerald-100 text-lg sm:text-xl py-3 sm:py-4"
                 >
-                  Next <ArrowRight className="w-6 h-6 ml-2" />
+                  Next <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 ml-2 inline" />
                 </Button>
               </div>
             </div>
@@ -695,19 +834,23 @@ export default function PickingSection({
         'bg-slate-900'
       } transition-colors duration-300`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <h1 className="text-xl font-bold text-white">Interactive Pick</h1>
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-slate-700">
+          <h1 className="text-lg sm:text-xl font-bold text-white">Interactive Pick</h1>
           <button 
-            onClick={() => setShowInteractivePick(false)}
-            className="text-slate-400 hover:text-white text-2xl"
+            onClick={() => {
+              stopCamera()
+              setShowInteractivePick(false)
+            }}
+            className="text-slate-400 hover:text-white text-2xl sm:text-3xl p-2 -mr-2"
+            aria-label="Close"
           >
             ✕
           </button>
         </div>
 
         {/* Progress */}
-        <div className="px-4 py-2 bg-slate-800">
-          <div className="flex items-center justify-between text-sm text-slate-400 mb-1">
+        <div className="px-3 sm:px-4 py-2 bg-slate-800">
+          <div className="flex items-center justify-between text-xs sm:text-sm text-slate-400 mb-1">
             <span>Item {currentPickIndex + 1} of {pendingItems.length}</span>
             <span>{pickedCount} picked, {skippedCount} skipped</span>
           </div>
@@ -720,26 +863,26 @@ export default function PickingSection({
         </div>
 
         {/* Current Item */}
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 text-center">
           {scanResult === 'wrong' ? (
             <div className="animate-pulse">
-              <AlertCircle className="w-32 h-32 text-red-400 mx-auto mb-4" />
-              <h2 className="text-4xl font-bold text-white">WRONG ITEM</h2>
-              <p className="text-xl text-red-300 mt-2">Expected: {currentItem.masterSku}</p>
+              <AlertCircle className="w-24 h-24 sm:w-32 sm:h-32 text-red-400 mx-auto mb-4" />
+              <h2 className="text-2xl sm:text-4xl font-bold text-white">WRONG ITEM</h2>
+              <p className="text-lg sm:text-xl text-red-300 mt-2">Expected: {currentItem.masterSku}</p>
             </div>
           ) : (
             <>
-              <div className="text-7xl font-bold text-white mb-6">
+              <div className="text-4xl sm:text-7xl font-bold text-white mb-4 sm:mb-6 break-all px-2">
                 {currentItem.masterSku}
               </div>
-              <div className="text-6xl font-bold text-cyan-400 mb-4">
+              <div className="text-4xl sm:text-6xl font-bold text-cyan-400 mb-3 sm:mb-4">
                 {currentItem.adjustedQty}
               </div>
-              <div className="text-xl text-slate-400 mb-2">
+              <div className="text-lg sm:text-xl text-slate-400 mb-2">
                 {Math.ceil(currentItem.adjustedQty / 5)}/box
               </div>
               {hasLocation && (
-                <div className="text-lg text-slate-400">
+                <div className="text-base sm:text-lg text-slate-400">
                   📍 {currentItem.warehouseLocation}
                 </div>
               )}
@@ -749,25 +892,79 @@ export default function PickingSection({
 
         {/* Scan Input */}
         {!scanResult && (
-          <div className="p-6 bg-slate-800 border-t border-slate-700">
+          <div className="p-4 sm:p-6 bg-slate-800 border-t border-slate-700">
             <div className="max-w-md mx-auto">
-              <label className="block text-center text-slate-400 mb-2">
+              <label className="block text-center text-slate-400 mb-3 text-sm sm:text-base">
                 Scan SKU barcode or type manually
               </label>
-              <input
-                type="text"
-                value={scanInput}
-                onChange={(e) => setScanInput(e.target.value)}
-                onKeyDown={handleScan}
-                autoFocus
-                className="w-full px-4 py-4 text-2xl text-center bg-slate-900 border-2 border-slate-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
-                placeholder="Scan or type SKU..."
-              />
-              <div className="flex gap-4 mt-4">
-                <Button variant="outline" onClick={skipItem} className="flex-1">
+              
+              {/* Camera View */}
+              {showCamera && (
+                <div className="mb-4 relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '16/9' }}>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    onClick={stopCamera}
+                    className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-black/70"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  {cameraError && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
+                      <div>
+                        <p className="text-red-400 mb-2">{cameraError}</p>
+                        <p className="text-sm text-slate-300">You can still type the SKU manually</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="border-2 border-cyan-400 rounded-lg" style={{ width: '80%', height: '40%' }} />
+                  </div>
+                </div>
+              )}
+              
+              {/* Hidden canvas for barcode detection */}
+              <canvas ref={canvasRef} className="hidden" />
+              
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={scanInput}
+                  onChange={(e) => setScanInput(e.target.value)}
+                  onKeyDown={handleScan}
+                  autoFocus={!showCamera}
+                  className="flex-1 px-4 py-3 sm:py-4 text-lg sm:text-2xl text-center bg-slate-900 border-2 border-slate-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                  placeholder="Scan or type SKU..."
+                  inputMode="text"
+                />
+                {!showCamera && (
+                  <button
+                    onClick={startCamera}
+                    className="px-4 sm:px-6 py-3 sm:py-4 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white flex items-center justify-center"
+                    title="Open camera scanner"
+                  >
+                    <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+                <Button 
+                  variant="outline" 
+                  onClick={skipItem} 
+                  className="flex-1 py-3 sm:py-2 text-base sm:text-sm"
+                >
                   Skip Item
                 </Button>
-                <Button onClick={manualConfirm} className="flex-1">
+                <Button 
+                  onClick={manualConfirm} 
+                  className="flex-1 py-3 sm:py-2 text-base sm:text-sm"
+                >
                   Manual Confirm
                 </Button>
               </div>

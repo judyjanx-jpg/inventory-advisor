@@ -449,7 +449,7 @@ export default function ProductLabelPrinter({
           }
 
           .fnsku-line {
-            line-height: 1.6;
+            line-height: 1.7;
             padding: 1px 0;
             width: 100%;
             text-align: center;
@@ -476,6 +476,20 @@ export default function ProductLabelPrinter({
             font-size: 6pt;
             font-weight: bold;
             color: #000;
+          }
+
+          .fnsku-only-label .fnsku-code-vertical {
+            font-size: 5pt;
+            font-weight: normal;
+            color: #000;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            word-break: normal;
+            position: absolute;
+            right: -0.15in;
+            top: 50%;
+            transform: translateY(-50%) rotate(90deg);
+            line-height: 1;
           }
           
           /* ========== TP ONLY LABEL (1x1) ========== */
@@ -533,16 +547,27 @@ export default function ProductLabelPrinter({
             return `
               <div class="label tp-only-label">
                 <div class="tp-header">
-                  <svg class="tp-icon" viewBox="0 0 24 24" fill="none">
-                    <rect x="0" y="0" width="5" height="5" fill="#000"/>
-                    <rect x="5" y="0" width="5" height="5" fill="#000"/>
-                    <rect x="0" y="5" width="5" height="5" fill="#000"/>
-                    <rect x="10" y="0" width="5" height="5" fill="#000"/>
-                    <rect x="15" y="0" width="5" height="5" fill="#fff" stroke="#000" stroke-width="0.5"/>
-                    <rect x="20" y="0" width="4" height="5" fill="#000"/>
-                    <rect x="10" y="5" width="5" height="5" fill="#fff" stroke="#000" stroke-width="0.5"/>
-                    <rect x="15" y="5" width="5" height="5" fill="#000"/>
-                    <path d="M15 10 L20 10 L20 20 Q20 24 16 24 L15 24 L15 10 Z" fill="#000"/>
+                  <svg class="tp-icon" viewBox="0 0 1125 1124.99995" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                    <defs>
+                      <filter x="0%" y="0%" width="100%" height="100%" id="tp-filter-1-${i}">
+                        <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0" color-interpolation-filters="sRGB"/>
+                      </filter>
+                      <filter x="0%" y="0%" width="100%" height="100%" id="tp-filter-2-${i}">
+                        <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.2126 0.7152 0.0722 0 0" color-interpolation-filters="sRGB"/>
+                      </filter>
+                      <mask id="tp-mask-${i}">
+                        <g filter="url(#tp-filter-1-${i})">
+                          <g filter="url(#tp-filter-2-${i})" transform="matrix(2.666015, 0, 0, 2.666015, -128.932757, -107.772899)">
+                            <image x="0" y="0" width="512" xlink:href="data:image/png;base64,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" height="512" preserveAspectRatio="xMidYMid meet"/>
+                          </g>
+                        </g>
+                      </mask>
+                    </defs>
+                    <g mask="url(#tp-mask-${i})">
+                      <g transform="matrix(2.666015, 0, 0, 2.666015, -128.932757, -107.772899)">
+                        <image x="0" y="0" width="512" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAABmJLR0QA/wD/AP+gvaeTAAADEUlEQVR4nO3BgQAAAADDoPlTX+EAVQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMBvArQAAVkUTe8AAAAASUVORK5CYII=" height="512" preserveAspectRatio="xMidYMid meet"/>
+                      </g>
+                    </g>
                   </svg>
                   <span class="tp-header-text">Scan with the<br/>Transparency app</span>
                 </div>
@@ -559,16 +584,27 @@ export default function ProductLabelPrinter({
               <div class="label">
                 <div class="tp-section">
                   <div class="tp-header">
-                    <svg class="tp-icon" viewBox="0 0 24 24" fill="none">
-                      <rect x="0" y="0" width="5" height="5" fill="#000"/>
-                      <rect x="5" y="0" width="5" height="5" fill="#000"/>
-                      <rect x="0" y="5" width="5" height="5" fill="#000"/>
-                      <rect x="10" y="0" width="5" height="5" fill="#000"/>
-                      <rect x="15" y="0" width="5" height="5" fill="#fff" stroke="#000" stroke-width="0.5"/>
-                      <rect x="20" y="0" width="4" height="5" fill="#000"/>
-                      <rect x="10" y="5" width="5" height="5" fill="#fff" stroke="#000" stroke-width="0.5"/>
-                      <rect x="15" y="5" width="5" height="5" fill="#000"/>
-                      <path d="M15 10 L20 10 L20 20 Q20 24 16 24 L15 24 L15 10 Z" fill="#000"/>
+                    <svg class="tp-icon" viewBox="0 0 1125 1124.99995" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                      <defs>
+                        <filter x="0%" y="0%" width="100%" height="100%" id="24a42a33c8">
+                          <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0" color-interpolation-filters="sRGB"/>
+                        </filter>
+                        <filter x="0%" y="0%" width="100%" height="100%" id="80ebd64d3f">
+                          <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.2126 0.7152 0.0722 0 0" color-interpolation-filters="sRGB"/>
+                        </filter>
+                        <mask id="56c224ad2e">
+                          <g filter="url(#24a42a33c8)">
+                            <g filter="url(#80ebd64d3f)" transform="matrix(2.666015, 0, 0, 2.666015, -128.932757, -107.772899)">
+                              <image x="0" y="0" width="512" xlink:href="data:image/png;base64,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" height="512" preserveAspectRatio="xMidYMid meet"/>
+                            </g>
+                          </g>
+                        </mask>
+                      </defs>
+                      <g mask="url(#tp-mask-${i})">
+                        <g transform="matrix(2.666015, 0, 0, 2.666015, -128.932757, -107.772899)">
+                          <image x="0" y="0" width="512" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAABmJLR0QA/wD/AP+gvaeTAAADEUlEQVR4nO3BgQAAAADDoPlTX+EAVQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMBvArQAAVkUTe8AAAAASUVORK5CYII=" height="512" preserveAspectRatio="xMidYMid meet"/>
+                        </g>
+                      </g>
                     </svg>
                     <span class="tp-header-text">Scan with the<br/>Transparency app</span>
                   </div>
@@ -592,7 +628,7 @@ export default function ProductLabelPrinter({
 
           // FNSKU only
           return `
-            <div class="label">
+            <div class="label fnsku-only-label" style="position: relative;">
               <div class="fnsku-section" style="width: 100%;">
                 ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
                 <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
@@ -602,6 +638,7 @@ export default function ProductLabelPrinter({
                   <div class="fnsku-line condition">New</div>
                 </div>
               </div>
+              <div class="fnsku-code-vertical">${item.masterSku}</div>
             </div>
           `
         }).join('')}
