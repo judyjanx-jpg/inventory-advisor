@@ -182,9 +182,6 @@ export default function ForecastingPage() {
   // Trend view state (multi-select for Trends tab)
   const [trendSelectedSkus, setTrendSelectedSkus] = useState<string[]>([])
 
-  // AI Engine state
-  const [aiEngineSelectedSku, setAiEngineSelectedSku] = useState<string | null>(null)
-
   // Save tab order to localStorage whenever it changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -541,10 +538,7 @@ export default function ForecastingPage() {
         )}
 
         {activeTab === 'ai-engine' && (
-          <ModelBreakdown
-            selectedSku={aiEngineSelectedSku}
-            onSelectSku={setAiEngineSelectedSku}
-          />
+          <ModelBreakdown />
         )}
 
         {activeTab === 'alerts' && (
