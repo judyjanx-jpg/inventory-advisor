@@ -1533,23 +1533,61 @@ async function processAdsReportsSync(job: any) {
       await sleep(500)
     }
 
-    // Step 2: Request new report if no pending reports or all are old
+    // Step 2: Check for missing dates and request reports
+    // Look at the last 7 days and find any dates without data in advertising_daily
+    const DAYS_TO_CHECK = 7
+    const missingDates: string[] = []
+
+    console.log(`  Checking for missing ads data in the last ${DAYS_TO_CHECK} days...`)
+
+    for (let i = 0; i < DAYS_TO_CHECK; i++) {
+      const { startDate: dayStart } = getPSTDateRange(i)
+      const dateStr = toZonedTime(dayStart, AMAZON_TIMEZONE).toISOString().split('T')[0]
+
+      // Check if we have data for this date in advertising_daily
+      const existingData = await prisma.advertisingDaily.findFirst({
+        where: {
+          date: new Date(dateStr),
+          campaignType: 'SP',
+        },
+      })
+
+      // Also check if there's already a pending report for this date
+      const pendingReport = await prisma.adsPendingReport.findFirst({
+        where: {
+          status: 'PENDING',
+          dateRange: { contains: dateStr },
+          createdAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) }, // Less than 2 hours old
+        },
+      })
+
+      if (!existingData && !pendingReport) {
+        missingDates.push(dateStr)
+      }
+    }
+
+    if (missingDates.length > 0) {
+      console.log(`  Found ${missingDates.length} dates with missing ads data: ${missingDates.join(', ')}`)
+    } else {
+      console.log(`  All recent dates have ads data`)
+    }
+
+    // Also check for active pending reports
     const activePending = await prisma.adsPendingReport.count({
-      where: { 
+      where: {
         status: 'PENDING',
         createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } // Less than 1 hour old
       },
     })
 
-    if (activePending === 0) {
-      console.log('  Requesting new SP reports (campaign + product)...')
+    // Request reports for missing dates (limit to 2 at a time to avoid overwhelming the API)
+    const datesToRequest = missingDates.slice(0, 2)
+
+    if (datesToRequest.length > 0 && activePending < 4) {
+      console.log(`  Requesting reports for missing dates: ${datesToRequest.join(', ')}`)
 
       const freshCreds = await getAdsCredentials()
       if (freshCreds?.accessToken) {
-        // Use PST day boundaries for ads reports
-        const { startDate: yesterdayStart } = getPSTDateRange(1)
-        const dateStr = toZonedTime(yesterdayStart, AMAZON_TIMEZONE).toISOString().split('T')[0]
-
         const headers = {
           'Authorization': `Bearer ${freshCreds.accessToken}`,
           'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
@@ -1558,148 +1596,163 @@ async function processAdsReportsSync(job: any) {
           'Accept': 'application/vnd.createasyncreport.v3+json',
         }
 
-        // Request campaign report
-        const campaignReportConfig = {
-          name: `Worker_SP_Campaign_${Date.now()}`,
-          startDate: dateStr,
-          endDate: dateStr,
-          configuration: {
-            adProduct: 'SPONSORED_PRODUCTS',
-            groupBy: ['campaign'],
-            columns: [
-              'campaignName',
-              'campaignId',
-              'campaignStatus',
-              'campaignBudgetAmount',
-              'campaignBudgetType',
-              'impressions',
-              'clicks',
-              'cost',
-              'purchases14d',
-              'sales14d',
-              'unitsSoldClicks14d',
-            ],
-            reportTypeId: 'spCampaigns',
-            timeUnit: 'SUMMARY',
-            format: 'GZIP_JSON',
-          },
-        }
-
-        // Request product report (for profit calculation)
-        const productReportConfig = {
-          name: `Worker_SP_Product_${Date.now()}`,
-          startDate: dateStr,
-          endDate: dateStr,
-          configuration: {
-            adProduct: 'SPONSORED_PRODUCTS',
-            groupBy: ['advertiser'],
-            columns: [
-              'advertisedAsin',
-              'advertisedSku',
-              'impressions',
-              'clicks',
-              'spend',
-              'sales14d',
-              'purchases14d',
-              'unitsSoldClicks14d',
-            ],
-            reportTypeId: 'spAdvertisedProduct',
-            timeUnit: 'SUMMARY',
-            format: 'GZIP_JSON',
-          },
-        }
-
-        // Request campaign report
-        try {
-          const campaignResponse = await fetch(`${ADS_API_BASE}/reporting/reports`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(campaignReportConfig),
-          })
-
-          const campaignResponseText = await campaignResponse.text()
-          let campaignReportId: string | null = null
-          
-          if (campaignResponse.status === 425) {
-            const match = campaignResponseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
-            if (match) campaignReportId = match[1]
-          } else if (campaignResponse.ok) {
-            const data = JSON.parse(campaignResponseText)
-            campaignReportId = data.reportId
+        for (const dateStr of datesToRequest) {
+          // Request campaign report
+          const campaignReportConfig = {
+            name: `Worker_SP_Campaign_${dateStr}_${Date.now()}`,
+            startDate: dateStr,
+            endDate: dateStr,
+            configuration: {
+              adProduct: 'SPONSORED_PRODUCTS',
+              groupBy: ['campaign'],
+              columns: [
+                'campaignName',
+                'campaignId',
+                'campaignStatus',
+                'campaignBudgetAmount',
+                'campaignBudgetType',
+                'impressions',
+                'clicks',
+                'cost',
+                'purchases14d',
+                'sales14d',
+                'unitsSoldClicks14d',
+              ],
+              reportTypeId: 'spCampaigns',
+              timeUnit: 'SUMMARY',
+              format: 'GZIP_JSON',
+            },
           }
 
-          if (campaignReportId) {
-            const existing = await prisma.adsPendingReport.findUnique({
-              where: { reportId: campaignReportId },
+          // Request product report (for profit calculation)
+          const productReportConfig = {
+            name: `Worker_SP_Product_${dateStr}_${Date.now()}`,
+            startDate: dateStr,
+            endDate: dateStr,
+            configuration: {
+              adProduct: 'SPONSORED_PRODUCTS',
+              groupBy: ['advertiser'],
+              columns: [
+                'advertisedAsin',
+                'advertisedSku',
+                'impressions',
+                'clicks',
+                'spend',
+                'sales14d',
+                'purchases14d',
+                'unitsSoldClicks14d',
+              ],
+              reportTypeId: 'spAdvertisedProduct',
+              timeUnit: 'SUMMARY',
+              format: 'GZIP_JSON',
+            },
+          }
+
+          // Request campaign report
+          try {
+            const campaignResponse = await fetch(`${ADS_API_BASE}/reporting/reports`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(campaignReportConfig),
             })
-            if (!existing) {
-              await prisma.adsPendingReport.create({
-                data: {
-                  reportId: campaignReportId,
-                  profileId,
-                  reportType: 'SP_CAMPAIGNS',
-                  status: 'PENDING',
-                  dateRange: `${dateStr} to ${dateStr}`,  // Consistent format for parsing
-                },
-              })
-              newReportRequested = true
-              console.log(`    Campaign report requested: ${campaignReportId.substring(0, 8)}...`)
+
+            const campaignResponseText = await campaignResponse.text()
+            let campaignReportId: string | null = null
+
+            if (campaignResponse.status === 425) {
+              const match = campaignResponseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
+              if (match) campaignReportId = match[1]
+            } else if (campaignResponse.ok) {
+              const data = JSON.parse(campaignResponseText)
+              campaignReportId = data.reportId
             }
+
+            if (campaignReportId) {
+              const existing = await prisma.adsPendingReport.findUnique({
+                where: { reportId: campaignReportId },
+              })
+              if (!existing) {
+                await prisma.adsPendingReport.create({
+                  data: {
+                    reportId: campaignReportId,
+                    profileId,
+                    reportType: 'SP_CAMPAIGNS',
+                    status: 'PENDING',
+                    dateRange: `${dateStr} to ${dateStr}`,
+                  },
+                })
+                newReportRequested = true
+                console.log(`    Campaign report for ${dateStr} requested: ${campaignReportId.substring(0, 8)}...`)
+              }
+            }
+          } catch (e: any) {
+            console.log(`    Failed to request campaign report for ${dateStr}: ${e.message}`)
           }
-        } catch (e: any) {
-          console.log(`    Failed to request campaign report: ${e.message}`)
-        }
 
-        // Request product report
-        try {
-          const productResponse = await fetch(`${ADS_API_BASE}/reporting/reports`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(productReportConfig),
-          })
-
-          const productResponseText = await productResponse.text()
-          let productReportId: string | null = null
-
-          if (productResponse.status === 425) {
-            const match = productResponseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
-            if (match) productReportId = match[1]
-          } else if (productResponse.ok) {
-            const data = JSON.parse(productResponseText)
-            productReportId = data.reportId
-          }
-
-          if (productReportId) {
-            const existing = await prisma.adsPendingReport.findUnique({
-              where: { reportId: productReportId },
+          // Request product report
+          try {
+            const productResponse = await fetch(`${ADS_API_BASE}/reporting/reports`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(productReportConfig),
             })
-            if (!existing) {
-              await prisma.adsPendingReport.create({
-                data: {
-                  reportId: productReportId,
-                  profileId,
-                  reportType: 'SP_PRODUCTS',
-                  status: 'PENDING',
-                  dateRange: `${dateStr} to ${dateStr}`,  // Consistent format for parsing
-                },
-              })
-              newReportRequested = true
-              console.log(`    Product report requested: ${productReportId.substring(0, 8)}...`)
+
+            const productResponseText = await productResponse.text()
+            let productReportId: string | null = null
+
+            if (productResponse.status === 425) {
+              const match = productResponseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
+              if (match) productReportId = match[1]
+            } else if (productResponse.ok) {
+              const data = JSON.parse(productResponseText)
+              productReportId = data.reportId
             }
+
+            if (productReportId) {
+              const existing = await prisma.adsPendingReport.findUnique({
+                where: { reportId: productReportId },
+              })
+              if (!existing) {
+                await prisma.adsPendingReport.create({
+                  data: {
+                    reportId: productReportId,
+                    profileId,
+                    reportType: 'SP_PRODUCTS',
+                    status: 'PENDING',
+                    dateRange: `${dateStr} to ${dateStr}`,
+                  },
+                })
+                newReportRequested = true
+                console.log(`    Product report for ${dateStr} requested: ${productReportId.substring(0, 8)}...`)
+              }
+            }
+          } catch (e: any) {
+            console.log(`    Failed to request product report for ${dateStr}: ${e.message}`)
           }
-        } catch (e: any) {
-          console.log(`    Failed to request product report: ${e.message}`)
+
+          // Small delay between date requests
+          await sleep(500)
         }
       }
+    } else if (activePending >= 4) {
+      console.log(`  ${activePending} active pending report(s), waiting for them to complete before requesting more`)
     } else {
-      console.log(`  ${activePending} active pending report(s), skipping new request`)
+      console.log(`  No missing dates to request reports for`)
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1)
-    console.log(`[ads-reports-sync] Completed in ${duration}s - ${reportsChecked} checked, ${reportsCompleted} completed, ${campaignsUpdated} campaigns updated`)
+    console.log(`[ads-reports-sync] Completed in ${duration}s - ${reportsChecked} checked, ${reportsCompleted} completed, ${campaignsUpdated} campaigns updated, ${missingDates.length} missing dates found`)
 
-    await logSyncResult('ads-reports', 'success', { reportsChecked, reportsCompleted, campaignsUpdated, newReportRequested }, null)
-    return { reportsChecked, reportsCompleted, campaignsUpdated, newReportRequested }
+    await logSyncResult('ads-reports', 'success', {
+      reportsChecked,
+      reportsCompleted,
+      campaignsUpdated,
+      newReportRequested,
+      missingDatesFound: missingDates.length,
+      missingDates: missingDates.slice(0, 5), // Log first 5 for reference
+      datesRequested: datesToRequest,
+    }, null)
+    return { reportsChecked, reportsCompleted, campaignsUpdated, newReportRequested, missingDatesFound: missingDates.length }
   } catch (error: any) {
     console.error(`[ads-reports-sync] Failed:`, error.message)
     await logSyncResult('ads-reports', 'failed', null, error.message)
