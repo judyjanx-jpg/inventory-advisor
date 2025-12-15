@@ -40,6 +40,11 @@ interface PrintedLabelData {
   printedAt: Date
 }
 
+// Persisted print counts per shipment
+interface PrintedCounts {
+  [sku: string]: number // Total labels printed (not including reprints)
+}
+
 export default function ProductLabelPrinter({
   shipmentId,
   shipmentInternalId,
@@ -55,12 +60,15 @@ export default function ProductLabelPrinter({
   const [loadingTp, setLoadingTp] = useState<string | null>(null)
   const [tpCodes, setTpCodes] = useState<Record<string, string[]>>({})
 
-  // Track printed labels and show confirmation
+  // Track printed labels (for reprint functionality)
   const [printedLabels, setPrintedLabels] = useState<Record<string, PrintedLabelData>>({})
-  const [showConfirm, setShowConfirm] = useState<string | null>(null) // SKU being confirmed
-  const [requestMoreQty, setRequestMoreQty] = useState<number>(1)
+  // Persisted total printed counts
+  const [printedCounts, setPrintedCounts] = useState<PrintedCounts>({})
+  // Show "print more" input for specific SKU
+  const [showPrintMore, setShowPrintMore] = useState<string | null>(null)
+  const [printMoreQty, setPrintMoreQty] = useState<number>(1)
 
-  // Load settings from localStorage
+  // Load settings and printed counts from localStorage
   useEffect(() => {
     const stored = localStorage.getItem('displaySettings')
     if (stored) {
@@ -77,13 +85,32 @@ export default function ProductLabelPrinter({
       }
     }
 
+    // Load persisted printed counts for this shipment
+    const printedKey = `printedLabels_${shipmentInternalId}`
+    const storedPrinted = localStorage.getItem(printedKey)
+    if (storedPrinted) {
+      try {
+        setPrintedCounts(JSON.parse(storedPrinted))
+      } catch (e) {
+        console.error('Error loading printed counts:', e)
+      }
+    }
+
     // Initialize label counts
     const counts: Record<string, number> = {}
     items.forEach(item => {
       counts[item.masterSku] = item.adjustedQty
     })
     setLabelCounts(counts)
-  }, [items])
+  }, [items, shipmentInternalId])
+
+  // Save printed counts to localStorage whenever they change
+  useEffect(() => {
+    if (Object.keys(printedCounts).length > 0) {
+      const printedKey = `printedLabels_${shipmentInternalId}`
+      localStorage.setItem(printedKey, JSON.stringify(printedCounts))
+    }
+  }, [printedCounts, shipmentInternalId])
 
   const getLabelType = (item: ShipmentItem): LabelType => {
     if (item.labelType) return item.labelType as LabelType
@@ -213,7 +240,7 @@ export default function ProductLabelPrinter({
     // Generate and auto-download PDF
     await generatePDF(html, item, labelType, quantity, width, height)
 
-    // Store print data for reprint/confirmation
+    // Store print data for reprint functionality
     setPrintedLabels(prev => ({
       ...prev,
       [item.masterSku]: {
@@ -227,9 +254,15 @@ export default function ProductLabelPrinter({
       }
     }))
 
-    // Show confirmation modal
-    setShowConfirm(item.masterSku)
-    setRequestMoreQty(1)
+    // Update cumulative printed count (persisted)
+    setPrintedCounts(prev => ({
+      ...prev,
+      [item.masterSku]: (prev[item.masterSku] || 0) + quantity
+    }))
+
+    // Reset print more state
+    setShowPrintMore(null)
+    setPrintMoreQty(1)
   }
 
   // Reprint using stored data (no new TP codes)
@@ -259,18 +292,10 @@ export default function ProductLabelPrinter({
       [item.masterSku]: additionalQty
     }))
 
-    // Close confirmation first
-    setShowConfirm(null)
-
     // Wait for state to update, then print with new codes
     setTimeout(() => {
       printLabels(item, true)
     }, 100)
-  }
-
-  // Confirm print was successful
-  const confirmPrinted = (sku: string) => {
-    setShowConfirm(null)
   }
 
   // Helper to truncate SKU for vertical display
@@ -879,16 +904,15 @@ export default function ProductLabelPrinter({
             const hasTpCodes = tpCodes[item.masterSku]?.length > 0
             
             return (
-              <div key={item.masterSku} className="space-y-2">
-                <div className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-white">{item.masterSku}</div>
-                    <div className="text-xs text-slate-500 font-mono">
-                      FNSKU: {item.fnsku || <span className="text-amber-400">Not set</span>}
-                    </div>
-                    <div className="text-sm text-slate-400 truncate">{item.productName}</div>
+              <div key={item.masterSku} className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-white">{item.masterSku}</div>
+                  <div className="text-xs text-slate-500 font-mono">
+                    FNSKU: {item.fnsku || <span className="text-amber-400">Not set</span>}
                   </div>
-                
+                  <div className="text-sm text-slate-400 truncate">{item.productName}</div>
+                </div>
+
                 <div className="text-center">
                   <div className="text-sm text-slate-400">Units</div>
                   <input
@@ -907,110 +931,102 @@ export default function ProductLabelPrinter({
                   {display.label}
                 </div>
 
-                {(labelType === 'fnsku_tp' || labelType === 'tp_only') && hasTpCodes && (
-                  <div className="text-xs text-emerald-400">
-                    ✓ {tpCodes[item.masterSku].length} codes
-                  </div>
-                )}
-
-                {/* Show printed status */}
-                {printedLabels[item.masterSku] && (
-                  <div className="text-xs text-emerald-400 flex items-center gap-1">
-                    <Check className="w-3 h-3" />
-                    {printedLabels[item.masterSku].quantity} printed
-                  </div>
-                )}
-
                 {labelType === 'none' ? (
                   <div className="text-sm text-slate-400 italic">
                     Pre-labeled
                   </div>
                 ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => printLabels(item)}
-                    disabled={loadingTp === item.masterSku}
-                  >
-                    {loadingTp === item.masterSku ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                        Getting TP...
-                      </>
+                  <>
+                    {/* Show different UI based on whether labels have been printed */}
+                    {printedCounts[item.masterSku] ? (
+                      // Already printed - show count and actions
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm text-emerald-400 font-medium flex items-center gap-1">
+                          <Check className="w-4 h-4" />
+                          {printedCounts[item.masterSku]} Printed
+                        </div>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => reprintLabels(item)}
+                          disabled={!printedLabels[item.masterSku] || loadingTp === item.masterSku}
+                          title={!printedLabels[item.masterSku] ? 'Print data not available (page was refreshed)' : 'Reprint last batch'}
+                        >
+                          <RotateCcw className="w-4 h-4 mr-1" />
+                          Reprint
+                        </Button>
+
+                        {showPrintMore === item.masterSku ? (
+                          // Show qty input for print more
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="1"
+                              value={printMoreQty}
+                              onChange={(e) => setPrintMoreQty(parseInt(e.target.value) || 1)}
+                              className="w-14 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center"
+                              autoFocus
+                            />
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => requestMoreLabels(item, printMoreQty)}
+                              disabled={loadingTp === item.masterSku}
+                            >
+                              {loadingTp === item.masterSku ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Printer className="w-4 h-4 mr-1" />
+                                  Print
+                                </>
+                              )}
+                            </Button>
+                            <button
+                              onClick={() => setShowPrintMore(null)}
+                              className="text-slate-400 hover:text-white p-1"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setShowPrintMore(item.masterSku)
+                              setPrintMoreQty(1)
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Print More
+                          </Button>
+                        )}
+                      </div>
                     ) : (
-                      <>
-                        <Printer className="w-4 h-4 mr-1" />
-                        Print
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-
-              {/* Confirmation Modal */}
-              {showConfirm === item.masterSku && (
-                <div className="mt-3 p-3 bg-slate-900 rounded-lg border border-slate-600">
-                  <div className="text-sm text-white mb-3 flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    PDF downloaded for {printedLabels[item.masterSku]?.quantity} labels
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Confirm printed */}
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => confirmPrinted(item.masterSku)}
-                    >
-                      <Check className="w-4 h-4 mr-1" />
-                      Printed OK
-                    </Button>
-
-                    {/* Reprint same labels */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => reprintLabels(item)}
-                    >
-                      <RotateCcw className="w-4 h-4 mr-1" />
-                      Reprint
-                    </Button>
-
-                    {/* Request more with input */}
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        min="1"
-                        value={requestMoreQty}
-                        onChange={(e) => setRequestMoreQty(parseInt(e.target.value) || 1)}
-                        className="w-14 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center"
-                      />
+                      // Not printed yet - show Print button
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => requestMoreLabels(item, requestMoreQty)}
+                        onClick={() => printLabels(item)}
+                        disabled={loadingTp === item.masterSku}
                       >
-                        <Plus className="w-4 h-4 mr-1" />
-                        More
+                        {loadingTp === item.masterSku ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            Getting TP...
+                          </>
+                        ) : (
+                          <>
+                            <Printer className="w-4 h-4 mr-1" />
+                            Print
+                          </>
+                        )}
                       </Button>
-                    </div>
-
-                    {/* Close */}
-                    <button
-                      onClick={() => setShowConfirm(null)}
-                      className="ml-auto text-slate-400 hover:text-white p-1"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {(labelType === 'fnsku_tp' || labelType === 'tp_only') && (
-                    <p className="text-xs text-slate-500 mt-2">
-                      "Reprint" uses same TP codes • "More" requests new TP codes
-                    </p>
-                  )}
-                </div>
-              )}
+                    )}
+                  </>
+                )}
               </div>
             )
           })}
