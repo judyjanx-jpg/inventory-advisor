@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { triggerSync } from '@/lib/queues/scheduler'
 
-const VALID_TYPES = ['orders', 'finances', 'inventory', 'products', 'reports', 'aggregation', 'all']
+const VALID_TYPES = ['orders', 'orders-report', 'finances', 'inventory', 'products', 'reports', 'aggregation', 'ads-reports', 'alerts', 'all']
 
 export async function POST(request: NextRequest) {
   try {
