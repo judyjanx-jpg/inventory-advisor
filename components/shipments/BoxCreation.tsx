@@ -10,6 +10,8 @@ interface ShipmentItem {
   sku: string
   productName: string
   adjustedQty: number
+  prepOwner?: 'AMAZON' | 'SELLER' | 'NONE'
+  labelOwner?: 'AMAZON' | 'SELLER' | 'NONE'
 }
 
 interface BoxItem {
@@ -39,6 +41,7 @@ interface BoxCreationProps {
   shipmentItems: ShipmentItem[]
   boxes: Box[]
   onBoxesChange: (boxes: Box[]) => void
+  onItemPrepChange?: (sku: string, field: 'prepOwner' | 'labelOwner', value: 'AMAZON' | 'SELLER' | 'NONE') => void
   autoSplitEnabled?: boolean
 }
 
@@ -46,6 +49,7 @@ export default function BoxCreation({
   shipmentItems,
   boxes,
   onBoxesChange,
+  onItemPrepChange,
   autoSplitEnabled = false,
 }: BoxCreationProps) {
   const displaySettings = useDisplaySettings()
@@ -391,6 +395,12 @@ export default function BoxCreation({
                   Units boxed
                   <Info className="w-3 h-3 inline ml-1 opacity-50" />
                 </th>
+                <th className="text-center py-3 px-2 text-sm font-medium text-slate-400 min-w-[90px]">
+                  Prep
+                </th>
+                <th className="text-center py-3 px-2 text-sm font-medium text-slate-400 min-w-[90px]">
+                  Label
+                </th>
                 {boxes.map(box => (
                   <th key={box.boxNumber} className="text-center py-3 px-2 text-sm font-medium text-slate-400 min-w-[70px]">
                     Box {box.boxNumber}
@@ -418,6 +428,28 @@ export default function BoxCreation({
                       isComplete ? 'text-emerald-400' : isOver ? 'text-red-400' : 'text-slate-400'
                     }`}>
                       {totals.assigned} of {totals.needed}
+                    </td>
+                    <td className="py-3 px-2 text-center">
+                      <select
+                        value={item.prepOwner || 'NONE'}
+                        onChange={(e) => onItemPrepChange?.(item.sku, 'prepOwner', e.target.value as 'AMAZON' | 'SELLER' | 'NONE')}
+                        className="w-20 px-1.5 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:border-cyan-500 focus:outline-none"
+                      >
+                        <option value="NONE">None</option>
+                        <option value="SELLER">Seller</option>
+                        <option value="AMAZON">Amazon</option>
+                      </select>
+                    </td>
+                    <td className="py-3 px-2 text-center">
+                      <select
+                        value={item.labelOwner || 'NONE'}
+                        onChange={(e) => onItemPrepChange?.(item.sku, 'labelOwner', e.target.value as 'AMAZON' | 'SELLER' | 'NONE')}
+                        className="w-20 px-1.5 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:border-cyan-500 focus:outline-none"
+                      >
+                        <option value="NONE">None</option>
+                        <option value="SELLER">Seller</option>
+                        <option value="AMAZON">Amazon</option>
+                      </select>
                     </td>
                     {boxes.map(box => {
                       const boxItem = box.items.find(i => i.sku === item.sku)
@@ -453,7 +485,7 @@ export default function BoxCreation({
                 }`}>
                   Units boxed: {totalAssigned} of {totalNeeded}
                 </td>
-                <td colSpan={boxes.length} className="py-3 px-4 text-sm text-slate-400">
+                <td colSpan={boxes.length + 2} className="py-3 px-4 text-sm text-slate-400">
                   Enter the box contents above and the box weights and dimensions below
                   <Info className="w-3 h-3 inline ml-1 opacity-50" />
                 </td>
@@ -461,7 +493,7 @@ export default function BoxCreation({
 
               {/* Box Weight Row */}
               <tr className="border-t border-slate-700">
-                <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right" colSpan={2}>
+                <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right" colSpan={4}>
                   Box weight (lb):
                 </td>
                 {boxes.map(box => (
@@ -485,7 +517,7 @@ export default function BoxCreation({
 
               {/* Total Weight Row */}
               <tr>
-                <td colSpan={2}></td>
+                <td colSpan={4}></td>
                 <td colSpan={boxes.length} className="py-2 px-4 text-right text-sm">
                   <span className={`${totalWeight > 0 ? 'text-white' : 'text-slate-500'}`}>
                     Total weight: <span className="font-bold">{totalWeight} lb</span>
@@ -499,7 +531,7 @@ export default function BoxCreation({
               {/* Box Dimensions Rows */}
               {dimensions.map((dim, dimIndex) => (
                 <tr key={dim.id} className={dimIndex === 0 ? "border-t border-slate-700" : ""}>
-                  <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right align-middle" colSpan={2}>
+                  <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right align-middle" colSpan={4}>
                     <div className="flex items-center justify-end gap-2">
                       {dimensions.length > 1 && (
                         <button
@@ -547,7 +579,7 @@ export default function BoxCreation({
               
               {/* Add another dimension link */}
               <tr>
-                <td colSpan={2} className="py-2 px-4 text-right">
+                <td colSpan={4} className="py-2 px-4 text-right">
                   <button
                     onClick={addDimensionGroup}
                     className="text-cyan-400 hover:text-cyan-300 text-sm inline-flex items-center gap-1"

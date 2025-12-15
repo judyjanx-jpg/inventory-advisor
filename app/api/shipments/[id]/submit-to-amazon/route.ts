@@ -56,6 +56,15 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid shipment ID' }, { status: 400 })
     }
 
+    // Parse request body for item settings (prep/label overrides)
+    let itemSettings: Record<string, { prepOwner: string; labelOwner: string }> = {}
+    try {
+      const body = await request.json()
+      itemSettings = body.itemSettings || {}
+    } catch {
+      // No body or invalid JSON - use defaults
+    }
+
     const url = new URL(request.url)
     const step = url.searchParams.get('step') || 'all'
 
@@ -229,14 +238,20 @@ export async function POST(
         result.inboundPlanId = shipment.amazonInboundPlanId
       } else {
         // Build items list for Amazon
-        // prepOwner: NONE for products without prep requirements (most products)
-        // labelOwner: SELLER for products that need FNSKU labeling (most FBA products)
-        const items: InboundItem[] = shipment.items.map((item: { masterSku: string; adjustedQty: number }) => ({
-          msku: item.masterSku,
-          quantity: item.adjustedQty,
-          prepOwner: 'NONE' as const,
-          labelOwner: 'SELLER' as const,  // Most FBA products require seller labeling (FNSKU)
-        }))
+        // Use item-specific settings from request body, falling back to product settings or defaults
+        const items: InboundItem[] = shipment.items.map((item: { masterSku: string; adjustedQty: number; product?: { prepOwner?: string; labelOwner?: string } }) => {
+          // Priority: request body overrides > product settings > defaults
+          const settings = itemSettings[item.masterSku]
+          const prepOwner = (settings?.prepOwner || item.product?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE'
+          const labelOwner = (settings?.labelOwner || item.product?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE'
+
+          return {
+            msku: item.masterSku,
+            quantity: item.adjustedQty,
+            prepOwner,
+            labelOwner,
+          }
+        })
 
         console.log(`[${id}] Creating inbound plan with ${items.length} items...`)
         console.log(`[${id}] Items:`, JSON.stringify(items))
@@ -460,12 +475,19 @@ export async function POST(
           },
           quantity: 1,
           contentInformationSource: 'BOX_CONTENT_PROVIDED' as const,
-          items: box.items.map((item: BoxItem) => ({
-            msku: item.masterSku,
-            quantity: item.quantity,
-            prepOwner: 'NONE' as const,
-            labelOwner: 'SELLER' as const,
-          })),
+          items: box.items.map((item: BoxItem) => {
+            // Use item-specific settings from request body, falling back to defaults
+            const settings = itemSettings[item.masterSku]
+            const prepOwner = (settings?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE'
+            const labelOwner = (settings?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE'
+
+            return {
+              msku: item.masterSku,
+              quantity: item.quantity,
+              prepOwner,
+              labelOwner,
+            }
+          }),
         }))
 
         // Assign boxes to packing groups based on item SKUs

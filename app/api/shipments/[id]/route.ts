@@ -31,6 +31,8 @@ export async function GET(
                 transparencyEnabled: true,
                 warehouseLocation: true,
                 labelType: true,
+                prepOwner: true,
+                labelOwner: true,
               },
             },
           },
