@@ -847,38 +847,49 @@ export default function ProductLabelPrinter({
 
     // Get all label elements
     const labelElements = Array.from(iframeDoc.querySelectorAll('.label')) as HTMLElement[]
+    const elementsToProcess = labelElements.slice(0, quantity)
 
-    // Render all canvases in parallel for much faster performance
-    const canvasPromises = labelElements.slice(0, quantity).map((labelElement, i) => {
-      if (!labelElement) {
-        console.warn(`Label ${i} not found`)
-        return Promise.resolve(null)
-      }
+    // Process in batches to avoid memory issues on lower-end machines
+    const BATCH_SIZE = 5
+    let pageIndex = 0
 
-      return html2canvas(labelElement, {
-        width: widthIn * 96,
-        height: heightIn * 96,
-        scale: 2, // Reduced from 3 for faster rendering while maintaining quality
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
+    for (let batchStart = 0; batchStart < elementsToProcess.length; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, elementsToProcess.length)
+      const batch = elementsToProcess.slice(batchStart, batchEnd)
+
+      // Render this batch in parallel
+      const canvasPromises = batch.map((labelElement, i) => {
+        if (!labelElement) {
+          console.warn(`Label ${batchStart + i} not found`)
+          return Promise.resolve(null)
+        }
+
+        return html2canvas(labelElement, {
+          width: widthIn * 96,
+          height: heightIn * 96,
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+        })
       })
-    })
 
-    // Wait for all canvases to render in parallel
-    const canvases = await Promise.all(canvasPromises)
+      // Wait for batch to complete
+      const canvases = await Promise.all(canvasPromises)
 
-    // Add canvases to PDF sequentially (PDF pages must be added in order)
-    canvases.forEach((canvas, i) => {
-      if (!canvas) return
+      // Add batch to PDF
+      for (const canvas of canvases) {
+        if (!canvas) continue
 
-      if (i > 0) {
-        pdf.addPage([smallerDim, largerDim], isLandscape ? 'landscape' : 'portrait')
+        if (pageIndex > 0) {
+          pdf.addPage([smallerDim, largerDim], isLandscape ? 'landscape' : 'portrait')
+        }
+
+        const imgData = canvas.toDataURL('image/png', 0.92)
+        pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'FAST')
+        pageIndex++
       }
-
-      const imgData = canvas.toDataURL('image/png', 0.92) // Slightly lower quality for faster encoding
-      pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'FAST')
-    })
+    }
 
     // Clean up
     document.body.removeChild(iframe)
