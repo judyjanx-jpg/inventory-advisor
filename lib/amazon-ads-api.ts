@@ -177,7 +177,7 @@ export async function saveAdsCredentials(credentials: AdsCredentials): Promise<v
 }
 
 // Get valid access token (refreshes if expired)
-async function getValidAccessToken(): Promise<string> {
+export async function getValidAccessToken(): Promise<string> {
   const credentials = await getAdsCredentials()
 
   if (!credentials) {

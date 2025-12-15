@@ -18,7 +18,7 @@ import {
 } from './index'
 import { prisma } from '@/lib/prisma'
 import { createSpApiClient, callApiWithTimeout, getAmazonCredentials } from '@/lib/amazon-sp-api'
-import { getAdsCredentials } from '@/lib/amazon-ads-api'
+import { getAdsCredentials, getValidAccessToken } from '@/lib/amazon-ads-api'
 import { gunzipSync } from 'zlib'
 import { toZonedTime, fromZonedTime } from 'date-fns-tz'
 import { startOfDay, subDays } from 'date-fns'
@@ -1583,13 +1583,23 @@ async function processAdsReportsSync(job: any) {
     // Request reports for missing dates (limit to 2 at a time to avoid overwhelming the API)
     const datesToRequest = missingDates.slice(0, 2)
 
+    // Track which dates actually had reports requested
+    const actuallyRequested: string[] = []
+
     if (datesToRequest.length > 0 && activePending < 4) {
       console.log(`  Requesting reports for missing dates: ${datesToRequest.join(', ')}`)
 
-      const freshCreds = await getAdsCredentials()
-      if (freshCreds?.accessToken) {
+      // Get a fresh (possibly refreshed) access token
+      let freshAccessToken: string | null = null
+      try {
+        freshAccessToken = await getValidAccessToken()
+      } catch (e: any) {
+        console.log(`  ⚠️ Failed to get valid access token: ${e.message}`)
+      }
+
+      if (freshAccessToken) {
         const headers = {
-          'Authorization': `Bearer ${freshCreds.accessToken}`,
+          'Authorization': `Bearer ${freshAccessToken}`,
           'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
           'Amazon-Advertising-API-Scope': profileId,
           'Content-Type': 'application/json',
@@ -1665,6 +1675,8 @@ async function processAdsReportsSync(job: any) {
             } else if (campaignResponse.ok) {
               const data = JSON.parse(campaignResponseText)
               campaignReportId = data.reportId
+            } else {
+              console.log(`    Campaign report request for ${dateStr} failed: ${campaignResponse.status} - ${campaignResponseText.substring(0, 200)}`)
             }
 
             if (campaignReportId) {
@@ -1682,6 +1694,9 @@ async function processAdsReportsSync(job: any) {
                   },
                 })
                 newReportRequested = true
+                if (!actuallyRequested.includes(dateStr)) {
+                  actuallyRequested.push(dateStr)
+                }
                 console.log(`    Campaign report for ${dateStr} requested: ${campaignReportId.substring(0, 8)}...`)
               }
             }
@@ -1706,6 +1721,8 @@ async function processAdsReportsSync(job: any) {
             } else if (productResponse.ok) {
               const data = JSON.parse(productResponseText)
               productReportId = data.reportId
+            } else {
+              console.log(`    Product report request for ${dateStr} failed: ${productResponse.status} - ${productResponseText.substring(0, 200)}`)
             }
 
             if (productReportId) {
@@ -1723,6 +1740,9 @@ async function processAdsReportsSync(job: any) {
                   },
                 })
                 newReportRequested = true
+                if (!actuallyRequested.includes(dateStr)) {
+                  actuallyRequested.push(dateStr)
+                }
                 console.log(`    Product report for ${dateStr} requested: ${productReportId.substring(0, 8)}...`)
               }
             }
@@ -1750,7 +1770,7 @@ async function processAdsReportsSync(job: any) {
       newReportRequested,
       missingDatesFound: missingDates.length,
       missingDates: missingDates.slice(0, 5), // Log first 5 for reference
-      datesRequested: datesToRequest,
+      datesRequested: actuallyRequested, // Only show dates that actually had reports created
     }, null)
     return { reportsChecked, reportsCompleted, campaignsUpdated, newReportRequested, missingDatesFound: missingDates.length }
   } catch (error: any) {
