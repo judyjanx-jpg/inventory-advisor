@@ -27,6 +27,9 @@ import {
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
+// Public routes where sidebar should not appear
+const PUBLIC_ROUTES = ['/support', '/portal', '/warranty', '/faq', '/track']
+
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Products', href: '/products', icon: Package },
@@ -50,6 +53,12 @@ export default function Sidebar() {
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Don't render sidebar on public routes
+  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname?.startsWith(route))
+  if (isPublicRoute) {
+    return null
+  }
 
   const formatTimeAgo = (date: Date) => {
     const now = new Date()

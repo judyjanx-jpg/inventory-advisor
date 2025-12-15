@@ -1,14 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { Sparkles } from 'lucide-react'
 import AIPanel from './AIPanel'
+
+// Public routes where the floating orb should not appear
+const PUBLIC_ROUTES = ['/support', '/portal', '/warranty', '/faq', '/track']
 
 interface FloatingOrbProps {
   position?: { bottom: number; right: number }
 }
 
 export default function FloatingOrb({ position = { bottom: 24, right: 24 } }: FloatingOrbProps) {
+  const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
   const [orbPosition, setOrbPosition] = useState(position)
   const [isDragging, setIsDragging] = useState(false)
@@ -82,6 +87,12 @@ export default function FloatingOrb({ position = { bottom: 24, right: 24 } }: Fl
       }
     }
   }, [isDragging, dragStart])
+
+  // Don't render on public routes
+  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname?.startsWith(route))
+  if (isPublicRoute) {
+    return null
+  }
 
   return (
     <>
