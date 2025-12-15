@@ -437,7 +437,7 @@ async function processOrdersReportData(rows: any[]): Promise<{
             errors++
           }
         }
-      })
+      }, { timeout: 30000 }) // 30 second timeout for batch processing
     } catch (txError: any) {
       console.error(`  Transaction error for batch starting at ${i}:`, txError.message)
       errors += batch.length
