@@ -132,28 +132,32 @@ const LINE_COLORS = [
 // Main Component
 // ==========================================
 
+const ALL_TABS = ['trends', 'purchasing', 'fba', 'stockouts', 'ai-engine', 'alerts', 'seasonality', 'suppliers', 'safety-stock', 'kpis']
+
 export default function ForecastingPage() {
-  // Tab order (persisted to localStorage)
+  // Tab order (persisted to localStorage, but always includes all tabs)
   const [tabOrder, setTabOrder] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('forecastingTabOrder')
       if (saved) {
         try {
-          return JSON.parse(saved)
+          const savedOrder = JSON.parse(saved)
+          // Ensure all tabs are present - add any missing tabs at the end
+          const missingTabs = ALL_TABS.filter(tab => !savedOrder.includes(tab))
+          // Remove any tabs that no longer exist
+          const validTabs = savedOrder.filter((tab: string) => ALL_TABS.includes(tab))
+          return [...validTabs, ...missingTabs]
         } catch {}
       }
     }
-    return ['trends', 'purchasing', 'fba', 'stockouts', 'ai-engine', 'alerts', 'seasonality', 'suppliers', 'safety-stock', 'kpis']
+    return ALL_TABS
   })
 
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('forecastingTabOrder')
-      if (saved) {
-        try {
-          const order = JSON.parse(saved)
-          return order[0] || 'trends'
-        } catch {}
+      const saved = localStorage.getItem('forecastingActiveTab')
+      if (saved && ALL_TABS.includes(saved)) {
+        return saved
       }
     }
     return 'trends'
@@ -178,15 +182,19 @@ export default function ForecastingPage() {
   // Trend view state (multi-select for Trends tab)
   const [trendSelectedSkus, setTrendSelectedSkus] = useState<string[]>([])
 
-  // AI Engine state
-  const [aiEngineSelectedSku, setAiEngineSelectedSku] = useState<string | null>(null)
-
   // Save tab order to localStorage whenever it changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('forecastingTabOrder', JSON.stringify(tabOrder))
     }
   }, [tabOrder])
+
+  // Save active tab to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('forecastingActiveTab', activeTab)
+    }
+  }, [activeTab])
 
   // Drag and drop handlers
   const handleDragStart = (tabId: string) => {
@@ -530,10 +538,7 @@ export default function ForecastingPage() {
         )}
 
         {activeTab === 'ai-engine' && (
-          <ModelBreakdown
-            selectedSku={aiEngineSelectedSku}
-            onSelectSku={setAiEngineSelectedSku}
-          />
+          <ModelBreakdown />
         )}
 
         {activeTab === 'alerts' && (
