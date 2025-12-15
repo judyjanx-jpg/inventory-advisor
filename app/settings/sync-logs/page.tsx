@@ -168,7 +168,7 @@ export default function SyncLogsPage() {
                 { type: 'orders-report', label: 'Orders', color: 'blue' },
                 { type: 'inventory', label: 'Inventory', color: 'amber' },
                 { type: 'finances', label: 'Finances', color: 'emerald' },
-                { type: 'ads', label: 'Ads', color: 'purple' },
+                { type: 'ads-reports', label: 'Ads', color: 'purple' },
               ].map(sync => (
                 <button
                   key={sync.type}
