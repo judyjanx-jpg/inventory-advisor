@@ -44,18 +44,25 @@ const quickQuestions = [
 export default function SupportPage() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: "Hello! I'm your AI support assistant. I'm here to help you with order tracking, returns, warranty claims, and any other questions you might have. How can I assist you today?",
-      timestamp: new Date(),
-    }
-  ])
+  const [mounted, setMounted] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Initialize messages on client side to avoid hydration mismatch
+  useEffect(() => {
+    setMessages([
+      {
+        id: '1',
+        role: 'assistant',
+        content: "Hello! I'm your AI support assistant. I'm here to help you with order tracking, returns, warranty claims, and any other questions you might have. How can I assist you today?",
+        timestamp: new Date(),
+      }
+    ])
+    setMounted(true)
+  }, [])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -119,6 +126,18 @@ export default function SupportPage() {
       e.preventDefault()
       handleSend()
     }
+  }
+
+  // Show loading state until client-side hydration is complete
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading support chat...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
