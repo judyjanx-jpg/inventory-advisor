@@ -12,7 +12,9 @@ import {
   DollarSign,
   Megaphone,
   ArrowLeft,
-  Filter
+  Filter,
+  Play,
+  Loader2
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -81,6 +83,27 @@ export default function SyncLogsPage() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [refreshing, setRefreshing] = useState(false)
+  const [triggeringSyncs, setTriggeringSyncs] = useState<Record<string, boolean>>({})
+
+  const triggerSync = async (type: string) => {
+    setTriggeringSyncs(prev => ({ ...prev, [type]: true }))
+    try {
+      const res = await fetch(`/api/sync/trigger?type=${type}`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (data.success) {
+        // Refresh logs after a short delay to show the new job
+        setTimeout(fetchLogs, 1000)
+      } else {
+        alert(`Failed to trigger ${type} sync: ${data.error}`)
+      }
+    } catch (err: any) {
+      alert(`Failed to trigger ${type} sync: ${err.message}`)
+    } finally {
+      setTriggeringSyncs(prev => ({ ...prev, [type]: false }))
+    }
+  }
 
   const fetchLogs = async () => {
     try {
@@ -137,14 +160,41 @@ export default function SyncLogsPage() {
               <p className="text-slate-400 text-sm">Monitor API sync activity and data imports</p>
             </div>
           </div>
-          <button
-            onClick={fetchLogs}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-white transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Trigger Sync Buttons */}
+            <div className="flex items-center gap-1 mr-2">
+              <span className="text-slate-400 text-sm mr-1">Trigger:</span>
+              {[
+                { type: 'orders-report', label: 'Orders', color: 'blue' },
+                { type: 'inventory', label: 'Inventory', color: 'amber' },
+                { type: 'finances', label: 'Finances', color: 'emerald' },
+                { type: 'ads', label: 'Ads', color: 'purple' },
+              ].map(sync => (
+                <button
+                  key={sync.type}
+                  onClick={() => triggerSync(sync.type)}
+                  disabled={triggeringSyncs[sync.type]}
+                  className={`flex items-center gap-1 px-3 py-1.5 bg-${sync.color}-600/20 hover:bg-${sync.color}-600/30 border border-${sync.color}-500/30 rounded-lg text-sm text-${sync.color}-400 transition-colors disabled:opacity-50`}
+                >
+                  {triggeringSyncs[sync.type] ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Play className="w-3 h-3" />
+                  )}
+                  {sync.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={fetchLogs}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-white transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* Summary Cards */}
