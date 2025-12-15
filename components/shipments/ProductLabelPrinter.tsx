@@ -70,6 +70,8 @@ export default function ProductLabelPrinter({
   // Track label type overrides (for immediate UI update before API confirms)
   const [labelTypeOverrides, setLabelTypeOverrides] = useState<Record<string, LabelType>>({})
   const [savingLabelType, setSavingLabelType] = useState<string | null>(null)
+  const [generatingPDF, setGeneratingPDF] = useState<string | null>(null)
+  const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null)
 
   // Load settings and printed counts from localStorage
   useEffect(() => {
@@ -274,7 +276,14 @@ export default function ProductLabelPrinter({
     const html = await generateLabelHTML(item, labelType, quantity, transparencyCodes, width, height)
 
     // Generate and auto-download PDF
-    await generatePDF(html, item, labelType, quantity, width, height)
+    setGeneratingPDF(item.masterSku)
+    setPdfProgress({ current: 0, total: quantity })
+    try {
+      await generatePDF(html, item, labelType, quantity, width, height)
+    } finally {
+      setGeneratingPDF(null)
+      setPdfProgress(null)
+    }
 
     // Store print data for reprint functionality
     setPrintedLabels(prev => ({
@@ -310,14 +319,21 @@ export default function ProductLabelPrinter({
     }
 
     // Regenerate PDF from stored HTML
-    await generatePDF(
-      printData.html,
-      item,
-      printData.labelType,
-      printData.quantity,
-      printData.widthIn,
-      printData.heightIn
-    )
+    setGeneratingPDF(item.masterSku)
+    setPdfProgress({ current: 0, total: printData.quantity })
+    try {
+      await generatePDF(
+        printData.html,
+        item,
+        printData.labelType,
+        printData.quantity,
+        printData.widthIn,
+        printData.heightIn
+      )
+    } finally {
+      setGeneratingPDF(null)
+      setPdfProgress(null)
+    }
   }
 
   // Request more labels with NEW transparency codes
@@ -867,8 +883,8 @@ export default function ProductLabelPrinter({
         iframe.contentWindow?.addEventListener('jsbarcode-rendered', checkComplete)
       }
 
-      // Shorter timeout since we're optimizing for speed
-      setTimeout(() => resolve(), 1500)
+      // Timeout for content loading
+      setTimeout(() => resolve(), 2000)
     })
     console.log('[PDF Gen] Content loaded, creating PDF')
 
@@ -892,46 +908,54 @@ export default function ProductLabelPrinter({
     const elementsToProcess = labelElements.slice(0, quantity)
     console.log(`[PDF Gen] Found ${labelElements.length} label elements, processing ${elementsToProcess.length}`)
 
-    // Process in batches to avoid memory issues on lower-end machines
-    const BATCH_SIZE = 5
+    // Optimize batch size and scale based on quantity for better performance on slower machines
+    // For large quantities, use smaller batches and lower scale
+    const BATCH_SIZE = quantity > 20 ? 2 : quantity > 10 ? 3 : 4
+    // Use scale 1 for better performance - labels are small enough that scale 1 is sufficient
+    const SCALE = 1
     let pageIndex = 0
 
     for (let batchStart = 0; batchStart < elementsToProcess.length; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, elementsToProcess.length)
       const batch = elementsToProcess.slice(batchStart, batchEnd)
-      console.log(`[PDF Gen] Processing batch ${batchStart / BATCH_SIZE + 1}/${Math.ceil(elementsToProcess.length / BATCH_SIZE)}`)
+      const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1
+      const totalBatches = Math.ceil(elementsToProcess.length / BATCH_SIZE)
+      console.log(`[PDF Gen] Processing batch ${batchNum}/${totalBatches}`)
+      
+      // Update progress
+      setPdfProgress({ current: batchStart, total: elementsToProcess.length })
 
-      // Render this batch in parallel
-      const canvasPromises = batch.map((labelElement, i) => {
+      // Process labels sequentially within batch to reduce memory pressure
+      for (let i = 0; i < batch.length; i++) {
+        const labelElement = batch[i]
         if (!labelElement) {
           console.warn(`Label ${batchStart + i} not found`)
-          return Promise.resolve(null)
+          continue
         }
 
-        return html2canvas(labelElement, {
+        // Render canvas
+        const canvas = await html2canvas(labelElement, {
           width: Math.round(widthIn * 96),
           height: Math.round(heightIn * 96),
-          scale: 2,
+          scale: SCALE,
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
+          removeContainer: true, // Clean up after rendering
         })
-      })
 
-      // Wait for batch to complete
-      const canvases = await Promise.all(canvasPromises)
-
-      // Add batch to PDF
-      for (const canvas of canvases) {
-        if (!canvas) continue
-
+        // Add to PDF
         if (pageIndex > 0) {
           pdf.addPage([smallerDim, largerDim], isLandscape ? 'landscape' : 'portrait')
         }
 
-        const imgData = canvas.toDataURL('image/png', 0.92)
+        // Use slightly lower quality for faster processing (0.85 is still good quality for labels)
+        const imgData = canvas.toDataURL('image/png', 0.85)
         pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'FAST')
         pageIndex++
+
+        // Update progress after each label
+        setPdfProgress({ current: batchStart + i + 1, total: elementsToProcess.length })
       }
     }
 
@@ -947,6 +971,7 @@ export default function ProductLabelPrinter({
     } catch (error: any) {
       console.error('[PDF Gen] Error generating PDF:', error)
       alert(`Failed to generate PDF: ${error.message}\n\nCheck the browser console for details.`)
+      throw error // Re-throw so calling code can handle cleanup
     }
   }
 
@@ -1045,11 +1070,20 @@ export default function ProductLabelPrinter({
                           size="sm"
                           variant="outline"
                           onClick={() => reprintLabels(item)}
-                          disabled={!printedLabels[item.masterSku] || loadingTp === item.masterSku}
+                          disabled={!printedLabels[item.masterSku] || loadingTp === item.masterSku || generatingPDF === item.masterSku}
                           title={!printedLabels[item.masterSku] ? 'Print data not available (page was refreshed)' : 'Reprint last batch'}
                         >
-                          <RotateCcw className="w-4 h-4 mr-1" />
-                          Reprint
+                          {generatingPDF === item.masterSku ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <RotateCcw className="w-4 h-4 mr-1" />
+                              Reprint
+                            </>
+                          )}
                         </Button>
 
                         {showPrintMore === item.masterSku ? (
@@ -1067,9 +1101,11 @@ export default function ProductLabelPrinter({
                               size="sm"
                               variant="primary"
                               onClick={() => requestMoreLabels(item, printMoreQty)}
-                              disabled={loadingTp === item.masterSku}
+                              disabled={loadingTp === item.masterSku || generatingPDF === item.masterSku}
                             >
                               {loadingTp === item.masterSku ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : generatingPDF === item.masterSku ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
                                 <>
@@ -1101,24 +1137,36 @@ export default function ProductLabelPrinter({
                       </div>
                     ) : (
                       // Not printed yet - show Print button
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => printLabels(item)}
-                        disabled={loadingTp === item.masterSku}
-                      >
-                        {loadingTp === item.masterSku ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                            Getting TP...
-                          </>
-                        ) : (
-                          <>
-                            <Printer className="w-4 h-4 mr-1" />
-                            Print
-                          </>
+                      <div className="flex flex-col items-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => printLabels(item)}
+                          disabled={loadingTp === item.masterSku || generatingPDF === item.masterSku}
+                        >
+                          {loadingTp === item.masterSku ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              Getting TP...
+                            </>
+                          ) : generatingPDF === item.masterSku ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              Generating PDF...
+                            </>
+                          ) : (
+                            <>
+                              <Printer className="w-4 h-4 mr-1" />
+                              Print
+                            </>
+                          )}
+                        </Button>
+                        {generatingPDF === item.masterSku && pdfProgress && (
+                          <div className="text-xs text-slate-400">
+                            {pdfProgress.current} / {pdfProgress.total} labels
+                          </div>
                         )}
-                      </Button>
+                      </div>
                     )}
                   </>
                 )}
