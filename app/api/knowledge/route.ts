@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       articles,
-      categories: categories.map(c => ({ name: c.category, count: c._count.category })),
+      categories: categories.map((c: { category: string; _count: { category: number } }) => ({ name: c.category, count: c._count.category })),
     })
   } catch (error) {
     console.error('[Knowledge] List error:', error)
