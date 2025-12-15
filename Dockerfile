@@ -22,8 +22,8 @@ ARG DATABASE_URL
 ENV DATABASE_URL=$DATABASE_URL
 
 # Cache bust - change this value to force rebuild
-ARG CACHEBUST=2
-RUN echo "Build timestamp: $CACHEBUST" && npm run build
+ARG CACHEBUST=dec15-v4
+RUN echo "Cache bust: $CACHEBUST - $(date)" && npm run build
 
 # Start the Next.js production server
 CMD ["npm", "start"]
