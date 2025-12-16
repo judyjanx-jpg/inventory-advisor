@@ -124,7 +124,10 @@ export default function FbaShipmentsPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setDeductionError(data.error || 'Failed to fetch shipment data')
+        const errorMessage = data.hint
+          ? `${data.error}\n\nHint: ${data.hint}`
+          : data.error || 'Failed to fetch shipment data'
+        setDeductionError(errorMessage)
         return
       }
 
@@ -288,7 +291,7 @@ export default function FbaShipmentsPage() {
                     type="text"
                     value={amazonShipmentId}
                     onChange={(e) => setAmazonShipmentId(e.target.value)}
-                    placeholder="e.g., FBA15X123ABC"
+                    placeholder="e.g., sh1234567890"
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                     disabled={deductionLoading}
                   />
@@ -329,9 +332,9 @@ export default function FbaShipmentsPage() {
 
               {/* Error Message */}
               {deductionError && (
-                <div className="flex items-center gap-2 p-3 bg-red-900/30 border border-red-800 rounded-lg text-red-400">
-                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                  <span>{deductionError}</span>
+                <div className="flex items-start gap-2 p-3 bg-red-900/30 border border-red-800 rounded-lg text-red-400">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <span className="whitespace-pre-wrap">{deductionError}</span>
                 </div>
               )}
 
