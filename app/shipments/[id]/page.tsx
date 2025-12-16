@@ -414,6 +414,12 @@ export default function ShipmentDetailPage() {
       // Check if we should skip to transport (placement already confirmed)
       if (data.skipToTransport) {
         console.log('Placement already confirmed, skipping to transport selection')
+
+        // Validate we have the placementOptionId
+        if (!data.placementOptionId) {
+          throw new Error('Placement was confirmed but placementOptionId is missing. Please contact support.')
+        }
+
         setSelectedPlacementId(data.placementOptionId)
         // Automatically proceed to get transport options
         setSubmissionStep('selecting_transport')
@@ -446,8 +452,10 @@ export default function ShipmentDetailPage() {
         }
         setSelectedTransports(autoSelected)
       } else {
-        setPlacementOptions(data.placementOptions)
-        setSelectedPlacementId(data.recommendedOptionId)
+        console.log('Placement options received:', data.placementOptions?.length, 'options')
+        console.log('Recommended option ID:', data.recommendedOptionId)
+        setPlacementOptions(data.placementOptions || [])
+        setSelectedPlacementId(data.recommendedOptionId || (data.placementOptions?.[0]?.placementOptionId || null))
         setSubmissionStep('selecting_placement')
       }
     } catch (error: any) {
