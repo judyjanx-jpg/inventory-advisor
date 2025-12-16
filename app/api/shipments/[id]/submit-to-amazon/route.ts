@@ -280,12 +280,40 @@ export async function POST(
       // Check if placement is already confirmed - need to resume from transport step
       if (shipment.amazonWorkflowStep === 'placement_confirmed') {
         const inboundPlanId = shipment.amazonInboundPlanId
-        const placementOptionId = shipment.amazonPlacementOptionId
+        let placementOptionId = shipment.amazonPlacementOptionId
 
-        if (!inboundPlanId || !placementOptionId) {
+        if (!inboundPlanId) {
           return NextResponse.json({
-            error: 'Shipment has inconsistent state - placement confirmed but missing IDs',
+            error: 'Shipment has inconsistent state - placement confirmed but missing inbound plan ID',
           }, { status: 400 })
+        }
+
+        // If placementOptionId is missing, try to retrieve it from Amazon
+        if (!placementOptionId) {
+          console.log(`[${id}] Missing placementOptionId, retrieving from Amazon...`)
+          const { placementOptions } = await listPlacementOptions(inboundPlanId)
+
+          // Find the confirmed/accepted placement option
+          const confirmedPlacement = placementOptions.find(
+            (p: any) => p.status === 'ACCEPTED' || p.status === 'CONFIRMED'
+          )
+
+          if (confirmedPlacement) {
+            placementOptionId = confirmedPlacement.placementOptionId
+            console.log(`[${id}] Found confirmed placement option: ${placementOptionId}`)
+
+            // Save it to the database for future use
+            await prisma.shipment.update({
+              where: { id },
+              data: { amazonPlacementOptionId: placementOptionId },
+            })
+          } else {
+            // No confirmed placement found - this is an inconsistent state
+            return NextResponse.json({
+              error: 'Shipment marked as placement_confirmed but no confirmed placement found in Amazon',
+              hint: 'The placement may have expired. Try creating a new shipment.',
+            }, { status: 400 })
+          }
         }
 
         // Return indicator that we should skip to transport selection
