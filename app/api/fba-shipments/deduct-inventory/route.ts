@@ -294,10 +294,10 @@ export async function POST(request: NextRequest) {
       const quantityShipped = item.quantity || 0
 
       // Try to find the product by SKU
-      let product = await prisma.childProduct.findFirst({
+      let product = await prisma.product.findFirst({
         where: {
           OR: [
-            { masterSku: sellerSku },
+            { sku: sellerSku },
             { fnsku: sellerSku },
           ],
         },
@@ -305,10 +305,10 @@ export async function POST(request: NextRequest) {
 
       if (!product) {
         // Try fuzzy match - SKU might have different casing
-        product = await prisma.childProduct.findFirst({
+        product = await prisma.product.findFirst({
           where: {
             OR: [
-              { masterSku: { equals: sellerSku, mode: 'insensitive' } },
+              { sku: { equals: sellerSku, mode: 'insensitive' } },
               { fnsku: { equals: sellerSku, mode: 'insensitive' } },
             ],
           },
@@ -333,7 +333,7 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      const masterSku = product.masterSku
+      const masterSku = product.sku
 
       // Check if this shipment was already processed (check inventory adjustment)
       const existingAdjustment = await prisma.inventoryAdjustment.findFirst({
