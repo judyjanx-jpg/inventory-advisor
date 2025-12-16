@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { Printer, Tag, X, AlertCircle, Check, Loader2, Download, RotateCcw, Plus } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
-import { generateLabelPDF, downloadPDF } from '@/lib/label-pdf-generator'
+import QRCode from 'qrcode'
+import jsPDF from 'jspdf'
 
 interface ShipmentItem {
   masterSku: string
@@ -32,6 +33,7 @@ interface LabelSettings {
 interface PrintedLabelData {
   quantity: number
   tpCodes: string[]
+  html: string
   labelType: LabelType
   widthIn: number
   heightIn: number
@@ -271,11 +273,13 @@ export default function ProductLabelPrinter({
 
     const [width, height] = labelSize.split('x').map(s => parseFloat(s))
 
-    // Generate and auto-download PDF using optimized direct-drawing method
+    const html = await generateLabelHTML(item, labelType, quantity, transparencyCodes, width, height)
+
+    // Generate and auto-download PDF
     setGeneratingPDF(item.masterSku)
     setPdfProgress({ current: 0, total: quantity })
     try {
-      await generatePDFOptimized(item, labelType, quantity, width, height, transparencyCodes)
+      await generatePDF(html, item, labelType, quantity, width, height)
     } finally {
       setGeneratingPDF(null)
       setPdfProgress(null)
@@ -287,6 +291,7 @@ export default function ProductLabelPrinter({
       [item.masterSku]: {
         quantity,
         tpCodes: transparencyCodes,
+        html,
         labelType,
         widthIn: width,
         heightIn: height,
@@ -313,17 +318,17 @@ export default function ProductLabelPrinter({
       return
     }
 
-    // Regenerate PDF using stored transparency codes
+    // Regenerate PDF from stored HTML
     setGeneratingPDF(item.masterSku)
     setPdfProgress({ current: 0, total: printData.quantity })
     try {
-      await generatePDFOptimized(
+      await generatePDF(
+        printData.html,
         item,
         printData.labelType,
         printData.quantity,
         printData.widthIn,
-        printData.heightIn,
-        printData.tpCodes
+        printData.heightIn
       )
     } finally {
       setGeneratingPDF(null)
@@ -345,48 +350,630 @@ export default function ProductLabelPrinter({
     }, 100)
   }
 
+  // Helper to truncate SKU for vertical display
+  const formatVerticalSku = (sku: string, max = 10) => {
+    return sku.length > max ? sku.substring(0, max) + '…' : sku
+  }
+
   /**
-   * Generate PDF using the optimized direct-drawing method
-   * This is 10-20x faster than html2canvas and produces sharper output
+   * Generate label HTML that matches the reference image:
+   * - Blue/gray header on LEFT with Transparency icon
+   * - QR code with vertical code text beside it
+   * - Dashed divider line
+   * - Brand logo on RIGHT (if available)
+   * - CODE128 barcode
+   * - FNSKU text
+   * - Product name
+   * - "NEW" condition
    */
-  const generatePDFOptimized = async (
+  const generateLabelHTML = async (
+    item: ShipmentItem, 
+    labelType: LabelType, 
+    quantity: number,
+    tpCodes: string[],
+    widthIn: number,
+    heightIn: number
+  ) => {
+    const isCombo = labelType === 'fnsku_tp'
+    const isFnskuOnly = labelType === 'fnsku_only'
+    const isTpOnly = labelType === 'tp_only'
+    
+    // Calculate dimensions in pixels (96 DPI for screen)
+    const widthPx = widthIn * 96
+    const heightPx = heightIn * 96
+    
+    // For 3x1 combo label: TP section ~38%, FNSKU section ~62%
+    const tpSectionWidth = isCombo ? Math.floor(widthPx * 0.38) : widthPx
+    const fnskuSectionWidth = isCombo ? widthPx - tpSectionWidth : widthPx
+    
+    // Generate QR codes as base64 data URLs
+    const qrCodeImages: string[] = []
+    if (isTpOnly || isCombo) {
+      const qrOptions = {
+        width: 300, // Higher resolution for sharp printing
+        margin: 1,
+        errorCorrectionLevel: 'M' as const,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        },
+        type: 'image/png' as const
+      }
+      
+      for (let i = 0; i < quantity; i++) {
+        const code = tpCodes[i]
+        
+        if (!code || String(code).trim() === '') {
+          console.warn(`Missing Transparency code at index ${i} - skipping QR code generation`)
+          qrCodeImages.push('')
+          continue
+        }
+        
+        const codeStr = String(code).trim()
+        
+        // Validate it's a real Transparency code
+        const isOnlyDigits = /^\d+$/.test(codeStr)
+        const isUPCLength = codeStr.length >= 8 && codeStr.length <= 14
+        if (isOnlyDigits && isUPCLength) {
+          console.error(`ERROR: Code at index ${i} is a UPC, not a Transparency code: "${codeStr}"`)
+          qrCodeImages.push('')
+          continue
+        }
+        
+        if (codeStr.length < 15) {
+          console.warn(`Suspicious code at index ${i}: "${codeStr}" - too short (length: ${codeStr.length})`)
+          qrCodeImages.push('')
+          continue
+        }
+        
+        try {
+          const dataUrl = await QRCode.toDataURL(codeStr, qrOptions)
+          qrCodeImages.push(dataUrl)
+        } catch (error) {
+          console.error(`Error generating QR code ${i}:`, error)
+          qrCodeImages.push('')
+        }
+      }
+    }
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Labels - ${item.masterSku}</title>
+        <meta name="viewport" content="width=${widthPx}px, height=${heightPx}px">
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          @page { 
+            size: ${widthIn}in ${heightIn}in;
+            margin: 0;
+          }
+          @media print {
+            @page { size: ${widthIn}in ${heightIn}in; margin: 0; }
+            html, body { margin: 0; padding: 0; }
+            .label { page-break-after: always; page-break-inside: avoid; }
+          }
+          html, body { 
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          
+          .label {
+            width: ${widthIn}in;
+            height: ${heightIn}in;
+            display: flex;
+            flex-direction: row;
+            overflow: visible;
+            background: #fff;
+            page-break-after: always;
+            page-break-inside: avoid;
+            border: 1px solid #ddd;
+          }
+          .label:last-child { 
+            page-break-after: auto; 
+          }
+          
+          /* ========== TRANSPARENCY SECTION (LEFT) ========== */
+          .tp-section {
+            width: ${isCombo ? '38%' : '100%'};
+            height: 100%;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            padding: 0.04in 0.03in;
+            position: relative;
+            border-right: 1px dashed #999;
+            overflow: visible;
+          }
+          
+          .tp-header {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            margin-bottom: 0.03in;
+          }
+          
+          .tp-icon {
+            width: 12px;
+            height: 12px;
+            flex-shrink: 0;
+          }
+
+          .tp-header-text {
+            font-size: 4pt;
+            font-weight: 500;
+            color: #000;
+            line-height: 1.1;
+          }
+          
+          .qr-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 2px;
+            flex: 1;
+          }
+          
+          .qr-code {
+            width: 0.65in;
+            height: 0.65in;
+            min-width: 0.65in;
+            min-height: 0.65in;
+            background: #fff;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 0.02in;
+            flex-shrink: 0;
+          }
+
+          .qr-code img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+          }
+          
+          .tp-code-vertical {
+            font-size: 5pt;
+            font-weight: normal;
+            color: #000;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            word-break: normal;
+            transform: rotate(90deg);
+            margin-left: -0.12in;
+            margin-right: -0.12in;
+            line-height: 1;
+          }
+          
+          /* ========== FNSKU SECTION (RIGHT) ========== */
+          .fnsku-section {
+            width: ${isCombo ? '62%' : '100%'};
+            height: 100%;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 0.02in 0.03in 0.02in 0.03in;
+            overflow: visible;
+          }
+          
+          .brand-logo {
+            height: 0.16in;
+            max-width: 90%;
+            object-fit: contain;
+            margin-bottom: 0.01in;
+          }
+          
+          .barcode-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-top: 2px;
+            overflow: visible;
+          }
+
+          .barcode-container svg {
+            width: auto;
+            max-width: 100%;
+            height: 0.24in;
+            display: block;
+          }
+          
+          .fnsku-block {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            flex: 1;
+            width: 100%;
+            margin-top: -2px;
+            overflow: visible;
+          }
+
+          .fnsku-line {
+            line-height: 1.7;
+            padding: 1px 0;
+            width: 100%;
+            text-align: center;
+          }
+
+          .fnsku-line.code {
+            font-size: 6pt;
+            font-weight: bold;
+            color: #000;
+            letter-spacing: 0.15px;
+          }
+
+          .fnsku-line.title {
+            font-size: 4.5pt;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+            padding: 2px 0;
+          }
+
+          .fnsku-line.condition {
+            font-size: 6pt;
+            font-weight: bold;
+            color: #000;
+          }
+
+          .fnsku-only-label .fnsku-code-vertical {
+            font-size: 5pt;
+            font-weight: normal;
+            color: #000;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            word-break: normal;
+            position: absolute;
+            right: -0.15in;
+            top: 50%;
+            transform: translateY(-50%) rotate(90deg);
+            line-height: 1;
+          }
+          
+          /* ========== TP ONLY LABEL (1x1) ========== */
+          .tp-only-label {
+            width: ${widthIn}in;
+            height: ${heightIn}in;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            padding: 0.05in;
+          }
+          
+          .tp-only-label .tp-header {
+            margin-bottom: 0.03in;
+          }
+
+          .tp-only-label .qr-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 2px;
+            justify-content: flex-start;
+            margin-left: -0.05in;
+          }
+
+          .tp-only-label .qr-code {
+            width: 0.6in;
+            height: 0.6in;
+            min-width: 0.6in;
+            min-height: 0.6in;
+          }
+
+          .tp-only-label .tp-code-vertical {
+            font-size: 5pt;
+            font-weight: normal;
+            color: #000;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            word-break: normal;
+            transform: rotate(90deg);
+            margin-left: -0.12in;
+            margin-right: -0.12in;
+            line-height: 1;
+          }
+        </style>
+      </head>
+      <body>
+        ${Array.from({ length: quantity }, (_, i) => {
+          const tpCode = tpCodes[i] || ''
+          const qrImage = qrCodeImages[i] || ''
+          
+          if (isTpOnly) {
+            return `
+              <div class="label tp-only-label">
+                <div class="tp-header">
+                  <svg class="tp-icon" viewBox="0 0 1125 1124.99995" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                    <defs>
+                      <filter x="0%" y="0%" width="100%" height="100%" id="tp-filter-1-${i}">
+                        <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0" color-interpolation-filters="sRGB"/>
+                      </filter>
+                      <filter x="0%" y="0%" width="100%" height="100%" id="tp-filter-2-${i}">
+                        <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.2126 0.7152 0.0722 0 0" color-interpolation-filters="sRGB"/>
+                      </filter>
+                      <mask id="tp-mask-${i}">
+                        <g filter="url(#tp-filter-1-${i})">
+                          <g filter="url(#tp-filter-2-${i})" transform="matrix(2.666015, 0, 0, 2.666015, -128.932757, -107.772899)">
+                            <image x="0" y="0" width="512" xlink:href="data:image/png;base64,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" height="512" preserveAspectRatio="xMidYMid meet"/>
+                          </g>
+                        </g>
+                      </mask>
+                    </defs>
+                    <g mask="url(#tp-mask-${i})">
+                      <g transform="matrix(2.666015, 0, 0, 2.666015, -128.932757, -107.772899)">
+                        <image x="0" y="0" width="512" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAABmJLR0QA/wD/AP+gvaeTAAADEUlEQVR4nO3BgQAAAADDoPlTX+EAVQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMBvArQAAVkUTe8AAAAASUVORK5CYII=" height="512" preserveAspectRatio="xMidYMid meet"/>
+                      </g>
+                    </g>
+                  </svg>
+                  <span class="tp-header-text">Scan with the<br/>Transparency app</span>
+                </div>
+                <div class="qr-container">
+                  ${qrImage ? `<div class="qr-code"><img src="${qrImage}" alt="QR Code" /></div>` : '<div class="qr-code"></div>'}
+                  <div class="tp-code-vertical">${item.masterSku}</div>
+                </div>
+              </div>
+            `
+          }
+          
+          if (isCombo) {
+            return `
+              <div class="label">
+                <div class="tp-section">
+                  <div class="tp-header">
+                    <svg class="tp-icon" viewBox="0 0 1125 1124.99995" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                      <defs>
+                        <filter x="0%" y="0%" width="100%" height="100%" id="24a42a33c8">
+                          <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0" color-interpolation-filters="sRGB"/>
+                        </filter>
+                        <filter x="0%" y="0%" width="100%" height="100%" id="80ebd64d3f">
+                          <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.2126 0.7152 0.0722 0 0" color-interpolation-filters="sRGB"/>
+                        </filter>
+                        <mask id="56c224ad2e">
+                          <g filter="url(#24a42a33c8)">
+                            <g filter="url(#80ebd64d3f)" transform="matrix(2.666015, 0, 0, 2.666015, -128.932757, -107.772899)">
+                              <image x="0" y="0" width="512" xlink:href="data:image/png;base64,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" height="512" preserveAspectRatio="xMidYMid meet"/>
+                            </g>
+                          </g>
+                        </mask>
+                      </defs>
+                      <g mask="url(#tp-mask-${i})">
+                        <g transform="matrix(2.666015, 0, 0, 2.666015, -128.932757, -107.772899)">
+                          <image x="0" y="0" width="512" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAABmJLR0QA/wD/AP+gvaeTAAADEUlEQVR4nO3BgQAAAADDoPlTX+EAVQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMBvArQAAVkUTe8AAAAASUVORK5CYII=" height="512" preserveAspectRatio="xMidYMid meet"/>
+                        </g>
+                      </g>
+                    </svg>
+                    <span class="tp-header-text">Scan with the<br/>Transparency app</span>
+                  </div>
+                  <div class="qr-container">
+                    ${qrImage ? `<div class="qr-code"><img src="${qrImage}" alt="QR Code" /></div>` : '<div class="qr-code"></div>'}
+                    <div class="tp-code-vertical">${item.masterSku}</div>
+                  </div>
+                </div>
+                <div class="fnsku-section">
+                  ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
+                  <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
+                  <div class="fnsku-block">
+                    <div class="fnsku-line code">${item.fnsku || item.masterSku}</div>
+                    <div class="fnsku-line title">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
+                    <div class="fnsku-line condition">New</div>
+                  </div>
+                </div>
+              </div>
+            `
+          }
+
+          // FNSKU only
+          return `
+            <div class="label fnsku-only-label" style="position: relative;">
+              <div class="fnsku-section" style="width: 100%;">
+                ${item.brandLogo ? `<img src="${item.brandLogo}" class="brand-logo" alt="Brand" />` : ''}
+                <div class="barcode-container"><svg id="barcode-${i}"></svg></div>
+                <div class="fnsku-block">
+                  <div class="fnsku-line code">${item.fnsku || item.masterSku}</div>
+                  <div class="fnsku-line title">${item.productName.length > 28 ? item.productName.substring(0, 28) + '...' : item.productName}</div>
+                  <div class="fnsku-line condition">New</div>
+                </div>
+              </div>
+              <div class="fnsku-code-vertical">${item.masterSku}</div>
+            </div>
+          `
+        }).join('')}
+        <script>
+          ${(isFnskuOnly || isCombo) ? Array.from({ length: quantity }, (_, i) => {
+            const barcodeValue = item.fnsku || item.masterSku
+            return `
+            JsBarcode("#barcode-${i}", "${barcodeValue}", {
+              format: "CODE128",
+              width: 1.0,
+              height: 22,
+              displayValue: false,
+              margin: 0,
+              background: "#ffffff",
+              lineColor: "#000000",
+              fontSize: 0,
+              textMargin: 0,
+              valid: function(valid) {
+                if (!valid) {
+                  console.error("Invalid barcode data for CODE128: ${barcodeValue}");
+                }
+              }
+            });
+          `
+          }).join('') : ''}
+          
+          window.dispatchEvent(new Event('jsbarcode-rendered'));
+        </script>
+      </body>
+      </html>
+    `
+  }
+
+  const generatePDF = async (
+    html: string,
     item: ShipmentItem,
     labelType: LabelType,
     quantity: number,
     widthIn: number,
-    heightIn: number,
-    transparencyCodes: string[]
+    heightIn: number
   ) => {
-    console.log(`[PDF Gen] Starting optimized generation for ${item.masterSku}, ${quantity} labels, size: ${widthIn}x${heightIn}in`)
+    console.log(`[PDF Gen] Starting for ${item.masterSku}, ${quantity} labels, size: ${widthIn}x${heightIn}in`)
 
     try {
-      const blob = await generateLabelPDF({
-        item: {
-          masterSku: item.masterSku,
-          fnsku: item.fnsku,
-          productName: item.productName,
-          brandLogo: item.brandLogo,
-        },
-        labelType,
-        quantity,
-        widthIn,
-        heightIn,
-        tpCodes: transparencyCodes,
-        onProgress: (current, total) => {
-          setPdfProgress({ current, total })
-        },
+    // Import html2canvas once at the start
+    const { default: html2canvas } = await import('html2canvas')
+    console.log('[PDF Gen] html2canvas loaded')
+
+    // Create a temporary iframe to render the HTML
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'absolute'
+    iframe.style.left = '-9999px'
+    iframe.style.width = `${widthIn * 96}px`
+    iframe.style.height = `${heightIn * 96}px`
+    document.body.appendChild(iframe)
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!iframeDoc) {
+      alert('Failed to create PDF - browser security restrictions')
+      document.body.removeChild(iframe)
+      return
+    }
+
+    iframeDoc.open()
+    iframeDoc.write(html)
+    iframeDoc.close()
+    console.log('[PDF Gen] HTML written to iframe')
+
+    // Wait for content to load
+    await new Promise<void>(resolve => {
+      let loadedCount = 0
+      const totalToLoad = iframeDoc.images.length + (labelType === 'fnsku_only' || labelType === 'fnsku_tp' ? quantity : 0)
+
+      const checkComplete = () => {
+        loadedCount++
+        if (loadedCount >= totalToLoad) {
+          resolve()
+        }
+      }
+
+      Array.from(iframeDoc.images).forEach(img => {
+        if (img.complete) {
+          checkComplete()
+        } else {
+          img.onload = checkComplete
+          img.onerror = checkComplete
+        }
       })
 
-      // Auto-download PDF
-      const fileName = `Labels-${item.masterSku}-${new Date().getTime()}.pdf`
-      console.log(`[PDF Gen] Saving PDF: ${fileName}`)
-      downloadPDF(blob, fileName)
-      console.log('[PDF Gen] PDF download triggered successfully')
+      if (labelType === 'fnsku_only' || labelType === 'fnsku_tp') {
+        iframe.contentWindow?.addEventListener('jsbarcode-rendered', checkComplete)
+      }
+
+      // Timeout for content loading
+      setTimeout(() => resolve(), 2000)
+    })
+    console.log('[PDF Gen] Content loaded, creating PDF')
+
+    // Create PDF with correct page size
+    // For jsPDF: format is [smaller, larger], orientation determines which is width vs height
+    const widthMm = widthIn * 25.4
+    const heightMm = heightIn * 25.4
+    const isLandscape = widthIn > heightIn
+    const smallerDim = Math.min(widthMm, heightMm)
+    const largerDim = Math.max(widthMm, heightMm)
+
+    const pdf = new jsPDF({
+      orientation: isLandscape ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: [smallerDim, largerDim],
+      compress: true,
+    })
+
+    // Get all label elements
+    const labelElements = Array.from(iframeDoc.querySelectorAll('.label')) as HTMLElement[]
+    const elementsToProcess = labelElements.slice(0, quantity)
+    console.log(`[PDF Gen] Found ${labelElements.length} label elements, processing ${elementsToProcess.length}`)
+
+    // Process in parallel batches for faster generation (higher resolution with scale 2)
+    const BATCH_SIZE = 3 // Smaller batches for better memory management
+    const SCALE = 2 // Higher resolution for sharp labels
+    let pageIndex = 0
+
+    // Process all labels in parallel batches
+    for (let batchStart = 0; batchStart < elementsToProcess.length; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, elementsToProcess.length)
+      const batch = elementsToProcess.slice(batchStart, batchEnd)
+      const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1
+      const totalBatches = Math.ceil(elementsToProcess.length / BATCH_SIZE)
+      console.log(`[PDF Gen] Processing batch ${batchNum}/${totalBatches}`)
+      
+      // Update progress
+      setPdfProgress({ current: batchStart, total: elementsToProcess.length })
+
+      // Render batch in parallel for speed
+      const canvasPromises = batch.map((labelElement, i) => {
+        if (!labelElement) {
+          console.warn(`Label ${batchStart + i} not found`)
+          return Promise.resolve(null)
+        }
+
+        return html2canvas(labelElement, {
+          width: Math.round(widthIn * 96),
+          height: Math.round(heightIn * 96),
+          scale: SCALE,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+        })
+      })
+
+      // Wait for batch to complete
+      const canvases = await Promise.all(canvasPromises)
+
+      // Add batch to PDF
+      for (const canvas of canvases) {
+        if (!canvas) continue
+
+        if (pageIndex > 0) {
+          pdf.addPage([smallerDim, largerDim], isLandscape ? 'landscape' : 'portrait')
+        }
+
+        const imgData = canvas.toDataURL('image/png', 0.92)
+        pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'FAST')
+        pageIndex++
+
+        // Update progress after each label
+        setPdfProgress({ current: batchStart + batch.indexOf(canvas) + 1, total: elementsToProcess.length })
+      }
+    }
+
+    // Clean up
+    document.body.removeChild(iframe)
+
+    // Auto-download PDF
+    const fileName = `Labels-${item.masterSku}-${new Date().getTime()}.pdf`
+    console.log(`[PDF Gen] Saving PDF: ${fileName} with ${pageIndex} pages`)
+    pdf.save(fileName)
+    console.log('[PDF Gen] PDF save called successfully')
 
     } catch (error: any) {
       console.error('[PDF Gen] Error generating PDF:', error)
       alert(`Failed to generate PDF: ${error.message}\n\nCheck the browser console for details.`)
-      throw error
+      throw error // Re-throw so calling code can handle cleanup
     }
   }
 
