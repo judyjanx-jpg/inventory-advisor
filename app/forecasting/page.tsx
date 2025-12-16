@@ -8,7 +8,7 @@ import {
   ShoppingCart, ArrowRight, RefreshCw, ChevronDown, ChevronUp,
   Filter, Download, Info, Calendar, Settings, Plus, Check, X,
   BarChart3, AlertCircle, Zap, History, Brain, Target, Edit3, GripVertical,
-  Bell, Shield, Activity, Cpu
+  Bell, Shield, Activity, Cpu, EyeOff
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -344,6 +344,23 @@ export default function ForecastingPage() {
     setActiveTab('trends')
   }
 
+  // Hide product from forecasting
+  const hideProduct = async (sku: string) => {
+    try {
+      const res = await fetch('/api/products/hide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sku, hidden: true })
+      })
+      if (res.ok) {
+        // Remove from local state immediately
+        setItems(prev => prev.filter(i => i.sku !== sku))
+      }
+    } catch (error) {
+      console.error('Failed to hide product:', error)
+    }
+  }
+
   // Render Helpers
   const getUrgencyColor = (urgency: string) => {
     switch (urgency) {
@@ -526,6 +543,7 @@ export default function ForecastingPage() {
             formatCurrency={formatCurrency}
             formatPercent={formatPercent}
             viewSkuTrend={viewSkuTrend}
+            onHideProduct={hideProduct}
           />
         )}
 
@@ -535,6 +553,7 @@ export default function ForecastingPage() {
             settings={settings}
             setSettings={setSettings}
             getUrgencyColor={getUrgencyColor}
+            onHideProduct={hideProduct}
           />
         )}
 
@@ -974,7 +993,7 @@ function PurchasingTab({
   items, selectedSkus, toggleSelection, selectAll, createPurchaseOrder,
   suppliers, selectedSupplier, setSelectedSupplier, filter, setFilter,
   sortBy, setSortBy, settings, applyRounding, getUrgencyColor,
-  formatCurrency, formatPercent, viewSkuTrend,
+  formatCurrency, formatPercent, viewSkuTrend, onHideProduct,
 }: any) {
   const [expandedSku, setExpandedSku] = useState<string | null>(null)
   const [sortColumn, setSortColumn] = useState<PurchasingSortColumn>('orderByDate')
@@ -1022,14 +1041,13 @@ function PurchasingTab({
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
     } else {
       setSortColumn(column)
-      // Default to ascending for SKU, descending for others
-      setSortDirection(column === 'sku' ? 'asc' : 'asc')
+      setSortDirection('asc')
     }
   }
 
   const SortHeader = ({ column, label, className = '' }: { column: PurchasingSortColumn; label: string; className?: string }) => (
     <th
-      className={`px-4 py-3 cursor-pointer hover:bg-slate-700/50 select-none transition-colors ${className}`}
+      className={`px-2 py-2 cursor-pointer hover:bg-slate-700/50 select-none transition-colors text-xs whitespace-nowrap ${className}`}
       onClick={() => handleSort(column)}
     >
       <div className="flex items-center gap-1 justify-center">
@@ -1042,15 +1060,15 @@ function PurchasingTab({
   )
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Filters */}
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-gray-400" />
           <select
             value={selectedSupplier}
             onChange={(e) => setSelectedSupplier(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
-            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+            className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white"
           >
             <option value="all">All Suppliers</option>
             {suppliers.map((s: Supplier) => (
@@ -1059,23 +1077,23 @@ function PurchasingTab({
           </select>
         </div>
 
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
+        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white">
           <option value="all">All Urgency</option>
-          <option value="critical">Critical Only</option>
-          <option value="high">High Priority</option>
-          <option value="medium">Medium Priority</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
         </select>
 
         <div className="flex-1" />
 
         {selectedSkus.size > 0 && (
-          <button onClick={createPurchaseOrder} className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg">
+          <button onClick={createPurchaseOrder} className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 rounded text-sm">
             <Plus className="w-4 h-4" />
-            Create PO ({selectedSkus.size} items, {formatCurrency(totalValue)})
+            Create PO ({selectedSkus.size})
           </button>
         )}
 
-        <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700">
+        <button className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-sm">
           <Download className="w-4 h-4" />
           Export
         </button>
@@ -1088,133 +1106,126 @@ function PurchasingTab({
           <p className="text-gray-400">No items need purchasing right now</p>
         </div>
       ) : (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-700 text-sm text-gray-400 bg-slate-900">
-                  <th className="px-4 py-3 w-10">
-                    <input
-                      type="checkbox"
-                      checked={selectedSkus.size === sortedItems.length && sortedItems.length > 0}
-                      onChange={selectAll}
-                      className="rounded bg-slate-800 border-slate-700"
-                    />
-                  </th>
-                  <SortHeader column="sku" label="SKU" className="text-left" />
-                  <SortHeader column="velocity" label="Velocity" />
-                  <SortHeader column="daysOfStock" label="Days of Stock" />
-                  <SortHeader column="incomingPO" label="Incoming PO" />
-                  <SortHeader column="orderQty" label="Order Qty" />
-                  <SortHeader column="orderByDate" label="Order By" />
-                  <th className="px-4 py-3 w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedItems.map((item: ForecastItem) => {
-                  const orderQty = applyRounding(item.recommendedOrderQty)
+        <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+          <table className="w-full table-fixed">
+            <thead>
+              <tr className="border-b border-slate-700 text-gray-400 bg-slate-900">
+                <th className="w-8 px-2 py-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedSkus.size === sortedItems.length && sortedItems.length > 0}
+                    onChange={selectAll}
+                    className="rounded bg-slate-800 border-slate-700"
+                  />
+                </th>
+                <SortHeader column="sku" label="SKU" className="text-left w-[22%]" />
+                <SortHeader column="velocity" label="Vel." className="w-[12%]" />
+                <SortHeader column="daysOfStock" label="Days" className="w-[10%]" />
+                <SortHeader column="incomingPO" label="PO" className="w-[10%]" />
+                <SortHeader column="orderQty" label="Order" className="w-[14%]" />
+                <SortHeader column="orderByDate" label="Order By" className="w-[14%]" />
+                <th className="w-[10%] px-2 py-2"></th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {sortedItems.map((item: ForecastItem) => {
+                const orderQty = applyRounding(item.recommendedOrderQty)
 
-                  return (
-                    <React.Fragment key={item.sku}>
-                      <tr className={`border-b border-slate-700/50 hover:bg-slate-750 transition-colors ${selectedSkus.has(item.sku) ? 'bg-cyan-900/10' : ''}`}>
-                        <td className="px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedSkus.has(item.sku)}
-                            onChange={() => toggleSelection(item.sku)}
-                            className="rounded bg-slate-900 border-slate-700"
-                          />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div
-                            className="cursor-pointer"
-                            onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)}
-                          >
-                            <p className="font-medium text-white">{item.sku}</p>
-                            <p className="text-xs text-gray-500 truncate max-w-[200px]">
-                              {(item.displayName || item.title)?.substring(0, 40)}
+                return (
+                  <React.Fragment key={item.sku}>
+                    <tr className={`border-b border-slate-700/50 hover:bg-slate-750 transition-colors ${selectedSkus.has(item.sku) ? 'bg-cyan-900/10' : ''}`}>
+                      <td className="px-2 py-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedSkus.has(item.sku)}
+                          onChange={() => toggleSelection(item.sku)}
+                          className="rounded bg-slate-900 border-slate-700"
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <div
+                          className="cursor-pointer truncate"
+                          onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)}
+                        >
+                          <p className="font-medium text-white truncate">{item.sku}</p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {(item.displayName || item.title)?.substring(0, 30)}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <span className="text-white">{item.velocity30d.toFixed(1)}</span>
+                        {item.velocityChange7d !== 0 && (
+                          <span className={`ml-0.5 ${item.velocityChange7d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {item.velocityChange7d >= 0 ? <TrendingUp className="w-3 h-3 inline" /> : <TrendingDown className="w-3 h-3 inline" />}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <span className={`font-medium ${
+                          item.totalDaysOfSupply < 30 ? 'text-red-400' :
+                          item.totalDaysOfSupply < 60 ? 'text-orange-400' :
+                          item.totalDaysOfSupply < 90 ? 'text-yellow-400' : 'text-green-400'
+                        }`}>
+                          {Math.round(item.totalDaysOfSupply)}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {item.incomingFromPO > 0 ? (
+                          <span className="text-green-400">+{item.incomingFromPO}</span>
+                        ) : (
+                          <span className="text-gray-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {orderQty > 0 ? (
+                          <div>
+                            <span className="text-cyan-400 font-bold">{orderQty}</span>
+                            <p className="text-xs text-gray-500">{formatCurrency(orderQty * item.cost)}</p>
+                          </div>
+                        ) : (
+                          <span className="text-green-400">OK</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {item.purchaseByDate && orderQty > 0 ? (
+                          <div>
+                            <span className={`font-medium ${
+                              (item.daysToPurchase || 0) <= 0 ? 'text-red-400' :
+                              (item.daysToPurchase || 0) <= 7 ? 'text-orange-400' :
+                              (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-white'
+                            }`}>
+                              {new Date(item.purchaseByDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </span>
+                            <p className="text-xs text-gray-500">
+                              {(item.daysToPurchase || 0) <= 0 ? 'Now!' : `${item.daysToPurchase}d`}
                             </p>
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <span className="text-white font-medium">{item.velocity30d.toFixed(1)}</span>
-                            <span className="text-gray-500 text-xs">/day</span>
-                            {item.velocityChange7d !== 0 && (
-                              <span className={item.velocityChange7d >= 0 ? 'text-green-400' : 'text-red-400'}>
-                                {item.velocityChange7d >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`font-medium ${
-                            item.totalDaysOfSupply < 30 ? 'text-red-400' :
-                            item.totalDaysOfSupply < 60 ? 'text-orange-400' :
-                            item.totalDaysOfSupply < 90 ? 'text-yellow-400' : 'text-green-400'
-                          }`}>
-                            {Math.round(item.totalDaysOfSupply)}
-                          </span>
-                          <span className="text-gray-500 text-xs ml-1">days</span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {item.incomingFromPO > 0 ? (
-                            <span className="text-green-400 font-medium">+{item.incomingFromPO}</span>
-                          ) : (
-                            <span className="text-gray-600">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {orderQty > 0 ? (
-                            <div>
-                              <span className="text-cyan-400 font-bold">{orderQty}</span>
-                              <p className="text-xs text-gray-500">{formatCurrency(orderQty * item.cost)}</p>
-                            </div>
-                          ) : (
-                            <span className="text-green-400 text-sm">OK</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {item.purchaseByDate && orderQty > 0 ? (
-                            <div>
-                              <span className={`font-medium ${
-                                (item.daysToPurchase || 0) <= 0 ? 'text-red-400' :
-                                (item.daysToPurchase || 0) <= 7 ? 'text-orange-400' :
-                                (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-white'
-                              }`}>
-                                {new Date(item.purchaseByDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </span>
-                              <p className="text-xs text-gray-500">
-                                {(item.daysToPurchase || 0) <= 0 ? 'Today!' :
-                                 (item.daysToPurchase || 0) === 1 ? 'Tomorrow' :
-                                 `In ${item.daysToPurchase}d`}
-                              </p>
-                            </div>
-                          ) : (
-                            <span className="text-gray-600">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); viewSkuTrend(item.sku); }}
-                              className="p-1.5 hover:bg-slate-700 rounded"
-                              title="View Trends"
-                            >
-                              <BarChart3 className="w-4 h-4 text-gray-400" />
-                            </button>
-                            <button
-                              onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)}
-                              className="p-1.5 hover:bg-slate-700 rounded"
-                            >
-                              {expandedSku === item.sku ?
-                                <ChevronUp className="w-4 h-4 text-gray-400" /> :
-                                <ChevronDown className="w-4 h-4 text-gray-400" />
-                              }
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                        ) : (
+                          <span className="text-gray-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        <div className="flex items-center justify-center gap-0.5">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onHideProduct(item.sku); }}
+                            className="p-1 hover:bg-slate-700 rounded"
+                            title="Hide from forecasting"
+                          >
+                            <EyeOff className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
+                          </button>
+                          <button
+                            onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)}
+                            className="p-1 hover:bg-slate-700 rounded"
+                          >
+                            {expandedSku === item.sku ?
+                              <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> :
+                              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                            }
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
 
                       {/* Expanded Details Row */}
                       {expandedSku === item.sku && (
@@ -1306,25 +1317,15 @@ function PurchasingTab({
                 })}
               </tbody>
             </table>
-          </div>
 
           {/* Summary Footer */}
-          <div className="px-4 py-3 bg-slate-900 border-t border-slate-700 flex items-center justify-between text-sm">
-            <div className="flex items-center gap-4">
-              <span className="text-gray-400">
-                {sortedItems.length} items
-              </span>
-              {selectedSkus.size > 0 && (
-                <span className="text-cyan-400">
-                  {selectedSkus.size} selected
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-gray-400">
-                Total Order Value: <span className="text-white font-medium">{formatCurrency(sortedItems.reduce((sum: number, i: ForecastItem) => sum + (applyRounding(i.recommendedOrderQty) * i.cost), 0))}</span>
-              </span>
-            </div>
+          <div className="px-3 py-2 bg-slate-900 border-t border-slate-700 flex items-center justify-between text-xs">
+            <span className="text-gray-400">
+              {sortedItems.length} items{selectedSkus.size > 0 && <span className="text-cyan-400 ml-2">({selectedSkus.size} selected)</span>}
+            </span>
+            <span className="text-gray-400">
+              Total: <span className="text-white font-medium">{formatCurrency(sortedItems.reduce((sum: number, i: ForecastItem) => sum + (applyRounding(i.recommendedOrderQty) * i.cost), 0))}</span>
+            </span>
           </div>
         </div>
       )}
@@ -1352,11 +1353,12 @@ interface FbaShipmentItemExtended extends FbaShipmentItem {
   totalDaysOfSupply: number
 }
 
-function FbaTab({ items, settings, setSettings, getUrgencyColor }: {
+function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }: {
   items: ForecastItem[]
   settings: ForecastSettings
   setSettings: (s: ForecastSettings) => void
   getUrgencyColor: (urgency: string) => string
+  onHideProduct: (sku: string) => void
 }) {
   const router = useRouter()
   const [shipmentItems, setShipmentItems] = useState<FbaShipmentItemExtended[]>([])
@@ -1945,6 +1947,9 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor }: {
                           />
                           <button onClick={() => updateQty(item.sku, item.replenishmentNeeded)} className="p-1 hover:bg-slate-700 rounded text-gray-400 hover:text-white" title="Set to replenishment needed">
                             <RefreshCw className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => onHideProduct(item.sku)} className="p-1 hover:bg-slate-700 rounded text-gray-500 hover:text-red-400" title="Hide from forecasting">
+                            <EyeOff className="w-3 h-3" />
                           </button>
                         </div>
                       </td>
