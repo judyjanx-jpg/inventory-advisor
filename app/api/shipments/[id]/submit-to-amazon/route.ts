@@ -80,8 +80,6 @@ export async function POST(
                 sku: true,
                 title: true,
                 fnsku: true,
-                prepOwner: true,
-                labelOwner: true,
               },
             },
           },
