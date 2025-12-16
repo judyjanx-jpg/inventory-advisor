@@ -58,6 +58,17 @@ interface DeductionPreview {
   }
 }
 
+interface PlanShipment {
+  shipmentId: string
+  shipmentConfirmationId: string | null
+  status: string
+  destination?: {
+    warehouseId?: string
+  }
+  itemCount: number
+  totalUnits: number
+}
+
 export default function FbaShipmentsPage() {
   const [loading, setLoading] = useState(true)
   const [shipments, setShipments] = useState<Shipment[]>([])
@@ -67,6 +78,10 @@ export default function FbaShipmentsPage() {
   const [amazonShipmentId, setAmazonShipmentId] = useState('')
   const [inboundPlanId, setInboundPlanId] = useState('')
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null)
+
+  // Plan shipments state
+  const [planShipments, setPlanShipments] = useState<PlanShipment[]>([])
+  const [loadingPlanShipments, setLoadingPlanShipments] = useState(false)
   const [deductionLoading, setDeductionLoading] = useState(false)
   const [deductionPreview, setDeductionPreview] = useState<DeductionPreview | null>(null)
   const [deductionError, setDeductionError] = useState<string | null>(null)
@@ -95,6 +110,43 @@ export default function FbaShipmentsPage() {
     } catch (error) {
       console.error('Error fetching warehouses:', error)
     }
+  }
+
+  const loadPlanShipments = async () => {
+    if (!inboundPlanId.trim()) {
+      setDeductionError('Please enter an Inbound Plan ID')
+      return
+    }
+
+    setLoadingPlanShipments(true)
+    setDeductionError(null)
+    setPlanShipments([])
+
+    try {
+      const res = await fetch(`/api/fba-shipments/list-by-plan?inboundPlanId=${encodeURIComponent(inboundPlanId.trim())}`)
+      const data = await res.json()
+
+      if (!res.ok) {
+        setDeductionError(data.error || 'Failed to load shipments')
+        return
+      }
+
+      setPlanShipments(data.shipments || [])
+
+      if (data.shipments?.length === 0) {
+        setDeductionError('No shipments found in this inbound plan')
+      }
+    } catch (error: any) {
+      setDeductionError(error.message || 'Failed to load shipments')
+    } finally {
+      setLoadingPlanShipments(false)
+    }
+  }
+
+  const selectShipment = (shipment: PlanShipment) => {
+    // Use shipmentConfirmationId if available, otherwise use shipmentId
+    setAmazonShipmentId(shipment.shipmentConfirmationId || shipment.shipmentId)
+    setPlanShipments([]) // Clear the list after selection
   }
 
   const handlePreviewDeduction = async () => {
@@ -302,18 +354,67 @@ export default function FbaShipmentsPage() {
                 </div>
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-slate-400 mb-1">
-                    Inbound Plan ID <span className="text-slate-500">(optional)</span>
+                    Inbound Plan ID <span className="text-slate-500">(Workflow ID)</span>
                   </label>
-                  <input
-                    type="text"
-                    value={inboundPlanId}
-                    onChange={(e) => setInboundPlanId(e.target.value)}
-                    placeholder="e.g., wf97fdd5bb-759c-46d1-..."
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                    disabled={deductionLoading}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={inboundPlanId}
+                      onChange={(e) => setInboundPlanId(e.target.value)}
+                      placeholder="e.g., wf97fdd5bb-759c-46d1-..."
+                      className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      disabled={deductionLoading || loadingPlanShipments}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={loadPlanShipments}
+                      disabled={deductionLoading || loadingPlanShipments || !inboundPlanId.trim()}
+                    >
+                      {loadingPlanShipments ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      ) : (
+                        'Load'
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
+
+              {/* Shipment Selection from Plan */}
+              {planShipments.length > 0 && (
+                <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                  <p className="text-sm text-slate-400 mb-2">Select a shipment from this plan:</p>
+                  <div className="space-y-2">
+                    {planShipments.map((shipment) => (
+                      <button
+                        key={shipment.shipmentId}
+                        onClick={() => selectShipment(shipment)}
+                        className="w-full text-left p-3 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-600 hover:border-cyan-500 transition-colors"
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <span className="text-white font-medium">
+                              {shipment.shipmentConfirmationId || shipment.shipmentId}
+                            </span>
+                            {shipment.destination?.warehouseId && (
+                              <span className="text-slate-400 ml-2">→ {shipment.destination.warehouseId}</span>
+                            )}
+                          </div>
+                          <div className="text-right text-sm">
+                            <span className="text-slate-400">{shipment.itemCount} SKUs</span>
+                            <span className="text-slate-500 mx-2">•</span>
+                            <span className="text-cyan-400">{shipment.totalUnits} units</span>
+                          </div>
+                        </div>
+                        {shipment.status && (
+                          <span className="text-xs text-slate-500 mt-1 block">{shipment.status}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-slate-400 mb-1">
