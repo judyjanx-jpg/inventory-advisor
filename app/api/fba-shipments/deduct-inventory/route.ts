@@ -41,58 +41,71 @@ async function findShipmentInPlans(
   client: any,
   targetShipmentId: string
 ): Promise<{ inboundPlanId: string; shipment: any } | null> {
-  let paginationToken: string | undefined
+  // Search through plans with different statuses to find older shipments
+  const statusesToSearch = [undefined, 'ACTIVE', 'SHIPPED', 'CLOSED']
 
-  // Search through all inbound plans
-  do {
-    const plansResponse = await listInboundPlans({
-      pageSize: 20,
-      paginationToken,
-    })
+  for (const status of statusesToSearch) {
+    let paginationToken: string | undefined
+    let plansSearched = 0
+    const maxPlansToSearch = 100 // Limit to avoid excessive API calls
 
-    for (const plan of plansResponse.inboundPlans) {
-      // For each plan, list its shipments
+    do {
       try {
-        const shipmentsResponse = await callFbaInboundApi(client, 'listInboundPlanShipments', {
-          path: { inboundPlanId: plan.inboundPlanId },
+        const plansResponse = await listInboundPlans({
+          pageSize: 20,
+          paginationToken,
+          status,
         })
 
-        const shipments = shipmentsResponse.shipments || []
+        for (const plan of plansResponse.inboundPlans) {
+          plansSearched++
 
-        // Check if our target shipment is in this plan
-        for (const shipment of shipments) {
-          // First check if it matches by shipmentId directly
-          if (shipment.shipmentId === targetShipmentId) {
-            const fullShipment = await getShipment(plan.inboundPlanId, shipment.shipmentId)
-            return {
-              inboundPlanId: plan.inboundPlanId,
-              shipment: fullShipment,
-            }
-          }
-
-          // Also check by shipmentConfirmationId (what users see in STA UI)
-          // Need to get full shipment details to access shipmentConfirmationId
+          // For each plan, list its shipments
           try {
-            const fullShipment = await getShipment(plan.inboundPlanId, shipment.shipmentId)
-            if (fullShipment.shipmentConfirmationId === targetShipmentId) {
-              return {
-                inboundPlanId: plan.inboundPlanId,
-                shipment: fullShipment,
+            const shipmentsResponse = await callFbaInboundApi(client, 'listInboundPlanShipments', {
+              path: { inboundPlanId: plan.inboundPlanId },
+            })
+
+            const shipments = shipmentsResponse.shipments || []
+
+            // Check if our target shipment is in this plan
+            for (const shipment of shipments) {
+              // First check if it matches by shipmentId directly
+              if (shipment.shipmentId === targetShipmentId) {
+                const fullShipment = await getShipment(plan.inboundPlanId, shipment.shipmentId)
+                return {
+                  inboundPlanId: plan.inboundPlanId,
+                  shipment: fullShipment,
+                }
+              }
+
+              // Also check by shipmentConfirmationId (what users see in STA UI)
+              try {
+                const fullShipment = await getShipment(plan.inboundPlanId, shipment.shipmentId)
+                if (fullShipment.shipmentConfirmationId === targetShipmentId) {
+                  return {
+                    inboundPlanId: plan.inboundPlanId,
+                    shipment: fullShipment,
+                  }
+                }
+              } catch (shipmentError) {
+                // Could not get shipment details, continue to next
+                console.log(`Error getting shipment ${shipment.shipmentId}:`, shipmentError)
               }
             }
-          } catch (shipmentError) {
-            // Could not get shipment details, continue to next
-            console.log(`Error getting shipment ${shipment.shipmentId}:`, shipmentError)
+          } catch (error) {
+            // Plan might not have shipments yet, continue searching
+            console.log(`Error listing shipments for plan ${plan.inboundPlanId}:`, error)
           }
         }
-      } catch (error) {
-        // Plan might not have shipments yet, continue searching
-        console.log(`Error listing shipments for plan ${plan.inboundPlanId}:`, error)
-      }
-    }
 
-    paginationToken = plansResponse.pagination?.token
-  } while (paginationToken)
+        paginationToken = plansResponse.pagination?.token
+      } catch (listError) {
+        console.log(`Error listing inbound plans (status=${status}):`, listError)
+        break // Try next status
+      }
+    } while (paginationToken && plansSearched < maxPlansToSearch)
+  }
 
   return null
 }
@@ -206,9 +219,10 @@ export async function POST(request: NextRequest) {
 
     if (shipmentItems.length === 0) {
       return NextResponse.json({
-        error: 'No items found for this shipment. The shipment may not exist or may not have been submitted to Amazon yet.',
+        error: 'Shipment not found. We searched through your inbound plans but could not locate this shipment.',
         amazonShipmentId,
-        hint: 'Make sure the shipment has been submitted to Amazon and has items assigned.',
+        searchedBy: 'shipmentConfirmationId',
+        hint: 'This ID should match the shipment ID shown in Amazon Seller Central (e.g., FBA193YSY6V4). If this is a very old shipment, the inbound plan may no longer be accessible via the API.',
       }, { status: 404 })
     }
 
