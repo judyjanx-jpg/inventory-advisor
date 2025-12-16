@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import {
@@ -968,6 +968,8 @@ function TrendsTab({ items, selectedSkus, setSelectedSkus }: {
 // Purchasing Tab Component
 // ==========================================
 
+type PurchasingSortColumn = 'sku' | 'velocity' | 'daysOfStock' | 'incomingPO' | 'orderQty' | 'orderByDate'
+
 function PurchasingTab({
   items, selectedSkus, toggleSelection, selectAll, createPurchaseOrder,
   suppliers, selectedSupplier, setSelectedSupplier, filter, setFilter,
@@ -975,9 +977,69 @@ function PurchasingTab({
   formatCurrency, formatPercent, viewSkuTrend,
 }: any) {
   const [expandedSku, setExpandedSku] = useState<string | null>(null)
+  const [sortColumn, setSortColumn] = useState<PurchasingSortColumn>('orderByDate')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
-  const totalValue = items.reduce((sum: number, i: ForecastItem) => 
+  const totalValue = items.reduce((sum: number, i: ForecastItem) =>
     sum + (applyRounding(i.recommendedOrderQty) * i.cost), 0)
+
+  // Sort items based on current sort column and direction
+  const sortedItems = useMemo(() => {
+    const sorted = [...items].sort((a: ForecastItem, b: ForecastItem) => {
+      let comparison = 0
+
+      switch (sortColumn) {
+        case 'sku':
+          comparison = a.sku.localeCompare(b.sku)
+          break
+        case 'velocity':
+          comparison = a.velocity30d - b.velocity30d
+          break
+        case 'daysOfStock':
+          comparison = a.totalDaysOfSupply - b.totalDaysOfSupply
+          break
+        case 'incomingPO':
+          comparison = (a.incomingFromPO || 0) - (b.incomingFromPO || 0)
+          break
+        case 'orderQty':
+          comparison = a.recommendedOrderQty - b.recommendedOrderQty
+          break
+        case 'orderByDate':
+          // Sort by daysToPurchase (null/undefined = no order needed = sort to end)
+          const aDays = a.daysToPurchase ?? 9999
+          const bDays = b.daysToPurchase ?? 9999
+          comparison = aDays - bDays
+          break
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison
+    })
+    return sorted
+  }, [items, sortColumn, sortDirection])
+
+  const handleSort = (column: PurchasingSortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      // Default to ascending for SKU, descending for others
+      setSortDirection(column === 'sku' ? 'asc' : 'asc')
+    }
+  }
+
+  const SortHeader = ({ column, label, className = '' }: { column: PurchasingSortColumn; label: string; className?: string }) => (
+    <th
+      className={`px-4 py-3 cursor-pointer hover:bg-slate-700/50 select-none transition-colors ${className}`}
+      onClick={() => handleSort(column)}
+    >
+      <div className="flex items-center gap-1 justify-center">
+        <span>{label}</span>
+        {sortColumn === column && (
+          <span className="text-cyan-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+        )}
+      </div>
+    </th>
+  )
 
   return (
     <div className="space-y-4">
@@ -996,197 +1058,125 @@ function PurchasingTab({
             ))}
           </select>
         </div>
-        
+
         <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
           <option value="all">All Urgency</option>
           <option value="critical">Critical Only</option>
           <option value="high">High Priority</option>
           <option value="medium">Medium Priority</option>
         </select>
-        
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
-          <option value="urgency">Sort by Urgency</option>
-          <option value="daysOfSupply">Sort by Days of Supply</option>
-          <option value="value">Sort by Value</option>
-        </select>
-        
+
         <div className="flex-1" />
-        
+
         {selectedSkus.size > 0 && (
           <button onClick={createPurchaseOrder} className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg">
             <Plus className="w-4 h-4" />
             Create PO ({selectedSkus.size} items, {formatCurrency(totalValue)})
           </button>
         )}
-        
+
         <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700">
           <Download className="w-4 h-4" />
           Export
         </button>
       </div>
 
-      {/* Select All */}
-      <div className="flex items-center gap-2 text-sm text-gray-400">
-        <input
-          type="checkbox"
-          checked={selectedSkus.size === items.length && items.length > 0}
-          onChange={selectAll}
-          className="rounded bg-slate-800 border-slate-700"
-        />
-        <span>Select all ({items.length} items)</span>
-        {settings.roundToNearest5 && (
-          <span className="ml-4 px-2 py-0.5 bg-slate-700 rounded text-xs">Rounding to nearest 5 enabled</span>
-        )}
-      </div>
+      {/* Table */}
+      {sortedItems.length === 0 ? (
+        <div className="bg-slate-800 rounded-xl p-8 text-center">
+          <Package className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-400">No items need purchasing right now</p>
+        </div>
+      ) : (
+        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-700 text-sm text-gray-400 bg-slate-900">
+                  <th className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedSkus.size === sortedItems.length && sortedItems.length > 0}
+                      onChange={selectAll}
+                      className="rounded bg-slate-800 border-slate-700"
+                    />
+                  </th>
+                  <SortHeader column="sku" label="SKU" className="text-left" />
+                  <SortHeader column="velocity" label="Velocity" />
+                  <SortHeader column="daysOfStock" label="Days of Stock" />
+                  <SortHeader column="incomingPO" label="Incoming PO" />
+                  <SortHeader column="orderQty" label="Order Qty" />
+                  <SortHeader column="orderByDate" label="Order By" />
+                  <th className="px-4 py-3 w-20"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedItems.map((item: ForecastItem) => {
+                  const orderQty = applyRounding(item.recommendedOrderQty)
 
-      {/* Items List */}
-      <div className="space-y-2">
-        {items.length === 0 ? (
-          <div className="bg-slate-800 rounded-xl p-8 text-center">
-            <Package className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400">No items need purchasing right now</p>
-          </div>
-        ) : (
-          items.map((item: ForecastItem) => (
-            <div key={item.sku} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center gap-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedSkus.has(item.sku)}
-                    onChange={() => toggleSelection(item.sku)}
-                    className="rounded bg-slate-900 border-slate-700"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  
-                  <div className={`px-3 py-1 rounded-full text-xs font-medium border ${getUrgencyColor(item.urgency)}`}>
-                    {item.urgency.toUpperCase()}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)}>
-                    <p className="font-medium text-white">{item.sku}</p>
-                    <p className="text-xs text-gray-500 truncate">{(item.displayName || item.title)?.substring(0, 60)}</p>
-                  </div>
-                  
-                  <div className="text-center px-4">
-                    <div className="flex items-center gap-1 justify-center">
-                      <span className="text-lg font-bold text-white">{item.velocity30d.toFixed(1)}</span>
-                      <span className={item.velocityChange7d >= 0 ? 'text-green-400' : 'text-red-400'}>
-                        {item.velocityChange7d >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500">units/day ({formatPercent(item.velocityChange7d || 0)})</p>
-                  </div>
-                  
-                  <div className="text-center px-4">
-                    <p className={`text-lg font-bold ${
-                      item.totalDaysOfSupply < 30 ? 'text-red-400' :
-                      item.totalDaysOfSupply < 60 ? 'text-orange-400' :
-                      item.totalDaysOfSupply < 90 ? 'text-yellow-400' : 'text-green-400'
-                    }`}>
-                      {Math.round(item.totalDaysOfSupply)} days
-                    </p>
-                    <p className="text-xs text-gray-500">total supply</p>
-                  </div>
-
-                  {/* NEW: Incoming PO indicator */}
-                  {item.incomingFromPO > 0 && (
-                    <div className="text-center px-3">
-                      <p className="text-sm font-medium text-green-400">
-                        +{item.incomingFromPO} on PO
-                      </p>
-                      <p className="text-xs text-gray-500">incoming</p>
-                    </div>
-                  )}
-
-                  {/* NEW: Purchase By Date */}
-                  {item.purchaseByDate && applyRounding(item.recommendedOrderQty) > 0 && (
-                    <div className="text-center px-3">
-                      <p className={`text-sm font-medium ${
-                        (item.daysToPurchase || 0) <= 0 ? 'text-red-400' :
-                        (item.daysToPurchase || 0) <= 7 ? 'text-orange-400' :
-                        (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-gray-300'
-                      }`}>
-                        {(item.daysToPurchase || 0) <= 0 ? 'Today' :
-                         (item.daysToPurchase || 0) === 1 ? 'Tomorrow' :
-                         `In ${item.daysToPurchase}d`}
-                      </p>
-                      <p className="text-xs text-gray-500">order by</p>
-                    </div>
-                  )}
-
-                  <div className="text-right px-4">
-                    <p className="text-lg font-bold text-cyan-400">
-                      {applyRounding(item.recommendedOrderQty) > 0 ? `Order ${applyRounding(item.recommendedOrderQty)}` : 'OK'}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {applyRounding(item.recommendedOrderQty) > 0 && formatCurrency(applyRounding(item.recommendedOrderQty) * item.cost)}
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={(e) => { e.stopPropagation(); viewSkuTrend(item.sku); }}
-                    className="p-2 hover:bg-slate-700 rounded-lg"
-                    title="View Trends"
-                  >
-                    <BarChart3 className="w-5 h-5 text-gray-400" />
-                  </button>
-                  
-                  <button onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)} className="p-2 hover:bg-slate-700 rounded-lg">
-                    {expandedSku === item.sku ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
-                  </button>
-                </div>
-              </div>
-              
-              {expandedSku === item.sku && (
-                <div className="px-4 pb-4 pt-2 border-t border-slate-700 bg-slate-900/50">
-                  <div className="grid grid-cols-5 gap-6">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-2">Inventory</h4>
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between"><span className="text-gray-500">FBA</span><span className="text-white">{item.fbaAvailable || 0}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">FBA Inbound</span><span className="text-cyan-400">{item.fbaInbound || 0}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Warehouse</span><span className="text-white">{item.warehouseAvailable || 0}</span></div>
-                        <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-gray-400 font-medium">On Hand</span><span className="text-white font-medium">{item.currentInventory || 0}</span></div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-2">Incoming POs</h4>
-                      {item.incomingFromPO > 0 && item.incomingPODetails ? (
-                        <div className="space-y-1 text-sm">
-                          {item.incomingPODetails.map((po, idx) => (
-                            <div key={idx} className="flex justify-between">
-                              <span className="text-gray-500">{po.poNumber}</span>
-                              <span className="text-green-400">+{po.qty}</span>
-                            </div>
-                          ))}
-                          <div className="flex justify-between border-t border-slate-700 pt-1">
-                            <span className="text-gray-400 font-medium">Total PO</span>
-                            <span className="text-green-400 font-medium">+{item.incomingFromPO}</span>
+                  return (
+                    <React.Fragment key={item.sku}>
+                      <tr className={`border-b border-slate-700/50 hover:bg-slate-750 transition-colors ${selectedSkus.has(item.sku) ? 'bg-cyan-900/10' : ''}`}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedSkus.has(item.sku)}
+                            onChange={() => toggleSelection(item.sku)}
+                            className="rounded bg-slate-900 border-slate-700"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div
+                            className="cursor-pointer"
+                            onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)}
+                          >
+                            <p className="font-medium text-white">{item.sku}</p>
+                            <p className="text-xs text-gray-500 truncate max-w-[200px]">
+                              {(item.displayName || item.title)?.substring(0, 40)}
+                            </p>
                           </div>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">No pending POs</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-2">Supplier</h4>
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between"><span className="text-gray-500">Name</span><span className="text-white">{item.supplierName || 'Not set'}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Lead Time</span><span className="text-white">{item.leadTimeDays} days</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Unit Cost</span><span className="text-white">{formatCurrency(item.cost)}</span></div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-2">Purchase Timeline</h4>
-                      <div className="space-y-1 text-sm">
-                        {item.purchaseByDate ? (
-                          <>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Order By</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-white font-medium">{item.velocity30d.toFixed(1)}</span>
+                            <span className="text-gray-500 text-xs">/day</span>
+                            {item.velocityChange7d !== 0 && (
+                              <span className={item.velocityChange7d >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                {item.velocityChange7d >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`font-medium ${
+                            item.totalDaysOfSupply < 30 ? 'text-red-400' :
+                            item.totalDaysOfSupply < 60 ? 'text-orange-400' :
+                            item.totalDaysOfSupply < 90 ? 'text-yellow-400' : 'text-green-400'
+                          }`}>
+                            {Math.round(item.totalDaysOfSupply)}
+                          </span>
+                          <span className="text-gray-500 text-xs ml-1">days</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {item.incomingFromPO > 0 ? (
+                            <span className="text-green-400 font-medium">+{item.incomingFromPO}</span>
+                          ) : (
+                            <span className="text-gray-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {orderQty > 0 ? (
+                            <div>
+                              <span className="text-cyan-400 font-bold">{orderQty}</span>
+                              <p className="text-xs text-gray-500">{formatCurrency(orderQty * item.cost)}</p>
+                            </div>
+                          ) : (
+                            <span className="text-green-400 text-sm">OK</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {item.purchaseByDate && orderQty > 0 ? (
+                            <div>
                               <span className={`font-medium ${
                                 (item.daysToPurchase || 0) <= 0 ? 'text-red-400' :
                                 (item.daysToPurchase || 0) <= 7 ? 'text-orange-400' :
@@ -1194,35 +1184,150 @@ function PurchasingTab({
                               }`}>
                                 {new Date(item.purchaseByDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                               </span>
+                              <p className="text-xs text-gray-500">
+                                {(item.daysToPurchase || 0) <= 0 ? 'Today!' :
+                                 (item.daysToPurchase || 0) === 1 ? 'Tomorrow' :
+                                 `In ${item.daysToPurchase}d`}
+                              </p>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Days Left</span>
-                              <span className="text-white">{item.daysToPurchase || 0}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <p className="text-gray-500">No order needed</p>
-                        )}
-                        <div className="flex justify-between"><span className="text-gray-500">Reorder Point</span><span className="text-white">{item.reorderPoint}</span></div>
-                      </div>
-                    </div>
+                          ) : (
+                            <span className="text-gray-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); viewSkuTrend(item.sku); }}
+                              className="p-1.5 hover:bg-slate-700 rounded"
+                              title="View Trends"
+                            >
+                              <BarChart3 className="w-4 h-4 text-gray-400" />
+                            </button>
+                            <button
+                              onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)}
+                              className="p-1.5 hover:bg-slate-700 rounded"
+                            >
+                              {expandedSku === item.sku ?
+                                <ChevronUp className="w-4 h-4 text-gray-400" /> :
+                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                              }
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
 
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-2">Why This Qty</h4>
-                      <div className="space-y-1 text-sm text-gray-300">
-                        <p>• {item.velocity30d.toFixed(1)}/day × 180d = {Math.round(item.velocity30d * 180)}</p>
-                        <p>• On hand: {item.currentInventory || 0}</p>
-                        {item.incomingFromPO > 0 && <p>• On PO: +{item.incomingFromPO}</p>}
-                        <p>• Gap: {Math.max(0, Math.round(item.velocity30d * 180) - item.totalInventory)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                      {/* Expanded Details Row */}
+                      {expandedSku === item.sku && (
+                        <tr className="bg-slate-900/50">
+                          <td colSpan={8} className="px-4 py-4">
+                            <div className="grid grid-cols-5 gap-6">
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-400 mb-2">Inventory Breakdown</h4>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between"><span className="text-gray-500">FBA</span><span className="text-white">{item.fbaAvailable || 0}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">FBA Inbound</span><span className="text-cyan-400">{item.fbaInbound || 0}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Warehouse</span><span className="text-white">{item.warehouseAvailable || 0}</span></div>
+                                  <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-gray-400 font-medium">On Hand</span><span className="text-white font-medium">{item.currentInventory || 0}</span></div>
+                                </div>
+                              </div>
+
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-400 mb-2">Incoming POs</h4>
+                                {item.incomingFromPO > 0 && item.incomingPODetails ? (
+                                  <div className="space-y-1 text-sm">
+                                    {item.incomingPODetails.map((po, idx) => (
+                                      <div key={idx} className="flex justify-between">
+                                        <span className="text-gray-500">{po.poNumber}</span>
+                                        <span className="text-green-400">+{po.qty}</span>
+                                      </div>
+                                    ))}
+                                    <div className="flex justify-between border-t border-slate-700 pt-1">
+                                      <span className="text-gray-400 font-medium">Total PO</span>
+                                      <span className="text-green-400 font-medium">+{item.incomingFromPO}</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-gray-500">No pending POs</p>
+                                )}
+                              </div>
+
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-400 mb-2">Supplier</h4>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between"><span className="text-gray-500">Name</span><span className="text-white">{item.supplierName || 'Not set'}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Lead Time</span><span className="text-white">{item.leadTimeDays} days</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Unit Cost</span><span className="text-white">{formatCurrency(item.cost)}</span></div>
+                                  {item.moq && <div className="flex justify-between"><span className="text-gray-500">MOQ</span><span className="text-white">{item.moq}</span></div>}
+                                </div>
+                              </div>
+
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-400 mb-2">Order Timeline</h4>
+                                <div className="space-y-1 text-sm">
+                                  {item.purchaseByDate ? (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Order By</span>
+                                        <span className={`font-medium ${
+                                          (item.daysToPurchase || 0) <= 0 ? 'text-red-400' :
+                                          (item.daysToPurchase || 0) <= 7 ? 'text-orange-400' :
+                                          (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-white'
+                                        }`}>
+                                          {new Date(item.purchaseByDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Days Left</span>
+                                        <span className="text-white">{item.daysToPurchase || 0}</span>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <p className="text-gray-500">No order needed</p>
+                                  )}
+                                  <div className="flex justify-between"><span className="text-gray-500">Reorder Point</span><span className="text-white">{item.reorderPoint}</span></div>
+                                </div>
+                              </div>
+
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-400 mb-2">Calculation</h4>
+                                <div className="space-y-1 text-sm text-gray-300">
+                                  <p>• {item.velocity30d.toFixed(1)}/day × 180d = {Math.round(item.velocity30d * 180)}</p>
+                                  <p>• On hand: {item.currentInventory || 0}</p>
+                                  {item.incomingFromPO > 0 && <p>• On PO: +{item.incomingFromPO}</p>}
+                                  <p>• Gap: {Math.max(0, Math.round(item.velocity30d * 180) - item.totalInventory)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Summary Footer */}
+          <div className="px-4 py-3 bg-slate-900 border-t border-slate-700 flex items-center justify-between text-sm">
+            <div className="flex items-center gap-4">
+              <span className="text-gray-400">
+                {sortedItems.length} items
+              </span>
+              {selectedSkus.size > 0 && (
+                <span className="text-cyan-400">
+                  {selectedSkus.size} selected
+                </span>
               )}
             </div>
-          ))
-        )}
-      </div>
+            <div className="flex items-center gap-4">
+              <span className="text-gray-400">
+                Total Order Value: <span className="text-white font-medium">{formatCurrency(sortedItems.reduce((sum: number, i: ForecastItem) => sum + (applyRounding(i.recommendedOrderQty) * i.cost), 0))}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
