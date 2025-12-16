@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, Plus, Trash2, Info } from 'lucide-react'
+import { Package, Plus, Trash2, Info, CheckSquare } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import { useDisplaySettings, formatTitle } from '@/lib/useDisplaySettings'
@@ -58,6 +58,9 @@ export default function BoxCreation({
     { id: 1, length: 18, width: 14, height: 8, applyToBoxes: [1, 2, 3, 4, 5] }
   ])
   const [hasAutoSplit, setHasAutoSplit] = useState(false)
+  const [selectedSkus, setSelectedSkus] = useState<Set<string>>(new Set())
+  const [bulkPrepValue, setBulkPrepValue] = useState<'AMAZON' | 'SELLER' | 'NONE'>('NONE')
+  const [bulkLabelValue, setBulkLabelValue] = useState<'AMAZON' | 'SELLER' | 'NONE'>('NONE')
 
   // Auto-split items evenly across boxes
   const autoSplitItems = (targetBoxes?: Box[]) => {
@@ -324,6 +327,37 @@ export default function BoxCreation({
     setDimensions(dimensions.filter(d => d.id !== dimId))
   }
 
+  // Selection helpers
+  const toggleSkuSelection = (sku: string) => {
+    const newSelected = new Set(selectedSkus)
+    if (newSelected.has(sku)) {
+      newSelected.delete(sku)
+    } else {
+      newSelected.add(sku)
+    }
+    setSelectedSkus(newSelected)
+  }
+
+  const selectAllSkus = () => {
+    if (selectedSkus.size === shipmentItems.length) {
+      setSelectedSkus(new Set())
+    } else {
+      setSelectedSkus(new Set(shipmentItems.map(item => item.sku)))
+    }
+  }
+
+  const applyBulkSettings = async () => {
+    if (selectedSkus.size === 0 || !onItemPrepChange) return
+
+    for (const sku of selectedSkus) {
+      await onItemPrepChange(sku, 'prepOwner', bulkPrepValue)
+      await onItemPrepChange(sku, 'labelOwner', bulkLabelValue)
+    }
+
+    // Clear selection after applying
+    setSelectedSkus(new Set())
+  }
+
   // Calculate totals
   const getSkuTotals = () => {
     const totals: Record<string, { assigned: number; needed: number }> = {}
@@ -351,34 +385,73 @@ export default function BoxCreation({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Box Contents
-          </CardTitle>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => autoSplitItems()}
-              className="px-3 py-1.5 text-sm bg-cyan-600 hover:bg-cyan-500 text-white rounded font-medium"
-            >
-              Auto-Split Evenly
-            </button>
-            <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Box Contents
+            </CardTitle>
+            <div className="flex items-center gap-4">
               <button
-                onClick={removeBox}
-                disabled={boxes.length <= 1}
-                className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded"
+                onClick={() => autoSplitItems()}
+                className="px-3 py-1.5 text-sm bg-cyan-600 hover:bg-cyan-500 text-white rounded font-medium"
               >
-                −
+                Auto-Split Evenly
               </button>
-              <span className="text-white font-medium">{boxes.length} boxes</span>
-              <button
-                onClick={addBox}
-                className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded"
-              >
-                +
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={removeBox}
+                  disabled={boxes.length <= 1}
+                  className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded"
+                >
+                  −
+                </button>
+                <span className="text-white font-medium">{boxes.length} boxes</span>
+                <button
+                  onClick={addBox}
+                  className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded"
+                >
+                  +
+                </button>
+              </div>
             </div>
+          </div>
+
+          {/* Bulk Apply Controls */}
+          <div className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+            <span className="text-sm text-slate-400">Bulk apply:</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Prep:</span>
+              <select
+                value={bulkPrepValue}
+                onChange={(e) => setBulkPrepValue(e.target.value as 'AMAZON' | 'SELLER' | 'NONE')}
+                className="px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs focus:border-cyan-500 focus:outline-none"
+              >
+                <option value="NONE">None</option>
+                <option value="SELLER">Seller</option>
+                <option value="AMAZON">Amazon</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Label:</span>
+              <select
+                value={bulkLabelValue}
+                onChange={(e) => setBulkLabelValue(e.target.value as 'AMAZON' | 'SELLER' | 'NONE')}
+                className="px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs focus:border-cyan-500 focus:outline-none"
+              >
+                <option value="NONE">None</option>
+                <option value="SELLER">Seller</option>
+                <option value="AMAZON">Amazon</option>
+              </select>
+            </div>
+            <button
+              onClick={applyBulkSettings}
+              disabled={selectedSkus.size === 0}
+              className="px-3 py-1 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:opacity-50 text-white rounded font-medium flex items-center gap-1"
+            >
+              <CheckSquare className="w-4 h-4" />
+              Apply to {selectedSkus.size > 0 ? `${selectedSkus.size} selected` : 'selected'}
+            </button>
           </div>
         </div>
       </CardHeader>
@@ -388,6 +461,15 @@ export default function BoxCreation({
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700">
+                <th className="text-center py-3 px-2 w-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedSkus.size === shipmentItems.length && shipmentItems.length > 0}
+                    onChange={selectAllSkus}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500 cursor-pointer"
+                    title="Select all"
+                  />
+                </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-400 min-w-[250px]">
                   SKU details
                 </th>
@@ -415,7 +497,15 @@ export default function BoxCreation({
                 const isOver = totals.assigned > totals.needed
                 
                 return (
-                  <tr key={item.sku} className="border-b border-slate-800">
+                  <tr key={item.sku} className={`border-b border-slate-800 ${selectedSkus.has(item.sku) ? 'bg-cyan-900/20' : ''}`}>
+                    <td className="py-3 px-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedSkus.has(item.sku)}
+                        onChange={() => toggleSkuSelection(item.sku)}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500 cursor-pointer"
+                      />
+                    </td>
                     <td className="py-3 px-4">
                       <div className="text-white font-medium text-sm">{item.sku}</div>
                       {formatTitle(item.productName, displaySettings) && (
@@ -477,6 +567,7 @@ export default function BoxCreation({
             <tfoot>
               {/* Summary Row */}
               <tr className="border-t border-slate-700 bg-slate-800/30">
+                <td className="py-3 px-2"></td>
                 <td className="py-3 px-4 text-sm font-medium text-slate-300">
                   Total SKUs: {shipmentItems.length}
                 </td>
@@ -493,7 +584,7 @@ export default function BoxCreation({
 
               {/* Box Weight Row */}
               <tr className="border-t border-slate-700">
-                <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right" colSpan={4}>
+                <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right" colSpan={5}>
                   Box weight (lb):
                 </td>
                 {boxes.map(box => (
@@ -517,7 +608,7 @@ export default function BoxCreation({
 
               {/* Total Weight Row */}
               <tr>
-                <td colSpan={4}></td>
+                <td colSpan={5}></td>
                 <td colSpan={boxes.length} className="py-2 px-4 text-right text-sm">
                   <span className={`${totalWeight > 0 ? 'text-white' : 'text-slate-500'}`}>
                     Total weight: <span className="font-bold">{totalWeight} lb</span>
@@ -531,7 +622,7 @@ export default function BoxCreation({
               {/* Box Dimensions Rows */}
               {dimensions.map((dim, dimIndex) => (
                 <tr key={dim.id} className={dimIndex === 0 ? "border-t border-slate-700" : ""}>
-                  <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right align-middle" colSpan={4}>
+                  <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right align-middle" colSpan={5}>
                     <div className="flex items-center justify-end gap-2">
                       {dimensions.length > 1 && (
                         <button
@@ -579,7 +670,7 @@ export default function BoxCreation({
               
               {/* Add another dimension link */}
               <tr>
-                <td colSpan={4} className="py-2 px-4 text-right">
+                <td colSpan={5} className="py-2 px-4 text-right">
                   <button
                     onClick={addDimensionGroup}
                     className="text-cyan-400 hover:text-cyan-300 text-sm inline-flex items-center gap-1"
