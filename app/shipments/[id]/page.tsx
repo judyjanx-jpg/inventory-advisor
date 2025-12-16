@@ -141,7 +141,7 @@ export default function ShipmentDetailPage() {
             labelType: item.product?.labelType || 'fnsku_only',
             transparencyEnabled: item.product?.transparencyEnabled || false,
             prepOwner: item.product?.prepOwner || 'NONE',
-            labelOwner: item.product?.labelOwner || 'SELLER',
+            labelOwner: item.product?.labelOwner || 'NONE',
           })),
           boxes: (shipmentData.boxes || []).map((box: any) => ({
             id: box.id,

@@ -242,7 +242,7 @@ export async function POST(
       msku: item.masterSku,
       quantity: item.adjustedQty,
       prepOwner: (item.product?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE',
-      labelOwner: (item.product?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE',
+      labelOwner: (item.product?.labelOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE',
     }))
 
     // ========================================
@@ -404,7 +404,7 @@ export async function POST(
         for (const item of shipment.items) {
           productSettingsMap.set(item.masterSku, {
             prepOwner: item.product?.prepOwner || 'NONE',
-            labelOwner: item.product?.labelOwner || 'SELLER',
+            labelOwner: item.product?.labelOwner || 'NONE',
           })
         }
 
@@ -426,7 +426,7 @@ export async function POST(
               msku: item.masterSku,
               quantity: item.quantity,
               prepOwner: (productSettings?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE',
-              labelOwner: (productSettings?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE',
+              labelOwner: (productSettings?.labelOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE',
             }
           }),
         }))
@@ -853,7 +853,7 @@ export async function POST(
           // Priority: request body overrides > product settings > defaults
           const settings = itemSettings[item.masterSku]
           const prepOwner = (settings?.prepOwner || item.product?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE'
-          const labelOwner = (settings?.labelOwner || item.product?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE'
+          const labelOwner = (settings?.labelOwner || item.product?.labelOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE'
 
           return {
             msku: item.masterSku,
@@ -1075,7 +1075,7 @@ export async function POST(
         for (const item of shipment.items) {
           productSettingsMap.set(item.masterSku, {
             prepOwner: item.product?.prepOwner || 'NONE',
-            labelOwner: item.product?.labelOwner || 'SELLER',
+            labelOwner: item.product?.labelOwner || 'NONE',
           })
         }
 
@@ -1099,7 +1099,7 @@ export async function POST(
             const settings = itemSettings[item.masterSku]
             const productSettings = productSettingsMap.get(item.masterSku)
             const prepOwner = (settings?.prepOwner || productSettings?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE'
-            const labelOwner = (settings?.labelOwner || productSettings?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE'
+            const labelOwner = (settings?.labelOwner || productSettings?.labelOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE'
 
             return {
               msku: item.masterSku,

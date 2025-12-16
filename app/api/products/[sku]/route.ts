@@ -60,6 +60,8 @@ export async function PUT(
       hidden,
       labelType,
       unitsPerCase,
+      prepOwner,
+      labelOwner,
     } = body
 
     // Build update data - only include fields that are provided
@@ -87,6 +89,8 @@ export async function PUT(
     if (hidden !== undefined) updateData.isHidden = hidden // Support both 'hidden' and 'isHidden'
     if (labelType !== undefined) updateData.labelType = labelType || 'fnsku_only'
     if (unitsPerCase !== undefined) updateData.unitsPerCase = unitsPerCase ? parseInt(unitsPerCase) : undefined
+    if (prepOwner !== undefined) updateData.prepOwner = prepOwner
+    if (labelOwner !== undefined) updateData.labelOwner = labelOwner
 
     const product = await prisma.product.update({
       where: { sku: params.sku },
