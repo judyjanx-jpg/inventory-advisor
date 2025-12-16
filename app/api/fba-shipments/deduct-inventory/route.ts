@@ -153,22 +153,30 @@ export async function POST(request: NextRequest) {
 
     let inboundPlanId: string | null = providedPlanId || null
     let shipmentItems: Array<{ msku: string; quantity: number }> = []
+    let localShipment: any = null
 
-    // First, check if we have this shipment stored locally
-    const localShipment = await prisma.amazonShipmentSplit.findUnique({
-      where: { amazonShipmentId },
-      include: {
-        shipment: {
+    // First, check if we have this shipment stored locally (optional - may not exist)
+    try {
+      if (prisma.amazonShipmentSplit) {
+        localShipment = await prisma.amazonShipmentSplit.findUnique({
+          where: { amazonShipmentId },
           include: {
-            items: true,
+            shipment: {
+              include: {
+                items: true,
+              },
+            },
           },
-        },
-      },
-    })
+        })
 
-    if (localShipment?.shipment?.amazonInboundPlanId) {
-      // We have the inbound plan ID stored locally
-      inboundPlanId = localShipment.shipment.amazonInboundPlanId
+        if (localShipment?.shipment?.amazonInboundPlanId) {
+          // We have the inbound plan ID stored locally
+          inboundPlanId = localShipment.shipment.amazonInboundPlanId
+        }
+      }
+    } catch (localError) {
+      // Local shipment lookup failed, continue with API lookup
+      console.log('Local shipment lookup skipped:', localError)
     }
 
     // Track the actual shipmentId (internal API ID) for fetching items

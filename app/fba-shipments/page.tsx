@@ -67,6 +67,8 @@ interface PlanShipment {
   }
   itemCount: number
   totalUnits: number
+  deducted?: boolean
+  deducting?: boolean
 }
 
 export default function FbaShipmentsPage() {
@@ -146,7 +148,72 @@ export default function FbaShipmentsPage() {
   const selectShipment = (shipment: PlanShipment) => {
     // Use shipmentConfirmationId if available, otherwise use shipmentId
     setAmazonShipmentId(shipment.shipmentConfirmationId || shipment.shipmentId)
-    setPlanShipments([]) // Clear the list after selection
+  }
+
+  const deductSingleShipment = async (shipment: PlanShipment) => {
+    if (!selectedWarehouseId) {
+      setDeductionError('Please select a warehouse first')
+      return
+    }
+
+    // Mark this shipment as deducting
+    setPlanShipments(prev => prev.map(s =>
+      s.shipmentId === shipment.shipmentId ? { ...s, deducting: true } : s
+    ))
+
+    try {
+      const res = await fetch('/api/fba-shipments/deduct-inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amazonShipmentId: shipment.shipmentId, // Use internal shipmentId
+          warehouseId: selectedWarehouseId,
+          inboundPlanId: inboundPlanId.trim(),
+          dryRun: false,
+        }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setDeductionError(`${shipment.shipmentConfirmationId || shipment.shipmentId}: ${data.error}`)
+        setPlanShipments(prev => prev.map(s =>
+          s.shipmentId === shipment.shipmentId ? { ...s, deducting: false } : s
+        ))
+        return false
+      }
+
+      // Mark as deducted
+      setPlanShipments(prev => prev.map(s =>
+        s.shipmentId === shipment.shipmentId ? { ...s, deducting: false, deducted: true } : s
+      ))
+      return true
+    } catch (error: any) {
+      setDeductionError(`${shipment.shipmentConfirmationId || shipment.shipmentId}: ${error.message}`)
+      setPlanShipments(prev => prev.map(s =>
+        s.shipmentId === shipment.shipmentId ? { ...s, deducting: false } : s
+      ))
+      return false
+    }
+  }
+
+  const deductAllShipments = async () => {
+    if (!selectedWarehouseId) {
+      setDeductionError('Please select a warehouse first')
+      return
+    }
+
+    setDeductionError(null)
+    const shipmentsToDeduct = planShipments.filter(s => !s.deducted)
+    let successCount = 0
+
+    for (const shipment of shipmentsToDeduct) {
+      const success = await deductSingleShipment(shipment)
+      if (success) successCount++
+    }
+
+    if (successCount > 0) {
+      setDeductionSuccess(`Successfully deducted inventory for ${successCount} shipment(s)`)
+    }
   }
 
   const handlePreviewDeduction = async () => {
@@ -383,33 +450,70 @@ export default function FbaShipmentsPage() {
               {/* Shipment Selection from Plan */}
               {planShipments.length > 0 && (
                 <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                  <p className="text-sm text-slate-400 mb-2">Select a shipment from this plan:</p>
+                  <div className="flex justify-between items-center mb-3">
+                    <p className="text-sm text-slate-400">Shipments in this plan ({planShipments.length}):</p>
+                    <Button
+                      size="sm"
+                      onClick={deductAllShipments}
+                      disabled={!selectedWarehouseId || planShipments.every(s => s.deducted || s.deducting)}
+                    >
+                      <Download className="w-4 h-4 mr-1" />
+                      Deduct All
+                    </Button>
+                  </div>
                   <div className="space-y-2">
                     {planShipments.map((shipment) => (
-                      <button
+                      <div
                         key={shipment.shipmentId}
-                        onClick={() => selectShipment(shipment)}
-                        className="w-full text-left p-3 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-600 hover:border-cyan-500 transition-colors"
+                        className={`p-3 rounded-lg border transition-colors ${
+                          shipment.deducted
+                            ? 'bg-emerald-900/20 border-emerald-700'
+                            : 'bg-slate-800 border-slate-600'
+                        }`}
                       >
                         <div className="flex justify-between items-center">
-                          <div>
+                          <div className="flex-1">
                             <span className="text-white font-medium">
                               {shipment.shipmentConfirmationId || shipment.shipmentId}
                             </span>
                             {shipment.destination?.warehouseId && (
                               <span className="text-slate-400 ml-2">→ {shipment.destination.warehouseId}</span>
                             )}
+                            <div className="text-sm mt-1">
+                              <span className="text-slate-400">{shipment.itemCount} SKUs</span>
+                              <span className="text-slate-500 mx-2">•</span>
+                              <span className="text-cyan-400">{shipment.totalUnits} units</span>
+                              {shipment.status && (
+                                <span className="text-slate-500 ml-2">• {shipment.status}</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-right text-sm">
-                            <span className="text-slate-400">{shipment.itemCount} SKUs</span>
-                            <span className="text-slate-500 mx-2">•</span>
-                            <span className="text-cyan-400">{shipment.totalUnits} units</span>
+                          <div className="flex gap-2 ml-4">
+                            {shipment.deducted ? (
+                              <span className="flex items-center text-emerald-400 text-sm">
+                                <Check className="w-4 h-4 mr-1" />
+                                Deducted
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => deductSingleShipment(shipment)}
+                                disabled={!selectedWarehouseId || shipment.deducting}
+                              >
+                                {shipment.deducting ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                                ) : (
+                                  <>
+                                    <Download className="w-4 h-4 mr-1" />
+                                    Deduct
+                                  </>
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
-                        {shipment.status && (
-                          <span className="text-xs text-slate-500 mt-1 block">{shipment.status}</span>
-                        )}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 </div>
