@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Printer, Tag, X, AlertCircle, Check, Loader2, Download, RotateCcw, Plus } from 'lucide-react'
+import { Printer, Tag, X, AlertCircle, Check, Loader2, Download, RotateCcw, Plus, CheckCircle2 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import QRCode from 'qrcode'
@@ -299,7 +299,7 @@ export default function ProductLabelPrinter({
       }
     }))
 
-    // Update cumulative printed count (persisted)
+    // Auto-mark as printed after successful PDF generation
     setPrintedCounts(prev => ({
       ...prev,
       [item.masterSku]: (prev[item.masterSku] || 0) + quantity
@@ -348,6 +348,17 @@ export default function ProductLabelPrinter({
     setTimeout(() => {
       printLabels(item, true)
     }, 100)
+  }
+
+  // Manually mark as printed (without actually printing)
+  const markAsPrinted = (item: ShipmentItem) => {
+    const quantity = labelCounts[item.masterSku] || item.adjustedQty
+    
+    // Update cumulative printed count (persisted)
+    setPrintedCounts(prev => ({
+      ...prev,
+      [item.masterSku]: (prev[item.masterSku] || 0) + quantity
+    }))
   }
 
   // Helper to truncate SKU for vertical display
@@ -940,19 +951,226 @@ export default function ProductLabelPrinter({
       throw error // Re-throw so calling code can handle cleanup
     }
   }
-  
-          if (isTpOnly) {
-            return `
-              <div class="label tp-only-label">
-                <div class="tp-header">
-                  <svg class="tp-icon" viewBox="0 0 1125 1124.99995" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-                    <defs>
-                      <filter x="0%" y="0%" width="100%" height="100%" id="tp-filter-1-${i}">
-                        <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0" color-interpolation-filters="sRGB"/>
-                      </filter>
-                      <filter x="0%" y="0%" width="100%" height="100%" id="tp-filter-2-${i}">
-                        <feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.2126 0.7152 0.0722 0 0" color-interpolation-filters="sRGB"/>
-                      </filter>
+
+  // Group items by label type
+  const itemsByType = {
+    fnsku_tp: items.filter(i => getLabelType(i) === 'fnsku_tp'),
+    fnsku_only: items.filter(i => getLabelType(i) === 'fnsku_only'),
+    tp_only: items.filter(i => getLabelType(i) === 'tp_only'),
+    none: items.filter(i => getLabelType(i) === 'none'),
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Tag className="w-5 h-5" />
+          Product Labels
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-slate-400 mb-4">
+          Print FNSKU and/or Transparency labels for each product
+        </p>
+
+        {/* Labels Table */}
+        <div className="space-y-2">
+          {items.map(item => {
+            const labelType = getLabelType(item)
+            const display = getLabelTypeDisplay(labelType)
+            const hasTpCodes = tpCodes[item.masterSku]?.length > 0
+            
+            return (
+              <div key={item.masterSku} className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-white">{item.masterSku}</div>
+                  <div className="text-xs text-slate-500 font-mono">
+                    FNSKU: {item.fnsku || <span className="text-amber-400">Not set</span>}
+                  </div>
+                  <div className="text-sm text-slate-400 truncate">{item.productName}</div>
+                </div>
+
+                <div className="text-center">
+                  <div className="text-sm text-slate-400">Units</div>
+                  <input
+                    type="number"
+                    min="1"
+                    value={labelCounts[item.masterSku] || item.adjustedQty}
+                    onChange={(e) => setLabelCounts({
+                      ...labelCounts,
+                      [item.masterSku]: parseInt(e.target.value) || 0
+                    })}
+                    className="w-16 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center"
+                  />
+                </div>
+
+                <div className="relative">
+                  <select
+                    value={labelType}
+                    onChange={(e) => handleLabelTypeChange(item.masterSku, e.target.value as LabelType)}
+                    disabled={savingLabelType === item.masterSku}
+                    className={`px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer appearance-none pr-6 ${display.bg} ${display.color} focus:outline-none focus:ring-1 focus:ring-slate-500`}
+                    style={{ backgroundImage: 'none' }}
+                  >
+                    <option value="fnsku_tp" className="bg-slate-800 text-purple-400">FNSKU + TP</option>
+                    <option value="fnsku_only" className="bg-slate-800 text-cyan-400">FNSKU</option>
+                    <option value="tp_only" className="bg-slate-800 text-amber-400">TP Only</option>
+                    <option value="none" className="bg-slate-800 text-slate-400">Pre-labeled</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-1 flex items-center pointer-events-none">
+                    {savingLabelType === item.masterSku ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+
+                {labelType === 'none' ? (
+                  <div className="text-sm text-slate-400 italic">
+                    Pre-labeled
+                  </div>
+                ) : (
+                  <>
+                    {/* Show different UI based on whether labels have been printed */}
+                    {printedCounts[item.masterSku] ? (
+                      // Already printed - show count and actions
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm text-emerald-400 font-medium flex items-center gap-1">
+                          <Check className="w-4 h-4" />
+                          {printedCounts[item.masterSku]} Printed
+                        </div>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => reprintLabels(item)}
+                          disabled={!printedLabels[item.masterSku] || loadingTp === item.masterSku || generatingPDF === item.masterSku}
+                          title={!printedLabels[item.masterSku] ? 'Print data not available (page was refreshed)' : 'Reprint last batch'}
+                        >
+                          {generatingPDF === item.masterSku ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <RotateCcw className="w-4 h-4 mr-1" />
+                              Reprint
+                            </>
+                          )}
+                        </Button>
+
+                        {showPrintMore === item.masterSku ? (
+                          // Show qty input for print more
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="1"
+                              value={printMoreQty}
+                              onChange={(e) => setPrintMoreQty(parseInt(e.target.value) || 1)}
+                              className="w-14 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center"
+                              autoFocus
+                            />
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => requestMoreLabels(item, printMoreQty)}
+                              disabled={loadingTp === item.masterSku || generatingPDF === item.masterSku}
+                            >
+                              {loadingTp === item.masterSku ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : generatingPDF === item.masterSku ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Printer className="w-4 h-4 mr-1" />
+                                  Print
+                                </>
+                              )}
+                            </Button>
+                            <button
+                              className="px-2 py-1 text-slate-400 hover:text-white"
+                              onClick={() => {
+                                setShowPrintMore(null)
+                                setPrintMoreQty(1)
+                              }}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setShowPrintMore(item.masterSku)
+                              setPrintMoreQty(1)
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Print More
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      // Not printed yet - show Print button and Mark as Printed option
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => printLabels(item)}
+                            disabled={loadingTp === item.masterSku || generatingPDF === item.masterSku}
+                          >
+                            {loadingTp === item.masterSku ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                Getting TP...
+                              </>
+                            ) : generatingPDF === item.masterSku ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                Generating PDF...
+                              </>
+                            ) : (
+                              <>
+                                <Printer className="w-4 h-4 mr-1" />
+                                Print
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => markAsPrinted(item)}
+                            disabled={loadingTp === item.masterSku || generatingPDF === item.masterSku}
+                            title="Mark as printed without generating PDF"
+                            className="text-emerald-400 border-emerald-400/50 hover:bg-emerald-400/10"
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Mark Printed
+                          </Button>
+                        </div>
+                        {generatingPDF === item.masterSku && pdfProgress && (
+                          <div className="text-xs text-slate-400">
+                            {pdfProgress.current} / {pdfProgress.total} labels
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
                       <mask id="tp-mask-${i}">
                         <g filter="url(#tp-filter-1-${i})">
                           <g filter="url(#tp-filter-2-${i})" transform="matrix(2.666015, 0, 0, 2.666015, -128.932757, -107.772899)">
@@ -1368,31 +1586,44 @@ export default function ProductLabelPrinter({
                         )}
                       </div>
                     ) : (
-                      // Not printed yet - show Print button
-                      <div className="flex flex-col items-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => printLabels(item)}
-                          disabled={loadingTp === item.masterSku || generatingPDF === item.masterSku}
-                        >
-                          {loadingTp === item.masterSku ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              Getting TP...
-                            </>
-                          ) : generatingPDF === item.masterSku ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              Generating PDF...
-                            </>
-                          ) : (
-                            <>
-                              <Printer className="w-4 h-4 mr-1" />
-                              Print
-                            </>
-                          )}
-                        </Button>
+                      // Not printed yet - show Print button and Mark as Printed option
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => printLabels(item)}
+                            disabled={loadingTp === item.masterSku || generatingPDF === item.masterSku}
+                          >
+                            {loadingTp === item.masterSku ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                Getting TP...
+                              </>
+                            ) : generatingPDF === item.masterSku ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                Generating PDF...
+                              </>
+                            ) : (
+                              <>
+                                <Printer className="w-4 h-4 mr-1" />
+                                Print
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => markAsPrinted(item)}
+                            disabled={loadingTp === item.masterSku || generatingPDF === item.masterSku}
+                            title="Mark as printed without generating PDF"
+                            className="text-emerald-400 border-emerald-400/50 hover:bg-emerald-400/10"
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Mark Printed
+                          </Button>
+                        </div>
                         {generatingPDF === item.masterSku && pdfProgress && (
                           <div className="text-xs text-slate-400">
                             {pdfProgress.current} / {pdfProgress.total} labels
