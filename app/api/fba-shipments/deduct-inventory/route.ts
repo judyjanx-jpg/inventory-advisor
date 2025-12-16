@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { createSpApiClient } from '@/lib/amazon-sp-api'
 import {
   listInboundPlans,
+  listPlacementOptions,
   getShipment,
   listShipmentItems,
 } from '@/lib/fba-inbound-v2024'
@@ -60,19 +61,23 @@ async function findShipmentInPlans(
         for (const plan of plansResponse.inboundPlans) {
           plansSearched++
 
-          // For each plan, list its shipments
+          // For each plan, get placement options which contain shipment IDs
           try {
-            const shipmentsResponse = await callFbaInboundApi(client, 'listInboundPlanShipments', {
-              path: { inboundPlanId: plan.inboundPlanId },
-            })
+            const placementResponse = await listPlacementOptions(plan.inboundPlanId)
 
-            const shipments = shipmentsResponse.shipments || []
+            // Extract unique shipment IDs from all placement options
+            const shipmentIds = new Set<string>()
+            for (const option of placementResponse.placementOptions || []) {
+              for (const shipmentId of option.shipmentIds || []) {
+                shipmentIds.add(shipmentId)
+              }
+            }
 
             // Check if our target shipment is in this plan
-            for (const shipment of shipments) {
+            for (const shipmentId of shipmentIds) {
               // First check if it matches by shipmentId directly
-              if (shipment.shipmentId === targetShipmentId) {
-                const fullShipment = await getShipment(plan.inboundPlanId, shipment.shipmentId)
+              if (shipmentId === targetShipmentId) {
+                const fullShipment = await getShipment(plan.inboundPlanId, shipmentId)
                 return {
                   inboundPlanId: plan.inboundPlanId,
                   shipment: fullShipment,
@@ -81,7 +86,7 @@ async function findShipmentInPlans(
 
               // Also check by shipmentConfirmationId (what users see in STA UI)
               try {
-                const fullShipment = await getShipment(plan.inboundPlanId, shipment.shipmentId)
+                const fullShipment = await getShipment(plan.inboundPlanId, shipmentId)
                 if (fullShipment.shipmentConfirmationId === targetShipmentId) {
                   return {
                     inboundPlanId: plan.inboundPlanId,
@@ -90,12 +95,12 @@ async function findShipmentInPlans(
                 }
               } catch (shipmentError) {
                 // Could not get shipment details, continue to next
-                console.log(`Error getting shipment ${shipment.shipmentId}:`, shipmentError)
+                console.log(`Error getting shipment ${shipmentId}:`, shipmentError)
               }
             }
           } catch (error) {
-            // Plan might not have shipments yet, continue searching
-            console.log(`Error listing shipments for plan ${plan.inboundPlanId}:`, error)
+            // Plan might not have placement options yet, continue searching
+            console.log(`Error listing placement options for plan ${plan.inboundPlanId}:`, error)
           }
         }
 
@@ -172,17 +177,22 @@ export async function POST(request: NextRequest) {
     // If we have an inbound plan ID, find the shipment by confirmationId within that plan
     if (inboundPlanId) {
       try {
-        // First, list all shipments in this plan to find the matching one
-        const shipmentsResponse = await callFbaInboundApi(client, 'listInboundPlanShipments', {
-          path: { inboundPlanId },
-        })
-        const shipments = shipmentsResponse.shipments || []
+        // Get placement options which contain shipment IDs
+        const placementResponse = await listPlacementOptions(inboundPlanId)
+
+        // Extract unique shipment IDs from all placement options
+        const shipmentIds = new Set<string>()
+        for (const option of placementResponse.placementOptions || []) {
+          for (const shipmentId of option.shipmentIds || []) {
+            shipmentIds.add(shipmentId)
+          }
+        }
 
         // Look for the shipment by checking both shipmentId and shipmentConfirmationId
-        for (const shipment of shipments) {
+        for (const shipmentId of shipmentIds) {
           // Check if user entered the internal shipmentId directly
-          if (shipment.shipmentId === amazonShipmentId) {
-            actualShipmentId = shipment.shipmentId
+          if (shipmentId === amazonShipmentId) {
+            actualShipmentId = shipmentId
             const fullShipment = await getShipment(inboundPlanId, actualShipmentId)
             shipmentItems = fullShipment.items || []
             break
@@ -190,14 +200,14 @@ export async function POST(request: NextRequest) {
 
           // Otherwise, get full details and check shipmentConfirmationId
           try {
-            const fullShipment = await getShipment(inboundPlanId, shipment.shipmentId)
+            const fullShipment = await getShipment(inboundPlanId, shipmentId)
             if (fullShipment.shipmentConfirmationId === amazonShipmentId) {
-              actualShipmentId = shipment.shipmentId
+              actualShipmentId = shipmentId
               shipmentItems = fullShipment.items || []
               break
             }
           } catch (shipmentError) {
-            console.log(`Error getting shipment ${shipment.shipmentId}:`, shipmentError)
+            console.log(`Error getting shipment ${shipmentId}:`, shipmentError)
           }
         }
 

@@ -1,28 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSpApiClient } from '@/lib/amazon-sp-api'
-import { getShipment, listShipmentItems } from '@/lib/fba-inbound-v2024'
-
-const API_VERSION = '2024-03-20'
-
-// Helper to call the Fulfillment Inbound v2024 API
-async function callFbaInboundApi(
-  client: any,
-  operation: string,
-  params: {
-    path?: Record<string, string>
-    query?: Record<string, any>
-    body?: any
-  } = {}
-): Promise<any> {
-  return client.callAPI({
-    operation,
-    endpoint: 'fulfillmentInbound',
-    options: { version: API_VERSION },
-    path: params.path,
-    query: params.query,
-    body: params.body,
-  })
-}
+import { getShipment, listShipmentItems, listPlacementOptions } from '@/lib/fba-inbound-v2024'
 
 /**
  * GET /api/fba-shipments/list-by-plan?inboundPlanId=xxx
@@ -38,26 +16,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Inbound Plan ID is required' }, { status: 400 })
     }
 
-    const client = await createSpApiClient()
+    // Get placement options which contain the shipment IDs
+    const placementResponse = await listPlacementOptions(inboundPlanId)
 
-    // List all shipments in this plan
-    const shipmentsResponse = await callFbaInboundApi(client, 'listInboundPlanShipments', {
-      path: { inboundPlanId },
-    })
+    // Extract unique shipment IDs from all placement options
+    const shipmentIds = new Set<string>()
+    for (const option of placementResponse.placementOptions || []) {
+      for (const shipmentId of option.shipmentIds || []) {
+        shipmentIds.add(shipmentId)
+      }
+    }
 
-    const shipments = shipmentsResponse.shipments || []
+    if (shipmentIds.size === 0) {
+      return NextResponse.json({
+        success: true,
+        inboundPlanId,
+        shipmentCount: 0,
+        shipments: [],
+        message: 'No shipments found. The placement options may not have been confirmed yet.',
+      })
+    }
 
     // Get detailed info for each shipment
     const detailedShipments = []
 
-    for (const shipment of shipments) {
+    for (const shipmentId of shipmentIds) {
       try {
-        const fullShipment = await getShipment(inboundPlanId, shipment.shipmentId)
+        const fullShipment = await getShipment(inboundPlanId, shipmentId)
 
         // Try to get items
         let items: Array<{ msku: string; quantity: number }> = []
         try {
-          const itemsResponse = await listShipmentItems(inboundPlanId, shipment.shipmentId)
+          const itemsResponse = await listShipmentItems(inboundPlanId, shipmentId)
           items = itemsResponse.items || []
         } catch (itemsError) {
           // Items might not be available yet
@@ -65,8 +55,8 @@ export async function GET(request: NextRequest) {
         }
 
         detailedShipments.push({
-          shipmentId: shipment.shipmentId,
-          shipmentConfirmationId: fullShipment.shipmentConfirmationId,
+          shipmentId,
+          shipmentConfirmationId: fullShipment.shipmentConfirmationId || null,
           status: fullShipment.status,
           destination: fullShipment.destination,
           itemCount: items.length,
@@ -76,9 +66,9 @@ export async function GET(request: NextRequest) {
       } catch (error: any) {
         // Include partial info if we can't get full details
         detailedShipments.push({
-          shipmentId: shipment.shipmentId,
+          shipmentId,
           shipmentConfirmationId: null,
-          status: shipment.status,
+          status: 'unknown',
           error: error.message,
         })
       }
