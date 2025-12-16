@@ -65,6 +65,7 @@ export default function FbaShipmentsPage() {
   // Warehouse deduction state
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [amazonShipmentId, setAmazonShipmentId] = useState('')
+  const [inboundPlanId, setInboundPlanId] = useState('')
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null)
   const [deductionLoading, setDeductionLoading] = useState(false)
   const [deductionPreview, setDeductionPreview] = useState<DeductionPreview | null>(null)
@@ -118,6 +119,7 @@ export default function FbaShipmentsPage() {
         body: JSON.stringify({
           amazonShipmentId: amazonShipmentId.trim(),
           warehouseId: selectedWarehouseId,
+          inboundPlanId: inboundPlanId.trim() || undefined,
           dryRun: true,
         }),
       })
@@ -152,6 +154,7 @@ export default function FbaShipmentsPage() {
         body: JSON.stringify({
           amazonShipmentId: amazonShipmentId.trim(),
           warehouseId: selectedWarehouseId,
+          inboundPlanId: inboundPlanId.trim() || undefined,
           dryRun: false,
         }),
       })
@@ -165,6 +168,7 @@ export default function FbaShipmentsPage() {
       setDeductionSuccess(data.message || 'Inventory deducted successfully')
       setDeductionPreview(null)
       setAmazonShipmentId('')
+      setInboundPlanId('')
     } catch (error: any) {
       setDeductionError(error.message || 'Failed to apply deduction')
     } finally {
@@ -296,6 +300,21 @@ export default function FbaShipmentsPage() {
                     disabled={deductionLoading}
                   />
                 </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-slate-400 mb-1">
+                    Inbound Plan ID <span className="text-slate-500">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={inboundPlanId}
+                    onChange={(e) => setInboundPlanId(e.target.value)}
+                    placeholder="e.g., wf97fdd5bb-759c-46d1-..."
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    disabled={deductionLoading}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-slate-400 mb-1">
                     Origin Warehouse

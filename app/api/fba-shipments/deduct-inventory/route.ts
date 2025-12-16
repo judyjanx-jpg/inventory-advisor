@@ -169,21 +169,46 @@ export async function POST(request: NextRequest) {
     // Track the actual shipmentId (internal API ID) for fetching items
     let actualShipmentId: string | null = null
 
-    // If we have an inbound plan ID, get the shipment directly
+    // If we have an inbound plan ID, find the shipment by confirmationId within that plan
     if (inboundPlanId) {
       try {
-        const shipment = await getShipment(inboundPlanId, amazonShipmentId)
-        actualShipmentId = shipment.shipmentId || amazonShipmentId
-        // Try to get items from shipment response first
-        shipmentItems = shipment.items || []
+        // First, list all shipments in this plan to find the matching one
+        const shipmentsResponse = await callFbaInboundApi(client, 'listInboundPlanShipments', {
+          path: { inboundPlanId },
+        })
+        const shipments = shipmentsResponse.shipments || []
+
+        // Look for the shipment by checking both shipmentId and shipmentConfirmationId
+        for (const shipment of shipments) {
+          // Check if user entered the internal shipmentId directly
+          if (shipment.shipmentId === amazonShipmentId) {
+            actualShipmentId = shipment.shipmentId
+            const fullShipment = await getShipment(inboundPlanId, actualShipmentId)
+            shipmentItems = fullShipment.items || []
+            break
+          }
+
+          // Otherwise, get full details and check shipmentConfirmationId
+          try {
+            const fullShipment = await getShipment(inboundPlanId, shipment.shipmentId)
+            if (fullShipment.shipmentConfirmationId === amazonShipmentId) {
+              actualShipmentId = shipment.shipmentId
+              shipmentItems = fullShipment.items || []
+              break
+            }
+          } catch (shipmentError) {
+            console.log(`Error getting shipment ${shipment.shipmentId}:`, shipmentError)
+          }
+        }
+
         // If no items in response, fetch via listShipmentItems
-        if (shipmentItems.length === 0) {
+        if (shipmentItems.length === 0 && actualShipmentId) {
           const itemsResponse = await listShipmentItems(inboundPlanId, actualShipmentId)
           shipmentItems = itemsResponse.items || []
         }
       } catch (error: any) {
-        console.log('Error getting shipment with provided plan ID:', error.message)
-        // Fall through to search
+        console.log('Error searching shipments in provided plan:', error.message)
+        // Fall through to broader search
         inboundPlanId = null
       }
     }
