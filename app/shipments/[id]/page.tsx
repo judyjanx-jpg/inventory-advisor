@@ -36,6 +36,8 @@ interface ShipmentItem {
   warehouseLocation?: string | null
   labelType?: string
   transparencyEnabled?: boolean
+  prepOwner?: 'AMAZON' | 'SELLER' | 'NONE'
+  labelOwner?: 'AMAZON' | 'SELLER' | 'NONE'
 }
 
 // Types for interactive FBA submission workflow
@@ -138,6 +140,8 @@ export default function ShipmentDetailPage() {
             warehouseLocation: item.product?.warehouseLocation || null,
             labelType: item.product?.labelType || 'fnsku_only',
             transparencyEnabled: item.product?.transparencyEnabled || false,
+            prepOwner: item.product?.prepOwner || 'NONE',
+            labelOwner: item.product?.labelOwner || 'SELLER',
           })),
           boxes: (shipmentData.boxes || []).map((box: any) => ({
             id: box.id,
@@ -160,6 +164,39 @@ export default function ShipmentDetailPage() {
       console.error('Error fetching shipment:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleItemPrepChange = async (sku: string, field: 'prepOwner' | 'labelOwner', value: 'AMAZON' | 'SELLER' | 'NONE') => {
+    if (!shipment) return
+    
+    // Update local state immediately
+    setShipment({
+      ...shipment,
+      items: shipment.items.map(item =>
+        item.masterSku === sku
+          ? { ...item, [field]: value }
+          : item
+      ),
+    })
+
+    // Save to backend
+    try {
+      const res = await fetch(`/api/products/${encodeURIComponent(sku)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        console.error(`Error updating ${field}:`, data.error)
+        // Revert on error
+        await fetchShipment()
+      }
+    } catch (error) {
+      console.error(`Error updating ${field}:`, error)
+      // Revert on error
+      await fetchShipment()
     }
   }
 
@@ -924,9 +961,12 @@ export default function ShipmentDetailPage() {
               sku: i.masterSku,
               productName: i.productName,
               adjustedQty: i.adjustedQty,
+              prepOwner: i.prepOwner,
+              labelOwner: i.labelOwner,
             }))}
             boxes={shipment.boxes}
             onBoxesChange={(boxes) => setShipment({ ...shipment, boxes })}
+            onItemPrepChange={handleItemPrepChange}
             autoSplitEnabled={shipment.optimalPlacementEnabled}
           />
         </div>
