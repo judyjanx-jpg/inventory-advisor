@@ -148,7 +148,8 @@ export interface OperationStatus {
   }>
 }
 
-// Helper to call the Fulfillment Inbound v2024 API
+// Helper to call the Fulfillment Inbound v2024 API using raw API paths
+// The amazon-sp-api library doesn't have v2024 operations defined, so we use api_path directly
 async function callFbaInboundApi(
   client: any,
   operation: string,
@@ -158,11 +159,63 @@ async function callFbaInboundApi(
     body?: any
   } = {}
 ): Promise<any> {
+  // Map operation names to API paths
+  const operationPaths: Record<string, { method: string; path: string }> = {
+    // Inbound Plans
+    listInboundPlans: { method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans' },
+    createInboundPlan: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans' },
+    getInboundPlan: { method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}' },
+    cancelInboundPlan: { method: 'PUT', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/cancellation' },
+
+    // Packing
+    generatePackingOptions: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions' },
+    listPackingOptions: { method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions' },
+    listPackingGroupItems: { method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingGroups/{packingGroupId}/items' },
+    confirmPackingOption: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions/{packingOptionId}/confirmation' },
+    setPackingInformation: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingInformation' },
+
+    // Placement
+    generatePlacementOptions: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions' },
+    listPlacementOptions: { method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions' },
+    confirmPlacementOption: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions/{placementOptionId}/confirmation' },
+
+    // Shipments
+    getShipment: { method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}' },
+    listShipmentItems: { method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/items' },
+
+    // Transportation
+    generateTransportationOptions: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions' },
+    listTransportationOptions: { method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions' },
+    confirmTransportationOptions: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions/confirmation' },
+
+    // Delivery Windows
+    generateDeliveryWindowOptions: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions' },
+    listDeliveryWindowOptions: { method: 'GET', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions' },
+    confirmDeliveryWindowOptions: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions/confirmation' },
+
+    // Labels
+    getLabels: { method: 'POST', path: '/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/labels' },
+
+    // Operations
+    getInboundOperationStatus: { method: 'GET', path: '/inbound/fba/2024-03-20/operations/{operationId}' },
+  }
+
+  const opConfig = operationPaths[operation]
+  if (!opConfig) {
+    throw new Error(`Unknown operation: ${operation}`)
+  }
+
+  // Replace path parameters
+  let apiPath = opConfig.path
+  if (params.path) {
+    for (const [key, value] of Object.entries(params.path)) {
+      apiPath = apiPath.replace(`{${key}}`, value)
+    }
+  }
+
   return client.callAPI({
-    operation,
-    endpoint: 'fulfillmentInbound',
-    options: { version: API_VERSION },
-    path: params.path,
+    api_path: apiPath,
+    method: opConfig.method,
     query: params.query,
     body: params.body,
   })
