@@ -84,7 +84,7 @@ async function findShipmentInPlans(
  * the inventory from a specified warehouse.
  *
  * Body:
- * - amazonShipmentId: string - The FBA shipment ID (e.g., "FBA15X123ABC")
+ * - amazonShipmentId: string - The FBA shipment ID (e.g., "FBA193YSY6V4")
  * - warehouseId: number - The warehouse to deduct inventory from
  * - inboundPlanId: string (optional) - If known, speeds up lookup
  * - dryRun: boolean - If true, preview changes without applying them
@@ -416,9 +416,9 @@ export async function POST(request: NextRequest) {
 
     if (error.code === 'InvalidInput' || error.message?.includes('Invalid')) {
       return NextResponse.json({
-        error: 'Invalid shipment ID format. The FBA Inbound v2024 API uses shipment IDs like "sh1234567890". If you have an older-format ID (e.g., FBA15X123ABC), the shipment may need to be looked up differently.',
+        error: 'Could not find shipment in Amazon. The shipment may not exist, may be archived, or the inbound plan it belongs to could not be located.',
         details: error.message,
-        hint: 'Shipment IDs from the new Send-to-Amazon workflow start with "sh" followed by numbers.',
+        hint: 'Make sure the shipment ID is correct (e.g., FBA193YSY6V4) and that the shipment has been submitted to Amazon.',
       }, { status: 400 })
     }
 

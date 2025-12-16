@@ -291,7 +291,7 @@ export default function FbaShipmentsPage() {
                     type="text"
                     value={amazonShipmentId}
                     onChange={(e) => setAmazonShipmentId(e.target.value)}
-                    placeholder="e.g., sh1234567890"
+                    placeholder="e.g., FBA193YSY6V4"
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                     disabled={deductionLoading}
                   />
