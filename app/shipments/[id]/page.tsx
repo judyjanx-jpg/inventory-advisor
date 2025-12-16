@@ -461,7 +461,14 @@ export default function ShipmentDetailPage() {
 
   // Step 2: Confirm placement selection and get transport options
   const confirmPlacementSelection = async () => {
-    if (!selectedPlacementId) return
+    // Validate we have a placement option selected
+    const placementId = selectedPlacementId || (placementOptions.length > 0 ? placementOptions[0].placementOptionId : null)
+
+    if (!placementId) {
+      setSubmissionError('Please select a placement option first')
+      setSubmissionStep('error')
+      return
+    }
 
     setSubmittingToAmazon(true)
     setSubmissionStep('selecting_transport')
@@ -470,7 +477,7 @@ export default function ShipmentDetailPage() {
       const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon?step=select_placement`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ placementOptionId: selectedPlacementId }),
+        body: JSON.stringify({ placementOptionId: placementId }),
       })
 
       const data = await res.json()
@@ -1078,9 +1085,18 @@ export default function ShipmentDetailPage() {
                   </div>
                   <p className="text-red-400 font-medium mb-2">Submission Failed</p>
                   <p className="text-slate-400 text-sm mb-4">{submissionError}</p>
-                  <Button variant="outline" onClick={closeSubmissionModal}>
-                    Close
-                  </Button>
+                  <div className="flex gap-3 justify-center">
+                    <Button variant="outline" onClick={closeSubmissionModal}>
+                      Close
+                    </Button>
+                    <Button onClick={() => {
+                      setSubmissionError(null)
+                      setSubmissionStep('idle')
+                      submitToAmazon()
+                    }}>
+                      Try Again
+                    </Button>
+                  </div>
                 </div>
               )}
 
