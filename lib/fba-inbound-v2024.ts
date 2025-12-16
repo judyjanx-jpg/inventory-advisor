@@ -364,6 +364,23 @@ export async function getShipment(
 }
 
 /**
+ * List items in a shipment
+ * Use this to get SKUs and quantities for imported shipments
+ */
+export async function listShipmentItems(
+  inboundPlanId: string,
+  shipmentId: string
+): Promise<{ items: Array<{ msku: string; quantity: number; prepOwner?: string; labelOwner?: string }> }> {
+  const client = await createSpApiClient()
+
+  const response = await callFbaInboundApi(client, 'listShipmentItems', {
+    path: { inboundPlanId, shipmentId },
+  })
+
+  return { items: response.items || [] }
+}
+
+/**
  * Step 5a: Generate transportation options
  */
 export async function generateTransportationOptions(

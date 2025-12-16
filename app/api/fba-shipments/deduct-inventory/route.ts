@@ -4,6 +4,7 @@ import { createSpApiClient } from '@/lib/amazon-sp-api'
 import {
   listInboundPlans,
   getShipment,
+  listShipmentItems,
 } from '@/lib/fba-inbound-v2024'
 
 const API_VERSION = '2024-03-20'
@@ -31,6 +32,10 @@ async function callFbaInboundApi(
 /**
  * Find a shipment across all inbound plans
  * Returns { inboundPlanId, shipment } if found
+ *
+ * Supports matching by:
+ * - shipmentId (internal API ID)
+ * - shipmentConfirmationId (what users see in Send to Amazon UI, e.g., FBA193YSY6V4)
  */
 async function findShipmentInPlans(
   client: any,
@@ -56,13 +61,28 @@ async function findShipmentInPlans(
 
         // Check if our target shipment is in this plan
         for (const shipment of shipments) {
+          // First check if it matches by shipmentId directly
           if (shipment.shipmentId === targetShipmentId) {
-            // Found it! Get the full shipment details
-            const fullShipment = await getShipment(plan.inboundPlanId, targetShipmentId)
+            const fullShipment = await getShipment(plan.inboundPlanId, shipment.shipmentId)
             return {
               inboundPlanId: plan.inboundPlanId,
               shipment: fullShipment,
             }
+          }
+
+          // Also check by shipmentConfirmationId (what users see in STA UI)
+          // Need to get full shipment details to access shipmentConfirmationId
+          try {
+            const fullShipment = await getShipment(plan.inboundPlanId, shipment.shipmentId)
+            if (fullShipment.shipmentConfirmationId === targetShipmentId) {
+              return {
+                inboundPlanId: plan.inboundPlanId,
+                shipment: fullShipment,
+              }
+            }
+          } catch (shipmentError) {
+            // Could not get shipment details, continue to next
+            console.log(`Error getting shipment ${shipment.shipmentId}:`, shipmentError)
           }
         }
       } catch (error) {
@@ -133,11 +153,21 @@ export async function POST(request: NextRequest) {
       inboundPlanId = localShipment.shipment.amazonInboundPlanId
     }
 
+    // Track the actual shipmentId (internal API ID) for fetching items
+    let actualShipmentId: string | null = null
+
     // If we have an inbound plan ID, get the shipment directly
     if (inboundPlanId) {
       try {
         const shipment = await getShipment(inboundPlanId, amazonShipmentId)
+        actualShipmentId = shipment.shipmentId || amazonShipmentId
+        // Try to get items from shipment response first
         shipmentItems = shipment.items || []
+        // If no items in response, fetch via listShipmentItems
+        if (shipmentItems.length === 0) {
+          const itemsResponse = await listShipmentItems(inboundPlanId, actualShipmentId)
+          shipmentItems = itemsResponse.items || []
+        }
       } catch (error: any) {
         console.log('Error getting shipment with provided plan ID:', error.message)
         // Fall through to search
@@ -151,7 +181,18 @@ export async function POST(request: NextRequest) {
 
       if (found) {
         inboundPlanId = found.inboundPlanId
+        actualShipmentId = found.shipment.shipmentId
+        // Try to get items from shipment response first
         shipmentItems = found.shipment.items || []
+        // If no items in response, fetch via listShipmentItems
+        if (shipmentItems.length === 0 && actualShipmentId) {
+          try {
+            const itemsResponse = await listShipmentItems(inboundPlanId, actualShipmentId)
+            shipmentItems = itemsResponse.items || []
+          } catch (itemsError) {
+            console.log('Error fetching shipment items:', itemsError)
+          }
+        }
       }
     }
 
