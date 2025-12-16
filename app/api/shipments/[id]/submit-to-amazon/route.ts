@@ -80,6 +80,8 @@ export async function POST(
                 sku: true,
                 title: true,
                 fnsku: true,
+                prepOwner: true,
+                labelOwner: true,
               },
             },
           },
@@ -397,6 +399,15 @@ export async function POST(
         }
 
         // Build boxes
+        // Create a lookup map from SKU to product prepOwner/labelOwner
+        const productSettingsMap = new Map<string, { prepOwner: string; labelOwner: string }>()
+        for (const item of shipment.items) {
+          productSettingsMap.set(item.masterSku, {
+            prepOwner: item.product?.prepOwner || 'NONE',
+            labelOwner: item.product?.labelOwner || 'SELLER',
+          })
+        }
+
         type ShipmentBox = typeof shipment.boxes[number]
         type BoxItem = ShipmentBox['items'][number]
         const allBoxes: BoxInput[] = shipment.boxes.map((box: ShipmentBox) => ({
@@ -409,12 +420,15 @@ export async function POST(
           },
           quantity: 1,
           contentInformationSource: 'BOX_CONTENT_PROVIDED' as const,
-          items: box.items.map((item: BoxItem) => ({
-            msku: item.masterSku,
-            quantity: item.quantity,
-            prepOwner: 'NONE' as const,
-            labelOwner: 'SELLER' as const,
-          })),
+          items: box.items.map((item: BoxItem) => {
+            const productSettings = productSettingsMap.get(item.masterSku)
+            return {
+              msku: item.masterSku,
+              quantity: item.quantity,
+              prepOwner: (productSettings?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE',
+              labelOwner: (productSettings?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE',
+            }
+          }),
         }))
 
         // Assign boxes to packing groups
@@ -1056,6 +1070,15 @@ export async function POST(
         }
 
         // Step 2e: Build boxes and assign to correct packing groups
+        // Create a lookup map from SKU to product prepOwner/labelOwner
+        const productSettingsMap = new Map<string, { prepOwner: string; labelOwner: string }>()
+        for (const item of shipment.items) {
+          productSettingsMap.set(item.masterSku, {
+            prepOwner: item.product?.prepOwner || 'NONE',
+            labelOwner: item.product?.labelOwner || 'SELLER',
+          })
+        }
+
         type ShipmentBox = typeof shipment.boxes[number]
         type BoxItem = ShipmentBox['items'][number]
         const allBoxes: BoxInput[] = shipment.boxes.map((box: ShipmentBox) => ({
@@ -1072,10 +1095,11 @@ export async function POST(
           quantity: 1,
           contentInformationSource: 'BOX_CONTENT_PROVIDED' as const,
           items: box.items.map((item: BoxItem) => {
-            // Use item-specific settings from request body, falling back to defaults
+            // Use item-specific settings from request body, falling back to product settings from DB
             const settings = itemSettings[item.masterSku]
-            const prepOwner = (settings?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE'
-            const labelOwner = (settings?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE'
+            const productSettings = productSettingsMap.get(item.masterSku)
+            const prepOwner = (settings?.prepOwner || productSettings?.prepOwner || 'NONE') as 'AMAZON' | 'SELLER' | 'NONE'
+            const labelOwner = (settings?.labelOwner || productSettings?.labelOwner || 'SELLER') as 'AMAZON' | 'SELLER' | 'NONE'
 
             return {
               msku: item.masterSku,
