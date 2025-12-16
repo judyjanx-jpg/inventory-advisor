@@ -31,42 +31,47 @@ interface ForecastItem {
   sku: string
   title: string
   displayName?: string
-  
+
   velocity7d: number
   velocity30d: number
   velocity90d: number
   velocityTrend: 'rising' | 'stable' | 'declining'
   velocityChange7d: number
   velocityChange30d: number
-  
+
   fbaAvailable: number
   fbaInbound: number
   warehouseAvailable: number
-  totalInventory: number
-  
+  incomingFromPO: number  // NEW: Units on pending POs
+  incomingPODetails?: Array<{ qty: number; poNumber: string; expectedDate: string | null; status: string }>  // NEW
+  currentInventory: number  // NEW: Inventory on hand (without POs)
+  totalInventory: number  // Now includes POs
+
   fbaDaysOfSupply: number
   warehouseDaysOfSupply: number
   totalDaysOfSupply: number
-  
+
   supplierId?: number
   supplierName?: string
   leadTimeDays: number
   cost: number
   moq?: number
-  
+
   reorderPoint: number
   recommendedOrderQty: number
   recommendedFbaQty: number
   urgency: 'critical' | 'high' | 'medium' | 'low' | 'ok'
   stockoutDate?: string
   daysUntilStockout?: number
-  
+  purchaseByDate?: string  // NEW: When to place the order
+  daysToPurchase?: number  // NEW: Days until you need to order
+
   seasonalityFactor: number
   upcomingEvent?: string
-  
+
   confidence: number
   safetyStock: number
-  
+
   reasoning: string[]
   salesHistory?: { date: string; units: number; year: number }[]
   selected?: boolean
@@ -1083,7 +1088,33 @@ function PurchasingTab({
                     </p>
                     <p className="text-xs text-gray-500">total supply</p>
                   </div>
-                  
+
+                  {/* NEW: Incoming PO indicator */}
+                  {item.incomingFromPO > 0 && (
+                    <div className="text-center px-3">
+                      <p className="text-sm font-medium text-green-400">
+                        +{item.incomingFromPO} on PO
+                      </p>
+                      <p className="text-xs text-gray-500">incoming</p>
+                    </div>
+                  )}
+
+                  {/* NEW: Purchase By Date */}
+                  {item.purchaseByDate && applyRounding(item.recommendedOrderQty) > 0 && (
+                    <div className="text-center px-3">
+                      <p className={`text-sm font-medium ${
+                        (item.daysToPurchase || 0) <= 0 ? 'text-red-400' :
+                        (item.daysToPurchase || 0) <= 7 ? 'text-orange-400' :
+                        (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-gray-300'
+                      }`}>
+                        {(item.daysToPurchase || 0) <= 0 ? 'Today' :
+                         (item.daysToPurchase || 0) === 1 ? 'Tomorrow' :
+                         `In ${item.daysToPurchase}d`}
+                      </p>
+                      <p className="text-xs text-gray-500">order by</p>
+                    </div>
+                  )}
+
                   <div className="text-right px-4">
                     <p className="text-lg font-bold text-cyan-400">
                       {applyRounding(item.recommendedOrderQty) > 0 ? `Order ${applyRounding(item.recommendedOrderQty)}` : 'OK'}
@@ -1109,18 +1140,37 @@ function PurchasingTab({
               
               {expandedSku === item.sku && (
                 <div className="px-4 pb-4 pt-2 border-t border-slate-700 bg-slate-900/50">
-                  <div className="grid grid-cols-4 gap-6">
+                  <div className="grid grid-cols-5 gap-6">
                     <div>
                       <h4 className="text-sm font-medium text-gray-400 mb-2">Inventory</h4>
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between"><span className="text-gray-500">FBA</span><span className="text-white">{item.fbaAvailable || 0}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">FBA Inbound</span><span className="text-cyan-400">{item.fbaInbound || 0}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">Warehouse</span><span className="text-white">{item.warehouseAvailable || 0}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Incoming PO</span><span className="text-green-400">{(item as any).incomingFromPO || 0}</span></div>
-                        <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-gray-400 font-medium">Total</span><span className="text-white font-medium">{(item as any).currentInventory || item.totalInventory || 0}</span></div>
+                        <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-gray-400 font-medium">On Hand</span><span className="text-white font-medium">{item.currentInventory || 0}</span></div>
                       </div>
                     </div>
-                    
+
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-400 mb-2">Incoming POs</h4>
+                      {item.incomingFromPO > 0 && item.incomingPODetails ? (
+                        <div className="space-y-1 text-sm">
+                          {item.incomingPODetails.map((po, idx) => (
+                            <div key={idx} className="flex justify-between">
+                              <span className="text-gray-500">{po.poNumber}</span>
+                              <span className="text-green-400">+{po.qty}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between border-t border-slate-700 pt-1">
+                            <span className="text-gray-400 font-medium">Total PO</span>
+                            <span className="text-green-400 font-medium">+{item.incomingFromPO}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">No pending POs</p>
+                      )}
+                    </div>
+
                     <div>
                       <h4 className="text-sm font-medium text-gray-400 mb-2">Supplier</h4>
                       <div className="space-y-1 text-sm">
@@ -1129,26 +1179,41 @@ function PurchasingTab({
                         <div className="flex justify-between"><span className="text-gray-500">Unit Cost</span><span className="text-white">{formatCurrency(item.cost)}</span></div>
                       </div>
                     </div>
-                    
+
                     <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-2">Why This Recommendation</h4>
-                      <div className="space-y-1 text-sm text-gray-300">
-                        <p>• Selling {item.velocity30d.toFixed(1)}/day × 180 days = {Math.round(item.velocity30d * 180)} needed</p>
-                        <p>• Have {item.totalInventory} in stock</p>
-                        <p>• Gap: {Math.max(0, Math.round(item.velocity30d * 180) - item.totalInventory)} units</p>
+                      <h4 className="text-sm font-medium text-gray-400 mb-2">Purchase Timeline</h4>
+                      <div className="space-y-1 text-sm">
+                        {item.purchaseByDate ? (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Order By</span>
+                              <span className={`font-medium ${
+                                (item.daysToPurchase || 0) <= 0 ? 'text-red-400' :
+                                (item.daysToPurchase || 0) <= 7 ? 'text-orange-400' :
+                                (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-white'
+                              }`}>
+                                {new Date(item.purchaseByDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Days Left</span>
+                              <span className="text-white">{item.daysToPurchase || 0}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-gray-500">No order needed</p>
+                        )}
+                        <div className="flex justify-between"><span className="text-gray-500">Reorder Point</span><span className="text-white">{item.reorderPoint}</span></div>
                       </div>
                     </div>
-                    
+
                     <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-2">Confidence</h4>
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="flex-1 bg-slate-700 rounded-full h-2">
-                          <div 
-                            className={`h-2 rounded-full ${item.confidence > 0.7 ? 'bg-green-500' : item.confidence > 0.4 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                            style={{ width: `${item.confidence * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-sm text-white">{Math.round(item.confidence * 100)}%</span>
+                      <h4 className="text-sm font-medium text-gray-400 mb-2">Why This Qty</h4>
+                      <div className="space-y-1 text-sm text-gray-300">
+                        <p>• {item.velocity30d.toFixed(1)}/day × 180d = {Math.round(item.velocity30d * 180)}</p>
+                        <p>• On hand: {item.currentInventory || 0}</p>
+                        {item.incomingFromPO > 0 && <p>• On PO: +{item.incomingFromPO}</p>}
+                        <p>• Gap: {Math.max(0, Math.round(item.velocity30d * 180) - item.totalInventory)}</p>
                       </div>
                     </div>
                   </div>

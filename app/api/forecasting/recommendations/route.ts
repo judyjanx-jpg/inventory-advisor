@@ -27,7 +27,55 @@ const URGENCY_THRESHOLDS = {
 export async function GET(request: NextRequest) {
   try {
     const now = new Date()
-    
+
+    // ========================================
+    // STEP 0: Get all pending PO quantities by SKU
+    // ========================================
+    const pendingPOItems = await prisma.purchaseOrderItem.findMany({
+      where: {
+        purchaseOrder: {
+          status: { in: ['sent', 'confirmed', 'shipped', 'partial'] }
+        }
+      },
+      select: {
+        masterSku: true,
+        quantityOrdered: true,
+        quantityReceived: true,
+        purchaseOrder: {
+          select: {
+            poNumber: true,
+            expectedArrivalDate: true,
+            status: true,
+          }
+        }
+      }
+    })
+
+    // Group by SKU - sum up all pending quantities
+    const incomingBySku: Record<string, {
+      totalIncoming: number
+      items: Array<{ qty: number; poNumber: string; expectedDate: string | null; status: string }>
+    }> = {}
+
+    for (const item of pendingPOItems) {
+      const remainingQty = item.quantityOrdered - (item.quantityReceived || 0)
+      if (remainingQty <= 0) continue
+
+      if (!incomingBySku[item.masterSku]) {
+        incomingBySku[item.masterSku] = { totalIncoming: 0, items: [] }
+      }
+
+      incomingBySku[item.masterSku].totalIncoming += remainingQty
+      incomingBySku[item.masterSku].items.push({
+        qty: remainingQty,
+        poNumber: item.purchaseOrder.poNumber,
+        expectedDate: item.purchaseOrder.expectedArrivalDate?.toISOString() || null,
+        status: item.purchaseOrder.status,
+      })
+    }
+
+    console.log(`[Forecasting] Found incoming POs for ${Object.keys(incomingBySku).length} SKUs`)
+
     // Use raw SQL for velocity calculation - MUCH faster than groupBy on large tables
     const days7Ago = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const days14Ago = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
@@ -128,9 +176,16 @@ export async function GET(request: NextRequest) {
       const fbaAvailable = inv?.fbaAvailable || 0
       const fbaInbound = (inv?.fbaInboundWorking || 0) + (inv?.fbaInboundShipped || 0) + (inv?.fbaInboundReceiving || 0)
       const warehouseAvailable = product.warehouseInventory.reduce((sum: any, w: any) => sum + w.available, 0)
-      const totalInventory = fbaAvailable + fbaInbound + warehouseAvailable
 
-      // Skip products with no sales AND no inventory
+      // Get pending PO quantities for this SKU
+      const incomingPO = incomingBySku[product.sku] || { totalIncoming: 0, items: [] }
+      const incomingFromPO = incomingPO.totalIncoming
+
+      // Total inventory includes PO quantities (used for "do we need to order?" calculation)
+      const inventoryOnHand = fbaAvailable + fbaInbound + warehouseAvailable
+      const totalInventory = inventoryOnHand + incomingFromPO
+
+      // Skip products with no sales AND no inventory (including POs)
       if (velocity.units90d === 0 && totalInventory === 0) {
         continue
       }
@@ -232,6 +287,25 @@ export async function GET(request: NextRequest) {
         urgency = 'ok'
       }
 
+      // Calculate "Purchase By Date" - when the order needs to be placed
+      // Formula: Today + days until stockout - lead time - safety buffer
+      // This is when you need to ORDER, not when you need the inventory
+      let purchaseByDate: string | undefined
+      let daysToPurchase: number | undefined
+
+      if (effectiveVelocity > 0 && recommendedOrderQty > 0) {
+        // How many days until we hit the reorder point?
+        const daysUntilReorderPoint = Math.max(0, (totalInventory - reorderPoint) / effectiveVelocity)
+        daysToPurchase = Math.floor(daysUntilReorderPoint)
+
+        if (daysToPurchase <= 0) {
+          purchaseByDate = now.toISOString().split('T')[0] // Today
+        } else {
+          const purchaseDate = new Date(now.getTime() + daysToPurchase * 24 * 60 * 60 * 1000)
+          purchaseByDate = purchaseDate.toISOString().split('T')[0]
+        }
+      }
+
       // Confidence
       let confidence = 0.5
       if (velocity.units90d > 0) {
@@ -245,36 +319,41 @@ export async function GET(request: NextRequest) {
         sku: product.sku,
         title: product.title,
         displayName: product.displayName || undefined,
-        
+
         velocity7d,
         velocity30d,
         velocity90d,
         velocityTrend,
         velocityChange7d,
         velocityChange30d,
-        
+
         fbaAvailable,
         fbaInbound,
         warehouseAvailable,
-        totalInventory,
-        
+        incomingFromPO,  // NEW: Units on pending POs
+        incomingPODetails: incomingPO.items,  // NEW: PO details
+        currentInventory: inventoryOnHand,  // NEW: Inventory on hand (without POs)
+        totalInventory,  // Now includes POs
+
         fbaDaysOfSupply: Math.min(fbaDaysOfSupply, 999),
         warehouseDaysOfSupply: Math.min(warehouseDaysOfSupply, 999),
         totalDaysOfSupply: Math.min(totalDaysOfSupply, 999),
-        
+
         supplierId: product.supplier?.id,
         supplierName,
         leadTimeDays,
         cost,
         moq: moq || undefined,
-        
+
         reorderPoint,
         recommendedOrderQty,
         recommendedFbaQty,
         urgency,
         stockoutDate,
         daysUntilStockout,
-        
+        purchaseByDate,  // NEW: When to place the order
+        daysToPurchase,  // NEW: Days until you need to order
+
         seasonalityFactor: 1,
         upcomingEvent: undefined,
         confidence,
@@ -297,6 +376,8 @@ export async function GET(request: NextRequest) {
       mediumCount: forecastItems.filter(i => i.urgency === 'medium').length,
       totalReorderValue: forecastItems.reduce((sum, i) => sum + (i.recommendedOrderQty * i.cost), 0),
       totalFbaShipmentUnits: forecastItems.reduce((sum, i) => sum + i.recommendedFbaQty, 0),
+      skusWithIncomingPO: forecastItems.filter(i => i.incomingFromPO > 0).length,
+      totalUnitsOnPO: forecastItems.reduce((sum, i) => sum + i.incomingFromPO, 0),
     }
 
     console.log('Done!', summary)
