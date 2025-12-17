@@ -51,38 +51,42 @@ export default function Modal({
       />
       
       {/* Modal Container */}
-      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="flex min-h-full items-center justify-center p-0 sm:p-4">
         <div
           className={cn(
-            "relative bg-slate-800 border border-slate-700/50 rounded-xl shadow-2xl transform transition-all",
-            size === 'sm' && "w-full max-w-sm",
-            size === 'md' && "w-full max-w-md",
-            size === 'lg' && "w-full max-w-lg",
-            size === 'xl' && "w-full max-w-2xl",
-            size === 'full' && "w-full max-w-4xl",
+            "relative bg-slate-800 border-slate-700/50 shadow-2xl transform transition-all w-full",
+            // Mobile: full screen for lg+ sizes, otherwise rounded with padding
+            "min-h-screen sm:min-h-0",
+            "border-0 sm:border rounded-none sm:rounded-xl",
+            // Desktop sizes
+            size === 'sm' && "sm:max-w-sm",
+            size === 'md' && "sm:max-w-md",
+            size === 'lg' && "sm:max-w-lg",
+            size === 'xl' && "sm:max-w-2xl",
+            size === 'full' && "sm:max-w-4xl",
           )}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           {(title || showCloseButton) && (
-            <div className="flex items-start justify-between p-6 border-b border-slate-700/50">
-              <div>
-                {title && <h3 className="text-lg font-semibold text-white">{title}</h3>}
+            <div className="flex items-start justify-between p-4 sm:p-6 border-b border-slate-700/50 sticky top-0 bg-slate-800 z-10">
+              <div className="min-w-0 flex-1 pr-2">
+                {title && <h3 className="text-base sm:text-lg font-semibold text-white truncate">{title}</h3>}
                 {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
               </div>
               {showCloseButton && (
                 <button
                   onClick={onClose}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                  className="p-2 -mr-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors touch-manipulation flex-shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>
               )}
             </div>
           )}
-          
+
           {/* Content */}
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {children}
           </div>
         </div>
@@ -100,7 +104,7 @@ interface ModalFooterProps {
 export function ModalFooter({ children, className }: ModalFooterProps) {
   return (
     <div className={cn(
-      "flex items-center justify-end gap-3 pt-6 mt-6 border-t border-slate-700/50",
+      "flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-slate-700/50",
       className
     )}>
       {children}

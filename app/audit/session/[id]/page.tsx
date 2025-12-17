@@ -425,30 +425,62 @@ export default function AuditSessionPage() {
           </div>
         )}
 
-        {/* Navigation - Mobile Optimized */}
+        {/* Navigation - Mobile Optimized with Sticky Bottom */}
         {((session.auditMode === 'parent' && currentIndex < groupedSkus.length) ||
           (session.auditMode === 'single_sku' && currentIndex < skus.length)) && (
-          <div className="flex items-center justify-between pt-4 border-t border-slate-700 gap-2">
-            <Button 
-              variant="ghost" 
-              onClick={handleBack} 
-              disabled={currentIndex === 0}
-              className="flex-1 md:flex-none"
-            >
-              <ArrowLeft className="w-4 h-4 md:mr-2" />
-              <span className="hidden md:inline">Back</span>
-            </Button>
-            <div className="flex items-center gap-2 flex-1 md:flex-none justify-end">
-              <Button variant="outline" onClick={handleSkip} className="flex-1 md:flex-none">
-                <SkipForward className="w-4 h-4 md:mr-2" />
-                <span className="hidden md:inline">Skip</span>
+          <>
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center justify-between pt-4 border-t border-slate-700 gap-2">
+              <Button
+                variant="ghost"
+                onClick={handleBack}
+                disabled={currentIndex === 0}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
               </Button>
-              <Button variant="primary" onClick={handleNext} className="flex-1 md:flex-none">
-                <span className="hidden md:inline">Next</span>
-                <ArrowRight className="w-4 h-4 md:ml-2" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handleSkip}>
+                  <SkipForward className="w-4 h-4 mr-2" />
+                  Skip
+                </Button>
+                <Button variant="primary" onClick={handleNext}>
+                  Next
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
             </div>
-          </div>
+
+            {/* Mobile Sticky Bottom Navigation */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700 p-3 z-40">
+              <div className="flex items-center gap-2 max-w-lg mx-auto">
+                <button
+                  onClick={handleBack}
+                  disabled={currentIndex === 0}
+                  className="w-12 h-12 flex items-center justify-center bg-slate-700 hover:bg-slate-600 active:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-colors touch-manipulation"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleSkip}
+                  className="flex-1 h-12 flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-white rounded-xl transition-colors touch-manipulation"
+                >
+                  <SkipForward className="w-5 h-5" />
+                  <span className="font-medium">Skip</span>
+                </button>
+                <button
+                  onClick={handleNext}
+                  className="flex-1 h-12 flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 active:from-cyan-600 active:to-blue-600 text-white font-bold rounded-xl transition-colors touch-manipulation"
+                >
+                  <span>Next</span>
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Spacer for fixed bottom nav on mobile */}
+            <div className="h-20 md:hidden" />
+          </>
         )}
 
         {/* Barcode Scanner Modal */}
@@ -492,38 +524,61 @@ function ParentAuditView({
   onSave: (sku: string, qty: number, note?: string) => void
 }) {
   return (
-    <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 md:p-6">
-      <h2 className="text-lg md:text-xl font-bold text-white mb-4 md:mb-6 truncate">
+    <div className="bg-slate-800 rounded-xl border border-slate-700 p-3 md:p-6">
+      <h2 className="text-base md:text-xl font-bold text-white mb-3 md:mb-6 truncate">
         PARENT: {group.parentSku}
       </h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-3 md:mb-6">
         {group.items.map(item => {
           const qty = currentQty[item.sku] ?? item.available
           const variance = qty - item.available
           const isFlagged = Math.abs(variance) > 10 || (item.available > 0 && Math.abs(variance) > item.available * 0.2)
-          
+
           return (
-            <div key={item.sku} className="bg-slate-900 rounded-lg p-3 md:p-4 border border-slate-700">
-              <div className="text-xs md:text-sm text-slate-400 mb-1 truncate">{item.sku}</div>
-              <div className="text-xs text-slate-500 mb-2 md:mb-3">Cur: {item.available}</div>
-              <input
-                type="number"
-                inputMode="numeric"
-                min="0"
-                value={qty}
-                onChange={(e) => onQtyChange(item.sku, parseInt(e.target.value) || 0)}
-                onFocus={(e) => e.target.select()}
-                className="w-full px-2 md:px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-lg md:text-xl font-bold mb-2"
-                placeholder="0"
-              />
+            <div key={item.sku} className="bg-slate-900 rounded-xl p-3 md:p-4 border border-slate-700">
+              <div className="flex items-start justify-between mb-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs md:text-sm text-slate-400 truncate font-medium">{item.sku}</div>
+                  <div className="text-xs text-slate-500">Cur: {item.available}</div>
+                </div>
+                {saving[item.sku] && (
+                  <div className="text-xs text-cyan-400 flex-shrink-0">Saving...</div>
+                )}
+              </div>
+
+              {/* Mobile-friendly quantity input with +/- buttons */}
+              <div className="flex items-center gap-1 mb-2">
+                <button
+                  onClick={() => onQtyChange(item.sku, Math.max(0, qty - 1))}
+                  className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center text-xl md:text-lg font-bold bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-white rounded-lg transition-colors touch-manipulation flex-shrink-0"
+                  type="button"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  value={qty}
+                  onChange={(e) => onQtyChange(item.sku, parseInt(e.target.value) || 0)}
+                  onFocus={(e) => e.target.select()}
+                  className="flex-1 min-w-0 px-2 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-lg md:text-xl font-bold text-center touch-manipulation"
+                  placeholder="0"
+                />
+                <button
+                  onClick={() => onQtyChange(item.sku, qty + 1)}
+                  className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center text-xl md:text-lg font-bold bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-400 text-white rounded-lg transition-colors touch-manipulation flex-shrink-0"
+                  type="button"
+                >
+                  +
+                </button>
+              </div>
+
               {variance !== 0 && (
                 <div className={`text-xs md:text-sm font-medium ${variance > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {variance > 0 ? '+' : ''}{variance}
                   {isFlagged && <AlertTriangle className="w-3 h-3 md:w-4 md:h-4 inline ml-1" />}
                 </div>
-              )}
-              {saving[item.sku] && (
-                <div className="text-xs text-cyan-400 mt-1">Saving...</div>
               )}
             </div>
           )
@@ -534,7 +589,7 @@ function ParentAuditView({
         <textarea
           value={notes[group.parentSku] || ''}
           onChange={(e) => onNotesChange(group.parentSku, e.target.value)}
-          className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-white text-sm md:text-base"
+          className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm md:text-base"
           rows={2}
           placeholder="Add notes for this parent..."
         />
@@ -564,29 +619,51 @@ function SingleSkuAuditView({
   const variance = currentQty - sku.available
   const isFlagged = Math.abs(variance) > 10 || (sku.available > 0 && Math.abs(variance) > sku.available * 0.2)
 
+  const handleIncrement = () => onQtyChange(currentQty + 1)
+  const handleDecrement = () => onQtyChange(Math.max(0, currentQty - 1))
+
   return (
     <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 md:p-8">
-      <div className="text-center mb-6 md:mb-8">
-        <div className="text-2xl md:text-4xl font-bold text-white mb-2 break-all">{sku.sku}</div>
+      <div className="text-center mb-4 md:mb-8">
+        <div className="text-xl md:text-4xl font-bold text-white mb-2 break-all">{sku.sku}</div>
         {sku.parentSku && (
           <div className="text-sm md:text-lg text-slate-400">Parent: {sku.parentSku}</div>
         )}
         <div className="text-xs md:text-sm text-slate-500 mt-2 line-clamp-2">{sku.title}</div>
       </div>
 
-      <div className="text-center mb-6 md:mb-8">
-        <div className="text-sm text-slate-400 mb-2">Current Qty: {sku.available}</div>
-        <input
-          type="number"
-          inputMode="numeric"
-          min="0"
-          value={currentQty}
-          onChange={(e) => onQtyChange(parseInt(e.target.value) || 0)}
-          onFocus={(e) => e.target.select()}
-          className="w-32 md:w-48 px-4 md:px-6 py-3 md:py-4 text-4xl md:text-5xl font-bold text-center bg-slate-900 border-2 border-slate-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
-        />
+      <div className="text-center mb-4 md:mb-8">
+        <div className="text-sm text-slate-400 mb-3">Current Qty: {sku.available}</div>
+
+        {/* Mobile-friendly quantity input with +/- buttons */}
+        <div className="flex items-center justify-center gap-2 md:gap-4">
+          <button
+            onClick={handleDecrement}
+            className="w-14 h-14 md:w-16 md:h-16 flex items-center justify-center text-3xl md:text-4xl font-bold bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-white rounded-xl transition-colors touch-manipulation"
+            type="button"
+          >
+            −
+          </button>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="0"
+            value={currentQty}
+            onChange={(e) => onQtyChange(parseInt(e.target.value) || 0)}
+            onFocus={(e) => e.target.select()}
+            className="w-28 md:w-48 px-2 md:px-6 py-3 md:py-4 text-4xl md:text-5xl font-bold text-center bg-slate-900 border-2 border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none touch-manipulation"
+          />
+          <button
+            onClick={handleIncrement}
+            className="w-14 h-14 md:w-16 md:h-16 flex items-center justify-center text-3xl md:text-4xl font-bold bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-400 text-white rounded-xl transition-colors touch-manipulation"
+            type="button"
+          >
+            +
+          </button>
+        </div>
+
         {variance !== 0 && (
-          <div className={`text-xl md:text-2xl font-bold mt-4 ${variance > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          <div className={`text-lg md:text-2xl font-bold mt-4 ${variance > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             Variance: {variance > 0 ? '+' : ''}{variance}
             {isFlagged && <AlertTriangle className="w-5 h-5 md:w-6 md:h-6 inline ml-2" />}
           </div>
@@ -596,13 +673,13 @@ function SingleSkuAuditView({
         )}
       </div>
 
-      <div className="mt-6 md:mt-8">
+      <div className="mt-4 md:mt-8">
         <label className="block text-sm text-slate-400 mb-2">Notes</label>
         <textarea
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
-          className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-white"
-          rows={3}
+          className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-base"
+          rows={2}
           placeholder="Add notes..."
         />
       </div>
