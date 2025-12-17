@@ -138,17 +138,22 @@ export default function AuditSetupPage() {
                     size="sm"
                     onClick={async () => {
                       try {
-                        await fetch(`/api/audit/${activeSessionId}`, { method: 'DELETE' })
-                        setHasActiveSession(false)
-                        setActiveSessionId(null)
+                        // Close the audit - if it has entries, save to log; otherwise delete
+                        const res = await fetch(`/api/audit/${activeSessionId}/close`, { method: 'PUT' })
+                        if (res.ok) {
+                          setHasActiveSession(false)
+                          setActiveSessionId(null)
+                        } else {
+                          alert('Failed to close audit')
+                        }
                       } catch (error) {
-                        console.error('Error deleting session:', error)
-                        alert('Failed to cancel session')
+                        console.error('Error closing session:', error)
+                        alert('Failed to close audit')
                       }
                     }}
                     className="flex-1 md:flex-none"
                   >
-                    Cancel & New
+                    Close Audit
                   </Button>
                 </div>
               </div>
