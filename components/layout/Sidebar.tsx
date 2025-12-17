@@ -26,6 +26,7 @@ import {
   Headphones,
   ChevronLeft,
   ChevronRight,
+  X,
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -33,9 +34,13 @@ import { useTheme } from '@/contexts/ThemeContext'
 const SidebarContext = createContext<{
   collapsed: boolean
   setCollapsed: (collapsed: boolean) => void
+  mobileOpen: boolean
+  setMobileOpen: (open: boolean) => void
 }>({
   collapsed: false,
   setCollapsed: () => {},
+  mobileOpen: false,
+  setMobileOpen: () => {},
 })
 
 export const useSidebar = () => useContext(SidebarContext)
@@ -76,12 +81,20 @@ export default function Sidebar() {
     return false
   })
 
+  // Mobile sidebar open state
+  const [mobileOpen, setMobileOpen] = useState(false)
+
   const setCollapsed = (value: boolean) => {
     setCollapsedState(value)
     if (typeof window !== 'undefined') {
       localStorage.setItem('sidebar-collapsed', String(value))
     }
   }
+
+  // Close mobile sidebar when route changes
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
 
   // Don't render sidebar on public routes
   const isPublicRoute = PUBLIC_ROUTES.some(route => pathname?.startsWith(route))
@@ -200,31 +213,55 @@ export default function Sidebar() {
   }
 
   return (
-    <SidebarContext.Provider value={{ collapsed, setCollapsed }}>
+    <SidebarContext.Provider value={{ collapsed, setCollapsed, mobileOpen, setMobileOpen }}>
+      {/* Mobile Overlay Backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       <div className={cn(
-        "flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--sidebar-border)] h-screen fixed left-0 top-0 transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
+        "flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--sidebar-border)] h-screen fixed left-0 top-0 transition-all duration-300 z-50",
+        // Mobile: hidden by default, shown as overlay when mobileOpen
+        "w-64 -translate-x-full md:translate-x-0",
+        mobileOpen && "translate-x-0",
+        // Desktop: respect collapsed state
+        !mobileOpen && collapsed && "md:w-16"
       )}>
         {/* Logo */}
         <div className="flex items-center h-16 border-b border-[var(--sidebar-border)] relative">
           <div className={cn(
             "flex items-center transition-all duration-300",
-            collapsed ? "justify-center w-full px-2" : "gap-3 px-6 w-full"
+            collapsed && !mobileOpen ? "justify-center w-full px-2" : "gap-3 px-6 w-full"
           )}>
             <div className="w-9 h-9 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            {!collapsed && (
+            {(!collapsed || mobileOpen) && (
               <div className="flex-1 min-w-0">
                 <h1 className="text-lg font-bold text-[var(--foreground)]">Inventory</h1>
                 <p className="text-[10px] text-[var(--muted-foreground)] -mt-1">ADVISOR</p>
               </div>
             )}
           </div>
+
+          {/* Mobile Close Button */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--muted-foreground)] md:hidden touch-manipulation"
+            aria-label="Close menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Desktop Collapse Button */}
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
-              "absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-[var(--sidebar-bg)] border border-[var(--sidebar-border)] rounded-full flex items-center justify-center hover:bg-[var(--hover-bg)] transition-colors z-10",
+              "absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-[var(--sidebar-bg)] border border-[var(--sidebar-border)] rounded-full items-center justify-center hover:bg-[var(--hover-bg)] transition-colors z-10",
+              "hidden md:flex",
               collapsed ? "right-2" : ""
             )}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -239,30 +276,31 @@ export default function Sidebar() {
       
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4">
-        <div className={cn("space-y-1", collapsed ? "px-2" : "px-3")}>
+        <div className={cn("space-y-1", collapsed && !mobileOpen ? "px-2" : "px-3")}>
           {navigation.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-            
+            const showExpanded = !collapsed || mobileOpen
+
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 className={cn(
                   'flex items-center rounded-lg transition-all duration-200 group',
-                  collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5',
+                  showExpanded ? 'px-3 py-2.5' : 'justify-center px-2 py-2.5',
                   isActive
                     ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-[var(--primary)] border border-cyan-500/30'
                     : 'text-[var(--muted-foreground)] hover:bg-[var(--hover-bg)] hover:text-[var(--foreground)]'
                 )}
-                title={collapsed ? item.name : undefined}
+                title={!showExpanded ? item.name : undefined}
               >
                 <Icon className={cn(
                   "h-5 w-5 flex-shrink-0",
-                  collapsed ? "" : "mr-3",
+                  showExpanded ? "mr-3" : "",
                   isActive ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"
                 )} />
-                {!collapsed && (
+                {showExpanded && (
                   <span className="text-sm font-medium truncate">{item.name}</span>
                 )}
               </Link>
@@ -272,20 +310,20 @@ export default function Sidebar() {
       </nav>
       
       {/* AI Advisor Button */}
-      <div className={cn("border-t border-[var(--sidebar-border)]", collapsed ? "p-2" : "p-4")}>
+      <div className={cn("border-t border-[var(--sidebar-border)]", collapsed && !mobileOpen ? "p-2" : "p-4")}>
         <Link
           href="/advisor"
           className={cn(
             "flex items-center rounded-xl transition-all duration-200",
-            collapsed ? "justify-center px-2 py-3" : "px-4 py-3",
+            collapsed && !mobileOpen ? "justify-center px-2 py-3" : "px-4 py-3",
             pathname === '/advisor'
               ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25"
               : "bg-gradient-to-r from-cyan-500/10 to-blue-500/10 text-cyan-400 border border-cyan-500/30 hover:from-cyan-500/20 hover:to-blue-500/20"
           )}
-          title={collapsed ? "AI Advisor" : undefined}
+          title={collapsed && !mobileOpen ? "AI Advisor" : undefined}
         >
-          <MessageSquare className={cn("h-5 w-5 flex-shrink-0", collapsed ? "" : "mr-3")} />
-          {!collapsed && (
+          <MessageSquare className={cn("h-5 w-5 flex-shrink-0", collapsed && !mobileOpen ? "" : "mr-3")} />
+          {(!collapsed || mobileOpen) && (
             <>
               <span className="text-sm font-medium">AI Advisor</span>
               <span className="ml-auto bg-cyan-500/20 text-cyan-300 text-xs px-2 py-0.5 rounded-full">
@@ -297,8 +335,8 @@ export default function Sidebar() {
       </div>
 
       {/* Sync Status Section */}
-      <div className={cn("border-t border-[var(--sidebar-border)] py-3", collapsed ? "px-2" : "px-4")}>
-        {collapsed ? (
+      <div className={cn("border-t border-[var(--sidebar-border)] py-3", collapsed && !mobileOpen ? "px-2" : "px-4")}>
+        {collapsed && !mobileOpen ? (
           <div className="flex flex-col items-center gap-2">
             <button
               onClick={handleSyncNow}
@@ -346,8 +384,8 @@ export default function Sidebar() {
       </div>
 
       {/* User/Status Section */}
-      <div className={cn("border-t border-[var(--sidebar-border)]", collapsed ? "p-2" : "p-4")}>
-        {collapsed ? (
+      <div className={cn("border-t border-[var(--sidebar-border)]", collapsed && !mobileOpen ? "p-2" : "p-4")}>
+        {collapsed && !mobileOpen ? (
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">K</span>

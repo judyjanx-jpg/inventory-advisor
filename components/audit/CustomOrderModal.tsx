@@ -62,23 +62,23 @@ function SortableItem({ sku, title, parentSku, available }: SKU) {
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-3 p-3 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700/50"
+      className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700/50 touch-manipulation"
     >
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-300"
+        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-300 p-1 -ml-1 touch-manipulation"
       >
-        <GripVertical className="w-5 h-5" />
+        <GripVertical className="w-6 h-6 sm:w-5 sm:h-5" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-white font-medium truncate">{sku}</div>
-        <div className="text-sm text-slate-400 truncate">{title}</div>
+        <div className="text-white font-medium truncate text-sm sm:text-base">{sku}</div>
+        <div className="text-xs sm:text-sm text-slate-400 truncate">{title}</div>
         {parentSku && (
           <div className="text-xs text-slate-500">Parent: {parentSku}</div>
         )}
       </div>
-      <div className="text-sm text-slate-400">
+      <div className="text-xs sm:text-sm text-slate-400 flex-shrink-0">
         Qty: {available}
       </div>
     </div>
@@ -111,26 +111,26 @@ function SortableParentItem({ parentSku, parentDisplayName, items }: { parentSku
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700/50"
+      className="bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700/50 touch-manipulation"
     >
-      <div className="flex items-center gap-3 p-3">
+      <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-300"
+          className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-300 p-1 -ml-1 touch-manipulation"
         >
-          <GripVertical className="w-5 h-5" />
+          <GripVertical className="w-6 h-6 sm:w-5 sm:h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-white font-semibold truncate">{displayLabel}</div>
+          <div className="text-white font-semibold truncate text-sm sm:text-base">{displayLabel}</div>
           {parentDisplayName && (
-            <div className="text-xs text-slate-500 font-mono">{parentSku}</div>
+            <div className="text-xs text-slate-500 font-mono truncate">{parentSku}</div>
           )}
-          <div className="text-sm text-slate-400">
+          <div className="text-xs sm:text-sm text-slate-400">
             {isStandalone ? 'Standalone SKU' : `${items.length} variant${items.length !== 1 ? 's' : ''}`}
           </div>
         </div>
-        <div className="text-sm text-slate-400">
+        <div className="text-xs sm:text-sm text-slate-400 flex-shrink-0">
           Total: {totalQty}
         </div>
       </div>
@@ -403,13 +403,13 @@ export default function CustomOrderModal({
       title={`Custom SKU Order${warehouseName ? ` - ${warehouseName}` : ''}`}
       size="lg"
     >
-      <div className="p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-400">
-            Drag and drop SKUs to reorder them. The order will be used when "Custom Order" is selected for auditing.
+      <div className="space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+          <div className="text-xs sm:text-sm text-slate-400">
+            Drag and drop to reorder. Used when "Custom Order" is selected.
           </div>
           {skus.length > 0 && (
-            <div className="text-sm text-slate-300">
+            <div className="text-xs sm:text-sm text-slate-300 flex-shrink-0">
               {skus.length} SKU{skus.length !== 1 ? 's' : ''}
             </div>
           )}
@@ -418,10 +418,10 @@ export default function CustomOrderModal({
         {/* Group by Parent Toggle */}
         <div className="flex items-center justify-between p-3 bg-slate-800/50 border border-slate-700 rounded-lg">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-slate-400" />
-            <span className="text-sm text-slate-300">Group by Parent SKU</span>
+            <Layers className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            <span className="text-xs sm:text-sm text-slate-300">Group by Parent SKU</span>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
+          <label className="relative inline-flex items-center cursor-pointer touch-manipulation">
             <input
               type="checkbox"
               checked={groupByParent}
@@ -441,7 +441,7 @@ export default function CustomOrderModal({
             No SKUs found for this warehouse
           </div>
         ) : groupByParent ? (
-          <div className="space-y-3 max-h-[500px] overflow-y-auto">
+          <div className="space-y-2 sm:space-y-3 max-h-[50vh] sm:max-h-[500px] overflow-y-auto -mx-1 px-1">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -461,7 +461,7 @@ export default function CustomOrderModal({
             </DndContext>
           </div>
         ) : (
-          <div className="space-y-2 max-h-[500px] overflow-y-auto">
+          <div className="space-y-2 max-h-[50vh] sm:max-h-[500px] overflow-y-auto -mx-1 px-1">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -480,9 +480,10 @@ export default function CustomOrderModal({
         )}
       </div>
 
-      <ModalFooter>
-        <div className="flex items-center justify-between w-full">
-          <div className="flex gap-2">
+      <ModalFooter className="flex-col sm:flex-row">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between w-full gap-2 sm:gap-0">
+          {/* Secondary actions */}
+          <div className="flex gap-2 order-2 sm:order-1">
             <input
               ref={fileInputRef}
               type="file"
@@ -494,29 +495,35 @@ export default function CustomOrderModal({
               variant="ghost"
               onClick={() => fileInputRef.current?.click()}
               disabled={loading || skus.length === 0}
+              className="flex-1 sm:flex-none"
             >
               <Upload className="w-4 h-4 mr-2" />
-              Import Order
+              <span className="hidden sm:inline">Import Order</span>
+              <span className="sm:hidden">Import</span>
             </Button>
             <Button
               variant="ghost"
               onClick={handleReset}
               disabled={loading || skus.length === 0}
+              className="flex-1 sm:flex-none"
             >
-              Reset to A-Z
+              <span className="hidden sm:inline">Reset to A-Z</span>
+              <span className="sm:hidden">Reset</span>
             </Button>
           </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>
+          {/* Primary actions */}
+          <div className="flex gap-2 order-1 sm:order-2">
+            <Button variant="ghost" onClick={onClose} className="flex-1 sm:flex-none">
               Cancel
             </Button>
             <Button
               variant="primary"
               onClick={handleSave}
               disabled={loading || saving || !hasChanges}
+              className="flex-1 sm:flex-none"
             >
               <Save className="w-4 h-4 mr-2" />
-              {saving ? 'Saving...' : 'Save Order'}
+              {saving ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </div>
