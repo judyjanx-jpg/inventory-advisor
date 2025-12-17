@@ -51,8 +51,21 @@ export async function GET(request: NextRequest) {
         })
       }
 
+      // Fetch parent product info for display names
+      const parentSkus = Array.from(groupedMap.keys())
+      const parentProducts = await prisma.product.findMany({
+        where: { sku: { in: parentSkus } },
+        select: {
+          sku: true,
+          title: true,
+          displayName: true,
+        },
+      })
+      const parentInfoMap = new Map(parentProducts.map(p => [p.sku, { title: p.displayName || p.title }]))
+
       const grouped = Array.from(groupedMap.entries()).map(([parentSku, items]) => ({
         parentSku,
+        parentTitle: parentInfoMap.get(parentSku)?.title || parentSku,
         items: items.sort((a, b) => a.sku.localeCompare(b.sku)),
       }))
 

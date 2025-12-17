@@ -29,6 +29,12 @@ interface SKU {
   available: number
 }
 
+interface ParentGroup {
+  parentSku: string
+  parentTitle: string
+  items: SKU[]
+}
+
 interface CustomOrderModalProps {
   isOpen: boolean
   onClose: () => void
@@ -79,7 +85,7 @@ function SortableItem({ sku, title, parentSku, available }: SKU) {
   )
 }
 
-function SortableParentItem({ parentSku, items }: { parentSku: string; items: SKU[] }) {
+function SortableParentItem({ parentSku, parentTitle, items }: { parentSku: string; parentTitle: string; items: SKU[] }) {
   const {
     attributes,
     listeners,
@@ -113,13 +119,14 @@ function SortableParentItem({ parentSku, items }: { parentSku: string; items: SK
           <GripVertical className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-white font-semibold">{parentSku}</div>
+          <div className="text-white font-semibold truncate">{parentTitle}</div>
+          <div className="text-xs text-slate-500 font-mono">{parentSku}</div>
           <div className="text-sm text-slate-400">
             {isStandalone ? 'Standalone SKU' : `${items.length} variant${items.length !== 1 ? 's' : ''}`}
           </div>
         </div>
         <div className="text-sm text-slate-400">
-          Total Qty: {totalQty}
+          Total: {totalQty}
         </div>
       </div>
     </div>
@@ -133,7 +140,7 @@ export default function CustomOrderModal({
   warehouseName,
 }: CustomOrderModalProps) {
   const [skus, setSkus] = useState<SKU[]>([])
-  const [groupedSkus, setGroupedSkus] = useState<Map<string, SKU[]>>(new Map())
+  const [parentGroups, setParentGroups] = useState<ParentGroup[]>([])
   const [parentOrder, setParentOrder] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -169,6 +176,13 @@ export default function CustomOrderModal({
       const skusData = await skusRes.json()
       let skusList = skusData.skus || []
 
+      // Also fetch grouped data for parent titles
+      const groupedRes = await fetch(`/api/audit/skus?warehouseId=${warehouseId}&grouped=true`)
+      if (groupedRes.ok) {
+        const groupedData = await groupedRes.json()
+        setParentGroups(groupedData.grouped || [])
+      }
+
       // Fetch custom order if it exists
       const orderRes = await fetch(`/api/audit/custom-order?warehouseId=${warehouseId}`)
       if (orderRes.ok) {
@@ -187,7 +201,7 @@ export default function CustomOrderModal({
       }
 
       setSkus(skusList)
-      updateGroupedSkus(skusList)
+      updateParentOrder(skusList)
     } catch (error) {
       console.error('Error fetching SKUs:', error)
     } finally {
@@ -195,16 +209,7 @@ export default function CustomOrderModal({
     }
   }
 
-  const updateGroupedSkus = (skuList: SKU[]) => {
-    const grouped = new Map<string, SKU[]>()
-    skuList.forEach(sku => {
-      const parentKey = sku.parentSku || sku.sku
-      if (!grouped.has(parentKey)) {
-        grouped.set(parentKey, [])
-      }
-      grouped.get(parentKey)!.push(sku)
-    })
-    setGroupedSkus(grouped)
+  const updateParentOrder = (skuList: SKU[]) => {
     // Set parent order based on current SKU order
     const order: string[] = []
     const seen = new Set<string>()
@@ -220,9 +225,12 @@ export default function CustomOrderModal({
 
   useEffect(() => {
     if (skus.length > 0) {
-      updateGroupedSkus(skus)
+      updateParentOrder(skus)
     }
   }, [skus])
+
+  // Create a map for quick lookup of parent group info
+  const parentGroupMap = new Map(parentGroups.map(g => [g.parentSku, g]))
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -241,8 +249,10 @@ export default function CustomOrderModal({
         // Reorder SKUs based on new parent order
         const reorderedSkus: SKU[] = []
         newParentOrder.forEach(parentKey => {
-          const children = groupedSkus.get(parentKey) || []
-          reorderedSkus.push(...children)
+          const group = parentGroupMap.get(parentKey)
+          if (group) {
+            reorderedSkus.push(...group.items)
+          }
         })
         setSkus(reorderedSkus)
         setHasChanges(true)
@@ -304,7 +314,7 @@ export default function CustomOrderModal({
           const data = await res.json()
           const skusList = data.skus || []
           setSkus(skusList)
-          updateGroupedSkus(skusList)
+          updateParentOrder(skusList)
           setHasChanges(true)
         }
       } catch (error) {
@@ -366,7 +376,7 @@ export default function CustomOrderModal({
       })
 
       setSkus(reorderedSkus)
-      updateGroupedSkus(reorderedSkus)
+      updateParentOrder(reorderedSkus)
       setHasChanges(true)
       
       alert(`Successfully imported ${skuList.length} SKUs from file.`)
@@ -437,8 +447,10 @@ export default function CustomOrderModal({
                 strategy={verticalListSortingStrategy}
               >
                 {parentOrder.map((parentSku) => {
-                  const items = groupedSkus.get(parentSku) || []
-                  return <SortableParentItem key={parentSku} parentSku={parentSku} items={items} />
+                  const group = parentGroupMap.get(parentSku)
+                  const items = group?.items || []
+                  const parentTitle = group?.parentTitle || parentSku
+                  return <SortableParentItem key={parentSku} parentSku={parentSku} parentTitle={parentTitle} items={items} />
                 })}
               </SortableContext>
             </DndContext>
