@@ -31,7 +31,7 @@ interface SKU {
 
 interface ParentGroup {
   parentSku: string
-  parentTitle: string
+  parentDisplayName: string | null
   items: SKU[]
 }
 
@@ -85,7 +85,7 @@ function SortableItem({ sku, title, parentSku, available }: SKU) {
   )
 }
 
-function SortableParentItem({ parentSku, parentTitle, items }: { parentSku: string; parentTitle: string; items: SKU[] }) {
+function SortableParentItem({ parentSku, parentDisplayName, items }: { parentSku: string; parentDisplayName: string | null; items: SKU[] }) {
   const {
     attributes,
     listeners,
@@ -104,6 +104,9 @@ function SortableParentItem({ parentSku, parentTitle, items }: { parentSku: stri
   const isStandalone = items.length === 1 && items[0].sku === parentSku
   const totalQty = items.reduce((sum, item) => sum + item.available, 0)
 
+  // Show custom display name if set, otherwise just show the SKU
+  const displayLabel = parentDisplayName || parentSku
+
   return (
     <div
       ref={setNodeRef}
@@ -119,8 +122,10 @@ function SortableParentItem({ parentSku, parentTitle, items }: { parentSku: stri
           <GripVertical className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-white font-semibold truncate">{parentTitle}</div>
-          <div className="text-xs text-slate-500 font-mono">{parentSku}</div>
+          <div className="text-white font-semibold truncate">{displayLabel}</div>
+          {parentDisplayName && (
+            <div className="text-xs text-slate-500 font-mono">{parentSku}</div>
+          )}
           <div className="text-sm text-slate-400">
             {isStandalone ? 'Standalone SKU' : `${items.length} variant${items.length !== 1 ? 's' : ''}`}
           </div>
@@ -449,8 +454,8 @@ export default function CustomOrderModal({
                 {parentOrder.map((parentSku) => {
                   const group = parentGroupMap.get(parentSku)
                   const items = group?.items || []
-                  const parentTitle = group?.parentTitle || parentSku
-                  return <SortableParentItem key={parentSku} parentSku={parentSku} parentTitle={parentTitle} items={items} />
+                  const parentDisplayName = group?.parentDisplayName || null
+                  return <SortableParentItem key={parentSku} parentSku={parentSku} parentDisplayName={parentDisplayName} items={items} />
                 })}
               </SortableContext>
             </DndContext>
