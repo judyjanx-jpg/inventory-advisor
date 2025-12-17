@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
-import { ArrowLeft, Download, CheckCircle, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, FileSpreadsheet, CheckCircle, AlertTriangle, Package, TrendingUp, TrendingDown, Hash } from 'lucide-react'
 
 interface AuditSummary {
   session: {
@@ -15,6 +15,7 @@ interface AuditSummary {
     totalSkus: number
     auditedCount: number
     startedAt: string
+    status: string
   }
   summary: {
     totalAudited: number
@@ -49,6 +50,7 @@ export default function AuditSummaryPage() {
   const [summary, setSummary] = useState<AuditSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [completing, setCompleting] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     fetchSummary()
@@ -77,6 +79,8 @@ export default function AuditSummaryPage() {
     try {
       const res = await fetch(`/api/audit/${sessionId}/complete`, {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applyChanges: true }),
       })
 
       if (res.ok) {
@@ -92,29 +96,31 @@ export default function AuditSummaryPage() {
     }
   }
 
-  const exportReport = () => {
-    if (!summary) return
-
-    const csv = [
-      ['SKU', 'Parent SKU', 'Previous Qty', 'New Qty', 'Variance', 'Flagged', 'Notes'].join(','),
-      ...summary.allEntries.map(e => [
-        e.sku,
-        e.parentSku || '',
-        e.previousQty,
-        e.newQty,
-        e.variance,
-        e.isFlagged ? 'Yes' : 'No',
-        (e.notes || '').replace(/"/g, '""'),
-      ].map(v => `"${v}"`).join(','))
-    ].join('\n')
-
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `audit-${sessionId}-${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
+  const downloadExcel = async () => {
+    setDownloading(true)
+    try {
+      const res = await fetch(`/api/audit/${sessionId}/export`)
+      if (res.ok) {
+        const blob = await res.blob()
+        const contentDisposition = res.headers.get('Content-Disposition')
+        const filenameMatch = contentDisposition?.match(/filename="(.+)"/)
+        const filename = filenameMatch ? filenameMatch[1] : `audit-${sessionId}.xlsx`
+        
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        a.click()
+        window.URL.revokeObjectURL(url)
+      } else {
+        alert('Failed to download report')
+      }
+    } catch (error) {
+      console.error('Error downloading:', error)
+      alert('Failed to download report')
+    } finally {
+      setDownloading(false)
+    }
   }
 
   if (loading) {
@@ -141,48 +147,79 @@ export default function AuditSummaryPage() {
     )
   }
 
+  const isCompleted = summary.session.status === 'completed'
+
   return (
     <MainLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 md:space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">Audit Summary</h1>
-            <p className="text-slate-400 mt-1">{summary.session.warehouse.name}</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">Audit Summary</h1>
+            <p className="text-slate-400 mt-1 text-sm md:text-base">{summary.session.warehouse.name}</p>
           </div>
-          <Button variant="ghost" onClick={() => router.push(`/audit/session/${sessionId}`)}>
+          <Button 
+            variant="ghost" 
+            onClick={() => router.push(`/audit/session/${sessionId}`)}
+            className="self-start md:self-auto"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Audit
           </Button>
         </div>
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Summary Stats - Mobile Optimized Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           <Card>
-            <CardContent className="pt-6">
-              <div className="text-sm text-slate-400">Total SKUs Audited</div>
-              <div className="text-2xl font-bold text-white">{summary.summary.totalAudited}</div>
+            <CardContent className="p-4 md:pt-6">
+              <div className="flex items-center gap-2 mb-1">
+                <Package className="w-4 h-4 text-slate-400" />
+                <span className="text-xs md:text-sm text-slate-400">Audited</span>
+              </div>
+              <div className="text-xl md:text-2xl font-bold text-white">{summary.summary.totalAudited}</div>
+              <div className="text-xs text-slate-500">of {summary.session.totalSkus} SKUs</div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
-              <div className="text-sm text-slate-400">SKUs with Variance</div>
-              <div className="text-2xl font-bold text-white">{summary.allEntries.filter(e => e.variance !== 0).length}</div>
+            <CardContent className="p-4 md:pt-6">
+              <div className="flex items-center gap-2 mb-1">
+                <Hash className="w-4 h-4 text-slate-400" />
+                <span className="text-xs md:text-sm text-slate-400">Variances</span>
+              </div>
+              <div className="text-xl md:text-2xl font-bold text-white">
+                {summary.allEntries.filter(e => e.variance !== 0).length}
+              </div>
+              <div className="text-xs text-slate-500">items changed</div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
-              <div className="text-sm text-slate-400">Total Units Adjusted</div>
-              <div className={`text-2xl font-bold ${summary.summary.totalVariance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <CardContent className="p-4 md:pt-6">
+              <div className="flex items-center gap-2 mb-1">
+                {summary.summary.totalVariance >= 0 ? (
+                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <TrendingDown className="w-4 h-4 text-red-400" />
+                )}
+                <span className="text-xs md:text-sm text-slate-400">Net Change</span>
+              </div>
+              <div className={`text-xl md:text-2xl font-bold ${summary.summary.totalVariance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {summary.summary.totalVariance > 0 ? '+' : ''}{summary.summary.totalVariance}
               </div>
+              <div className="text-xs text-slate-500">
+                +{summary.summary.positiveVariance} / -{summary.summary.negativeVariance}
+              </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
-              <div className="text-sm text-slate-400">Flagged Discrepancies</div>
-              <div className={`text-2xl font-bold ${summary.summary.flaggedCount > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+            <CardContent className="p-4 md:pt-6">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className={`w-4 h-4 ${summary.summary.flaggedCount > 0 ? 'text-amber-400' : 'text-slate-400'}`} />
+                <span className="text-xs md:text-sm text-slate-400">Flagged</span>
+              </div>
+              <div className={`text-xl md:text-2xl font-bold ${summary.summary.flaggedCount > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
                 {summary.summary.flaggedCount}
               </div>
+              <div className="text-xs text-slate-500">large discrepancies</div>
             </CardContent>
           </Card>
         </div>
@@ -190,23 +227,23 @@ export default function AuditSummaryPage() {
         {/* Large Discrepancies */}
         {summary.flaggedEntries.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-400" />
+            <CardHeader className="pb-2 md:pb-4">
+              <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 text-amber-400" />
                 Large Discrepancies ({summary.flaggedEntries.length})
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               <div className="space-y-2">
                 {summary.flaggedEntries.map((entry, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg">
-                    <div>
-                      <div className="font-medium text-white">{entry.sku}</div>
-                      <div className="text-sm text-slate-400">
-                        Was: {entry.previousQty} → Now: {entry.newQty}
+                  <div key={idx} className="flex items-center justify-between p-3 md:p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-white text-sm md:text-base truncate">{entry.sku}</div>
+                      <div className="text-xs md:text-sm text-slate-400">
+                        {entry.previousQty} → {entry.newQty}
                       </div>
                     </div>
-                    <div className={`text-lg font-bold ${entry.variance > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <div className={`text-base md:text-lg font-bold flex-shrink-0 ml-2 ${entry.variance > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {entry.variance > 0 ? '+' : ''}{entry.variance}
                     </div>
                   </div>
@@ -216,13 +253,33 @@ export default function AuditSummaryPage() {
           </Card>
         )}
 
-        {/* All Variances */}
+        {/* All Variances - Responsive Table */}
         <Card>
-          <CardHeader>
-            <CardTitle>All Variances</CardTitle>
+          <CardHeader className="pb-2 md:pb-4">
+            <CardTitle className="text-base md:text-lg">All Variances</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
+          <CardContent className="pt-0">
+            {/* Mobile List View */}
+            <div className="md:hidden space-y-2">
+              {summary.allEntries.map((entry, idx) => (
+                <div key={idx} className="p-3 bg-slate-800/50 rounded-lg">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-mono text-white text-sm truncate flex-1">{entry.sku}</span>
+                    <span className={`font-medium ml-2 ${entry.variance > 0 ? 'text-emerald-400' : entry.variance < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                      {entry.variance > 0 ? '+' : ''}{entry.variance}
+                    </span>
+                    {entry.isFlagged && <AlertTriangle className="w-4 h-4 text-amber-400 ml-1" />}
+                  </div>
+                  <div className="text-xs text-slate-400 flex items-center gap-2">
+                    <span>{entry.previousQty} → {entry.newQty}</span>
+                    {entry.parentSku && <span>• {entry.parentSku}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="text-sm text-slate-400 border-b border-slate-700">
@@ -255,19 +312,43 @@ export default function AuditSummaryPage() {
           </CardContent>
         </Card>
 
-        {/* Actions */}
-        <div className="flex items-center justify-between pt-4">
-          <Button variant="outline" onClick={exportReport}>
-            <Download className="w-4 h-4 mr-2" />
-            Export Report
+        {/* Actions - Mobile Optimized */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between pt-2 md:pt-4">
+          <Button 
+            variant="outline" 
+            onClick={downloadExcel}
+            disabled={downloading}
+            className="w-full md:w-auto"
+          >
+            {downloading ? (
+              <span className="animate-spin mr-2">⏳</span>
+            ) : (
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+            )}
+            Download Excel
           </Button>
-          <Button variant="primary" onClick={completeAudit} disabled={completing}>
-            {completing ? 'Completing...' : 'Complete Audit'}
-            <CheckCircle className="w-4 h-4 ml-2" />
-          </Button>
+          {!isCompleted && (
+            <Button 
+              variant="primary" 
+              onClick={completeAudit} 
+              disabled={completing}
+              className="w-full md:w-auto"
+            >
+              {completing ? 'Completing...' : 'Complete Audit'}
+              <CheckCircle className="w-4 h-4 ml-2" />
+            </Button>
+          )}
+          {isCompleted && (
+            <Button 
+              variant="ghost" 
+              onClick={() => router.push('/audit/history')}
+              className="w-full md:w-auto"
+            >
+              Back to Logs
+            </Button>
+          )}
         </div>
       </div>
     </MainLayout>
   )
 }
-
