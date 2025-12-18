@@ -5,7 +5,7 @@
  * which is:
  * - 10-20x faster (no DOM rendering)
  * - Sharper output (vector text, proper image scaling)
- * - Works reliably on any computer
+ * - Works reliably on any computer (no memory issues with 500+ labels)
  */
 
 import jsPDF from 'jspdf'
@@ -13,7 +13,6 @@ import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 
 // Transparency "T" icon as base64 PNG (simple black icon, 64x64)
-// This replaces the complex SVG with filters that html2canvas can't render
 const TRANSPARENCY_ICON_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACXBIWXMAAAsTAAALEwEAmpwYAAADT0lEQVR4nO2bW07DMBBFz1D2wgYQYgHsgA2wA1gDK2IH7AAJdsMOYAewBBYAQggJ8ThMSpO4je3x2E5LpfJRxXHm+s7EySQDTJkyZUo+ALgEVoGZwPctYBe4A7YC1/NVHbAO3AMfwI+y/wA3wLoy2dBsA4fAe0n9H+C5GFP5MllbwAPw6qj/DbANbCmT9c02sAe8+dT/AmwAa8pkfbMN7AMvPvW/ApvAqjLZ0GwDB8CzT/13xZjnykRDswUcAk8+9V/HmMfKJEOzDRwBjz71X8aYR8oEQ7MFHAMPPvVfxJj7ymR9sw2cAPc+9cfjmLvKRH2zBRwWF6Xu10SRxMQ8UCbpm23gELjNbxIxpgE+pAksKJP1zRZwANzk1p8dY64qk/TNNrAP3OTUH49jriuT9M0WcADc5NY/pRhzXZmgb7aAA+A6t/4p0bME+yXx15sGp4NtDjZwFgD2gKuc+kv2c1OZpG+2gH3gMqf+Mv1cr0wyJBvAHnCeU38p0cW6MsHQrAO7wFlu/aVEF2vK5EKzCuwAZzn1JwyH56oywdCsANvAaU79xYlyj5VJhmYZ2AJOcupPJh1z3CsTDM0SsAkc59afKJk0TLqvTDI0S8AmcJRT/zfJyNjN2MV/AmJD08PuxzYP+CrDMDpd/Fhw4KJBh3/9HLCg1R+wqU0sJsvAG6JDAOLrR4fAKw8dfKZMLCaP0Y5w+LFtSL1TbHrCw2cdgnY8O/jchLn2AYyBT/i8OYS28y3wDyxLuFMcuLy16YQ7UPh41+E8Ey82Hc4w4N8Q5V4JLOWsWz8c+RbS2h8pX2h0FuY8oN3S2n+pfJHQ+e+S+r+UL7Sn8n8q/6vyB/r/O+XPS/95mUv5cpr7D+WbC5w/pnwxi/89T/mQ9l8oXzBw/ozyJSrnryr/WaT8S7H7z5UvpLn/Qvli2vs/K19Ie/+l8sW093+g/P8a7ZP/J/G9BmDY8/6K8gW175+VL6a9/0L5Ytr7L5Uvpr3/UvmC2vu/lC+mvf9a+WLa+38ofyBc+38qf6Bc+38pf6Bc+38rf1D7/oXyB7Xvn5U/qH3/pPxh7ftH5Y9q3z8of1T7/l75o9r3j8qfUb7/ovwZ7fsvyh/Xvn9S/gzl+wflzyhfIHJ+gO0O3U+ZMmXKFL/8ApMMl7d2XVzAAAAAAElFTkSuQmCC'
 
 interface LabelItem {
@@ -36,17 +35,29 @@ interface GeneratePDFOptions {
 }
 
 /**
+ * Sanitize barcode value for reliable scanning
+ * - Strips whitespace
+ * - Converts to uppercase (CODE128 is case-sensitive, but scanners may not be)
+ */
+function sanitizeBarcodeValue(value: string): string {
+  return value.replace(/\s+/g, '').toUpperCase()
+}
+
+/**
  * Generate a barcode as base64 PNG data URL
  */
 async function generateBarcodeImage(value: string, width: number, height: number): Promise<string> {
   return new Promise((resolve, reject) => {
     try {
+      // Sanitize the value for reliable scanning
+      const cleanValue = sanitizeBarcodeValue(value)
+      
       // Create an off-screen canvas
       const canvas = document.createElement('canvas')
       canvas.width = width
       canvas.height = height
 
-      JsBarcode(canvas, value, {
+      JsBarcode(canvas, cleanValue, {
         format: 'CODE128',
         width: 2,
         height: height - 10,
@@ -225,7 +236,7 @@ async function drawComboLabel(
 
   // Transparency icon
   try {
-    pdf.addImage(TRANSPARENCY_ICON_BASE64, 'PNG', 1, 0.5, 3, 3)
+    pdf.addImage(TRANSPARENCY_ICON_BASE64, 'PNG', 2, 0.5, 3, 3)
   } catch (e) {
     console.warn('Could not add transparency icon:', e)
   }
@@ -233,14 +244,21 @@ async function drawComboLabel(
   // Header text
   pdf.setFontSize(4)
   pdf.setFont('helvetica', 'normal')
-  pdf.text('Scan with the', 4.5, 1.5)
-  pdf.text('Transparency app', 4.5, 3)
+  pdf.text('Scan with the', 5.5, 1.5)
+  pdf.text('Transparency app', 5.5, 3)
 
-  // QR Code
+  // QR Code - CENTERED in the TP section with proper margins
   if (qrImage) {
-    const qrSize = Math.min(tpSectionWidth * 0.7, heightMm * 0.75)
-    const qrX = 2
-    const qrY = 5
+    // Calculate QR size to fit comfortably
+    const qrSize = Math.min(tpSectionWidth * 0.65, heightMm * 0.70)
+    
+    // Center the QR within the TP section horizontally
+    const minLeftMargin = 3 // mm - minimum distance from left edge
+    const qrX = Math.max((tpSectionWidth - qrSize) / 2, minLeftMargin)
+    
+    // Center vertically with slight offset for header
+    const qrY = (heightMm - qrSize) / 2 + 3
+    
     try {
       pdf.addImage(qrImage, 'PNG', qrX, qrY, qrSize, qrSize)
     } catch (e) {
@@ -248,10 +266,10 @@ async function drawComboLabel(
     }
   }
 
-  // SKU text (rotated)
+  // SKU text (rotated) - positioned to not overlap QR
   pdf.setFontSize(4)
   const skuText = item.masterSku.length > 10 ? item.masterSku.substring(0, 10) : item.masterSku
-  pdf.text(skuText, tpSectionWidth - 2, heightMm / 2, { angle: 90 })
+  pdf.text(skuText, tpSectionWidth - 1.5, heightMm / 2, { angle: 90 })
 
   // === FNSKU SECTION (RIGHT) ===
   const fnskuCenterX = fnskuSectionX + fnskuSectionWidth / 2
@@ -280,10 +298,10 @@ async function drawComboLabel(
     yOffset += barcodeHeight + 1
   }
 
-  // FNSKU text
+  // FNSKU text (sanitized for display)
   pdf.setFontSize(7)
   pdf.setFont('helvetica', 'bold')
-  const fnskuText = item.fnsku || item.masterSku
+  const fnskuText = sanitizeBarcodeValue(item.fnsku || item.masterSku)
   pdf.text(fnskuText, fnskuCenterX, yOffset + 2, { align: 'center' })
   yOffset += 4
 
@@ -338,10 +356,10 @@ async function drawFNSKUOnlyLabel(
     yOffset += barcodeHeight + 1
   }
 
-  // FNSKU text
+  // FNSKU text (sanitized)
   pdf.setFontSize(8)
   pdf.setFont('helvetica', 'bold')
-  const fnskuText = item.fnsku || item.masterSku
+  const fnskuText = sanitizeBarcodeValue(item.fnsku || item.masterSku)
   pdf.text(fnskuText, centerX, yOffset + 2, { align: 'center' })
   yOffset += 4
 
