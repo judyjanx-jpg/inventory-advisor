@@ -18,7 +18,9 @@ import {
   ExternalLink,
   Check,
   X,
+  ArrowLeft,
 } from 'lucide-react'
+import Link from 'next/link'
 
 interface Article {
   id: number
@@ -193,11 +195,19 @@ export default function KnowledgeBasePage() {
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--foreground)]">Knowledge Base</h1>
-            <p className="text-[var(--muted-foreground)]">
-              Manage FAQ articles and help content
-            </p>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/admin/support"
+              className="p-2 hover:bg-[var(--muted)] rounded-lg transition-colors text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-[var(--foreground)]">Knowledge Base</h1>
+              <p className="text-[var(--muted-foreground)]">
+                Manage FAQ articles and help content
+              </p>
+            </div>
           </div>
           <Button onClick={() => openEditor()}>
             <Plus className="w-4 h-4 mr-2" />
