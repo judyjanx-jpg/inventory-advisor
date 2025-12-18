@@ -108,18 +108,32 @@ ${order.orderItems.map(item => `  - ${item.product.displayName || item.product.t
     }
   }
 
-  // Get recent FAQ articles
+  // Get knowledge base articles with full content
   try {
     const articles = await prisma.knowledgeArticle.findMany({
       where: { isPublished: true },
-      select: { title: true, excerpt: true, category: true },
-      take: 10,
+      select: { 
+        title: true, 
+        excerpt: true, 
+        content: true,
+        category: true,
+        tags: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 20, // Increased limit for better coverage
     })
 
     if (articles.length > 0) {
       context += `
-FAQ ARTICLES:
-${articles.map(a => `- [${a.category}] ${a.title}: ${a.excerpt || ''}`).join('\n')}
+KNOWLEDGE BASE ARTICLES:
+${articles.map(a => `
+### ${a.title}
+Category: ${a.category}
+${a.tags ? `Tags: ${a.tags}` : ''}
+${a.excerpt ? `Summary: ${a.excerpt}` : ''}
+
+${a.content || ''}
+`).join('\n---\n')}
 `
     }
   } catch (e) {
