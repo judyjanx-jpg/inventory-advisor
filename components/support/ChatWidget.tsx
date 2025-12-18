@@ -177,6 +177,45 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
     }
   }
 
+  // Parse markdown links [text](url) into clickable links
+  const renderMessageContent = (content: string) => {
+    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
+    const parts: (string | JSX.Element)[] = []
+    let lastIndex = 0
+    let match
+
+    while ((match = linkRegex.exec(content)) !== null) {
+      // Add text before the link
+      if (match.index > lastIndex) {
+        parts.push(content.slice(lastIndex, match.index))
+      }
+      
+      // Add the link
+      const [, linkText, linkUrl] = match
+      parts.push(
+        <a
+          key={match.index}
+          href={linkUrl}
+          target={linkUrl.startsWith('http') ? '_blank' : '_self'}
+          rel={linkUrl.startsWith('http') ? 'noopener noreferrer' : undefined}
+          className="underline font-medium hover:opacity-80"
+          style={{ color: 'inherit' }}
+        >
+          {linkText}
+        </a>
+      )
+      
+      lastIndex = match.index + match[0].length
+    }
+
+    // Add remaining text
+    if (lastIndex < content.length) {
+      parts.push(content.slice(lastIndex))
+    }
+
+    return parts.length > 0 ? parts : content
+  }
+
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {isOpen ? (
@@ -217,7 +256,7 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
                     ? 'text-white rounded-tr-sm'
                     : 'bg-white text-gray-800 rounded-tl-sm shadow-sm border border-gray-100'
                 }`} style={msg.role === 'user' ? { backgroundColor: brandColor } : undefined}>
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-sm whitespace-pre-wrap">{renderMessageContent(msg.content)}</p>
                   <p className={`text-xs mt-1 ${msg.role === 'user' ? 'opacity-70' : 'text-gray-400'}`}>
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
@@ -228,7 +267,7 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
             {streamingMessage && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] bg-white text-gray-800 rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm border border-gray-100">
-                  <p className="text-sm whitespace-pre-wrap">{streamingMessage}</p>
+                  <p className="text-sm whitespace-pre-wrap">{renderMessageContent(streamingMessage)}</p>
                 </div>
               </div>
             )}
