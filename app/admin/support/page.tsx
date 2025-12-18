@@ -322,7 +322,7 @@ export default function SupportDashboardPage() {
                   {tickets.map((ticket) => (
                     <Link
                       key={ticket.id}
-                      href={`/app/support/tickets/${ticket.id}`}
+                      href={`/admin/support/tickets/${ticket.id}`}
                       className="flex items-center gap-4 p-4 bg-[var(--muted)]/50 hover:bg-[var(--muted)] rounded-lg transition-colors"
                     >
                       <div className="flex-1 min-w-0">
@@ -375,7 +375,7 @@ export default function SupportDashboardPage() {
                   {claims.map((claim) => (
                     <Link
                       key={claim.id}
-                      href={`/app/support/claims/${claim.claimNumber}`}
+                      href={`/admin/support/claims/${claim.claimNumber}`}
                       className="flex items-center gap-4 p-4 bg-[var(--muted)]/50 hover:bg-[var(--muted)] rounded-lg transition-colors"
                     >
                       <div className="flex-1 min-w-0">
@@ -414,7 +414,7 @@ export default function SupportDashboardPage() {
         {/* Quick Links */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Link
-            href="/app/support/knowledge"
+            href="/admin/support/knowledge"
             className="p-4 bg-[var(--card-bg)] border border-[var(--border)] rounded-xl hover:border-purple-500/50 transition-colors group"
           >
             <div className="flex items-center gap-3">
@@ -444,7 +444,7 @@ export default function SupportDashboardPage() {
           </Link>
 
           <Link
-            href="/app/support/metrics"
+            href="/admin/support/metrics"
             className="p-4 bg-[var(--card-bg)] border border-[var(--border)] rounded-xl hover:border-purple-500/50 transition-colors group"
           >
             <div className="flex items-center gap-3">

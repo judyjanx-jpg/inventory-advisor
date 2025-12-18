@@ -369,7 +369,7 @@ export default function MetricsPage() {
                     {metrics.recentActivity.tickets.map((ticket) => (
                       <a 
                         key={ticket.id}
-                        href={`/app/support/tickets/${ticket.id}`}
+                        href={`/admin/support/tickets/${ticket.id}`}
                         className="block p-3 bg-[var(--muted)]/50 rounded-lg hover:bg-[var(--muted)] transition-colors"
                       >
                         <div className="flex items-start justify-between mb-1">

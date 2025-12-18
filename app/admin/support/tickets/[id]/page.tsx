@@ -237,7 +237,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
           <div className="text-center py-12">
             <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-[var(--foreground)]">Ticket not found</h2>
-            <Link href="/app/support" className="text-purple-400 hover:underline mt-4 inline-block">
+            <Link href="/admin/support" className="text-purple-400 hover:underline mt-4 inline-block">
               Back to Support Dashboard
             </Link>
           </div>
@@ -253,7 +253,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
         <div className="flex items-start justify-between">
           <div>
             <Link 
-              href="/app/support"
+              href="/admin/support"
               className="inline-flex items-center gap-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] mb-4 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
