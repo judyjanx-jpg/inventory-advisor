@@ -105,16 +105,18 @@ export default function PublicSupportPortal() {
           href="https://www.amazon.com/gp/your-account/order-history"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-between bg-gray-900 text-white rounded-2xl p-6 hover:bg-gray-800 transition-colors"
+          className="flex items-center justify-between bg-white border-2 border-gray-200 hover:border-gray-300 rounded-2xl p-6 hover:shadow-lg transition-all"
         >
           <div className="flex items-center gap-4">
-            <Package className="w-8 h-8" />
+            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+              <Package className="w-6 h-6 text-orange-600" />
+            </div>
             <div>
-              <h3 className="text-lg font-semibold">Track Your Order</h3>
-              <p className="text-gray-400">View order status on Amazon</p>
+              <h3 className="text-lg font-semibold text-gray-900">Track Your Order</h3>
+              <p className="text-gray-500">View order status on Amazon</p>
             </div>
           </div>
-          <ChevronRight className="w-6 h-6" />
+          <ChevronRight className="w-6 h-6 text-gray-400" />
         </a>
       </section>
 
