@@ -246,7 +246,7 @@ export default function NewShipmentPage() {
     }
   }
 
-  // Handle Excel file upload
+  // Handle Excel/CSV file upload
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -254,17 +254,49 @@ export default function NewShipmentPage() {
     setBulkError('')
     
     try {
-      const text = await file.text()
-      const lines = text.split('\n').filter(line => line.trim())
-      
-      // Check if it's CSV or TSV
-      const delimiter = text.includes('\t') ? '\t' : ','
-      const rows = lines.map(line => line.split(delimiter).map(cell => cell.trim().replace(/^["']|["']$/g, '')))
-      
-      // Find SKU and QTY columns
+      const fileName = file.name.toLowerCase()
+      let rows: string[][] = []
+
+      // Handle Excel files (.xlsx, .xls) using xlsx library
+      if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+        const XLSX = await import('xlsx')
+        const arrayBuffer = await file.arrayBuffer()
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        // Get data as array of arrays, all values as strings
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false }) as any[][]
+        rows = jsonData.map(row => row.map((cell: any) => String(cell || '').trim()))
+      } else {
+        // Handle CSV/TSV as text
+        const text = await file.text()
+        const lines = text.split('\n').filter(line => line.trim())
+        const delimiter = text.includes('\t') ? '\t' : ','
+        rows = lines.map(line => line.split(delimiter).map(cell => cell.trim().replace(/^["']|["']$/g, '')))
+      }
+
+      if (rows.length === 0) {
+        setBulkError('File is empty')
+        return
+      }
+
+      // Find SKU and QTY columns from header
       const header = rows[0].map(h => h.toUpperCase())
-      let skuCol = header.findIndex(h => h === 'SKU' || h === 'SELLER SKU' || h === 'SELLER-SKU')
-      let qtyCol = header.findIndex(h => h === 'QTY' || h === 'QUANTITY' || h === 'UNITS')
+      let skuCol = header.findIndex(h => 
+        h === 'SKU' || 
+        h === 'SELLER SKU' || 
+        h === 'SELLER-SKU' || 
+        h === 'MERCHANT SKU' ||
+        h === 'MSKU'
+      )
+      let qtyCol = header.findIndex(h => 
+        h === 'QTY' || 
+        h === 'QUANTITY' || 
+        h === 'UNITS' || 
+        h === 'COUNT' ||
+        h === 'SHIP QTY' ||
+        h === 'SHIPMENT QTY'
+      )
 
       // If no header found, assume column 0 = SKU, column 1 = QTY
       if (skuCol === -1) skuCol = 0
@@ -272,24 +304,33 @@ export default function NewShipmentPage() {
 
       const dataRows = rows.slice(1) // Skip header
       const entries: string[] = []
+      const skipped: string[] = []
 
       for (const row of dataRows) {
         const sku = row[skuCol]?.trim()
-        const qty = parseInt(row[qtyCol]) || 0
+        const qtyStr = row[qtyCol]?.trim()
+        const qty = parseInt(qtyStr) || 0
+        
         if (sku && qty > 0) {
           entries.push(`${sku}x${qty}`)
+        } else if (sku && !qty) {
+          skipped.push(sku)
         }
       }
 
       if (entries.length > 0) {
         // Overwrite: replace all existing items with uploaded ones
         await parseBulkText(entries.join(', '), true)
+        
+        if (skipped.length > 0) {
+          setBulkError(`Imported ${entries.length} items. Skipped ${skipped.length} items with qty=0 or invalid qty.`)
+        }
       } else {
-        setBulkError('No valid SKU/QTY data found in file')
+        setBulkError(`No valid SKU/QTY data found in file.\n\nExpected columns: SKU (or SELLER SKU) and QTY (or QUANTITY)\nFound headers: ${header.slice(0, 5).join(', ')}${header.length > 5 ? '...' : ''}`)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error reading file:', error)
-      setBulkError('Failed to read file. Please use CSV or Excel format.')
+      setBulkError(`Failed to read file: ${error.message || 'Unknown error'}. Please use CSV or Excel format.`)
     }
 
     // Reset file input
