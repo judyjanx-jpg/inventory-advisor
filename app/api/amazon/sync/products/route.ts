@@ -183,7 +183,7 @@ export async function POST() {
           path: { asin },
           query: {
             marketplaceIds: [credentials.marketplaceId],
-            includedData: ['attributes', 'relationships', 'summaries'],
+            includedData: ['attributes', 'relationships', 'summaries', 'images'],
           },
           options: {
             version: '2022-04-01'  // THIS IS THE KEY - specify the API version!
@@ -306,13 +306,67 @@ export async function POST() {
       // Get variation attributes
       let variationType: string | null = null
       let variationValue: string | null = null
-      
+
       if (attributes.size?.[0]?.value) {
         variationType = 'Size'
         variationValue = attributes.size[0].value
       } else if (attributes.color?.[0]?.value) {
         variationType = 'Color'
         variationValue = attributes.color[0].value
+      }
+
+      // Extract Amazon listing data for listing tools
+      let mainImageUrl: string | null = null
+      let additionalImages: string[] = []
+      let bulletPoints: string[] = []
+      let productDescription: string | null = null
+
+      // Extract images from catalog data
+      // Images structure: { images: [{ marketplaceId, images: [{ variant, link, height, width }] }] }
+      const catalogImages = catalog?.images || []
+      for (const imageGroup of catalogImages) {
+        const images = imageGroup?.images || []
+        for (const img of images) {
+          if (img.link) {
+            // MAIN variant is the primary image
+            if (img.variant === 'MAIN' && !mainImageUrl) {
+              mainImageUrl = img.link
+            } else if (img.variant !== 'MAIN') {
+              additionalImages.push(img.link)
+            }
+          }
+        }
+      }
+      // If no MAIN image found, use the first available
+      if (!mainImageUrl && additionalImages.length > 0) {
+        mainImageUrl = additionalImages.shift() || null
+      }
+
+      // Extract bullet points from attributes
+      // Bullet points are usually stored as bullet_point attribute array
+      const bulletPointAttrs = attributes.bullet_point || []
+      for (const bp of bulletPointAttrs) {
+        if (bp?.value) {
+          bulletPoints.push(bp.value)
+        }
+      }
+
+      // Extract product description
+      // Description can be in product_description or item_description attributes
+      const descAttrs = attributes.product_description || attributes.item_description || []
+      if (descAttrs.length > 0 && descAttrs[0]?.value) {
+        productDescription = descAttrs[0].value
+      }
+
+      // Store relevant Amazon attributes for AI tools
+      const amazonAttributes = {
+        ...(attributes.brand?.[0] && { brand: attributes.brand[0].value }),
+        ...(attributes.item_type_name?.[0] && { itemType: attributes.item_type_name[0].value }),
+        ...(attributes.material?.[0] && { material: attributes.material[0].value }),
+        ...(attributes.target_audience_keyword && { targetAudience: attributes.target_audience_keyword.map((a: any) => a.value) }),
+        ...(attributes.style && { style: attributes.style.map((a: any) => a.value) }),
+        ...(attributes.recommended_uses_for_product && { recommendedUses: attributes.recommended_uses_for_product.map((a: any) => a.value) }),
+        ...(attributes.product_site_launch_date?.[0] && { launchDate: attributes.product_site_launch_date[0].value }),
       }
 
       // Check if product exists
@@ -336,6 +390,12 @@ export async function POST() {
               isParent,
               variationType,
               variationValue,
+              // Amazon listing data
+              mainImageUrl,
+              additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
+              bulletPoints: bulletPoints.length > 0 ? bulletPoints : undefined,
+              productDescription,
+              amazonAttributes: Object.keys(amazonAttributes).length > 0 ? amazonAttributes : undefined,
               inventoryLevels: {
                 create: {
                   fbaAvailable: quantity,
@@ -372,6 +432,12 @@ export async function POST() {
             isParent: isParent || product.isParent,
             variationType: variationType || product.variationType,
             variationValue: variationValue || product.variationValue,
+            // Amazon listing data - update if we have new data
+            ...(mainImageUrl && { mainImageUrl }),
+            ...(additionalImages.length > 0 && { additionalImages }),
+            ...(bulletPoints.length > 0 && { bulletPoints }),
+            ...(productDescription && { productDescription }),
+            ...(Object.keys(amazonAttributes).length > 0 && { amazonAttributes }),
           },
         })
 

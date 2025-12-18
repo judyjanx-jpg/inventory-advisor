@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
                 price: true,
                 isWarrantied: true,
                 asin: true,
+                mainImageUrl: true,
               }
             }
           }
@@ -90,9 +91,8 @@ export async function GET(request: NextRequest) {
         quantity: item.quantity,
         price: Number(item.itemPrice),
         isWarrantied: item.product.isWarrantied,
-        imageUrl: item.product.asin 
-          ? `https://m.media-amazon.com/images/P/${item.product.asin}.jpg`
-          : null,
+        imageUrl: item.product.mainImageUrl
+          || (item.product.asin ? `https://m.media-amazon.com/images/P/${item.product.asin}.jpg` : null),
       })),
       shippingAddress: {
         city: order.shipCity,
