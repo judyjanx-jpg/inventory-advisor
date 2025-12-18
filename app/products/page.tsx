@@ -74,6 +74,7 @@ interface Product {
   labelType?: string // fnsku_only, fnsku_tp, tp_only
   transparencyEnabled?: boolean
   warehouseLocation?: string
+  physicalProductGroupId?: string // For linking products that share physical inventory
   createdAt?: string
   supplier?: { id: number; name: string }
   inventoryLevels?: {
@@ -138,7 +139,12 @@ export default function ProductsPage() {
   const [showSkuMapping, setShowSkuMapping] = useState(false)
   const [showProductSettings, setShowProductSettings] = useState(false)
   const [showBulkUpdate, setShowBulkUpdate] = useState(false)
+  const [showLinkProducts, setShowLinkProducts] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [linkedProducts, setLinkedProducts] = useState<Product[]>([])
+  const [linkSearchTerm, setLinkSearchTerm] = useState('')
+  const [linkSearchResults, setLinkSearchResults] = useState<Product[]>([])
+  const [savingLink, setSavingLink] = useState(false)
   
   // Suppliers
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -393,6 +399,132 @@ export default function ProductsPage() {
     }
   }
 
+  // Link Products functionality
+  const openLinkProducts = async (product: Product, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setSelectedProduct(product)
+    setLinkSearchTerm('')
+    setLinkSearchResults([])
+    
+    // Fetch all products to get updated linked products
+    const allProductsRes = await fetch('/api/products?flat=true')
+    const allProductsData = await allProductsRes.json()
+    const allProducts = Array.isArray(allProductsData) ? allProductsData : []
+    
+    // Find all products linked to this one
+    if (product.physicalProductGroupId) {
+      const linked = allProducts.filter((p: Product) => 
+        p.physicalProductGroupId === product.physicalProductGroupId && p.sku !== product.sku
+      )
+      setLinkedProducts(linked)
+    } else {
+      setLinkedProducts([])
+    }
+    
+    setShowLinkProducts(true)
+  }
+
+  const searchProductsForLinking = (search: string) => {
+    setLinkSearchTerm(search)
+    if (search.trim().length < 2) {
+      setLinkSearchResults([])
+      return
+    }
+    
+    const searchLower = search.toLowerCase()
+    // Search in all SKU products (flat list)
+    const results = allSkuProducts.filter(p => 
+      p.sku !== selectedProduct?.sku && // Don't include self
+      (p.sku.toLowerCase().includes(searchLower) || 
+       p.title.toLowerCase().includes(searchLower)) &&
+      (!p.physicalProductGroupId || p.physicalProductGroupId !== selectedProduct?.physicalProductGroupId) // Don't show already linked
+    ).slice(0, 10)
+    
+    setLinkSearchResults(results)
+  }
+
+  const linkProduct = async (productToLink: Product) => {
+    if (!selectedProduct) return
+    
+    setSavingLink(true)
+    try {
+      // Generate a group ID (use the selected product's existing group ID or create new)
+      const groupId = selectedProduct.physicalProductGroupId || `group-${selectedProduct.sku}-${Date.now()}`
+      
+      // Link both products to the same group
+      const res1 = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku: selectedProduct.sku,
+          physicalProductGroupId: groupId,
+        }),
+      })
+      
+      const res2 = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku: productToLink.sku,
+          physicalProductGroupId: groupId,
+        }),
+      })
+      
+      if (res1.ok && res2.ok) {
+        await fetchProducts()
+        // Refresh linked products list
+        const allProductsRes = await fetch('/api/products?flat=true')
+        const allProductsData = await allProductsRes.json()
+        const allProducts = Array.isArray(allProductsData) ? allProductsData : []
+        const updatedProduct = allProducts.find((p: Product) => p.sku === selectedProduct.sku)
+        if (updatedProduct?.physicalProductGroupId) {
+          const linked = allProducts.filter((p: Product) => 
+            p.physicalProductGroupId === updatedProduct.physicalProductGroupId && p.sku !== selectedProduct.sku
+          )
+          setLinkedProducts(linked)
+        }
+        setLinkSearchTerm('')
+        setLinkSearchResults([])
+      } else {
+        alert('Failed to link products')
+      }
+    } catch (error) {
+      console.error('Error linking products:', error)
+      alert('Failed to link products')
+    } finally {
+      setSavingLink(false)
+    }
+  }
+
+  const unlinkProduct = async (productToUnlink: Product) => {
+    if (!selectedProduct) return
+    
+    setSavingLink(true)
+    try {
+      const res = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku: productToUnlink.sku,
+          physicalProductGroupId: null,
+        }),
+      })
+      
+      if (res.ok) {
+        await fetchProducts()
+        // Remove from linked list
+        setLinkedProducts(prev => prev.filter(p => p.sku !== productToUnlink.sku))
+      } else {
+        alert('Failed to unlink product')
+      }
+    } catch (error) {
+      console.error('Error unlinking product:', error)
+      alert('Failed to unlink product')
+    } finally {
+      setSavingLink(false)
+    }
+  }
+
   // Rename functionality
   const startEditing = (product: Product, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -618,14 +750,25 @@ export default function ProductsPage() {
             <div className="flex items-center gap-1">
               {/* Only show settings for actual products, not parent containers */}
               {!hasVariations && !product.isParent && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={(e) => openProductSettings(product, e)}
-                  title="Product Settings"
-                >
-                  <Settings className="w-4 h-4" />
-                </Button>
+                <>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={(e) => openProductSettings(product, e)}
+                    title="Product Settings"
+                  >
+                    <Settings className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={(e) => openLinkProducts(product, e)}
+                    title="Link Products (Share Physical Inventory)"
+                    className={product.physicalProductGroupId ? 'text-cyan-400' : ''}
+                  >
+                    <Layers className="w-4 h-4" />
+                  </Button>
+                </>
               )}
               <Button 
                 variant="ghost" 
@@ -1243,6 +1386,108 @@ export default function ProductsPage() {
             loading={savingSettings}
           >
             Save Settings
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Link Products Modal */}
+      <Modal
+        isOpen={showLinkProducts}
+        onClose={() => {
+          setShowLinkProducts(false)
+          setLinkSearchTerm('')
+          setLinkSearchResults([])
+        }}
+        title={`Link Products: ${selectedProduct?.sku}`}
+      >
+        <div className="space-y-4">
+          <div className="bg-slate-800/30 rounded-lg p-3">
+            <p className="text-sm text-slate-400 mb-2">
+              Linked products share the same physical inventory and purchasing velocity, but maintain separate FBA listings.
+            </p>
+            <p className="text-xs text-slate-500">
+              Example: A 9-inch chain sold as both "bracelet" and "anklet" listings.
+            </p>
+          </div>
+
+          {/* Currently Linked Products */}
+          {linkedProducts.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Currently Linked ({linkedProducts.length})
+              </label>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {linkedProducts.map((linked) => (
+                  <div
+                    key={linked.sku}
+                    className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700"
+                  >
+                    <div>
+                      <p className="font-mono text-white font-medium">{linked.sku}</p>
+                      <p className="text-sm text-slate-400 truncate">{linked.title}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => unlinkProduct(linked)}
+                      disabled={savingLink}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Search to Link New Product */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Link Another Product
+            </label>
+            <input
+              type="text"
+              value={linkSearchTerm}
+              onChange={(e) => searchProductsForLinking(e.target.value)}
+              placeholder="Search by SKU or title..."
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            />
+            
+            {/* Search Results */}
+            {linkSearchResults.length > 0 && (
+              <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                {linkSearchResults.map((product) => (
+                  <div
+                    key={product.sku}
+                    className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700 hover:border-cyan-500/50 cursor-pointer"
+                    onClick={() => linkProduct(product)}
+                  >
+                    <div>
+                      <p className="font-mono text-white font-medium">{product.sku}</p>
+                      <p className="text-sm text-slate-400 truncate">{product.title}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={savingLink}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => {
+            setShowLinkProducts(false)
+            setLinkSearchTerm('')
+            setLinkSearchResults([])
+          }}>
+            Close
           </Button>
         </ModalFooter>
       </Modal>

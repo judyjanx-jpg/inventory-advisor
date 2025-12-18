@@ -30,6 +30,11 @@ model Product {
   variationType  String?   @map("variation_type") // e.g., "Size", "Color"
   variationValue String?   @map("variation_value") // e.g., "Large", "Blue"
 
+  // Physical Product Linking (for same physical item sold as different listings)
+  // Products with the same physicalProductGroupId share warehouse inventory and purchasing velocity
+  // but maintain separate FBA listings and replenishment recommendations
+  physicalProductGroupId String? @map("physical_product_group_id") // UUID or identifier for the group
+
   // Amazon Identifiers
   asin  String?
   fnsku String?

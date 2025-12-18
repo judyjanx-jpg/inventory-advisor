@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sku, displayName, isHidden, cost, price, supplierId, supplierSku, fnsku, upc, labelType, warehouseLocation } = body
+    const { sku, displayName, isHidden, cost, price, supplierId, supplierSku, fnsku, upc, labelType, warehouseLocation, physicalProductGroupId } = body
     
     if (!sku) {
       return NextResponse.json(
@@ -224,6 +224,9 @@ export async function PUT(request: NextRequest) {
     }
     if (warehouseLocation !== undefined) {
       updateData.warehouseLocation = warehouseLocation || null
+    }
+    if (physicalProductGroupId !== undefined) {
+      updateData.physicalProductGroupId = physicalProductGroupId || null
     }
 
     const product = await prisma.product.update({

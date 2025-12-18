@@ -72,6 +72,51 @@ export async function POST(
         })
       )
 
+      // If this product is linked to others, also mark their PO items as received
+      if (poItem.product.physicalProductGroupId && received > 0) {
+        // Find all linked products
+        const linkedProducts = await prisma.product.findMany({
+          where: {
+            physicalProductGroupId: poItem.product.physicalProductGroupId,
+            sku: { not: poItem.masterSku }, // Exclude the current product
+          },
+        })
+
+        // Find PO items for linked products in this same PO
+        for (const linkedProduct of linkedProducts) {
+          const linkedPOItem = purchaseOrder.items.find((i: any) => i.masterSku === linkedProduct.sku)
+          if (linkedPOItem) {
+            // Mark the linked product's PO item as received with the same quantity
+            updates.push(
+              prisma.purchaseOrderItem.update({
+                where: { id: linkedPOItem.id },
+                data: {
+                  quantityReceived: linkedPOItem.quantityReceived + received,
+                },
+              })
+            )
+            // Also update inventory for linked product (they share physical inventory)
+            inventoryUpdates.push(
+              prisma.inventoryLevel.upsert({
+                where: { masterSku: linkedProduct.sku },
+                update: {
+                  warehouseAvailable: {
+                    increment: received,
+                  },
+                  warehouseLastSync: new Date(),
+                },
+                create: {
+                  masterSku: linkedProduct.sku,
+                  warehouseAvailable: received,
+                  fbaAvailable: 0,
+                  warehouseLastSync: new Date(),
+                },
+              })
+            )
+          }
+        }
+      }
+
       // Update inventory (add received goods to warehouse)
       // This updates warehouseAvailable which is used by the forecasting tool
       if (received > 0) {

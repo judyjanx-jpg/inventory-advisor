@@ -107,12 +107,49 @@ export async function GET(request: NextRequest) {
     // Create a map for quick lookup
     const inventoryMap = new Map(inventoryLevels.map((il: any) => [il.masterSku, il]))
 
+    // Group products by physicalProductGroupId to combine warehouse inventory
+    const linkedGroups = new Map<string, any[]>()
+    const unlinkedProducts: any[] = []
+    
+    for (const product of childProducts) {
+      if (product.physicalProductGroupId) {
+        const groupId = product.physicalProductGroupId
+        if (!linkedGroups.has(groupId)) {
+          linkedGroups.set(groupId, [])
+        }
+        linkedGroups.get(groupId)!.push(product)
+      } else {
+        unlinkedProducts.push(product)
+      }
+    }
+
+    // Calculate combined warehouse inventory for each linked group
+    const combinedWarehouseInventory = new Map<string, number>()
+    for (const [groupId, linkedProducts] of linkedGroups.entries()) {
+      let totalWarehouse = 0
+      for (const product of linkedProducts) {
+        const level = inventoryMap.get(product.sku)
+        if (level) {
+          totalWarehouse += Number(level.warehouseAvailable || 0)
+        }
+      }
+      combinedWarehouseInventory.set(groupId, totalWarehouse)
+    }
+
     // Transform to inventory format
     let itemCount = 0
     const inventory = childProducts.map((product: any) => {
       itemCount++
       // Get inventory level from map or create default
       const existingLevel: any = inventoryMap.get(product.sku)
+
+      // For linked products, use combined warehouse inventory
+      let warehouseAvailable = 0
+      if (product.physicalProductGroupId) {
+        warehouseAvailable = combinedWarehouseInventory.get(product.physicalProductGroupId) || 0
+      } else {
+        warehouseAvailable = existingLevel ? Number(existingLevel.warehouseAvailable) || 0 : 0
+      }
 
       const level = existingLevel ? {
         ...existingLevel,
@@ -123,7 +160,7 @@ export async function GET(request: NextRequest) {
         fbaInboundReceiving: Number(existingLevel.fbaInboundReceiving) || 0,
         fbaReserved: Number(existingLevel.fbaReserved) || 0,
         fbaUnfulfillable: Number(existingLevel.fbaUnfulfillable) || 0,
-        warehouseAvailable: Number(existingLevel.warehouseAvailable) || 0,
+        warehouseAvailable: warehouseAvailable, // Use combined for linked products
         warehouseReserved: Number(existingLevel.warehouseReserved) || 0,
       } : {
         masterSku: product.sku,
@@ -133,7 +170,7 @@ export async function GET(request: NextRequest) {
         fbaInboundReceiving: 0,
         fbaReserved: 0,
         fbaUnfulfillable: 0,
-        warehouseAvailable: 0,
+        warehouseAvailable: warehouseAvailable, // Use combined for linked products
         warehouseReserved: 0,
         createdAt: new Date(),
         updatedAt: new Date(),

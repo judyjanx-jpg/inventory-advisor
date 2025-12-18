@@ -104,6 +104,24 @@ export async function POST(request: NextRequest) {
       return true
     })
 
+    // ========================================
+    // Group products by physicalProductGroupId for linked inventory
+    // ========================================
+    const linkedGroups = new Map<string, any[]>()
+    const unlinkedProducts: any[] = []
+    
+    for (const product of childProducts) {
+      if (product.physicalProductGroupId) {
+        const groupId = product.physicalProductGroupId
+        if (!linkedGroups.has(groupId)) {
+          linkedGroups.set(groupId, [])
+        }
+        linkedGroups.get(groupId)!.push(product)
+      } else {
+        unlinkedProducts.push(product)
+      }
+    }
+
     const now = new Date()
     const targetDate = new Date(now)
     targetDate.setDate(targetDate.getDate() + daysTarget)
@@ -113,7 +131,205 @@ export async function POST(request: NextRequest) {
 
     const recommendations: any[] = []
 
-    for (const product of childProducts) {
+    // Process linked groups (combine velocities and warehouse inventory)
+    for (const [groupId, linkedProducts] of linkedGroups.entries()) {
+      // Combine velocities from all linked products
+      let combinedVelocity30d = 0
+      let combinedVelocity90d = 0
+      let combinedUnitsSold30d = 0
+      let combinedWarehouseAvailable = 0
+      let combinedFbaAvailable = 0
+      let combinedFbaInbound = 0
+      let combinedIncomingFromPO = 0
+      const allIncomingPOItems: any[] = []
+      
+      // Get 30-day sales for all linked products
+      const thirtyDaysAgo = new Date(now)
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+      for (const product of linkedProducts) {
+        const velocity30d = Number(product.salesVelocity?.velocity30d || 0)
+        const velocity90d = Number(product.salesVelocity?.velocity90d || 0)
+        combinedVelocity30d += velocity30d
+        combinedVelocity90d += velocity90d
+
+        try {
+          const recentSales = await prisma.dailyProfit.aggregate({
+            where: {
+              masterSku: product.sku,
+              date: { gte: thirtyDaysAgo },
+            },
+            _sum: {
+              unitsSold: true,
+            },
+          })
+          combinedUnitsSold30d += Number(recentSales._sum.unitsSold || 0)
+        } catch (e) {
+          // Table might not exist
+        }
+
+        // Combine warehouse inventory (shared physical inventory)
+        const inventoryLevel = product.inventoryLevels?.[0] || null
+        if (inventoryLevel) {
+          combinedWarehouseAvailable += Number(inventoryLevel.warehouseAvailable || 0)
+          combinedFbaAvailable += Number(inventoryLevel.fbaAvailable || 0)
+          combinedFbaInbound += 
+            Number(inventoryLevel.fbaInboundWorking || 0) +
+            Number(inventoryLevel.fbaInboundShipped || 0) +
+            Number(inventoryLevel.fbaInboundReceiving || 0)
+        }
+
+        // Combine incoming POs
+        const incomingPO = incomingBySku[product.sku] || { totalIncoming: 0, items: [] }
+        combinedIncomingFromPO += incomingPO.totalIncoming
+        allIncomingPOItems.push(...incomingPO.items)
+      }
+
+      const currentVelocity = combinedVelocity30d > 0 ? combinedVelocity30d : combinedVelocity90d > 0 ? combinedVelocity90d : 0
+
+      if (currentVelocity === 0) continue // Skip groups with no sales
+
+      // Use the first product in the group as the representative (for supplier, cost, etc.)
+      const representativeProduct = linkedProducts[0]
+      
+      const inventoryOnHand = combinedFbaAvailable + combinedFbaInbound + combinedWarehouseAvailable
+      const totalInventory = inventoryOnHand + combinedIncomingFromPO
+
+      // Calculate days of stock
+      const daysOfStock = currentVelocity > 0 ? totalInventory / currentVelocity : 999
+
+      // Calculate demand for target period
+      const demandForPeriod = currentVelocity * daysTarget
+
+      // Get supplier lead time from representative product
+      const leadTimeDays = Number(representativeProduct.supplier?.leadTimeDays || 30)
+      const safetyStock = Math.ceil(currentVelocity * Math.max(leadTimeDays, 14))
+
+      // Calculate seasonality multiplier (check if we're approaching a peak)
+      let seasonalEvents: any[] = []
+      try {
+        seasonalEvents = await prisma.seasonalEvent.findMany({
+          where: { isActive: true },
+        })
+      } catch (error: any) {
+        // Table doesn't exist yet - that's okay, just skip seasonality
+        if (!error.message?.includes('does not exist') && !error.message?.includes('Unknown table')) {
+          console.warn('Error fetching seasonal events:', error.message)
+        }
+      }
+      
+      let seasonalityMultiplier = 1.0
+      let seasonalityNote = ''
+      const today = new Date()
+      const daysToCheck = 30 // Check next 30 days for upcoming events
+      
+      for (const event of seasonalEvents) {
+        const eventStart = new Date(today.getFullYear(), event.startMonth - 1, event.startDay)
+        const eventEnd = new Date(today.getFullYear(), event.endMonth - 1, event.endDay)
+        
+        // Check if event is coming up in the next 30 days
+        const daysUntilEvent = Math.ceil((eventStart.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        if (daysUntilEvent >= 0 && daysUntilEvent <= daysToCheck) {
+          const multiplier = Number(event.learnedMultiplier || event.baseMultiplier)
+          if (multiplier > seasonalityMultiplier) {
+            seasonalityMultiplier = multiplier
+            seasonalityNote = `${event.name} coming up (+${((multiplier - 1) * 100).toFixed(0)}%)`
+          }
+        }
+      }
+
+      // Calculate adjusted demand (with seasonality)
+      const adjustedDemandForPeriod = demandForPeriod * seasonalityMultiplier
+
+      // Calculate what we need to order (including safety stock)
+      const neededInventory = Math.max(0, adjustedDemandForPeriod + safetyStock - totalInventory)
+
+      // Calculate when to order (order when we'll run out in leadTime + buffer)
+      const daysUntilReorder = Math.max(0, daysOfStock - leadTimeDays - 7)
+
+      if (neededInventory > 0 || daysOfStock < daysTarget) {
+        // Calculate order quantities for each order cycle
+        const orderCycles: any[] = []
+        let currentDate = new Date(now)
+        let remainingNeeded = neededInventory
+
+        while (currentDate < targetDate && remainingNeeded > 0) {
+          // Calculate how much we'll need by this order date
+          const daysUntilOrder = Math.ceil((currentDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          const projectedInventory = totalInventory - (currentVelocity * daysUntilOrder)
+          const projectedNeeded = Math.max(0, (currentVelocity * daysTarget) - projectedInventory)
+
+          if (projectedNeeded > 0) {
+            // Round up to reasonable batch sizes
+            let orderQty = projectedNeeded
+            const moq = representativeProduct.supplier?.minimumOrderQuantity || 1
+            if (moq > 1) {
+              orderQty = Math.ceil(orderQty / moq) * moq
+            }
+
+            orderCycles.push({
+              orderDate: new Date(currentDate).toISOString(),
+              quantity: Math.ceil(orderQty),
+              projectedInventory: Math.max(0, Math.floor(projectedInventory)),
+              needed: Math.ceil(projectedNeeded),
+            })
+
+            remainingNeeded -= orderQty
+          }
+
+          // Move to next order cycle
+          currentDate.setDate(currentDate.getDate() + daysBetweenOrders)
+        }
+
+        // Create recommendation for the group (using representative product)
+        recommendations.push({
+          masterSku: representativeProduct.sku,
+          title: representativeProduct.title,
+          linkedSkus: linkedProducts.map(p => p.sku), // Show which SKUs are linked
+          isLinkedGroup: true,
+          supplier: representativeProduct.supplier ? {
+            id: representativeProduct.supplier.id,
+            name: representativeProduct.supplier.name,
+            moq: representativeProduct.supplier.minimumOrderQuantity || 1,
+          } : null,
+          currentInventory: totalInventory,
+          fbaAvailable: combinedFbaAvailable,
+          fbaInbound: combinedFbaInbound,
+          warehouseAvailable: combinedWarehouseAvailable,
+          incomingFromPO: combinedIncomingFromPO,
+          incomingPODetails: allIncomingPOItems,
+          currentVelocity: currentVelocity,
+          daysOfStock: Math.floor(daysOfStock),
+          targetDays: daysTarget,
+          neededInventory: Math.ceil(neededInventory),
+          safetyStock,
+          leadTimeDays,
+          daysUntilReorder: Math.floor(daysUntilReorder),
+          orderCycles,
+          unitCost: Number(representativeProduct.cost || 0),
+          calculationBreakdown: {
+            unitsSold30d: combinedUnitsSold30d,
+            velocity30d: combinedVelocity30d,
+            velocity90d: combinedVelocity90d,
+            baseDemand: demandForPeriod,
+            seasonalityMultiplier,
+            seasonalityNote,
+            adjustedDemand: adjustedDemandForPeriod,
+            fbaAvailable: combinedFbaAvailable,
+            fbaInbound: combinedFbaInbound,
+            warehouseAvailable: combinedWarehouseAvailable,
+            incomingFromPO: combinedIncomingFromPO,
+            currentInventory: totalInventory,
+            safetyStock,
+            totalNeeded: adjustedDemandForPeriod + safetyStock,
+            finalNeeded: neededInventory,
+          },
+        })
+      }
+    }
+
+    // Process unlinked products (normal flow)
+    for (const product of unlinkedProducts) {
       const velocity30d = Number(product.salesVelocity?.velocity30d || 0)
       const velocity90d = Number(product.salesVelocity?.velocity90d || 0)
       const currentVelocity = velocity30d > 0 ? velocity30d : velocity90d > 0 ? velocity90d : 0
@@ -141,7 +357,6 @@ export async function POST(request: NextRequest) {
       }
 
       // Get current inventory across all locations
-      // inventoryLevels is an array, get the first one or use defaults
       const inventoryLevel = product.inventoryLevels?.[0] || null
 
       const inventory = inventoryLevel || {
@@ -152,9 +367,6 @@ export async function POST(request: NextRequest) {
         warehouseAvailable: 0,
       }
 
-      // ========================================
-      // UPDATED: Include incoming PO quantities
-      // ========================================
       const incomingPO = incomingBySku[product.sku] || { totalIncoming: 0, items: [] }
       
       // Break down inventory components
@@ -167,8 +379,6 @@ export async function POST(request: NextRequest) {
       const incomingFromPO = incomingPO.totalIncoming
       
       const inventoryOnHand = fbaAvailable + fbaInbound + warehouseAvailable
-      
-      // Total inventory = on hand + incoming from POs
       const totalInventory = inventoryOnHand + incomingFromPO
 
       // Calculate days of stock
@@ -266,11 +476,11 @@ export async function POST(request: NextRequest) {
             moq: product.supplier.minimumOrderQuantity || 1,
           } : null,
           currentInventory: totalInventory,
-          fbaAvailable,  // NEW: FBA available
-          fbaInbound,    // NEW: FBA inbound (working+shipped+receiving)
-          warehouseAvailable,  // NEW: Warehouse on hand
-          incomingFromPO: incomingPO.totalIncoming,  // What's on order
-          incomingPODetails: incomingPO.items,  // PO details
+          fbaAvailable,
+          fbaInbound,
+          warehouseAvailable,
+          incomingFromPO: incomingPO.totalIncoming,
+          incomingPODetails: incomingPO.items,
           currentVelocity: currentVelocity,
           daysOfStock: Math.floor(daysOfStock),
           targetDays: daysTarget,
@@ -288,10 +498,10 @@ export async function POST(request: NextRequest) {
             seasonalityMultiplier,
             seasonalityNote,
             adjustedDemand: adjustedDemandForPeriod,
-            fbaAvailable,  // NEW
-            fbaInbound,    // NEW
-            warehouseAvailable,  // NEW
-            incomingFromPO: incomingPO.totalIncoming,  // NEW
+            fbaAvailable,
+            fbaInbound,
+            warehouseAvailable,
+            incomingFromPO: incomingPO.totalIncoming,
             currentInventory: totalInventory,
             safetyStock,
             totalNeeded: adjustedDemandForPeriod + safetyStock,
