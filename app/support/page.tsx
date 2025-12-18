@@ -13,6 +13,7 @@ import {
   Heart
 } from 'lucide-react'
 
+// Force redeploy: v1.2.0 - Dec 18, 2024
 export default function PublicSupportPortal() {
   const branding = useBranding()
 
