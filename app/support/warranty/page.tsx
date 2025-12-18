@@ -208,15 +208,18 @@ export default function WarrantyPage() {
                   item.isWarrantied && !order.hasExistingClaim ? 'bg-white border-gray-200 hover:border-emerald-300 hover:shadow-md' : 'bg-gray-50 border-gray-100 opacity-50 cursor-not-allowed'
                 }`}
               >
-                <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                  <Package className="w-8 h-8 text-gray-400" />
+                <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                  ) : null}
+                  <Package className={`w-7 h-7 text-gray-400 ${item.imageUrl ? 'hidden' : ''}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-gray-900 font-medium truncate">{item.name}</p>
-                  <p className="text-sm text-gray-500">Qty: {item.quantity} · ${item.price.toFixed(2)}</p>
+                  <p className="text-sm text-gray-900 font-medium line-clamp-2 leading-snug">{item.name}</p>
+                  <p className="text-xs text-gray-500 mt-1">Qty: {item.quantity} · ${item.price.toFixed(2)}</p>
                   {!item.isWarrantied && <p className="text-xs text-amber-600 mt-1">Not eligible for warranty</p>}
                 </div>
-                <ChevronRight className="w-5 h-5 text-gray-300" />
+                <ChevronRight className="w-5 h-5 text-gray-300 flex-shrink-0" />
               </button>
             ))}
           </div>
@@ -233,12 +236,16 @@ export default function WarrantyPage() {
 
       <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-6 shadow-sm">
         <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100">
-          <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-            <Package className="w-8 h-8 text-gray-400" />
+          <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+            {selectedItem?.imageUrl ? (
+              <img src={selectedItem.imageUrl} alt={selectedItem.name} className="w-full h-full object-contain" />
+            ) : (
+              <Package className="w-7 h-7 text-gray-400" />
+            )}
           </div>
-          <div>
-            <p className="text-gray-900 font-medium">{selectedItem?.name}</p>
-            <p className="text-sm text-gray-500">From order {order?.orderId}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-gray-900 font-medium line-clamp-2 leading-snug">{selectedItem?.name}</p>
+            <p className="text-xs text-gray-500 mt-1">From order {order?.orderId}</p>
           </div>
         </div>
 

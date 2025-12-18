@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
                 displayName: true,
                 price: true,
                 isWarrantied: true,
+                asin: true,
               }
             }
           }
@@ -89,6 +90,9 @@ export async function GET(request: NextRequest) {
         quantity: item.quantity,
         price: Number(item.itemPrice),
         isWarrantied: item.product.isWarrantied,
+        imageUrl: item.product.asin 
+          ? `https://m.media-amazon.com/images/P/${item.product.asin}.jpg`
+          : null,
       })),
       shippingAddress: {
         city: order.shipCity,
