@@ -66,6 +66,14 @@ model Product {
   warehouseLocation   String? @map("warehouse_location") // Bin/Rack location for picking
   labelType           String  @default("fnsku_only") @map("label_type") // fnsku_tp, fnsku_only, tp_only
 
+  // Amazon Listing Data (for Listing Tool)
+  imageUrl           String?  @map("image_url") // Main product image URL
+  images             Json?    // Array of all image URLs [{url, variant, width, height}]
+  bulletPoints       Json?    @map("bullet_points") // Array of bullet points from Amazon
+  listingDescription String?  @map("listing_description") @db.Text // Amazon listing description (HTML)
+  searchTerms        String?  @map("search_terms") @db.Text // Backend search terms
+  listingLastSync    DateTime? @map("listing_last_sync") // When listing data was last synced
+
   // Customer Support & Warranty
   isWarrantied     Boolean @default(true) @map("is_warrantied") // Eligible for warranty claims
   careInstructions String? @map("care_instructions") @db.Text // For AI/support reference

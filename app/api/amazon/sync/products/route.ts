@@ -183,7 +183,7 @@ export async function POST() {
           path: { asin },
           query: {
             marketplaceIds: [credentials.marketplaceId],
-            includedData: ['attributes', 'relationships', 'summaries'],
+            includedData: ['attributes', 'relationships', 'summaries', 'images'],
           },
           options: {
             version: '2022-04-01'  // THIS IS THE KEY - specify the API version!
@@ -315,6 +315,50 @@ export async function POST() {
         variationValue = attributes.color[0].value
       }
 
+      // Extract listing data from catalog
+      let imageUrl: string | null = null
+      let images: any[] = []
+      let bulletPoints: string[] = []
+      let listingDescription: string | null = null
+
+      // Get images from catalog
+      if (catalog?.images) {
+        const imageData = catalog.images
+        // Images come as array of {marketplaceId, images: [{variant, link, width, height}]}
+        for (const imgWrapper of imageData) {
+          if (imgWrapper.images && Array.isArray(imgWrapper.images)) {
+            for (const img of imgWrapper.images) {
+              images.push({
+                url: img.link,
+                variant: img.variant,
+                width: img.width,
+                height: img.height,
+              })
+              // Set main image (MAIN variant is the primary product image)
+              if (img.variant === 'MAIN' && !imageUrl) {
+                imageUrl = img.link
+              }
+            }
+          }
+        }
+        // Fallback: use first image if no MAIN variant
+        if (!imageUrl && images.length > 0) {
+          imageUrl = images[0].url
+        }
+      }
+
+      // Get bullet points from attributes
+      if (attributes.bullet_point) {
+        bulletPoints = attributes.bullet_point
+          .map((bp: any) => bp.value)
+          .filter((v: any) => v && typeof v === 'string')
+      }
+
+      // Get description from attributes
+      if (attributes.product_description?.[0]?.value) {
+        listingDescription = attributes.product_description[0].value
+      }
+
       // Check if product exists
       let product = await prisma.product.findUnique({
         where: { sku },
@@ -336,6 +380,12 @@ export async function POST() {
               isParent,
               variationType,
               variationValue,
+              // Listing data
+              imageUrl,
+              images: images.length > 0 ? images : undefined,
+              bulletPoints: bulletPoints.length > 0 ? bulletPoints : undefined,
+              listingDescription,
+              listingLastSync: new Date(),
               inventoryLevels: {
                 create: {
                   fbaAvailable: quantity,
@@ -372,6 +422,12 @@ export async function POST() {
             isParent: isParent || product.isParent,
             variationType: variationType || product.variationType,
             variationValue: variationValue || product.variationValue,
+            // Update listing data if we have it
+            imageUrl: imageUrl || product.imageUrl,
+            images: images.length > 0 ? images : product.images,
+            bulletPoints: bulletPoints.length > 0 ? bulletPoints : product.bulletPoints,
+            listingDescription: listingDescription || product.listingDescription,
+            listingLastSync: (imageUrl || bulletPoints.length > 0 || listingDescription) ? new Date() : product.listingLastSync,
           },
         })
 
