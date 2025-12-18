@@ -713,28 +713,36 @@ export async function POST() {
               }
             }
             
-            await prisma.inventoryLevel.upsert({
-              where: { masterSku: item.sellerSku },
-              update: {
-                fbaAvailable,
-                fbaReserved,
-                fbaUnfulfillable,
-                fbaInboundWorking,
-                fbaInboundShipped,
-                fbaInboundReceiving,
-              },
-              create: {
-                masterSku: item.sellerSku,
-                fbaAvailable,
-                fbaReserved,
-                fbaUnfulfillable,
-                fbaInboundWorking,
-                fbaInboundShipped,
-                fbaInboundReceiving,
-                warehouseAvailable: 0,
-              },
+            // Only upsert inventory if the product exists (to avoid FK constraint errors)
+            const productExists = await prisma.product.findUnique({
+              where: { sku: item.sellerSku },
+              select: { sku: true },
             })
-            inventoryUpdated++
+
+            if (productExists) {
+              await prisma.inventoryLevel.upsert({
+                where: { masterSku: item.sellerSku },
+                update: {
+                  fbaAvailable,
+                  fbaReserved,
+                  fbaUnfulfillable,
+                  fbaInboundWorking,
+                  fbaInboundShipped,
+                  fbaInboundReceiving,
+                },
+                create: {
+                  masterSku: item.sellerSku,
+                  fbaAvailable,
+                  fbaReserved,
+                  fbaUnfulfillable,
+                  fbaInboundWorking,
+                  fbaInboundShipped,
+                  fbaInboundReceiving,
+                  warehouseAvailable: 0,
+                },
+              })
+              inventoryUpdated++
+            }
           } catch (e) {
             // Ignore errors
           }
