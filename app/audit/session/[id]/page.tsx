@@ -540,6 +540,7 @@ function ParentAuditView({
                 <div className="min-w-0 flex-1">
                   <div className="text-xs md:text-sm text-slate-400 truncate font-medium">{item.sku}</div>
                   <div className="text-xs text-slate-500">Cur: {item.available}</div>
+                  <div className="text-xs text-slate-600 mt-0.5">New Qty:</div>
                 </div>
                 {saving[item.sku] && (
                   <div className="text-xs text-cyan-400 flex-shrink-0">Saving...</div>
@@ -559,11 +560,40 @@ function ParentAuditView({
                   type="number"
                   inputMode="numeric"
                   min="0"
+                  step="1"
                   value={qty}
-                  onChange={(e) => onQtyChange(item.sku, parseInt(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const rawValue = e.target.value
+                    // Handle empty input - allow user to clear field
+                    if (rawValue === '') {
+                      // Set to 0 temporarily so user can type new number
+                      onQtyChange(item.sku, 0)
+                      return
+                    }
+                    // Parse as integer - this is the NEW warehouse quantity
+                    const numValue = parseInt(rawValue, 10)
+                    if (!isNaN(numValue) && numValue >= 0) {
+                      onQtyChange(item.sku, numValue)
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // On blur, ensure we have a valid number
+                    const rawValue = e.target.value.trim()
+                    if (rawValue === '') {
+                      // If empty on blur, reset to current available
+                      onQtyChange(item.sku, item.available)
+                      return
+                    }
+                    const numValue = parseInt(rawValue, 10)
+                    if (isNaN(numValue) || numValue < 0) {
+                      // Reset to current available if invalid
+                      onQtyChange(item.sku, item.available)
+                    }
+                  }}
                   onFocus={(e) => e.target.select()}
                   className="flex-1 min-w-0 px-2 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-lg md:text-xl font-bold text-center touch-manipulation"
                   placeholder="0"
+                  title="Enter new warehouse quantity"
                 />
                 <button
                   onClick={() => onQtyChange(item.sku, qty + 1)}
@@ -633,7 +663,8 @@ function SingleSkuAuditView({
       </div>
 
       <div className="text-center mb-4 md:mb-8">
-        <div className="text-sm text-slate-400 mb-3">Current Qty: {sku.available}</div>
+        <div className="text-sm text-slate-400 mb-1">Current Qty: {sku.available}</div>
+        <div className="text-xs text-slate-500 mb-3">New Qty (warehouse quantity)</div>
 
         {/* Mobile-friendly quantity input with +/- buttons */}
         <div className="flex items-center justify-center gap-2 md:gap-4">
@@ -648,10 +679,39 @@ function SingleSkuAuditView({
             type="number"
             inputMode="numeric"
             min="0"
+            step="1"
             value={currentQty}
-            onChange={(e) => onQtyChange(parseInt(e.target.value) || 0)}
+            onChange={(e) => {
+              const rawValue = e.target.value
+              // Handle empty input - allow user to clear field
+              if (rawValue === '') {
+                // Set to 0 temporarily so user can type new number
+                onQtyChange(0)
+                return
+              }
+              // Parse as integer - this is the NEW warehouse quantity
+              const numValue = parseInt(rawValue, 10)
+              if (!isNaN(numValue) && numValue >= 0) {
+                onQtyChange(numValue)
+              }
+            }}
+            onBlur={(e) => {
+              // On blur, ensure we have a valid number
+              const rawValue = e.target.value.trim()
+              if (rawValue === '') {
+                // If empty on blur, reset to current available
+                onQtyChange(sku.available)
+                return
+              }
+              const numValue = parseInt(rawValue, 10)
+              if (isNaN(numValue) || numValue < 0) {
+                // Reset to current available if invalid
+                onQtyChange(sku.available)
+              }
+            }}
             onFocus={(e) => e.target.select()}
             className="w-28 md:w-48 px-2 md:px-6 py-3 md:py-4 text-4xl md:text-5xl font-bold text-center bg-slate-900 border-2 border-slate-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none touch-manipulation"
+            title="Enter new warehouse quantity"
           />
           <button
             onClick={handleIncrement}

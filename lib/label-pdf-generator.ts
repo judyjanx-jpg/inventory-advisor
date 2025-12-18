@@ -234,18 +234,18 @@ async function drawComboLabel(
 
   // === TP SECTION (LEFT) ===
 
-  // Transparency icon
+  // Transparency icon - larger and properly positioned
   try {
-    pdf.addImage(TRANSPARENCY_ICON_BASE64, 'PNG', 2, 0.5, 3, 3)
+    pdf.addImage(TRANSPARENCY_ICON_BASE64, 'PNG', 1, 1, 4, 4)
   } catch (e) {
     console.warn('Could not add transparency icon:', e)
   }
 
-  // Header text
+  // Header text - adjusted to account for larger icon
   pdf.setFontSize(4)
   pdf.setFont('helvetica', 'normal')
-  pdf.text('Scan with the', 5.5, 1.5)
-  pdf.text('Transparency app', 5.5, 3)
+  pdf.text('Scan with the', 6, 2)
+  pdf.text('Transparency app', 6, 3.5)
 
   // QR Code - CENTERED in the TP section with proper margins
   if (qrImage) {
@@ -266,10 +266,10 @@ async function drawComboLabel(
     }
   }
 
-  // SKU text (rotated) - positioned to not overlap QR
+  // SKU text (rotated) - increased character limit and better positioning
   pdf.setFontSize(4)
-  const skuText = item.masterSku.length > 10 ? item.masterSku.substring(0, 10) : item.masterSku
-  pdf.text(skuText, tpSectionWidth - 1.5, heightMm / 2, { angle: 90 })
+  const skuText = item.masterSku.length > 15 ? item.masterSku.substring(0, 15) : item.masterSku
+  pdf.text(skuText, tpSectionWidth - 2, heightMm / 2, { angle: 90 })
 
   // === FNSKU SECTION (RIGHT) ===
   const fnskuCenterX = fnskuSectionX + fnskuSectionWidth / 2
@@ -285,17 +285,19 @@ async function drawComboLabel(
     }
   }
 
-  // Barcode
+  // Barcode - positioned lower to avoid being cut off
   if (barcodeImg) {
     const barcodeWidth = fnskuSectionWidth * 0.85
     const barcodeHeight = 6
     const barcodeX = fnskuSectionX + (fnskuSectionWidth - barcodeWidth) / 2
+    // Start barcode lower - add more space from top
+    const barcodeY = yOffset + 2
     try {
-      pdf.addImage(barcodeImg, 'PNG', barcodeX, yOffset, barcodeWidth, barcodeHeight)
+      pdf.addImage(barcodeImg, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight)
     } catch (e) {
       console.warn('Could not add barcode:', e)
     }
-    yOffset += barcodeHeight + 1
+    yOffset = barcodeY + barcodeHeight + 1
   }
 
   // FNSKU text (sanitized for display)
