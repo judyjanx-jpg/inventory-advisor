@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Printer, Tag, X, AlertCircle, Check, Loader2, Download, RotateCcw, Plus, CheckCircle2 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
-import { generateLabelPDF, downloadPDF } from '@/lib/label-pdf-generator'
+import { generateLabelPDF, openAndPrintPDF } from '@/lib/label-pdf-generator'
 
 interface ShipmentItem {
   masterSku: string
@@ -68,6 +68,18 @@ export default function ProductLabelPrinter({
   const [savingLabelType, setSavingLabelType] = useState<string | null>(null)
   const [generatingPDF, setGeneratingPDF] = useState<string | null>(null)
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null)
+  // Batch printing state
+  const [batchPrinting, setBatchPrinting] = useState<{
+    sku: string
+    currentBatch: number
+    totalBatches: number
+    batches: Array<{ codes: string[]; quantity: number }>
+    item: ShipmentItem
+    labelType: LabelType
+    labelSize: string
+    width: number
+    height: number
+  } | null>(null)
 
   // Load settings and printed counts from localStorage
   useEffect(() => {
@@ -220,6 +232,101 @@ export default function ProductLabelPrinter({
     }
   }
 
+  // Print a single batch
+  const printBatch = async (
+    item: ShipmentItem,
+    batchCodes: string[],
+    batchQuantity: number,
+    labelType: LabelType,
+    width: number,
+    height: number,
+    batchNumber: number
+  ) => {
+    setGeneratingPDF(item.masterSku)
+    setPdfProgress({ current: 0, total: batchQuantity * 2 })
+    
+    try {
+      const blob = await generateLabelPDF({
+        item: {
+          masterSku: item.masterSku,
+          fnsku: item.fnsku,
+          productName: item.productName,
+          brandLogo: item.brandLogo,
+        },
+        labelType,
+        quantity: batchQuantity,
+        widthIn: width,
+        heightIn: height,
+        tpCodes: batchCodes,
+        onProgress: (current, total) => setPdfProgress({ current, total }),
+      })
+
+      const fileName = `Labels-${item.masterSku}-Batch${batchNumber}-${Date.now()}.pdf`
+      openAndPrintPDF(blob, fileName)
+      console.log(`[PDF Gen] Successfully generated batch ${batchNumber}: ${fileName}`)
+    } catch (error: any) {
+      console.error(`[PDF Gen] Error generating batch ${batchNumber}:`, error)
+      throw error
+    } finally {
+      setGeneratingPDF(null)
+      setPdfProgress(null)
+    }
+  }
+
+  // Continue to next batch in batch printing
+  const continueBatchPrint = async () => {
+    if (!batchPrinting) return
+
+    const { sku, currentBatch, totalBatches, batches, item, labelType, width, height } = batchPrinting
+    
+    if (currentBatch >= totalBatches) {
+      // All batches printed
+      setBatchPrinting(null)
+      return
+    }
+
+    const batch = batches[currentBatch]
+    
+    try {
+      await printBatch(item, batch.codes, batch.quantity, labelType, width, height, currentBatch + 1)
+      
+      // Move to next batch
+      if (currentBatch + 1 < totalBatches) {
+        setBatchPrinting(prev => prev ? {
+          ...prev,
+          currentBatch: prev.currentBatch + 1
+        } : null)
+      } else {
+        // All batches done
+        setBatchPrinting(null)
+        // Store print data
+        const allCodes = batches.flatMap(b => b.codes)
+        const totalQuantity = batches.reduce((sum, b) => sum + b.quantity, 0)
+        setPrintedLabels(prev => ({
+          ...prev,
+          [sku]: {
+            quantity: totalQuantity,
+            tpCodes: allCodes,
+            labelType,
+            widthIn: width,
+            heightIn: height,
+            printedAt: new Date()
+          }
+        }))
+        setPrintedCounts(prev => ({
+          ...prev,
+          [sku]: (prev[sku] || 0) + totalQuantity
+        }))
+        // Reset print more state
+        setShowPrintMore(null)
+        setPrintMoreQty(1)
+      }
+    } catch (error: any) {
+      alert(`Failed to print batch ${currentBatch + 1}: ${error.message}`)
+      setBatchPrinting(null)
+    }
+  }
+
   const printLabels = async (item: ShipmentItem, forceNewCodes = true) => {
     const labelType = getLabelType(item)
     const quantity = labelCounts[item.masterSku] || item.adjustedQty
@@ -269,7 +376,83 @@ export default function ProductLabelPrinter({
 
     const [width, height] = labelSize.split('x').map(s => parseFloat(s))
 
-    // Generate PDF using fast direct drawing (no html2canvas!)
+    // Check if we need batch printing (quantity > 200)
+    // If so, always split into 5 equal batches
+    const needsBatching = quantity > 200
+
+    if (needsBatching) {
+      // Always split into 5 batches
+      const totalBatches = 5
+      const batchSize = Math.ceil(quantity / totalBatches)
+      const batches: Array<{ codes: string[]; quantity: number }> = []
+      
+      for (let i = 0; i < totalBatches; i++) {
+        const start = i * batchSize
+        const end = Math.min(start + batchSize, quantity)
+        const batchQuantity = end - start
+        
+        // Only add batch if it has labels
+        if (batchQuantity > 0) {
+          const batchCodes = transparencyCodes.slice(start, end)
+          batches.push({
+            codes: batchCodes,
+            quantity: batchQuantity
+          })
+        }
+      }
+
+      // Start batch printing
+      setBatchPrinting({
+        sku: item.masterSku,
+        currentBatch: 0,
+        totalBatches,
+        batches,
+        item,
+        labelType,
+        labelSize,
+        width,
+        height
+      })
+
+      // Print first batch immediately
+      const firstBatch = batches[0]
+      try {
+        await printBatch(item, firstBatch.codes, firstBatch.quantity, labelType, width, height, 1)
+        // After first batch, update state to show modal for next batch
+        if (totalBatches > 1) {
+          setBatchPrinting(prev => prev ? {
+            ...prev,
+            currentBatch: 1
+          } : null)
+        } else {
+          // Only one batch, we're done
+          setBatchPrinting(null)
+          const allCodes = batches.flatMap(b => b.codes)
+          const totalQuantity = batches.reduce((sum, b) => sum + b.quantity, 0)
+          setPrintedLabels(prev => ({
+            ...prev,
+            [item.masterSku]: {
+              quantity: totalQuantity,
+              tpCodes: allCodes,
+              labelType,
+              widthIn: width,
+              heightIn: height,
+              printedAt: new Date()
+            }
+          }))
+          setPrintedCounts(prev => ({
+            ...prev,
+            [item.masterSku]: (prev[item.masterSku] || 0) + totalQuantity
+          }))
+        }
+      } catch (error: any) {
+        alert(`Failed to print first batch: ${error.message}`)
+        setBatchPrinting(null)
+      }
+      return
+    }
+
+    // Regular single-batch printing for quantities <= 200
     setGeneratingPDF(item.masterSku)
     setPdfProgress({ current: 0, total: quantity * 2 })
     
@@ -291,9 +474,9 @@ export default function ProductLabelPrinter({
         onProgress: (current, total) => setPdfProgress({ current, total }),
       })
 
-      // Download the PDF
+      // Open PDF in new window and trigger print
       const fileName = `Labels-${item.masterSku}-${Date.now()}.pdf`
-      downloadPDF(blob, fileName)
+      openAndPrintPDF(blob, fileName)
       console.log(`[PDF Gen] Successfully generated ${fileName}`)
 
     } catch (error: any) {
@@ -357,7 +540,7 @@ export default function ProductLabelPrinter({
       })
 
       const fileName = `Labels-${item.masterSku}-reprint-${Date.now()}.pdf`
-      downloadPDF(blob, fileName)
+      openAndPrintPDF(blob, fileName)
 
     } catch (error: any) {
       console.error('Error reprinting:', error)
@@ -644,6 +827,86 @@ export default function ProductLabelPrinter({
           <span className="text-slate-500 ml-2">(Change in Settings → Display)</span>
         </div>
       </CardContent>
+
+      {/* Batch Printing Modal */}
+      {batchPrinting && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md border border-slate-700">
+            <h3 className="text-xl font-bold text-white mb-4">Batch Printing</h3>
+            
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-slate-400">Progress</span>
+                <span className="text-white font-medium">
+                  Batch {batchPrinting.currentBatch + 1} of {batchPrinting.totalBatches}
+                </span>
+              </div>
+              <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden">
+                <div
+                  className="h-full bg-cyan-500 transition-all duration-300"
+                  style={{ width: `${((batchPrinting.currentBatch + 1) / batchPrinting.totalBatches) * 100}%` }}
+                />
+              </div>
+              <div className="mt-2 text-sm text-slate-400">
+                Printing {batchPrinting.batches[batchPrinting.currentBatch]?.quantity} labels in this batch
+              </div>
+            </div>
+
+            <div className="bg-slate-900/50 rounded-lg p-4 mb-6">
+              <div className="text-sm text-slate-400 mb-1">SKU: {batchPrinting.sku}</div>
+              <div className="text-sm text-slate-400">
+                Total: {batchPrinting.batches.reduce((sum, b) => sum + b.quantity, 0)} labels in {batchPrinting.totalBatches} batches
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (confirm('Cancel batch printing? You can resume later by printing again.')) {
+                    setBatchPrinting(null)
+                    setGeneratingPDF(null)
+                    setPdfProgress(null)
+                  }
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={continueBatchPrint}
+                disabled={generatingPDF === batchPrinting.sku}
+                className="flex-1"
+              >
+                {generatingPDF === batchPrinting.sku ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : batchPrinting.currentBatch + 1 >= batchPrinting.totalBatches ? (
+                  'Finish'
+                ) : (
+                  'Next Batch'
+                )}
+              </Button>
+            </div>
+
+            {pdfProgress && (
+              <div className="mt-4">
+                <div className="text-xs text-slate-400 mb-1">
+                  Generating PDF: {pdfProgress.current} / {pdfProgress.total}
+                </div>
+                <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="h-full bg-cyan-400 transition-all duration-200"
+                    style={{ width: `${(pdfProgress.current / pdfProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </Card>
   )
 }

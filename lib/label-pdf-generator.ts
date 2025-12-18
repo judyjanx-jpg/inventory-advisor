@@ -181,12 +181,22 @@ async function drawTPOnlyLabel(
   pdf.setFontSize(5)
   pdf.setFont('helvetica', 'normal')
 
-  // Add Transparency icon
-  try {
-    pdf.addImage(TRANSPARENCY_ICON_BASE64, 'PNG', 2, 1, 4, 4)
-  } catch (e) {
-    console.warn('Could not add transparency icon:', e)
-  }
+  // Add Transparency icon - draw a bold "T" in a circle
+  // This is more reliable than base64 images
+  const iconX = 2
+  const iconY = 1
+  const iconSize = 3
+  
+  // Draw circle background
+  pdf.setDrawColor(0, 0, 0) // Black border
+  pdf.setFillColor(255, 255, 255) // White fill
+  pdf.circle(iconX + iconSize/2, iconY + iconSize/2, iconSize/2, 'FD')
+  
+  // Draw bold "T" text inside circle
+  pdf.setFontSize(4)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setTextColor(0, 0, 0) // Black text
+  pdf.text('T', iconX + iconSize/2 - 0.5, iconY + iconSize/2 + 0.7, { align: 'center' })
 
   // Header text
   pdf.text('Scan with the', 7, 3)
@@ -234,12 +244,22 @@ async function drawComboLabel(
 
   // === TP SECTION (LEFT) ===
 
-  // Transparency icon - larger and properly positioned
-  try {
-    pdf.addImage(TRANSPARENCY_ICON_BASE64, 'PNG', 1, 1, 4, 4)
-  } catch (e) {
-    console.warn('Could not add transparency icon:', e)
-  }
+  // Transparency icon - draw a bold "T" in a circle
+  // This is more reliable than base64 images
+  const iconX = 1
+  const iconY = 1
+  const iconSize = 3
+  
+  // Draw circle background
+  pdf.setDrawColor(0, 0, 0) // Black border
+  pdf.setFillColor(255, 255, 255) // White fill
+  pdf.circle(iconX + iconSize/2, iconY + iconSize/2, iconSize/2, 'FD')
+  
+  // Draw bold "T" text inside circle
+  pdf.setFontSize(4)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setTextColor(0, 0, 0) // Black text
+  pdf.text('T', iconX + iconSize/2 - 0.5, iconY + iconSize/2 + 0.7, { align: 'center' })
 
   // Header text - adjusted to account for larger icon
   pdf.setFontSize(4)
@@ -387,7 +407,47 @@ async function drawFNSKUOnlyLabel(
 }
 
 /**
- * Download the PDF blob
+ * Open PDF in new window and trigger print dialog
+ */
+export function openAndPrintPDF(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const printWindow = window.open(url, '_blank')
+  
+  if (printWindow) {
+    // Wait for PDF to load, then trigger print
+    printWindow.onload = () => {
+      // Small delay to ensure PDF is fully loaded
+      setTimeout(() => {
+        printWindow.print()
+        // Clean up URL after a delay (in case user cancels print)
+        setTimeout(() => {
+          URL.revokeObjectURL(url)
+        }, 1000)
+      }, 500)
+    }
+    
+    // Fallback: if onload doesn't fire (some browsers), try print after a delay
+    setTimeout(() => {
+      if (printWindow && !printWindow.closed) {
+        try {
+          printWindow.print()
+        } catch (e) {
+          console.warn('Could not trigger print automatically:', e)
+        }
+        setTimeout(() => {
+          URL.revokeObjectURL(url)
+        }, 1000)
+      }
+    }, 1000)
+  } else {
+    // If popup blocked, fall back to download
+    console.warn('Popup blocked, falling back to download')
+    downloadPDF(blob, filename)
+  }
+}
+
+/**
+ * Download the PDF blob (fallback method)
  */
 export function downloadPDF(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
