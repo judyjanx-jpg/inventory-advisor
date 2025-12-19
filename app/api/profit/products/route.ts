@@ -169,7 +169,11 @@ export async function GET(request: NextRequest) {
           COALESCE(p.cost, 0) +
           COALESCE(p.packaging_cost, 0) +
           (COALESCE(p.cost, 0) * COALESCE(p.tariff_percent, 0) / 100) +
-          COALESCE((SELECT SUM((elem->>'amount')::numeric) FROM jsonb_array_elements(p.additional_costs) elem), 0)
+          CASE 
+            WHEN p.additional_costs IS NOT NULL AND jsonb_typeof(p.additional_costs) = 'array'
+            THEN COALESCE((SELECT SUM((elem->>'amount')::numeric) FROM jsonb_array_elements(p.additional_costs) elem), 0)
+            ELSE 0
+          END
         ), 0)::text as cost,
         COALESCE(SUM(oi.quantity), 0)::text as units_sold,
         -- SELLERBOARD-LEVEL ACCURACY: Same revenue priority as profit engine
