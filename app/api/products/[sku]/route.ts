@@ -40,28 +40,59 @@ export async function PUT(
   try {
     const body = await request.json()
     const {
+      // Identifiers
       title,
+      displayName,
       asin,
       fnsku,
       upc,
       brand,
       category,
+      // Pricing
       cost,
       price,
+      mapPrice,
+      msrp,
+      // Additional Costs
+      packagingCost,
+      tariffPercent,
+      // Amazon Fees
+      fbaFeeEstimate,
+      referralFeePercent,
+      refundPercent,
+      adsPercent,
+      // Supplier
+      supplierId,
+      supplierSku,
+      // Physical
       weight,
       weightOz,
       lengthIn,
       widthIn,
       heightIn,
+      unitsPerCase,
+      // Labeling & Prep
+      labelType,
+      transparencyEnabled,
+      prepType,
+      labelingRequired,
+      prepOwner,
+      labelOwner,
+      warehouseLocation,
+      // Lifecycle
       status,
-      supplierId,
+      launchDate,
+      recreatedFromSku,
+      discontinuedAt,
+      // Support & Warranty
+      isWarrantied,
+      careInstructions,
+      sizingGuide,
+      // Other
+      physicalProductGroupId,
       notes,
       isHidden,
       hidden,
-      labelType,
-      unitsPerCase,
-      prepOwner,
-      labelOwner,
     } = body
 
     // Build update data - only include fields that are provided
@@ -69,28 +100,68 @@ export async function PUT(
       updatedAt: new Date(),
     }
 
+    // Identifiers
     if (title !== undefined) updateData.title = title
+    if (displayName !== undefined) updateData.displayName = displayName || null
     if (asin !== undefined) updateData.asin = asin || null
     if (fnsku !== undefined) updateData.fnsku = fnsku || null
     if (upc !== undefined) updateData.upc = upc || null
     if (brand !== undefined) updateData.brand = brand
     if (category !== undefined) updateData.category = category || null
-    if (cost !== undefined) updateData.cost = cost ? parseFloat(cost) : undefined
-    if (price !== undefined) updateData.price = price ? parseFloat(price) : undefined
-    if (weight !== undefined) updateData.weightOz = weight ? parseFloat(weight) : undefined
-    if (weightOz !== undefined) updateData.weightOz = weightOz ? parseFloat(weightOz) : undefined
-    if (lengthIn !== undefined) updateData.lengthIn = lengthIn ? parseFloat(lengthIn) : undefined
-    if (widthIn !== undefined) updateData.widthIn = widthIn ? parseFloat(widthIn) : undefined
-    if (heightIn !== undefined) updateData.heightIn = heightIn ? parseFloat(heightIn) : undefined
-    if (status !== undefined) updateData.status = status
+    
+    // Pricing
+    if (cost !== undefined) updateData.cost = cost !== null && cost !== '' ? parseFloat(cost) : 0
+    if (price !== undefined) updateData.price = price !== null && price !== '' ? parseFloat(price) : 0
+    if (mapPrice !== undefined) updateData.mapPrice = mapPrice !== null && mapPrice !== '' ? parseFloat(mapPrice) : null
+    if (msrp !== undefined) updateData.msrp = msrp !== null && msrp !== '' ? parseFloat(msrp) : null
+    
+    // Additional Costs
+    if (packagingCost !== undefined) updateData.packagingCost = packagingCost !== null && packagingCost !== '' ? parseFloat(packagingCost) : null
+    if (tariffPercent !== undefined) updateData.tariffPercent = tariffPercent !== null && tariffPercent !== '' ? parseFloat(tariffPercent) : null
+    
+    // Amazon Fees
+    if (fbaFeeEstimate !== undefined) updateData.fbaFeeEstimate = fbaFeeEstimate !== null && fbaFeeEstimate !== '' ? parseFloat(fbaFeeEstimate) : null
+    if (referralFeePercent !== undefined) updateData.referralFeePercent = referralFeePercent !== null && referralFeePercent !== '' ? parseFloat(referralFeePercent) : null
+    if (refundPercent !== undefined) updateData.refundPercent = refundPercent !== null && refundPercent !== '' ? parseFloat(refundPercent) : null
+    if (adsPercent !== undefined) updateData.adsPercent = adsPercent !== null && adsPercent !== '' ? parseFloat(adsPercent) : null
+    
+    // Supplier
     if (supplierId !== undefined) updateData.supplierId = supplierId || null
+    if (supplierSku !== undefined) updateData.supplierSku = supplierSku || null
+    
+    // Physical
+    if (weight !== undefined) updateData.weightOz = weight !== null && weight !== '' ? parseFloat(weight) : null
+    if (weightOz !== undefined) updateData.weightOz = weightOz !== null && weightOz !== '' ? parseFloat(weightOz) : null
+    if (lengthIn !== undefined) updateData.lengthIn = lengthIn !== null && lengthIn !== '' ? parseFloat(lengthIn) : null
+    if (widthIn !== undefined) updateData.widthIn = widthIn !== null && widthIn !== '' ? parseFloat(widthIn) : null
+    if (heightIn !== undefined) updateData.heightIn = heightIn !== null && heightIn !== '' ? parseFloat(heightIn) : null
+    if (unitsPerCase !== undefined) updateData.unitsPerCase = unitsPerCase !== null && unitsPerCase !== '' ? parseInt(unitsPerCase) : null
+    
+    // Labeling & Prep
+    if (labelType !== undefined) updateData.labelType = labelType || 'fnsku_only'
+    if (transparencyEnabled !== undefined) updateData.transparencyEnabled = transparencyEnabled
+    if (prepType !== undefined) updateData.prepType = prepType || 'none'
+    if (labelingRequired !== undefined) updateData.labelingRequired = labelingRequired
+    if (prepOwner !== undefined) updateData.prepOwner = prepOwner || 'NONE'
+    if (labelOwner !== undefined) updateData.labelOwner = labelOwner || 'NONE'
+    if (warehouseLocation !== undefined) updateData.warehouseLocation = warehouseLocation || null
+    
+    // Lifecycle
+    if (status !== undefined) updateData.status = status || 'active'
+    if (launchDate !== undefined) updateData.launchDate = launchDate ? new Date(launchDate) : null
+    if (recreatedFromSku !== undefined) updateData.recreatedFromSku = recreatedFromSku || null
+    if (discontinuedAt !== undefined) updateData.discontinuedAt = discontinuedAt ? new Date(discontinuedAt) : null
+    
+    // Support & Warranty
+    if (isWarrantied !== undefined) updateData.isWarrantied = isWarrantied
+    if (careInstructions !== undefined) updateData.careInstructions = careInstructions || null
+    if (sizingGuide !== undefined) updateData.sizingGuide = sizingGuide || null
+    
+    // Other
+    if (physicalProductGroupId !== undefined) updateData.physicalProductGroupId = physicalProductGroupId || null
     if (notes !== undefined) updateData.notes = notes || null
     if (isHidden !== undefined) updateData.isHidden = isHidden
     if (hidden !== undefined) updateData.isHidden = hidden // Support both 'hidden' and 'isHidden'
-    if (labelType !== undefined) updateData.labelType = labelType || 'fnsku_only'
-    if (unitsPerCase !== undefined) updateData.unitsPerCase = unitsPerCase ? parseInt(unitsPerCase) : undefined
-    if (prepOwner !== undefined) updateData.prepOwner = prepOwner
-    if (labelOwner !== undefined) updateData.labelOwner = labelOwner
 
     const product = await prisma.product.update({
       where: { sku: params.sku },

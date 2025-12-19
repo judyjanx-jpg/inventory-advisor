@@ -36,27 +36,70 @@ interface BulkProductUpdateProps {
 
 // System columns that can be mapped
 const SYSTEM_COLUMNS = [
+  // Required
   { key: 'sku', label: 'SKU (Required)', required: true, type: 'text' },
+  
+  // Identifiers
+  { key: 'displayName', label: 'Display Name', required: false, type: 'text' },
+  { key: 'fnsku', label: 'FNSKU', required: false, type: 'text' },
+  { key: 'asin', label: 'ASIN', required: false, type: 'text' },
+  { key: 'upc', label: 'UPC', required: false, type: 'text' },
+  
+  // Supplier
   { key: 'supplierId', label: 'Supplier', required: false, type: 'supplier' },
   { key: 'supplierSku', label: 'Supplier SKU', required: false, type: 'text' },
-  { key: 'upc', label: 'UPC', required: false, type: 'text' },
+  
+  // Base Pricing
   { key: 'cost', label: 'Unit Cost', required: false, type: 'number' },
   { key: 'price', label: 'Price', required: false, type: 'number' },
   { key: 'mapPrice', label: 'MAP Price', required: false, type: 'number' },
   { key: 'msrp', label: 'MSRP', required: false, type: 'number' },
+  
+  // Additional Costs
+  { key: 'packagingCost', label: 'Packaging Cost', required: false, type: 'number' },
+  { key: 'tariffPercent', label: 'Tariff %', required: false, type: 'number' },
+  
+  // Amazon Fees
+  { key: 'fbaFeeEstimate', label: 'FBA Fee Estimate', required: false, type: 'number' },
+  { key: 'referralFeePercent', label: 'Referral Fee %', required: false, type: 'number' },
+  { key: 'refundPercent', label: 'Refund %', required: false, type: 'number' },
+  { key: 'adsPercent', label: 'Ads %', required: false, type: 'number' },
+  
+  // Labeling & Prep
   { key: 'labelType', label: 'Label Type', required: false, type: 'labelType' },
   { key: 'transparencyEnabled', label: 'Transparency Enabled', required: false, type: 'boolean' },
   { key: 'prepType', label: 'Prep Type', required: false, type: 'prepType' },
   { key: 'labelingRequired', label: 'Labeling Required', required: false, type: 'boolean' },
+  { key: 'prepOwner', label: 'Prep Owner', required: false, type: 'prepOwner' },
+  { key: 'labelOwner', label: 'Label Owner', required: false, type: 'labelOwner' },
+  
+  // Organization
   { key: 'warehouseLocation', label: 'Warehouse Location', required: false, type: 'text' },
   { key: 'category', label: 'Category', required: false, type: 'text' },
   { key: 'status', label: 'Status', required: false, type: 'status' },
   { key: 'isHidden', label: 'Hidden', required: false, type: 'boolean' },
+  
+  // Lifecycle
+  { key: 'launchDate', label: 'Launch Date', required: false, type: 'date' },
+  { key: 'recreatedFromSku', label: 'Recreated From SKU', required: false, type: 'text' },
+  { key: 'discontinuedAt', label: 'Discontinued Date', required: false, type: 'date' },
+  
+  // Physical
   { key: 'weightOz', label: 'Weight (oz)', required: false, type: 'number' },
   { key: 'lengthIn', label: 'Length (in)', required: false, type: 'number' },
   { key: 'widthIn', label: 'Width (in)', required: false, type: 'number' },
   { key: 'heightIn', label: 'Height (in)', required: false, type: 'number' },
   { key: 'unitsPerCase', label: 'Units Per Case', required: false, type: 'number' },
+  
+  // Support & Warranty
+  { key: 'isWarrantied', label: 'Warranty Eligible', required: false, type: 'boolean' },
+  { key: 'careInstructions', label: 'Care Instructions', required: false, type: 'text' },
+  { key: 'sizingGuide', label: 'Sizing Guide', required: false, type: 'text' },
+  
+  // Linking
+  { key: 'physicalProductGroupId', label: 'Physical Product Group ID', required: false, type: 'text' },
+  
+  // Other
   { key: 'notes', label: 'Notes', required: false, type: 'text' },
 ]
 
@@ -72,6 +115,18 @@ const PREP_TYPES = [
   { value: 'poly_bag', label: 'Poly Bag' },
   { value: 'bubble_wrap', label: 'Bubble Wrap' },
   { value: 'sticker', label: 'Sticker' },
+]
+
+const PREP_OWNER_TYPES = [
+  { value: 'NONE', label: 'None' },
+  { value: 'AMAZON', label: 'Amazon' },
+  { value: 'SELLER', label: 'Seller' },
+]
+
+const LABEL_OWNER_TYPES = [
+  { value: 'NONE', label: 'None' },
+  { value: 'AMAZON', label: 'Amazon' },
+  { value: 'SELLER', label: 'Seller' },
 ]
 
 const STATUS_TYPES = [
@@ -160,6 +215,33 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             return labelType ? labelType.label : String(value)
           }
           
+          // Special handling for prepType - show label instead of value
+          if (key === 'prepType' && value) {
+            const prepType = PREP_TYPES.find(pt => pt.value === value)
+            return prepType ? prepType.label : String(value)
+          }
+          
+          // Special handling for prepOwner/labelOwner
+          if ((key === 'prepOwner' || key === 'labelOwner') && value) {
+            const ownerType = key === 'prepOwner' ? PREP_OWNER_TYPES : LABEL_OWNER_TYPES
+            const owner = ownerType.find(o => o.value === value)
+            return owner ? owner.label : String(value)
+          }
+          
+          // Special handling for status
+          if (key === 'status' && value) {
+            const statusType = STATUS_TYPES.find(st => st.value === value)
+            return statusType ? statusType.label : String(value)
+          }
+          
+          // Special handling for dates
+          if ((key === 'launchDate' || key === 'discontinuedAt') && value) {
+            const date = new Date(value)
+            if (!isNaN(date.getTime())) {
+              return date.toISOString().split('T')[0] // Format as YYYY-MM-DD
+            }
+          }
+          
           // Boolean values
           if (typeof value === 'boolean') {
             return value ? 'true' : 'false'
@@ -178,15 +260,45 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
       const sampleRow = selectedFields.map(key => {
         switch (key) {
           case 'sku': return 'YOUR-SKU-001'
-          case 'supplierId': return suppliers[0]?.name || 'Supplier Name'
+          case 'displayName': return 'My Product Name'
+          case 'fnsku': return 'X00ABC123'
+          case 'asin': return 'B00ABC1234'
           case 'upc': return '123456789012'
+          case 'supplierId': return suppliers[0]?.name || 'Supplier Name'
+          case 'supplierSku': return 'VENDOR-SKU-001'
           case 'cost': return '10.00'
           case 'price': return '29.99'
+          case 'mapPrice': return '24.99'
+          case 'msrp': return '39.99'
+          case 'packagingCost': return '0.50'
+          case 'tariffPercent': return '25'
+          case 'fbaFeeEstimate': return '5.00'
+          case 'referralFeePercent': return '15'
+          case 'refundPercent': return '2'
+          case 'adsPercent': return '5'
           case 'labelType': return 'FNSKU Only'
           case 'transparencyEnabled': return 'false'
           case 'prepType': return 'none'
+          case 'labelingRequired': return 'false'
+          case 'prepOwner': return 'SELLER'
+          case 'labelOwner': return 'SELLER'
+          case 'warehouseLocation': return 'A-01-01'
+          case 'category': return 'Jewelry'
           case 'status': return 'active'
           case 'isHidden': return 'false'
+          case 'launchDate': return '2025-01-15'
+          case 'recreatedFromSku': return ''
+          case 'discontinuedAt': return ''
+          case 'weightOz': return '2.5'
+          case 'lengthIn': return '6'
+          case 'widthIn': return '4'
+          case 'heightIn': return '1'
+          case 'unitsPerCase': return '100'
+          case 'isWarrantied': return 'true'
+          case 'careInstructions': return 'Keep dry, avoid chemicals'
+          case 'sizingGuide': return 'See size chart'
+          case 'physicalProductGroupId': return ''
+          case 'notes': return 'Sample notes'
           default: return ''
         }
       })
@@ -348,6 +460,24 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             case 'boolean':
               updateData[systemKey] = value === true || value === 'true' || value === 'yes' || value === '1' || value === 'TRUE' || value === 'Yes'
               break
+            case 'date':
+              // Parse date - accept various formats
+              if (value) {
+                const dateStr = String(value).trim()
+                // Handle Excel serial date numbers
+                if (!isNaN(Number(dateStr))) {
+                  const excelDate = new Date((Number(dateStr) - 25569) * 86400 * 1000)
+                  if (!isNaN(excelDate.getTime())) {
+                    updateData[systemKey] = excelDate.toISOString()
+                  }
+                } else {
+                  const parsedDate = new Date(dateStr)
+                  if (!isNaN(parsedDate.getTime())) {
+                    updateData[systemKey] = parsedDate.toISOString()
+                  }
+                }
+              }
+              break
             case 'supplier':
               // Find supplier by name (check both existing and cached)
               const supplierName = String(value).trim()
@@ -400,10 +530,28 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
               if (labelType) updateData[systemKey] = labelType.value
               break
             case 'prepType':
-              if (PREP_TYPES.some(pt => pt.value === value)) updateData[systemKey] = value
+              const prepType = PREP_TYPES.find(pt => 
+                pt.value === value || pt.label === value || pt.label.toLowerCase() === String(value).toLowerCase()
+              )
+              if (prepType) updateData[systemKey] = prepType.value
+              break
+            case 'prepOwner':
+              const prepOwner = PREP_OWNER_TYPES.find(po => 
+                po.value === value || po.label === value || po.value.toLowerCase() === String(value).toLowerCase()
+              )
+              if (prepOwner) updateData[systemKey] = prepOwner.value
+              break
+            case 'labelOwner':
+              const labelOwner = LABEL_OWNER_TYPES.find(lo => 
+                lo.value === value || lo.label === value || lo.value.toLowerCase() === String(value).toLowerCase()
+              )
+              if (labelOwner) updateData[systemKey] = labelOwner.value
               break
             case 'status':
-              if (STATUS_TYPES.some(st => st.value === value)) updateData[systemKey] = value
+              const statusType = STATUS_TYPES.find(st => 
+                st.value === value || st.label === value || st.label.toLowerCase() === String(value).toLowerCase()
+              )
+              if (statusType) updateData[systemKey] = statusType.value
               break
             default:
               updateData[systemKey] = String(value)
@@ -483,11 +631,27 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             Select which fields you want to update, then export a template or upload your own file.
           </p>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-2">
+            {/* Identifiers */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-cyan-400">Identifiers</h4>
+              {SYSTEM_COLUMNS.filter(c => ['displayName', 'fnsku', 'asin', 'upc'].includes(c.key)).map(col => (
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={selectedFields.includes(col.key)}
+                    onChange={() => toggleField(col.key)}
+                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  {col.label}
+                </label>
+              ))}
+            </div>
+
             {/* Supplier & Sourcing */}
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-cyan-400">Supplier & Sourcing</h4>
-              {SYSTEM_COLUMNS.filter(c => ['supplierId', 'supplierSku', 'upc', 'cost'].includes(c.key)).map(col => (
+              <h4 className="text-sm font-medium text-cyan-400">Supplier</h4>
+              {SYSTEM_COLUMNS.filter(c => ['supplierId', 'supplierSku', 'cost'].includes(c.key)).map(col => (
                 <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
                   <input
                     type="checkbox"
@@ -516,10 +680,42 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
               ))}
             </div>
 
+            {/* Additional Costs */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-cyan-400">Additional Costs</h4>
+              {SYSTEM_COLUMNS.filter(c => ['packagingCost', 'tariffPercent'].includes(c.key)).map(col => (
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={selectedFields.includes(col.key)}
+                    onChange={() => toggleField(col.key)}
+                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  {col.label}
+                </label>
+              ))}
+            </div>
+
+            {/* Amazon Fees */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-cyan-400">Amazon Fees</h4>
+              {SYSTEM_COLUMNS.filter(c => ['fbaFeeEstimate', 'referralFeePercent', 'refundPercent', 'adsPercent'].includes(c.key)).map(col => (
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={selectedFields.includes(col.key)}
+                    onChange={() => toggleField(col.key)}
+                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  {col.label}
+                </label>
+              ))}
+            </div>
+
             {/* Labeling & Prep */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Labeling & Prep</h4>
-              {SYSTEM_COLUMNS.filter(c => ['labelType', 'transparencyEnabled', 'prepType', 'labelingRequired'].includes(c.key)).map(col => (
+              {SYSTEM_COLUMNS.filter(c => ['labelType', 'transparencyEnabled', 'prepType', 'labelingRequired', 'prepOwner', 'labelOwner'].includes(c.key)).map(col => (
                 <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
                   <input
                     type="checkbox"
@@ -548,6 +744,22 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
               ))}
             </div>
 
+            {/* Lifecycle */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-cyan-400">Lifecycle</h4>
+              {SYSTEM_COLUMNS.filter(c => ['launchDate', 'recreatedFromSku', 'discontinuedAt'].includes(c.key)).map(col => (
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={selectedFields.includes(col.key)}
+                    onChange={() => toggleField(col.key)}
+                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  {col.label}
+                </label>
+              ))}
+            </div>
+
             {/* Physical */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Physical</h4>
@@ -564,10 +776,26 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
               ))}
             </div>
 
+            {/* Support & Warranty */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-cyan-400">Support & Warranty</h4>
+              {SYSTEM_COLUMNS.filter(c => ['isWarrantied', 'careInstructions', 'sizingGuide'].includes(c.key)).map(col => (
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={selectedFields.includes(col.key)}
+                    onChange={() => toggleField(col.key)}
+                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  {col.label}
+                </label>
+              ))}
+            </div>
+
             {/* Other */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Other</h4>
-              {SYSTEM_COLUMNS.filter(c => ['notes'].includes(c.key)).map(col => (
+              {SYSTEM_COLUMNS.filter(c => ['physicalProductGroupId', 'notes'].includes(c.key)).map(col => (
                 <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
                   <input
                     type="checkbox"
