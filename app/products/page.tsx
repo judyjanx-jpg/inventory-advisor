@@ -310,7 +310,7 @@ export default function ProductsPage() {
     setShowProductSettings(true)
   }
 
-  const saveProductSettings = async (data: any, applyScope: 'this' | 'all' | 'supplier' = 'this') => {
+  const saveProductSettings = async (data: any, applyScope: 'this' | 'all' | 'supplier' = 'this', closeAfterSave: boolean = true) => {
     if (!selectedProduct) return
     
     setSavingSettings(true)
@@ -327,7 +327,10 @@ export default function ProductsPage() {
       
       if (res.ok) {
         fetchProducts()
-        setShowProductSettings(false)
+        // Only close modal if explicitly requested (e.g., clicking "Save Changes" button)
+        if (closeAfterSave) {
+          setShowProductSettings(false)
+        }
       } else {
         const responseData = await res.json()
         alert(responseData.error || 'Failed to save settings')

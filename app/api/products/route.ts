@@ -426,23 +426,38 @@ export async function PUT(request: NextRequest) {
           ? { supplierId: currentProduct.supplierId }
           : { sku } // fallback to single product
       
-      await prisma.product.updateMany({
+      console.log('Bulk applying fields:', bulkApplyFields, 'to scope:', applyScope, 'where:', bulkWhere)
+      
+      const result = await prisma.product.updateMany({
         where: bulkWhere,
         data: bulkApplyFields,
       })
+      
+      console.log('Bulk update result:', result)
+      
+      // For bulk updates, return success with count
+      return NextResponse.json({ 
+        success: true, 
+        updatedCount: result.count,
+        scope: applyScope,
+        fields: Object.keys(bulkApplyFields)
+      })
     }
 
-    // Always update the main product with all fields
-    const product = await prisma.product.update({
-      where: { sku },
-      data: updateData,
-      include: {
-        supplier: true,
-        skuMappings: true,
-      },
-    })
+    // Only run single product update if there are fields to update
+    if (Object.keys(updateData).length > 0) {
+      const product = await prisma.product.update({
+        where: { sku },
+        data: updateData,
+        include: {
+          supplier: true,
+          skuMappings: true,
+        },
+      })
+      return NextResponse.json(product)
+    }
 
-    return NextResponse.json(product)
+    return NextResponse.json({ success: true, message: 'No changes to apply' })
   } catch (error) {
     console.error('Error updating product:', error)
     return NextResponse.json(

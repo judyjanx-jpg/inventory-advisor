@@ -122,7 +122,7 @@ interface ProductSettingsModalProps {
   allProducts?: Product[] // For recreate linking
   suppliers: Supplier[]
   linkedProducts: Product[]
-  onSave: (data: any, applyScope?: 'this' | 'all' | 'supplier') => Promise<void>
+  onSave: (data: any, applyScope?: 'this' | 'all' | 'supplier', closeAfterSave?: boolean) => Promise<void>
   onLinkProduct: (product: Product) => Promise<void>
   onUnlinkProduct: (product: Product) => Promise<void>
   onSearchLinked: (term: string) => Promise<Product[]>
@@ -278,15 +278,20 @@ export default function ProductSettingsModal({
   }
 
   const confirmApplyScope = async () => {
-    // Save with the selected scope
-    await handleSave(applyScope)
+    // Only send the specific field that's being bulk-applied
+    if (pendingField && pendingValue !== null) {
+      const fieldData: Record<string, any> = {}
+      fieldData[pendingField] = parseFloat(pendingValue)
+      
+      await onSave(fieldData, applyScope, false)
+    }
     setShowApplyModal(false)
     setPendingField(null)
     setPendingValue(null)
     setApplyScope('this')
   }
 
-  const handleSave = async (scope: 'this' | 'all' | 'supplier' = 'this') => {
+  const handleSave = async (scope: 'this' | 'all' | 'supplier' = 'this', closeAfterSave: boolean = true) => {
     const data = {
       cost: form.cost ? parseFloat(form.cost) : 0,
       price: form.price ? parseFloat(form.price) : 0,
@@ -314,7 +319,7 @@ export default function ProductSettingsModal({
       discontinuedAt: form.status === 'discontinued' ? new Date().toISOString() : null,
     }
     
-    await onSave(data, scope)
+    await onSave(data, scope, closeAfterSave)
   }
 
   const handleLinkSearch = async (term: string) => {
