@@ -60,6 +60,15 @@ export async function GET(request: NextRequest) {
           price: true,
           mapPrice: true,
           msrp: true,
+          // Additional costs
+          packagingCost: true,
+          tariffPercent: true,
+          additionalCosts: true,
+          // Amazon fee settings
+          fbaFeeEstimate: true,
+          referralFeePercent: true,
+          refundPercent: true,
+          adsPercent: true,
           supplierId: true,
           supplierSku: true,
           labelType: true,
@@ -115,6 +124,15 @@ export async function GET(request: NextRequest) {
       price: true,
       mapPrice: true,
       msrp: true,
+      // Additional costs
+      packagingCost: true,
+      tariffPercent: true,
+      additionalCosts: true,
+      // Amazon fee settings
+      fbaFeeEstimate: true,
+      referralFeePercent: true,
+      refundPercent: true,
+      adsPercent: true,
       supplierId: true,
       supplierSku: true,
       labelType: true,
