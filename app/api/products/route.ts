@@ -40,7 +40,45 @@ export async function GET(request: NextRequest) {
       // Return all products flat (no grouping)
       const products = await prisma.product.findMany({
         where: hiddenFilter,
-        include: {
+        select: {
+          sku: true,
+          title: true,
+          displayName: true,
+          description: true,
+          brand: true,
+          category: true,
+          isHidden: true,
+          parentSku: true,
+          isParent: true,
+          variationType: true,
+          variationValue: true,
+          physicalProductGroupId: true,
+          asin: true,
+          fnsku: true,
+          upc: true,
+          cost: true,
+          price: true,
+          mapPrice: true,
+          msrp: true,
+          supplierId: true,
+          supplierSku: true,
+          labelType: true,
+          transparencyEnabled: true,
+          warehouseLocation: true,
+          status: true,
+          createdAt: true,
+          // Listing data from Amazon
+          imageUrl: true,
+          images: true,
+          bulletPoints: true,
+          listingDescription: true,
+          searchTerms: true,
+          listingLastSync: true,
+          // Warranty/Support
+          isWarrantied: true,
+          careInstructions: true,
+          sizingGuide: true,
+          // Relations
           supplier: true,
           inventoryLevels: true,
           skuMappings: true,
@@ -53,26 +91,64 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(products.map(transformProduct))
     }
 
+    // Common select fields for product data
+    const productSelect = {
+      sku: true,
+      title: true,
+      displayName: true,
+      description: true,
+      brand: true,
+      category: true,
+      isHidden: true,
+      parentSku: true,
+      isParent: true,
+      variationType: true,
+      variationValue: true,
+      physicalProductGroupId: true,
+      asin: true,
+      fnsku: true,
+      upc: true,
+      cost: true,
+      price: true,
+      mapPrice: true,
+      msrp: true,
+      supplierId: true,
+      supplierSku: true,
+      labelType: true,
+      transparencyEnabled: true,
+      warehouseLocation: true,
+      status: true,
+      createdAt: true,
+      // Listing data from Amazon
+      imageUrl: true,
+      images: true,
+      bulletPoints: true,
+      listingDescription: true,
+      searchTerms: true,
+      listingLastSync: true,
+      // Warranty/Support
+      isWarrantied: true,
+      careInstructions: true,
+      sizingGuide: true,
+      // Relations
+      supplier: true,
+      inventoryLevels: true,
+      skuMappings: true,
+      salesVelocity: true,
+    }
+
     // Fetch parent products and standalone products (products without a parent)
     const parentAndStandaloneProducts = await prisma.product.findMany({
       where: {
         parentSku: null, // No parent = either a parent product or standalone
         ...hiddenFilter,
       },
-      include: {
-        supplier: true,
-        inventoryLevels: true,
-        skuMappings: true,
-        salesVelocity: true,
+      select: {
+        ...productSelect,
         // Include child variations
         variations: includeVariations ? {
           where: hiddenFilter,
-          include: {
-            supplier: true,
-            inventoryLevels: true,
-            skuMappings: true,
-            salesVelocity: true,
-          },
+          select: productSelect,
           orderBy: {
             variationValue: 'asc',
           },
@@ -183,7 +259,25 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sku, displayName, isHidden, cost, price, supplierId, supplierSku, fnsku, upc, labelType, warehouseLocation, physicalProductGroupId } = body
+    const { 
+      sku, 
+      displayName, 
+      isHidden, 
+      cost, 
+      price, 
+      mapPrice,
+      msrp,
+      supplierId, 
+      supplierSku, 
+      fnsku, 
+      upc, 
+      labelType, 
+      warehouseLocation, 
+      physicalProductGroupId,
+      isWarrantied,
+      careInstructions,
+      sizingGuide,
+    } = body
     
     if (!sku) {
       return NextResponse.json(
@@ -207,6 +301,12 @@ export async function PUT(request: NextRequest) {
     if (price !== undefined) {
       updateData.price = price
     }
+    if (mapPrice !== undefined) {
+      updateData.mapPrice = mapPrice || null
+    }
+    if (msrp !== undefined) {
+      updateData.msrp = msrp || null
+    }
     if (supplierId !== undefined) {
       updateData.supplierId = supplierId || null // null to unset
     }
@@ -227,6 +327,15 @@ export async function PUT(request: NextRequest) {
     }
     if (physicalProductGroupId !== undefined) {
       updateData.physicalProductGroupId = physicalProductGroupId || null
+    }
+    if (isWarrantied !== undefined) {
+      updateData.isWarrantied = isWarrantied
+    }
+    if (careInstructions !== undefined) {
+      updateData.careInstructions = careInstructions || null
+    }
+    if (sizingGuide !== undefined) {
+      updateData.sizingGuide = sizingGuide || null
     }
 
     const product = await prisma.product.update({

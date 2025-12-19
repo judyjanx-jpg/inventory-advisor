@@ -29,11 +29,10 @@ import {
   LayoutGrid,
   List,
   Settings,
-  DollarSign,
-  Truck,
   Upload
 } from 'lucide-react'
 import BulkProductUpdate from '@/components/products/BulkProductUpdate'
+import ProductSettingsModal from '@/components/products/ProductSettingsModal'
 
 interface SkuMapping {
   id: number
@@ -52,6 +51,13 @@ interface Supplier {
   leadTimeDays?: number
 }
 
+interface ProductImage {
+  link: string
+  variant: string
+  width?: number
+  height?: number
+}
+
 interface Product {
   sku: string
   title: string
@@ -64,6 +70,8 @@ interface Product {
   category?: string
   cost: number
   price: number
+  mapPrice?: number
+  msrp?: number
   status: string
   isParent?: boolean
   parentSku?: string
@@ -77,6 +85,18 @@ interface Product {
   physicalProductGroupId?: string // For linking products that share physical inventory
   createdAt?: string
   supplier?: { id: number; name: string }
+  // Listing data from Amazon
+  imageUrl?: string
+  images?: ProductImage[]
+  bulletPoints?: string[]
+  listingDescription?: string
+  searchTerms?: string
+  listingLastSync?: string
+  // Support
+  isWarrantied?: boolean
+  careInstructions?: string
+  sizingGuide?: string
+  // Relations
   inventoryLevels?: {
     fbaAvailable: number
     warehouseAvailable: number
@@ -139,11 +159,8 @@ export default function ProductsPage() {
   const [showSkuMapping, setShowSkuMapping] = useState(false)
   const [showProductSettings, setShowProductSettings] = useState(false)
   const [showBulkUpdate, setShowBulkUpdate] = useState(false)
-  const [showLinkProducts, setShowLinkProducts] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [linkedProducts, setLinkedProducts] = useState<Product[]>([])
-  const [linkSearchTerm, setLinkSearchTerm] = useState('')
-  const [linkSearchResults, setLinkSearchResults] = useState<Product[]>([])
   const [savingLink, setSavingLink] = useState(false)
   
   // Suppliers
@@ -158,17 +175,7 @@ export default function ProductsPage() {
   })
   const [savingMapping, setSavingMapping] = useState(false)
   
-  // Product Settings form
-  const [settingsForm, setSettingsForm] = useState({
-    cost: '',
-    price: '',
-    supplierId: '',
-    supplierSku: '',
-    fnsku: '',
-    upc: '',
-    labelType: 'fnsku_only',
-    warehouseLocation: '',
-  })
+  // Product Settings
   const [savingSettings, setSavingSettings] = useState(false)
 
   useEffect(() => {
@@ -348,70 +355,15 @@ export default function ProductsPage() {
   }
 
   // Product Settings
-  const openProductSettings = (product: Product, e?: React.MouseEvent) => {
+  const openProductSettings = async (product: Product, e?: React.MouseEvent) => {
     e?.stopPropagation()
     setSelectedProduct(product)
-    setSettingsForm({
-      cost: product.cost?.toString() || '',
-      price: product.price?.toString() || '',
-      supplierId: product.supplierId?.toString() || '',
-      supplierSku: product.supplierSku || '',
-      fnsku: product.fnsku || '',
-      upc: product.upc || '',
-      labelType: product.labelType || 'fnsku_only',
-      warehouseLocation: product.warehouseLocation || '',
-    })
-    setShowProductSettings(true)
-  }
-
-  const saveProductSettings = async () => {
-    if (!selectedProduct) return
     
-    setSavingSettings(true)
-    try {
-      const res = await fetch('/api/products', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sku: selectedProduct.sku,
-          cost: settingsForm.cost ? parseFloat(settingsForm.cost) : 0,
-          price: settingsForm.price ? parseFloat(settingsForm.price) : 0,
-          supplierId: settingsForm.supplierId ? parseInt(settingsForm.supplierId) : null,
-          supplierSku: settingsForm.supplierSku || null,
-          fnsku: settingsForm.fnsku || null,
-          upc: settingsForm.upc || null,
-          labelType: settingsForm.labelType || 'fnsku_only',
-          warehouseLocation: settingsForm.warehouseLocation || null,
-        }),
-      })
-      
-      if (res.ok) {
-        fetchProducts()
-        setShowProductSettings(false)
-      } else {
-        const data = await res.json()
-        alert(data.error || 'Failed to save settings')
-      }
-    } catch (error) {
-      console.error('Error saving settings:', error)
-    } finally {
-      setSavingSettings(false)
-    }
-  }
-
-  // Link Products functionality
-  const openLinkProducts = async (product: Product, e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setSelectedProduct(product)
-    setLinkSearchTerm('')
-    setLinkSearchResults([])
-    
-    // Fetch all products to get updated linked products
+    // Fetch linked products for this product
     const allProductsRes = await fetch('/api/products?flat=true')
     const allProductsData = await allProductsRes.json()
     const allProducts = Array.isArray(allProductsData) ? allProductsData : []
     
-    // Find all products linked to this one
     if (product.physicalProductGroupId) {
       const linked = allProducts.filter((p: Product) => 
         p.physicalProductGroupId === product.physicalProductGroupId && p.sku !== product.sku
@@ -421,28 +373,53 @@ export default function ProductsPage() {
       setLinkedProducts([])
     }
     
-    setShowLinkProducts(true)
+    setShowProductSettings(true)
   }
 
-  const searchProductsForLinking = (search: string) => {
-    setLinkSearchTerm(search)
-    if (search.trim().length < 2) {
-      setLinkSearchResults([])
-      return
-    }
+  const saveProductSettings = async (data: any) => {
+    if (!selectedProduct) return
     
-    const searchLower = search.toLowerCase()
-    // Search in all SKU products (flat list)
+    setSavingSettings(true)
+    try {
+      const res = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku: selectedProduct.sku,
+          ...data,
+        }),
+      })
+      
+      if (res.ok) {
+        fetchProducts()
+        setShowProductSettings(false)
+      } else {
+        const responseData = await res.json()
+        alert(responseData.error || 'Failed to save settings')
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error)
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+  
+  // Search products for linking (used by ProductSettingsModal)
+  const searchProductsToLink = async (term: string): Promise<Product[]> => {
+    if (term.length < 2 || !selectedProduct) return []
+    
+    const searchLower = term.toLowerCase()
     const results = allSkuProducts.filter(p => 
-      p.sku !== selectedProduct?.sku && // Don't include self
+      p.sku !== selectedProduct.sku &&
       (p.sku.toLowerCase().includes(searchLower) || 
        p.title.toLowerCase().includes(searchLower)) &&
-      (!p.physicalProductGroupId || p.physicalProductGroupId !== selectedProduct?.physicalProductGroupId) // Don't show already linked
+      (!p.physicalProductGroupId || p.physicalProductGroupId !== selectedProduct.physicalProductGroupId)
     ).slice(0, 10)
     
-    setLinkSearchResults(results)
+    return results
   }
 
+  // Link Products functionality
   const linkProduct = async (productToLink: Product) => {
     if (!selectedProduct) return
     
@@ -762,7 +739,7 @@ export default function ProductsPage() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={(e) => openLinkProducts(product, e)}
+                    onClick={(e) => openProductSettings(product, e)}
                     title="Link Products (Share Physical Inventory)"
                     className={product.physicalProductGroupId ? 'text-cyan-400' : ''}
                   >
@@ -1190,307 +1167,18 @@ export default function ProductsPage() {
       </Modal>
 
       {/* Product Settings Modal */}
-      <Modal
+      <ProductSettingsModal
         isOpen={showProductSettings}
         onClose={() => setShowProductSettings(false)}
-        title="Product Settings"
-        description={selectedProduct ? `${selectedProduct.displayName || selectedProduct.sku}` : ''}
-        size="md"
-      >
-        <div className="space-y-5">
-          {/* Product Info Header */}
-          {selectedProduct && (
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-              <div className="flex items-center gap-3">
-                <Package className="w-8 h-8 text-cyan-400" />
-                <div>
-                  <p className="font-mono font-bold text-white">{selectedProduct.sku}</p>
-                  <p className="text-sm text-slate-400 truncate max-w-sm">{selectedProduct.title}</p>
-                  {selectedProduct.asin && (
-                    <p className="text-xs text-slate-500 font-mono">ASIN: {selectedProduct.asin}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Cost & Price */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                <DollarSign className="w-4 h-4 inline mr-1" />
-                Cost
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={settingsForm.cost}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, cost: e.target.value })}
-                  placeholder="0.00"
-                  className="w-full pl-8 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                <DollarSign className="w-4 h-4 inline mr-1" />
-                Price
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={settingsForm.price}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, price: e.target.value })}
-                  placeholder="0.00"
-                  className="w-full pl-8 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Margin Display */}
-          {settingsForm.cost && settingsForm.price && (
-            <div className="bg-slate-800/30 rounded-lg p-3 flex justify-between items-center">
-              <span className="text-sm text-slate-400">Profit Margin:</span>
-              <span className={`font-bold ${
-                parseFloat(settingsForm.price) > 0 && 
-                ((parseFloat(settingsForm.price) - parseFloat(settingsForm.cost)) / parseFloat(settingsForm.price) * 100) >= 30 
-                  ? 'text-emerald-400' 
-                  : ((parseFloat(settingsForm.price) - parseFloat(settingsForm.cost)) / parseFloat(settingsForm.price) * 100) >= 15 
-                    ? 'text-amber-400' 
-                    : 'text-red-400'
-              }`}>
-                {parseFloat(settingsForm.price) > 0 
-                  ? `${Math.round((parseFloat(settingsForm.price) - parseFloat(settingsForm.cost)) / parseFloat(settingsForm.price) * 100)}%`
-                  : '—'
-                }
-              </span>
-            </div>
-          )}
-
-          {/* Supplier */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              <Truck className="w-4 h-4 inline mr-1" />
-              Supplier
-            </label>
-            <select
-              value={settingsForm.supplierId}
-              onChange={(e) => setSettingsForm({ ...settingsForm, supplierId: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-            >
-              <option value="">No supplier assigned</option>
-              {suppliers.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Supplier SKU */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Supplier SKU
-            </label>
-            <input
-              type="text"
-              value={settingsForm.supplierSku}
-              onChange={(e) => setSettingsForm({ ...settingsForm, supplierSku: e.target.value })}
-              placeholder="Enter supplier's SKU for this product"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-
-          {/* Divider */}
-          <div className="border-t border-slate-700 my-2" />
-
-          {/* Amazon & Labeling */}
-          <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Amazon & Labeling</h4>
-
-          {/* FNSKU */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              FNSKU
-            </label>
-            <input
-              type="text"
-              value={settingsForm.fnsku}
-              onChange={(e) => setSettingsForm({ ...settingsForm, fnsku: e.target.value })}
-              placeholder="e.g., X001ABC123"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
-            />
-            <p className="text-xs text-slate-500 mt-1">Amazon Fulfillment Network SKU - used on FBA labels</p>
-          </div>
-
-          {/* UPC */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              UPC (GTIN)
-            </label>
-            <input
-              type="text"
-              value={settingsForm.upc}
-              onChange={(e) => setSettingsForm({ ...settingsForm, upc: e.target.value })}
-              placeholder="12-14 digit UPC/EAN code"
-              maxLength={14}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
-            />
-            <p className="text-xs text-slate-500 mt-1">Required for Transparency codes</p>
-          </div>
-
-          {/* Label Type */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Label Type
-            </label>
-            <select
-              value={settingsForm.labelType}
-              onChange={(e) => setSettingsForm({ ...settingsForm, labelType: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-            >
-              <option value="fnsku_only">FNSKU Only</option>
-              <option value="fnsku_tp">FNSKU + Transparency</option>
-              <option value="tp_only">Transparency Only (product has FNSKU)</option>
-            </select>
-          </div>
-
-          {/* Warehouse Location */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Warehouse Location
-            </label>
-            <input
-              type="text"
-              value={settingsForm.warehouseLocation}
-              onChange={(e) => setSettingsForm({ ...settingsForm, warehouseLocation: e.target.value })}
-              placeholder="e.g., A-12-3, Bin 45"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-            />
-            <p className="text-xs text-slate-500 mt-1">For pick labels during FBA shipments</p>
-          </div>
-        </div>
-
-        <ModalFooter>
-          <Button variant="ghost" onClick={() => setShowProductSettings(false)}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={saveProductSettings} 
-            loading={savingSettings}
-          >
-            Save Settings
-          </Button>
-        </ModalFooter>
-      </Modal>
-
-      {/* Link Products Modal */}
-      <Modal
-        isOpen={showLinkProducts}
-        onClose={() => {
-          setShowLinkProducts(false)
-          setLinkSearchTerm('')
-          setLinkSearchResults([])
-        }}
-        title={`Link Products: ${selectedProduct?.sku}`}
-      >
-        <div className="space-y-4">
-          <div className="bg-slate-800/30 rounded-lg p-3">
-            <p className="text-sm text-slate-400 mb-2">
-              Linked products share the same physical inventory and purchasing velocity, but maintain separate FBA listings.
-            </p>
-            <p className="text-xs text-slate-500">
-              Example: A 9-inch chain sold as both "bracelet" and "anklet" listings.
-            </p>
-          </div>
-
-          {/* Currently Linked Products */}
-          {linkedProducts.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Currently Linked ({linkedProducts.length})
-              </label>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {linkedProducts.map((linked) => (
-                  <div
-                    key={linked.sku}
-                    className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700"
-                  >
-                    <div>
-                      <p className="font-mono text-white font-medium">{linked.sku}</p>
-                      <p className="text-sm text-slate-400 truncate">{linked.title}</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => unlinkProduct(linked)}
-                      disabled={savingLink}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Search to Link New Product */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Link Another Product
-            </label>
-            <input
-              type="text"
-              value={linkSearchTerm}
-              onChange={(e) => searchProductsForLinking(e.target.value)}
-              placeholder="Search by SKU or title..."
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-            />
-            
-            {/* Search Results */}
-            {linkSearchResults.length > 0 && (
-              <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
-                {linkSearchResults.map((product) => (
-                  <div
-                    key={product.sku}
-                    className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700 hover:border-cyan-500/50 cursor-pointer"
-                    onClick={() => linkProduct(product)}
-                  >
-                    <div>
-                      <p className="font-mono text-white font-medium">{product.sku}</p>
-                      <p className="text-sm text-slate-400 truncate">{product.title}</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={savingLink}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <ModalFooter>
-          <Button variant="ghost" onClick={() => {
-            setShowLinkProducts(false)
-            setLinkSearchTerm('')
-            setLinkSearchResults([])
-          }}>
-            Close
-          </Button>
-        </ModalFooter>
-      </Modal>
+        product={selectedProduct}
+        suppliers={suppliers}
+        linkedProducts={linkedProducts}
+        onSave={saveProductSettings}
+        onLinkProduct={linkProduct}
+        onUnlinkProduct={unlinkProduct}
+        onSearchLinked={searchProductsToLink}
+        saving={savingSettings}
+      />
 
       {/* Bulk Update Modal */}
       <BulkProductUpdate

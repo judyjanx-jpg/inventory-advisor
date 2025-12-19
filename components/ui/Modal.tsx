@@ -10,7 +10,7 @@ interface ModalProps {
   title?: string
   description?: string
   children: ReactNode
-  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full' | '2xl' | '3xl' | '4xl' | '5xl'
   showCloseButton?: boolean
 }
 
@@ -64,6 +64,10 @@ export default function Modal({
             size === 'lg' && "sm:max-w-lg",
             size === 'xl' && "sm:max-w-2xl",
             size === 'full' && "sm:max-w-4xl",
+            size === '2xl' && "sm:max-w-3xl",
+            size === '3xl' && "sm:max-w-4xl",
+            size === '4xl' && "sm:max-w-5xl",
+            size === '5xl' && "sm:max-w-6xl",
           )}
           onClick={(e) => e.stopPropagation()}
         >
