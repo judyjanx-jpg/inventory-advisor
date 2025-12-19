@@ -66,6 +66,9 @@ export async function GET(request: NextRequest) {
           transparencyEnabled: true,
           warehouseLocation: true,
           status: true,
+          launchDate: true,
+          recreatedFromSku: true,
+          discontinuedAt: true,
           createdAt: true,
           // Listing data from Amazon
           imageUrl: true,
@@ -118,6 +121,9 @@ export async function GET(request: NextRequest) {
       transparencyEnabled: true,
       warehouseLocation: true,
       status: true,
+      launchDate: true,
+      recreatedFromSku: true,
+      discontinuedAt: true,
       createdAt: true,
       // Listing data from Amazon
       imageUrl: true,
@@ -287,6 +293,13 @@ export async function PUT(request: NextRequest) {
       isWarrantied,
       careInstructions,
       sizingGuide,
+      // Status fields
+      status,
+      launchDate,
+      recreatedFromSku,
+      discontinuedAt,
+      // Apply scope (this, all, supplier)
+      applyScope,
     } = body
     
     if (!sku) {
@@ -296,11 +309,20 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    // Get current product for supplier info if applying to supplier
+    const currentProduct = await prisma.product.findUnique({
+      where: { sku },
+      select: { supplierId: true }
+    })
+
     const updateData: Record<string, any> = {}
+    
+    // Fields that can be bulk applied (costs/fees)
+    const bulkApplyFields: Record<string, any> = {}
     
     // Only update fields that are explicitly provided
     if (displayName !== undefined) {
-      updateData.displayName = displayName || null // Empty string becomes null
+      updateData.displayName = displayName || null
     }
     if (isHidden !== undefined) {
       updateData.isHidden = isHidden
@@ -317,31 +339,43 @@ export async function PUT(request: NextRequest) {
     if (msrp !== undefined) {
       updateData.msrp = msrp || null
     }
-    // Additional costs
+    // Additional costs (can be bulk applied)
     if (packagingCost !== undefined) {
-      updateData.packagingCost = packagingCost || null
+      const val = packagingCost || null
+      updateData.packagingCost = val
+      bulkApplyFields.packagingCost = val
     }
     if (tariffPercent !== undefined) {
-      updateData.tariffPercent = tariffPercent || null
+      const val = tariffPercent || null
+      updateData.tariffPercent = val
+      bulkApplyFields.tariffPercent = val
     }
     if (additionalCosts !== undefined) {
       updateData.additionalCosts = additionalCosts || null
     }
-    // Amazon fee settings
+    // Amazon fee settings (can be bulk applied)
     if (fbaFeeEstimate !== undefined) {
-      updateData.fbaFeeEstimate = fbaFeeEstimate || null
+      const val = fbaFeeEstimate || null
+      updateData.fbaFeeEstimate = val
+      bulkApplyFields.fbaFeeEstimate = val
     }
     if (referralFeePercent !== undefined) {
-      updateData.referralFeePercent = referralFeePercent
+      const val = referralFeePercent
+      updateData.referralFeePercent = val
+      bulkApplyFields.referralFeePercent = val
     }
     if (refundPercent !== undefined) {
-      updateData.refundPercent = refundPercent
+      const val = refundPercent
+      updateData.refundPercent = val
+      bulkApplyFields.refundPercent = val
     }
     if (adsPercent !== undefined) {
-      updateData.adsPercent = adsPercent
+      const val = adsPercent
+      updateData.adsPercent = val
+      bulkApplyFields.adsPercent = val
     }
     if (supplierId !== undefined) {
-      updateData.supplierId = supplierId || null // null to unset
+      updateData.supplierId = supplierId || null
     }
     if (supplierSku !== undefined) {
       updateData.supplierSku = supplierSku || null
@@ -370,12 +404,41 @@ export async function PUT(request: NextRequest) {
     if (sizingGuide !== undefined) {
       updateData.sizingGuide = sizingGuide || null
     }
+    // Status fields
+    if (status !== undefined) {
+      updateData.status = status
+    }
+    if (launchDate !== undefined) {
+      updateData.launchDate = launchDate ? new Date(launchDate) : null
+    }
+    if (recreatedFromSku !== undefined) {
+      updateData.recreatedFromSku = recreatedFromSku || null
+    }
+    if (discontinuedAt !== undefined) {
+      updateData.discontinuedAt = discontinuedAt ? new Date(discontinuedAt) : null
+    }
 
+    // Handle bulk apply for cost/fee fields
+    if (applyScope && applyScope !== 'this' && Object.keys(bulkApplyFields).length > 0) {
+      const bulkWhere = applyScope === 'all' 
+        ? {} 
+        : applyScope === 'supplier' && currentProduct?.supplierId
+          ? { supplierId: currentProduct.supplierId }
+          : { sku } // fallback to single product
+      
+      await prisma.product.updateMany({
+        where: bulkWhere,
+        data: bulkApplyFields,
+      })
+    }
+
+    // Always update the main product with all fields
     const product = await prisma.product.update({
       where: { sku },
       data: updateData,
       include: {
         supplier: true,
+        skuMappings: true,
       },
     })
 

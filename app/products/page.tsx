@@ -12,13 +12,9 @@ import {
   Search, 
   Filter,
   Edit,
-  Trash2,
-  Link as LinkIcon,
   RefreshCw,
   ChevronDown,
   ChevronRight,
-  Globe,
-  Tag,
   Layers,
   EyeOff,
   Eye,
@@ -84,6 +80,9 @@ interface Product {
   adsPercent?: number
   // Status
   status: string
+  launchDate?: string
+  recreatedFromSku?: string
+  discontinuedAt?: string
   isParent?: boolean
   parentSku?: string
   variationType?: string
@@ -131,21 +130,6 @@ const SORT_OPTIONS = [
   { id: 'sales-low', label: 'Sales: Low → High' },
 ]
 
-const CHANNELS = [
-  { id: 'amazon_us', name: 'Amazon US', flag: '🇺🇸' },
-  { id: 'amazon_uk', name: 'Amazon UK', flag: '🇬🇧' },
-  { id: 'amazon_ca', name: 'Amazon CA', flag: '🇨🇦' },
-  { id: 'amazon_de', name: 'Amazon DE', flag: '🇩🇪' },
-  { id: 'amazon_fr', name: 'Amazon FR', flag: '🇫🇷' },
-  { id: 'amazon_es', name: 'Amazon ES', flag: '🇪🇸' },
-  { id: 'amazon_it', name: 'Amazon IT', flag: '🇮🇹' },
-  { id: 'amazon_au', name: 'Amazon AU', flag: '🇦🇺' },
-  { id: 'walmart', name: 'Walmart', flag: '🛒' },
-  { id: 'shopify', name: 'Shopify', flag: '🛍️' },
-  { id: 'ebay', name: 'eBay', flag: '📦' },
-  { id: 'supplier', name: 'Supplier SKU', flag: '🏭' },
-]
-
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [allSkuProducts, setAllSkuProducts] = useState<Product[]>([])
@@ -153,7 +137,6 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
-  const [expandedMappings, setExpandedMappings] = useState<string | null>(null)
   const [showHiddenPanel, setShowHiddenPanel] = useState(false)
   
   // View and Sort states
@@ -167,7 +150,6 @@ export default function ProductsPage() {
   
   // Modal states
   const [showAddProduct, setShowAddProduct] = useState(false)
-  const [showSkuMapping, setShowSkuMapping] = useState(false)
   const [showProductSettings, setShowProductSettings] = useState(false)
   const [showBulkUpdate, setShowBulkUpdate] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -176,15 +158,6 @@ export default function ProductsPage() {
   
   // Suppliers
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  
-  // SKU Mapping form
-  const [mappingForm, setMappingForm] = useState({
-    channel: '',
-    channelSku: '',
-    channelProductId: '',
-    channelFnsku: '',
-  })
-  const [savingMapping, setSavingMapping] = useState(false)
   
   // Product Settings
   const [savingSettings, setSavingSettings] = useState(false)
@@ -315,56 +288,6 @@ export default function ProductsPage() {
     })
   }
 
-  const openSkuMapping = (product: Product, e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setSelectedProduct(product)
-    setMappingForm({
-      channel: '',
-      channelSku: '',
-      channelProductId: '',
-      channelFnsku: '',
-    })
-    setShowSkuMapping(true)
-  }
-
-  const saveSkuMapping = async () => {
-    if (!selectedProduct || !mappingForm.channel || !mappingForm.channelSku) return
-    
-    setSavingMapping(true)
-    try {
-      const res = await fetch(`/api/products/${selectedProduct.sku}/mappings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mappingForm),
-      })
-      
-      if (res.ok) {
-        fetchProducts()
-        setShowSkuMapping(false)
-      } else {
-        const data = await res.json()
-        alert(data.error || 'Failed to save mapping')
-      }
-    } catch (error) {
-      console.error('Error saving mapping:', error)
-    } finally {
-      setSavingMapping(false)
-    }
-  }
-
-  const deleteSkuMapping = async (product: Product, mappingId: number) => {
-    if (!confirm('Are you sure you want to delete this SKU mapping?')) return
-    
-    try {
-      await fetch(`/api/products/${product.sku}/mappings?id=${mappingId}`, {
-        method: 'DELETE',
-      })
-      fetchProducts()
-    } catch (error) {
-      console.error('Error deleting mapping:', error)
-    }
-  }
-
   // Product Settings
   const openProductSettings = async (product: Product, e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -387,7 +310,7 @@ export default function ProductsPage() {
     setShowProductSettings(true)
   }
 
-  const saveProductSettings = async (data: any) => {
+  const saveProductSettings = async (data: any, applyScope: 'this' | 'all' | 'supplier' = 'this') => {
     if (!selectedProduct) return
     
     setSavingSettings(true)
@@ -397,6 +320,7 @@ export default function ProductsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sku: selectedProduct.sku,
+          applyScope,
           ...data,
         }),
       })
@@ -554,10 +478,6 @@ export default function ProductsPage() {
     }
   }
 
-  const getChannelInfo = (channelId: string) => {
-    return CHANNELS.find(c => c.id === channelId) || { id: channelId, name: channelId, flag: '🔗' }
-  }
-
   const getInventoryTotal = (product: Product) => {
     // Handle both array (from Prisma) and object (from transform) cases
     const inv = Array.isArray(product.inventoryLevels) 
@@ -590,7 +510,6 @@ export default function ProductsPage() {
   const renderProductRow = (product: Product, isVariation = false, parentExpanded = true, isHiddenView = false) => {
     const hasVariations = product.variations && product.variations.length > 0
     const isExpanded = expandedProducts.has(product.sku)
-    const showMappings = expandedMappings === product.sku
     const isEditingThis = editingName === product.sku
     const isSkuView = viewMode === 'sku'
 
@@ -736,47 +655,17 @@ export default function ProductsPage() {
             </div>
             {/* Actions */}
             <div className="flex items-center gap-1">
-              {/* Only show settings for actual products, not parent containers */}
+              {/* Settings button for actual products */}
               {!hasVariations && !product.isParent && (
-                <>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={(e) => openProductSettings(product, e)}
-                    title="Product Settings"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={(e) => openProductSettings(product, e)}
-                    title="Link Products (Share Physical Inventory)"
-                    className={product.physicalProductGroupId ? 'text-cyan-400' : ''}
-                  >
-                    <Layers className="w-4 h-4" />
-                  </Button>
-                </>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={(e) => openProductSettings(product, e)}
+                  title="Product Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </Button>
               )}
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={(e) => openSkuMapping(product, e)}
-                title="SKU Mappings"
-              >
-                <LinkIcon className="w-4 h-4" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setExpandedMappings(showMappings ? null : product.sku)
-                }}
-                title="View Mappings"
-              >
-                <Globe className="w-4 h-4" />
-              </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -788,63 +677,6 @@ export default function ProductsPage() {
             </div>
           </div>
         </div>
-
-        {/* SKU Mappings Panel */}
-        {showMappings && (
-          <div className="px-6 py-4 bg-slate-900/50 border-t border-slate-700/50">
-            <div className="ml-8">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-cyan-400" />
-                  Channel SKU Mappings
-                </h4>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={(e) => openSkuMapping(product, e)}
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add
-                </Button>
-              </div>
-              
-              {(!product.skuMappings || product.skuMappings.length === 0) ? (
-                <div className="text-center py-4 bg-slate-800/30 rounded-lg border border-dashed border-slate-700">
-                  <Tag className="w-6 h-6 text-slate-600 mx-auto mb-1" />
-                  <p className="text-sm text-slate-400">No channel mappings</p>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {product.skuMappings.map((mapping) => {
-                    const channel = getChannelInfo(mapping.channel)
-                    return (
-                      <div 
-                        key={mapping.id}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700/50"
-                      >
-                        <span className="text-lg">{channel.flag}</span>
-                        <div className="text-sm">
-                          <span className="text-white font-mono">{mapping.channelSku}</span>
-                          {mapping.channelProductId && (
-                            <span className="text-slate-500 ml-2">({mapping.channelProductId})</span>
-                          )}
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => deleteSkuMapping(product, mapping.id)}
-                          className="ml-1 p-1"
-                        >
-                          <Trash2 className="w-3 h-3 text-slate-500 hover:text-red-400" />
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Variations (children) - only in parent view */}
         {!isSkuView && hasVariations && isExpanded && (
@@ -1078,87 +910,6 @@ export default function ProductsPage() {
         </Card>
       </div>
 
-      {/* SKU Mapping Modal */}
-      <Modal
-        isOpen={showSkuMapping}
-        onClose={() => setShowSkuMapping(false)}
-        title="Add SKU Mapping"
-        description={`Add a channel mapping for ${selectedProduct?.sku}`}
-        size="md"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Channel <span className="text-red-400">*</span>
-            </label>
-            <select
-              value={mappingForm.channel}
-              onChange={(e) => setMappingForm({ ...mappingForm, channel: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-            >
-              <option value="">Select a channel...</option>
-              {CHANNELS.map((channel) => (
-                <option key={channel.id} value={channel.id}>
-                  {channel.flag} {channel.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Channel SKU <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={mappingForm.channelSku}
-              onChange={(e) => setMappingForm({ ...mappingForm, channelSku: e.target.value })}
-              placeholder="e.g., MJBC116-UK-FBA"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Product ID (ASIN, Walmart ID, etc.)
-            </label>
-            <input
-              type="text"
-              value={mappingForm.channelProductId}
-              onChange={(e) => setMappingForm({ ...mappingForm, channelProductId: e.target.value })}
-              placeholder="e.g., B08XYZ1234"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              FNSKU (for FBA)
-            </label>
-            <input
-              type="text"
-              value={mappingForm.channelFnsku}
-              onChange={(e) => setMappingForm({ ...mappingForm, channelFnsku: e.target.value })}
-              placeholder="e.g., X001ABC123"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-        </div>
-
-        <ModalFooter>
-          <Button variant="ghost" onClick={() => setShowSkuMapping(false)}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={saveSkuMapping} 
-            loading={savingMapping}
-            disabled={!mappingForm.channel || !mappingForm.channelSku}
-          >
-            Save Mapping
-          </Button>
-        </ModalFooter>
-      </Modal>
-
       {/* Add Product Modal */}
       <Modal
         isOpen={showAddProduct}
@@ -1182,6 +933,7 @@ export default function ProductsPage() {
         isOpen={showProductSettings}
         onClose={() => setShowProductSettings(false)}
         product={selectedProduct}
+        allProducts={allSkuProducts}
         suppliers={suppliers}
         linkedProducts={linkedProducts}
         onSave={saveProductSettings}

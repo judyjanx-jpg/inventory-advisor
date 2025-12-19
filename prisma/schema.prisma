@@ -95,9 +95,11 @@ model Product {
   careInstructions String? @map("care_instructions") @db.Text // For AI/support reference
   sizingGuide      String? @map("sizing_guide") @db.Text // Product-specific sizing info
 
-  // Status
-  status     String    @default("active") // active, discontinued, seasonal, liquidate
-  launchDate DateTime? @map("launch_date")
+  // Status & Lifecycle
+  status           String    @default("active") // active, new, recreated, discontinued, seasonal, liquidate
+  launchDate       DateTime? @map("launch_date") // When marked as "new", auto-expires after 6 months
+  recreatedFromSku String?   @map("recreated_from_sku") // Old SKU this product replaced (for FBA purposes)
+  discontinuedAt   DateTime? @map("discontinued_at") // When marked as discontinued
 
   // Notes
   notes String? @db.Text
