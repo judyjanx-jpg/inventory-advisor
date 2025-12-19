@@ -52,7 +52,8 @@ interface Supplier {
 }
 
 interface ProductImage {
-  link: string
+  url?: string
+  link?: string
   variant: string
   width?: number
   height?: number
@@ -72,6 +73,16 @@ interface Product {
   price: number
   mapPrice?: number
   msrp?: number
+  // Additional costs
+  packagingCost?: number
+  tariffCost?: number
+  additionalCosts?: { name: string; amount: number }[]
+  // Amazon fee settings
+  fbaFeeEstimate?: number
+  referralFeePercent?: number
+  refundPercent?: number
+  adsPercent?: number
+  // Status
   status: string
   isParent?: boolean
   parentSku?: string
@@ -1177,6 +1188,22 @@ export default function ProductsPage() {
         onLinkProduct={linkProduct}
         onUnlinkProduct={unlinkProduct}
         onSearchLinked={searchProductsToLink}
+        onSaveMapping={async (channel, channelSku, channelProductId) => {
+          if (!selectedProduct) return
+          await fetch(`/api/products/${selectedProduct.sku}/mappings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel, channelSku, channelProductId }),
+          })
+          fetchProducts()
+        }}
+        onDeleteMapping={async (mappingId) => {
+          if (!selectedProduct) return
+          await fetch(`/api/products/${selectedProduct.sku}/mappings?id=${mappingId}`, {
+            method: 'DELETE',
+          })
+          fetchProducts()
+        }}
         saving={savingSettings}
       />
 

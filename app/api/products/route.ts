@@ -267,6 +267,16 @@ export async function PUT(request: NextRequest) {
       price, 
       mapPrice,
       msrp,
+      // Additional costs
+      packagingCost,
+      tariffCost,
+      additionalCosts,
+      // Amazon fee settings
+      fbaFeeEstimate,
+      referralFeePercent,
+      refundPercent,
+      adsPercent,
+      // Supplier
       supplierId, 
       supplierSku, 
       fnsku, 
@@ -306,6 +316,29 @@ export async function PUT(request: NextRequest) {
     }
     if (msrp !== undefined) {
       updateData.msrp = msrp || null
+    }
+    // Additional costs
+    if (packagingCost !== undefined) {
+      updateData.packagingCost = packagingCost || null
+    }
+    if (tariffCost !== undefined) {
+      updateData.tariffCost = tariffCost || null
+    }
+    if (additionalCosts !== undefined) {
+      updateData.additionalCosts = additionalCosts || null
+    }
+    // Amazon fee settings
+    if (fbaFeeEstimate !== undefined) {
+      updateData.fbaFeeEstimate = fbaFeeEstimate || null
+    }
+    if (referralFeePercent !== undefined) {
+      updateData.referralFeePercent = referralFeePercent
+    }
+    if (refundPercent !== undefined) {
+      updateData.refundPercent = refundPercent
+    }
+    if (adsPercent !== undefined) {
+      updateData.adsPercent = adsPercent
     }
     if (supplierId !== undefined) {
       updateData.supplierId = supplierId || null // null to unset

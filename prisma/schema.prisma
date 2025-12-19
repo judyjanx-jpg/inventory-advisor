@@ -45,6 +45,17 @@ model Product {
   price    Decimal  @db.Decimal(10, 2)
   mapPrice Decimal? @map("map_price") @db.Decimal(10, 2)
   msrp     Decimal? @db.Decimal(10, 2)
+  
+  // Additional Costs
+  packagingCost  Decimal? @default(0) @map("packaging_cost") @db.Decimal(10, 2)
+  tariffCost     Decimal? @default(0) @map("tariff_cost") @db.Decimal(10, 2)
+  additionalCosts Json?   @map("additional_costs") // Array of {name, amount}
+  
+  // Amazon Fee Settings (for profit calculation)
+  fbaFeeEstimate     Decimal? @map("fba_fee_estimate") @db.Decimal(10, 2)
+  referralFeePercent Decimal? @default(15) @map("referral_fee_percent") @db.Decimal(5, 2)
+  refundPercent      Decimal? @default(2) @map("refund_percent") @db.Decimal(5, 2)
+  adsPercent         Decimal? @default(0) @map("ads_percent") @db.Decimal(5, 2)
 
   // Supplier Link
   supplierId  Int?      @map("supplier_id")
