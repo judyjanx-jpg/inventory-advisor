@@ -619,6 +619,26 @@ export async function getPeriodData(
     // Ads table might not exist yet
   }
 
+  // If no data from advertising_daily, try ad_product_spend directly (raw data)
+  if (adCost === 0) {
+    try {
+      const rawAdData = await queryOne<{ total_spend: string }>(`
+        SELECT COALESCE(SUM(spend), 0)::text as total_spend
+        FROM ad_product_spend
+        WHERE start_date >= $1::date
+          AND start_date < $2::date
+      `, [startDate, endDate])
+      
+      const rawSpend = parseFloat(rawAdData?.total_spend || '0')
+      if (rawSpend > 0) {
+        adCost = rawSpend
+        adCostSP = rawSpend // Assume SP for now since that's what we sync
+      }
+    } catch {
+      // ad_product_spend table might not exist
+    }
+  }
+
   // Calculate COGS - landed cost = cost + packagingCost + tariff + additionalCosts
   let cogs = 0
   try {
@@ -897,6 +917,25 @@ export async function getPeriodDataLightweight(
     }
   } catch {
     // Ads table might not exist
+  }
+
+  // If no data from advertising_daily, try ad_product_spend directly (raw data)
+  if (adCost === 0) {
+    try {
+      const rawAdData = await queryOne<{ total_spend: string }>(`
+        SELECT COALESCE(SUM(spend), 0)::text as total_spend
+        FROM ad_product_spend
+        WHERE start_date >= $1::date AND start_date < $2::date
+      `, [startDate, endDate])
+      
+      const rawSpend = parseFloat(rawAdData?.total_spend || '0')
+      if (rawSpend > 0) {
+        adCost = rawSpend
+        adCostSP = rawSpend
+      }
+    } catch {
+      // ad_product_spend table might not exist
+    }
   }
 
   // Calculate COGS - landed cost = cost + packagingCost + tariff + additionalCosts
