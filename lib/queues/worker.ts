@@ -1454,10 +1454,26 @@ async function processAdsReportsSync(job: any) {
               }
               console.log(`    Processed ${productsUpdated} product records`)
             } else {
-              // Campaign-level report - store in AdCampaign
+              // Campaign-level report - store in AdCampaign AND aggregate totals to advertising_daily
+              // This captures the FULL ad spend (not just product-attributed spend)
+              let totalSpend = 0
+              let totalImpressions = 0
+              let totalClicks = 0
+              let totalSales14d = 0
+              let totalOrders14d = 0
+              let totalUnits14d = 0
+
               for (const campaign of data) {
                 const campaignId = campaign.campaignId?.toString()
                 if (!campaignId) continue
+
+                const spend = parseFloat(campaign.cost) || 0
+                totalSpend += spend
+                totalImpressions += campaign.impressions || 0
+                totalClicks += campaign.clicks || 0
+                totalSales14d += parseFloat(campaign.sales14d) || 0
+                totalOrders14d += campaign.purchases14d || 0
+                totalUnits14d += campaign.unitsSoldClicks14d || 0
 
                 await prisma.adCampaign.upsert({
                   where: { campaignId },
@@ -1469,7 +1485,7 @@ async function processAdsReportsSync(job: any) {
                     budgetType: campaign.campaignBudgetType || 'DAILY',
                     impressions: campaign.impressions || 0,
                     clicks: campaign.clicks || 0,
-                    spend: parseFloat(campaign.cost) || 0,
+                    spend,
                     sales14d: parseFloat(campaign.sales14d) || 0,
                     orders14d: campaign.purchases14d || 0,
                     units14d: campaign.unitsSoldClicks14d || 0,
@@ -1485,7 +1501,7 @@ async function processAdsReportsSync(job: any) {
                     budgetType: campaign.campaignBudgetType || 'DAILY',
                     impressions: campaign.impressions || 0,
                     clicks: campaign.clicks || 0,
-                    spend: parseFloat(campaign.cost) || 0,
+                    spend,
                     sales14d: parseFloat(campaign.sales14d) || 0,
                     orders14d: campaign.purchases14d || 0,
                     units14d: campaign.unitsSoldClicks14d || 0,
@@ -1494,12 +1510,60 @@ async function processAdsReportsSync(job: any) {
                 })
                 campaignsUpdated++
               }
+
+              // Store TOTAL campaign spend in advertising_daily (this is the accurate total)
+              // This uses campaign totals which include ALL spend, not just product-attributed
+              if (totalSpend > 0) {
+                const acos = totalSales14d > 0 ? (totalSpend / totalSales14d) * 100 : null
+                const roas = totalSpend > 0 ? totalSales14d / totalSpend : null
+                const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : null
+                const cpc = totalClicks > 0 ? totalSpend / totalClicks : null
+
+                await prisma.advertisingDaily.upsert({
+                  where: {
+                    date_campaignType: {
+                      date: new Date(startDateStr),
+                      campaignType: 'SP',
+                    },
+                  },
+                  update: {
+                    impressions: totalImpressions,
+                    clicks: totalClicks,
+                    spend: totalSpend,
+                    sales14d: totalSales14d > 0 ? totalSales14d : null,
+                    orders14d: totalOrders14d > 0 ? totalOrders14d : null,
+                    unitsSold14d: totalUnits14d > 0 ? totalUnits14d : null,
+                    acos,
+                    roas,
+                    ctr,
+                    cpc,
+                    updatedAt: new Date(),
+                  },
+                  create: {
+                    date: new Date(startDateStr),
+                    campaignType: 'SP',
+                    impressions: totalImpressions,
+                    clicks: totalClicks,
+                    spend: totalSpend,
+                    sales14d: totalSales14d > 0 ? totalSales14d : null,
+                    orders14d: totalOrders14d > 0 ? totalOrders14d : null,
+                    unitsSold14d: totalUnits14d > 0 ? totalUnits14d : null,
+                    acos,
+                    roas,
+                    ctr,
+                    cpc,
+                  },
+                })
+                console.log(`    Updated advertising_daily for ${startDateStr}: $${totalSpend.toFixed(2)} total spend`)
+              }
             }
           }
 
-          // After processing report, aggregate data into advertising_daily
-          // Aggregate from adProductSpend for the report's date range
-          await aggregateAdsToDaily(startDateStr, endDateStr)
+          // After processing PRODUCT reports, aggregate data into advertising_daily
+          // (Campaign reports now directly update advertising_daily above)
+          if (report.reportType === 'SP_PRODUCTS') {
+            await aggregateAdsToDaily(startDateStr, endDateStr)
+          }
 
           // Mark report as completed
           await prisma.adsPendingReport.update({

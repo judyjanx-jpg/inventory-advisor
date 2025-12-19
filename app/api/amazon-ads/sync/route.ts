@@ -401,13 +401,28 @@ export async function POST(request: NextRequest) {
                 results.productsUpdated++
               }
             } else {
-              // Campaign-level report - store in AdCampaign
+              // Campaign-level report - store in AdCampaign AND aggregate totals to advertising_daily
+              // This captures the FULL ad spend (not just product-attributed spend)
+              let totalSpend = 0
+              let totalImpressions = 0
+              let totalClicks = 0
+              let totalSales14d = 0
+              let totalOrders14d = 0
+              let totalUnits14d = 0
+
               for (const campaign of data) {
                 const campaignId = campaign.campaignId?.toString()
                 if (!campaignId) continue
 
                 const spend = parseFloat(campaign.cost) || 0
                 const sales = parseFloat(campaign.sales14d) || 0
+
+                totalSpend += spend
+                totalImpressions += campaign.impressions || 0
+                totalClicks += campaign.clicks || 0
+                totalSales14d += sales
+                totalOrders14d += campaign.purchases14d || 0
+                totalUnits14d += campaign.unitsSoldClicks14d || 0
 
                 await prisma.adCampaign.upsert({
                   where: { campaignId },
@@ -447,6 +462,51 @@ export async function POST(request: NextRequest) {
                 })
                 results.campaignsUpdated++
               }
+
+              // Store TOTAL campaign spend in advertising_daily (this is the accurate total)
+              if (totalSpend > 0) {
+                const acos = totalSales14d > 0 ? (totalSpend / totalSales14d) * 100 : null
+                const roas = totalSpend > 0 ? totalSales14d / totalSpend : null
+                const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : null
+                const cpc = totalClicks > 0 ? totalSpend / totalClicks : null
+
+                await prisma.advertisingDaily.upsert({
+                  where: {
+                    date_campaignType: {
+                      date: new Date(startDateStr),
+                      campaignType: 'SP',
+                    },
+                  },
+                  update: {
+                    impressions: totalImpressions,
+                    clicks: totalClicks,
+                    spend: totalSpend,
+                    sales14d: totalSales14d > 0 ? totalSales14d : null,
+                    orders14d: totalOrders14d > 0 ? totalOrders14d : null,
+                    unitsSold14d: totalUnits14d > 0 ? totalUnits14d : null,
+                    acos,
+                    roas,
+                    ctr,
+                    cpc,
+                    updatedAt: new Date(),
+                  },
+                  create: {
+                    date: new Date(startDateStr),
+                    campaignType: 'SP',
+                    impressions: totalImpressions,
+                    clicks: totalClicks,
+                    spend: totalSpend,
+                    sales14d: totalSales14d > 0 ? totalSales14d : null,
+                    orders14d: totalOrders14d > 0 ? totalOrders14d : null,
+                    unitsSold14d: totalUnits14d > 0 ? totalUnits14d : null,
+                    acos,
+                    roas,
+                    ctr,
+                    cpc,
+                  },
+                })
+                results.dailyTotalSpend = (results.dailyTotalSpend || 0) + totalSpend
+              }
             }
           }
 
@@ -456,7 +516,7 @@ export async function POST(request: NextRequest) {
           })
           results.completed++
 
-          // Aggregate to advertising_daily after processing product reports
+          // Aggregate to advertising_daily after processing product reports (for product-level detail)
           if (report.reportType === 'SP_PRODUCTS') {
             const dailyUpdated = await aggregateAdsToDaily(startDateStr, endDateStr)
             results.dailyAggregated = (results.dailyAggregated || 0) + dailyUpdated
