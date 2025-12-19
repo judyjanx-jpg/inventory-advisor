@@ -311,19 +311,29 @@ export default function ProductsPage() {
   }
 
   const saveProductSettings = async (data: any, applyScope: 'this' | 'all' | 'supplier' = 'this', closeAfterSave: boolean = true) => {
-    if (!selectedProduct) return
+    if (!selectedProduct) {
+      console.log('No selected product')
+      return
+    }
+    
+    const requestBody = {
+      sku: selectedProduct.sku,
+      applyScope,
+      ...data,
+    }
+    
+    console.log('saveProductSettings called with:', requestBody)
     
     setSavingSettings(true)
     try {
       const res = await fetch('/api/products', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sku: selectedProduct.sku,
-          applyScope,
-          ...data,
-        }),
+        body: JSON.stringify(requestBody),
       })
+      
+      const responseData = await res.json()
+      console.log('API response:', responseData)
       
       if (res.ok) {
         fetchProducts()
@@ -332,7 +342,6 @@ export default function ProductsPage() {
           setShowProductSettings(false)
         }
       } else {
-        const responseData = await res.json()
         alert(responseData.error || 'Failed to save settings')
       }
     } catch (error) {

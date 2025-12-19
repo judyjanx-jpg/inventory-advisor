@@ -265,6 +265,9 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
+    
+    console.log('PUT /api/products received:', JSON.stringify(body, null, 2))
+    
     const { 
       sku, 
       displayName, 
@@ -301,6 +304,8 @@ export async function PUT(request: NextRequest) {
       // Apply scope (this, all, supplier)
       applyScope,
     } = body
+    
+    console.log('Parsed fields:', { sku, packagingCost, applyScope })
     
     if (!sku) {
       return NextResponse.json(

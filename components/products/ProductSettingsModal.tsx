@@ -279,12 +279,25 @@ export default function ProductSettingsModal({
 
   const confirmApplyScope = async () => {
     // Only send the specific field that's being bulk-applied
-    if (pendingField && pendingValue !== null) {
+    console.log('confirmApplyScope called:', { pendingField, pendingValue, applyScope })
+    
+    if (pendingField && pendingValue !== null && pendingValue !== undefined) {
       const fieldData: Record<string, any> = {}
-      fieldData[pendingField] = parseFloat(pendingValue)
+      const numValue = parseFloat(pendingValue)
+      fieldData[pendingField] = numValue
       
-      await onSave(fieldData, applyScope, false)
+      console.log('Sending fieldData:', fieldData, 'scope:', applyScope)
+      
+      try {
+        await onSave(fieldData, applyScope, false)
+        console.log('Save completed successfully')
+      } catch (error) {
+        console.error('Save error:', error)
+      }
+    } else {
+      console.log('Skipping save - pendingField or pendingValue is missing')
     }
+    
     setShowApplyModal(false)
     setPendingField(null)
     setPendingValue(null)
