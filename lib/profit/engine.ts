@@ -619,11 +619,18 @@ export async function getPeriodData(
     // Ads table might not exist yet
   }
 
-  // Calculate COGS - use 'cost' column from products table
+  // Calculate COGS - landed cost = cost + packagingCost + tariff + additionalCosts
   let cogs = 0
   try {
     const cogsData = await queryOne<{ total_cogs: string }>(`
-      SELECT COALESCE(SUM(oi.quantity * COALESCE(p.cost, 0)), 0)::text as total_cogs
+      SELECT COALESCE(SUM(
+        oi.quantity * (
+          COALESCE(p.cost, 0) +
+          COALESCE(p.packaging_cost, 0) +
+          (COALESCE(p.cost, 0) * COALESCE(p.tariff_percent, 0) / 100) +
+          COALESCE((SELECT SUM((elem->>'amount')::numeric) FROM jsonb_array_elements(p.additional_costs) elem), 0)
+        )
+      ), 0)::text as total_cogs
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       LEFT JOIN products p ON oi.master_sku = p.sku
@@ -888,11 +895,18 @@ export async function getPeriodDataLightweight(
     // Ads table might not exist
   }
 
-  // Calculate COGS
+  // Calculate COGS - landed cost = cost + packagingCost + tariff + additionalCosts
   let cogs = 0
   try {
     const cogsData = await queryOne<{ total_cogs: string }>(`
-      SELECT COALESCE(SUM(oi.quantity * COALESCE(p.cost, 0)), 0)::text as total_cogs
+      SELECT COALESCE(SUM(
+        oi.quantity * (
+          COALESCE(p.cost, 0) +
+          COALESCE(p.packaging_cost, 0) +
+          (COALESCE(p.cost, 0) * COALESCE(p.tariff_percent, 0) / 100) +
+          COALESCE((SELECT SUM((elem->>'amount')::numeric) FROM jsonb_array_elements(p.additional_costs) elem), 0)
+        )
+      ), 0)::text as total_cogs
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       LEFT JOIN products p ON oi.master_sku = p.sku

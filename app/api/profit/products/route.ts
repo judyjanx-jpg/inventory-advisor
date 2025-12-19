@@ -164,7 +164,13 @@ export async function GET(request: NextRequest) {
         MAX(p.brand) as brand,
         MAX(s.name) as supplier_name,
         MAX(p.parent_sku) as parent_sku,
-        COALESCE(AVG(p.cost), 0)::text as cost,
+        -- Landed cost = cost + packaging + tariff + additional costs
+        COALESCE(AVG(
+          COALESCE(p.cost, 0) +
+          COALESCE(p.packaging_cost, 0) +
+          (COALESCE(p.cost, 0) * COALESCE(p.tariff_percent, 0) / 100) +
+          COALESCE((SELECT SUM((elem->>'amount')::numeric) FROM jsonb_array_elements(p.additional_costs) elem), 0)
+        ), 0)::text as cost,
         COALESCE(SUM(oi.quantity), 0)::text as units_sold,
         -- SELLERBOARD-LEVEL ACCURACY: Same revenue priority as profit engine
         COALESCE(SUM(

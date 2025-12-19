@@ -170,7 +170,12 @@ async function buildDatabaseContext(): Promise<string> {
         SUM(
           (oi.item_price + oi.shipping_price) * oi.quantity 
           - (oi.referral_fee + oi.fba_fee + oi.other_fees + oi.amazon_fees)
-          - COALESCE(p.cost, 0) * oi.quantity
+          - (
+            COALESCE(p.cost, 0) +
+            COALESCE(p.packaging_cost, 0) +
+            (COALESCE(p.cost, 0) * COALESCE(p.tariff_percent, 0) / 100) +
+            COALESCE((SELECT SUM((elem->>'amount')::numeric) FROM jsonb_array_elements(p.additional_costs) elem), 0)
+          ) * oi.quantity
         ) as profit,
         COUNT(DISTINCT o.id) as orders
       FROM order_items oi
@@ -197,7 +202,12 @@ async function buildDatabaseContext(): Promise<string> {
         SUM(
           (oi.item_price + oi.shipping_price) * oi.quantity 
           - (oi.referral_fee + oi.fba_fee + oi.other_fees + oi.amazon_fees)
-          - COALESCE(p.cost, 0) * oi.quantity
+          - (
+            COALESCE(p.cost, 0) +
+            COALESCE(p.packaging_cost, 0) +
+            (COALESCE(p.cost, 0) * COALESCE(p.tariff_percent, 0) / 100) +
+            COALESCE((SELECT SUM((elem->>'amount')::numeric) FROM jsonb_array_elements(p.additional_costs) elem), 0)
+          ) * oi.quantity
         ) as profit,
         COUNT(DISTINCT o.id) as orders,
         SUM(oi.quantity) as units
@@ -214,7 +224,12 @@ async function buildDatabaseContext(): Promise<string> {
         SUM(
           (oi.item_price + oi.shipping_price) * oi.quantity 
           - (oi.referral_fee + oi.fba_fee + oi.other_fees + oi.amazon_fees)
-          - COALESCE(p.cost, 0) * oi.quantity
+          - (
+            COALESCE(p.cost, 0) +
+            COALESCE(p.packaging_cost, 0) +
+            (COALESCE(p.cost, 0) * COALESCE(p.tariff_percent, 0) / 100) +
+            COALESCE((SELECT SUM((elem->>'amount')::numeric) FROM jsonb_array_elements(p.additional_costs) elem), 0)
+          ) * oi.quantity
         ) as profit,
         COUNT(DISTINCT o.id) as orders,
         SUM(oi.quantity) as units
