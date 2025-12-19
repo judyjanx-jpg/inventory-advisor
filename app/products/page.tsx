@@ -75,7 +75,7 @@ interface Product {
   msrp?: number
   // Additional costs
   packagingCost?: number
-  tariffCost?: number
+  tariffPercent?: number // % of cost
   additionalCosts?: { name: string; amount: number }[]
   // Amazon fee settings
   fbaFeeEstimate?: number

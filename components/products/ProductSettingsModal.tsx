@@ -72,7 +72,7 @@ interface Product {
   msrp?: number
   // Additional costs
   packagingCost?: number
-  tariffCost?: number
+  tariffPercent?: number // % of cost
   additionalCosts?: AdditionalCost[]
   // Amazon fees
   fbaFeeEstimate?: number
@@ -170,7 +170,7 @@ export default function ProductSettingsModal({
     mapPrice: '',
     msrp: '',
     packagingCost: '',
-    tariffCost: '',
+    tariffPercent: '',
     additionalCosts: [] as AdditionalCost[],
     fbaFeeEstimate: '',
     referralFeePercent: '15',
@@ -215,7 +215,7 @@ export default function ProductSettingsModal({
         mapPrice: product.mapPrice?.toString() || '',
         msrp: product.msrp?.toString() || '',
         packagingCost: product.packagingCost?.toString() || '',
-        tariffCost: product.tariffCost?.toString() || '',
+        tariffPercent: product.tariffPercent?.toString() || '',
         additionalCosts: product.additionalCosts || [],
         fbaFeeEstimate: product.fbaFeeEstimate?.toString() || '',
         referralFeePercent: product.referralFeePercent?.toString() || '15',
@@ -246,7 +246,7 @@ export default function ProductSettingsModal({
       mapPrice: form.mapPrice ? parseFloat(form.mapPrice) : null,
       msrp: form.msrp ? parseFloat(form.msrp) : null,
       packagingCost: form.packagingCost ? parseFloat(form.packagingCost) : null,
-      tariffCost: form.tariffCost ? parseFloat(form.tariffCost) : null,
+      tariffPercent: form.tariffPercent ? parseFloat(form.tariffPercent) : null,
       additionalCosts: form.additionalCosts.length > 0 ? form.additionalCosts : null,
       fbaFeeEstimate: form.fbaFeeEstimate ? parseFloat(form.fbaFeeEstimate) : null,
       referralFeePercent: form.referralFeePercent ? parseFloat(form.referralFeePercent) : 15,
@@ -289,8 +289,8 @@ export default function ProductSettingsModal({
   const handleCostChange = (costType: string, value: string) => {
     if (costType === 'packagingCost') {
       setForm({ ...form, packagingCost: value })
-    } else if (costType === 'tariffCost') {
-      setForm({ ...form, tariffCost: value })
+    } else if (costType === 'tariffPercent') {
+      setForm({ ...form, tariffPercent: value })
     }
     
     // If value is being set (not cleared) and we have the callback, prompt for scope
@@ -304,8 +304,8 @@ export default function ProductSettingsModal({
     if (pendingCostType && onApplyCostToProducts) {
       const amount = pendingCostType === 'packagingCost' 
         ? parseFloat(form.packagingCost) 
-        : pendingCostType === 'tariffCost'
-          ? parseFloat(form.tariffCost)
+        : pendingCostType === 'tariffPercent'
+          ? parseFloat(form.tariffPercent)
           : parseFloat(newCostAmount)
       
       if (costApplyScope !== 'this') {
@@ -341,7 +341,8 @@ export default function ProductSettingsModal({
     const price = parseFloat(form.price) || 0
     const cost = parseFloat(form.cost) || 0
     const packaging = parseFloat(form.packagingCost) || 0
-    const tariff = parseFloat(form.tariffCost) || 0
+    const tariffPct = parseFloat(form.tariffPercent) || 0
+    const tariffCost = cost * (tariffPct / 100) // Calculate tariff from % of cost
     const customCosts = form.additionalCosts.reduce((sum, c) => sum + c.amount, 0)
     const fbaFee = parseFloat(form.fbaFeeEstimate) || 0
     const referralPercent = parseFloat(form.referralFeePercent) || 15
@@ -352,7 +353,8 @@ export default function ProductSettingsModal({
     const refundCost = price * (refundPercent / 100)
     const adsCost = price * (adsPercent / 100)
     
-    const totalCosts = cost + packaging + tariff + customCosts + fbaFee + referralFee + refundCost + adsCost
+    const landedCost = cost + packaging + tariffCost + customCosts
+    const totalCosts = landedCost + fbaFee + referralFee + refundCost + adsCost
     const profit = price - totalCosts
     const margin = price > 0 ? (profit / price) * 100 : 0
     const roi = cost > 0 ? (profit / cost) * 100 : 0
@@ -365,7 +367,8 @@ export default function ProductSettingsModal({
       referralFee, 
       refundCost, 
       adsCost,
-      landedCost: cost + packaging + tariff + customCosts
+      tariffCost,
+      landedCost
     }
   }
   
@@ -667,19 +670,21 @@ export default function ProductSettingsModal({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Tariff/Duty</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Tariff/Duty %</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
                       <input
                         type="number"
-                        step="0.01"
+                        step="0.1"
                         min="0"
-                        value={form.tariffCost}
-                        onChange={(e) => handleCostChange('tariffCost', e.target.value)}
-                        placeholder="0.00"
-                        className="w-full pl-8 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                        max="100"
+                        value={form.tariffPercent}
+                        onChange={(e) => handleCostChange('tariffPercent', e.target.value)}
+                        placeholder="0"
+                        className="w-full pl-4 pr-8 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                       />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">%</span>
                     </div>
+                    <p className="text-xs text-slate-500 mt-1">= ${profitCalc.tariffCost.toFixed(2)} per unit</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">Landed Cost</label>
@@ -1348,7 +1353,7 @@ export default function ProductSettingsModal({
               Apply Cost To...
             </h3>
             <p className="text-sm text-slate-400 mb-4">
-              Would you like to apply this {pendingCostType === 'packagingCost' ? 'packaging' : 'tariff'} cost to other products?
+              Would you like to apply this {pendingCostType === 'packagingCost' ? 'packaging cost' : 'tariff percentage'} to other products?
             </p>
             <div className="space-y-2 mb-6">
               <label className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg cursor-pointer hover:bg-slate-700">

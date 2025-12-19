@@ -269,7 +269,7 @@ export async function PUT(request: NextRequest) {
       msrp,
       // Additional costs
       packagingCost,
-      tariffCost,
+      tariffPercent,
       additionalCosts,
       // Amazon fee settings
       fbaFeeEstimate,
@@ -321,8 +321,8 @@ export async function PUT(request: NextRequest) {
     if (packagingCost !== undefined) {
       updateData.packagingCost = packagingCost || null
     }
-    if (tariffCost !== undefined) {
-      updateData.tariffCost = tariffCost || null
+    if (tariffPercent !== undefined) {
+      updateData.tariffPercent = tariffPercent || null
     }
     if (additionalCosts !== undefined) {
       updateData.additionalCosts = additionalCosts || null

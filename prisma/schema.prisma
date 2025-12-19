@@ -48,7 +48,7 @@ model Product {
   
   // Additional Costs
   packagingCost  Decimal? @default(0) @map("packaging_cost") @db.Decimal(10, 2)
-  tariffCost     Decimal? @default(0) @map("tariff_cost") @db.Decimal(10, 2)
+  tariffPercent  Decimal? @default(0) @map("tariff_percent") @db.Decimal(5, 2) // % of cost
   additionalCosts Json?   @map("additional_costs") // Array of {name, amount}
   
   // Amazon Fee Settings (for profit calculation)
