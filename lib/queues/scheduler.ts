@@ -87,7 +87,7 @@ const schedules: ScheduleConfig[] = [
   {
     queue: adsReportsQueue,
     name: 'ads-reports-sync',
-    cron: '*/30 * * * *',   // Every 30 minutes (to check pending reports and request new ones)
+    cron: '*/15 * * * *',   // Every 15 minutes (reports can take over an hour to generate)
     description: 'Sync Amazon Ads campaign data (SP reports)',
     enabled: true,
   },
