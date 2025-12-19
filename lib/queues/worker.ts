@@ -1362,13 +1362,18 @@ async function processAdsReportsSync(job: any) {
     for (const report of pendingReports) {
       reportsChecked++
       try {
-        // Refresh token if needed
-        const freshCreds = await getAdsCredentials()
-        if (!freshCreds?.accessToken) continue
+        // Get a fresh access token (auto-refreshes if expired)
+        let accessToken: string
+        try {
+          accessToken = await getValidAccessToken()
+        } catch (tokenError: any) {
+          console.log(`    ⚠️ Failed to get valid token: ${tokenError.message}`)
+          continue
+        }
 
         const statusResponse = await fetch(`${ADS_API_BASE}/reporting/reports/${report.reportId}`, {
           headers: {
-            'Authorization': `Bearer ${freshCreds.accessToken}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Amazon-Advertising-API-ClientId': process.env.AMAZON_ADS_CLIENT_ID!,
             'Amazon-Advertising-API-Scope': profileId,
             'Accept': 'application/json',
