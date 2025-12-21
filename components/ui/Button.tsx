@@ -14,21 +14,21 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(
-          "inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed",
-          
+          "inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--background)] disabled:opacity-50 disabled:cursor-not-allowed",
+
           // Variants
           variant === 'primary' && "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/25 focus:ring-cyan-500",
-          variant === 'secondary' && "bg-slate-700 hover:bg-slate-600 text-white focus:ring-slate-500",
-          variant === 'ghost' && "bg-transparent hover:bg-slate-800 text-slate-300 hover:text-white focus:ring-slate-500",
+          variant === 'secondary' && "bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--secondary-foreground)] focus:ring-[var(--ring)]",
+          variant === 'ghost' && "bg-transparent hover:bg-[var(--hover-bg)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] focus:ring-[var(--ring)]",
           variant === 'danger' && "bg-red-600 hover:bg-red-500 text-white focus:ring-red-500",
           variant === 'success' && "bg-emerald-600 hover:bg-emerald-500 text-white focus:ring-emerald-500",
-          variant === 'outline' && "bg-transparent border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-white focus:ring-slate-500",
-          
+          variant === 'outline' && "bg-transparent border border-[var(--border)] hover:border-[var(--muted-foreground)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] focus:ring-[var(--ring)]",
+
           // Sizes
           size === 'sm' && "px-3 py-1.5 text-sm",
           size === 'md' && "px-4 py-2 text-sm",
           size === 'lg' && "px-6 py-3 text-base",
-          
+
           className
         )}
         {...props}
