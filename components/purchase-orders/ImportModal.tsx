@@ -340,7 +340,7 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
         {/* Step 1: Upload */}
         {step === 1 && (
           <>
-            <div className="border-2 border-dashed border-slate-700 rounded-lg p-12 text-center hover:border-cyan-500/50 transition-colors">
+            <div className="border-2 border-dashed border-[var(--border)] rounded-lg p-12 text-center hover:border-cyan-500/50 transition-colors">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -348,9 +348,9 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                 onChange={handleFileSelect}
                 className="hidden"
               />
-              <FileSpreadsheet className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-              <p className="text-white font-medium mb-2">Drag and drop your file here</p>
-              <p className="text-sm text-slate-400 mb-4">or</p>
+              <FileSpreadsheet className="w-16 h-16 text-[var(--muted-foreground)] mx-auto mb-4" />
+              <p className="text-[var(--foreground)] font-medium mb-2">Drag and drop your file here</p>
+              <p className="text-sm text-[var(--muted-foreground)] mb-4">or</p>
               <Button
                 variant="outline"
                 onClick={() => fileInputRef.current?.click()}
@@ -358,15 +358,15 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                 <Upload className="w-4 h-4 mr-2" />
                 Click to browse
               </Button>
-              <p className="text-xs text-slate-500 mt-4">Supports .csv, .xlsx, .xls files</p>
+              <p className="text-xs text-[var(--muted-foreground)] mt-4">Supports .csv, .xlsx, .xls files</p>
             </div>
 
             {file && (
-              <div className="bg-slate-800 rounded-lg p-4">
+              <div className="bg-[var(--card)] rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-white font-medium">{file.name}</p>
-                    <p className="text-sm text-slate-400">{(file.size / 1024).toFixed(2)} KB</p>
+                    <p className="text-[var(--foreground)] font-medium">{file.name}</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">{(file.size / 1024).toFixed(2)} KB</p>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => {
                     setFile(null)
@@ -383,11 +383,11 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
         {/* Step 2: Map Columns */}
         {step === 2 && (
           <>
-            <div className="bg-slate-800/50 rounded-lg p-4 mb-4">
-              <p className="text-sm text-slate-400">
-                <strong className="text-slate-300">File:</strong> {file?.name} ({rawData.length} rows found)
+            <div className="bg-[var(--card)]/50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-[var(--muted-foreground)]">
+                <strong className="text-[var(--foreground)]">File:</strong> {file?.name} ({rawData.length} rows found)
               </p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
                 Columns detected: {headers.length}. Auto-mapping applied where possible.
               </p>
             </div>
@@ -395,13 +395,13 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                     SKU <span className="text-red-400">*</span>
                   </label>
                   <select
                     value={columnMapping.sku || ''}
                     onChange={(e) => handleMappingChange('sku', e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   >
                     <option value="">Select column...</option>
                     {headers.map((header, index) => (
@@ -411,17 +411,17 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                     ))}
                   </select>
                   {columnMapping.sku && (
-                    <p className="text-xs text-slate-500 mt-1">Mapped to: {columnMapping.sku}</p>
+                    <p className="text-xs text-[var(--muted-foreground)] mt-1">Mapped to: {columnMapping.sku}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                     Quantity <span className="text-red-400">*</span>
                   </label>
                   <select
                     value={columnMapping.quantity || ''}
                     onChange={(e) => handleMappingChange('quantity', e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   >
                     <option value="">Select column...</option>
                     {headers.map((header, index) => (
@@ -431,19 +431,19 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                     ))}
                   </select>
                   {columnMapping.quantity && (
-                    <p className="text-xs text-slate-500 mt-1">Mapped to: {columnMapping.quantity}</p>
+                    <p className="text-xs text-[var(--muted-foreground)] mt-1">Mapped to: {columnMapping.quantity}</p>
                   )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                     Unit Cost (optional)
                   </label>
                   <select
                     value={columnMapping.unitCost || ''}
                     onChange={(e) => handleMappingChange('unitCost', e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   >
                     <option value="">Select column...</option>
                     {headers.map((header, index) => (
@@ -453,17 +453,17 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                     ))}
                   </select>
                   {columnMapping.unitCost && (
-                    <p className="text-xs text-slate-500 mt-1">Mapped to: {columnMapping.unitCost}</p>
+                    <p className="text-xs text-[var(--muted-foreground)] mt-1">Mapped to: {columnMapping.unitCost}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                     Product Name (optional)
                   </label>
                   <select
                     value={columnMapping.productName || ''}
                     onChange={(e) => handleMappingChange('productName', e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   >
                     <option value="">Select column...</option>
                     {headers.map((header, index) => (
@@ -473,7 +473,7 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                     ))}
                   </select>
                   {columnMapping.productName && (
-                    <p className="text-xs text-slate-500 mt-1">Mapped to: {columnMapping.productName}</p>
+                    <p className="text-xs text-[var(--muted-foreground)] mt-1">Mapped to: {columnMapping.productName}</p>
                   )}
                 </div>
               </div>
@@ -481,12 +481,12 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
 
             {/* Show all available columns */}
             <div className="mt-4">
-              <p className="text-sm font-medium text-slate-300 mb-2">Available columns in file:</p>
+              <p className="text-sm font-medium text-[var(--foreground)] mb-2">Available columns in file:</p>
               <div className="flex flex-wrap gap-2">
                 {headers.map((header, index) => (
                   <span
                     key={index}
-                    className="px-2 py-1 text-xs bg-slate-700 text-slate-300 rounded"
+                    className="px-2 py-1 text-xs bg-[var(--muted)] text-[var(--foreground)] rounded"
                   >
                     {header || `Column ${index + 1}`}
                   </span>
@@ -497,29 +497,29 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
             {/* Preview Table */}
             {canProceedToStep3 && (
               <div className="mt-6">
-                <h3 className="text-sm font-medium text-slate-300 mb-3">Preview (first 5 rows)</h3>
+                <h3 className="text-sm font-medium text-[var(--foreground)] mb-3">Preview (first 5 rows)</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700">
-                        <th className="text-left py-2 text-slate-400">SKU</th>
-                        <th className="text-right py-2 text-slate-400">Quantity</th>
-                        {columnMapping.unitCost && <th className="text-right py-2 text-slate-400">Unit Cost</th>}
-                        {columnMapping.productName && <th className="text-left py-2 text-slate-400">Product Name</th>}
+                      <tr className="border-b border-[var(--border)]">
+                        <th className="text-left py-2 text-[var(--muted-foreground)]">SKU</th>
+                        <th className="text-right py-2 text-[var(--muted-foreground)]">Quantity</th>
+                        {columnMapping.unitCost && <th className="text-right py-2 text-[var(--muted-foreground)]">Unit Cost</th>}
+                        {columnMapping.productName && <th className="text-left py-2 text-[var(--muted-foreground)]">Product Name</th>}
                       </tr>
                     </thead>
                     <tbody>
                       {previewData.map((item, index) => (
-                        <tr key={index} className="border-b border-slate-700/50">
-                          <td className="py-2 text-white">{item.sku}</td>
-                          <td className="py-2 text-right text-white">{item.quantity}</td>
+                        <tr key={index} className="border-b border-[var(--border)]/50">
+                          <td className="py-2 text-[var(--foreground)]">{item.sku}</td>
+                          <td className="py-2 text-right text-[var(--foreground)]">{item.quantity}</td>
                           {columnMapping.unitCost && (
-                            <td className="py-2 text-right text-white">
+                            <td className="py-2 text-right text-[var(--foreground)]">
                               {item.unitCost ? `$${item.unitCost.toFixed(2)}` : '-'}
                             </td>
                           )}
                           {columnMapping.productName && (
-                            <td className="py-2 text-slate-300">{item.productName || '-'}</td>
+                            <td className="py-2 text-[var(--foreground)]">{item.productName || '-'}</td>
                           )}
                         </tr>
                       ))}
@@ -553,10 +553,10 @@ export default function ImportModal({ isOpen, onClose, onImport }: ImportModalPr
                     </span>
                   </div>
                   <details className="mt-2">
-                    <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-300">
+                    <summary className="text-sm text-[var(--muted-foreground)] cursor-pointer hover:text-[var(--foreground)]">
                       View details
                     </summary>
-                    <ul className="mt-2 space-y-1 text-xs text-slate-400">
+                    <ul className="mt-2 space-y-1 text-xs text-[var(--muted-foreground)]">
                       {warnings.map((warning, index) => (
                         <li key={index}>{warning}</li>
                       ))}

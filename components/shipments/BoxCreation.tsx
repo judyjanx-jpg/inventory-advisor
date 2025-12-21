@@ -394,7 +394,7 @@ export default function BoxCreation({
             <div className="flex items-center gap-4">
               <button
                 onClick={() => autoSplitItems()}
-                className="px-3 py-1.5 text-sm bg-cyan-600 hover:bg-cyan-500 text-white rounded font-medium"
+                className="px-3 py-1.5 text-sm bg-cyan-600 hover:bg-cyan-500 text-[var(--foreground)] rounded font-medium"
               >
                 Auto-Split Evenly
               </button>
@@ -402,14 +402,14 @@ export default function BoxCreation({
                 <button
                   onClick={removeBox}
                   disabled={boxes.length <= 1}
-                  className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded"
+                  className="px-3 py-1 text-sm bg-[var(--muted)] hover:bg-[var(--hover-bg)] disabled:opacity-50 rounded"
                 >
                   −
                 </button>
-                <span className="text-white font-medium">{boxes.length} boxes</span>
+                <span className="text-[var(--foreground)] font-medium">{boxes.length} boxes</span>
                 <button
                   onClick={addBox}
-                  className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded"
+                  className="px-3 py-1 text-sm bg-[var(--muted)] hover:bg-[var(--hover-bg)] rounded"
                 >
                   +
                 </button>
@@ -418,14 +418,14 @@ export default function BoxCreation({
           </div>
 
           {/* Bulk Apply Controls */}
-          <div className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-            <span className="text-sm text-slate-400">Bulk apply:</span>
+          <div className="flex items-center gap-3 p-3 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]">
+            <span className="text-sm text-[var(--muted-foreground)]">Bulk apply:</span>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Prep:</span>
+              <span className="text-xs text-[var(--muted-foreground)]">Prep:</span>
               <select
                 value={bulkPrepValue}
                 onChange={(e) => setBulkPrepValue(e.target.value as 'AMAZON' | 'SELLER' | 'NONE')}
-                className="px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs focus:border-cyan-500 focus:outline-none"
+                className="px-2 py-1 bg-[var(--muted)] border border-[var(--border)] rounded text-[var(--foreground)] text-xs focus:border-cyan-500 focus:outline-none"
               >
                 <option value="NONE">None</option>
                 <option value="SELLER">Seller</option>
@@ -433,11 +433,11 @@ export default function BoxCreation({
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Label:</span>
+              <span className="text-xs text-[var(--muted-foreground)]">Label:</span>
               <select
                 value={bulkLabelValue}
                 onChange={(e) => setBulkLabelValue(e.target.value as 'AMAZON' | 'SELLER' | 'NONE')}
-                className="px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs focus:border-cyan-500 focus:outline-none"
+                className="px-2 py-1 bg-[var(--muted)] border border-[var(--border)] rounded text-[var(--foreground)] text-xs focus:border-cyan-500 focus:outline-none"
               >
                 <option value="NONE">None</option>
                 <option value="SELLER">Seller</option>
@@ -447,7 +447,7 @@ export default function BoxCreation({
             <button
               onClick={applyBulkSettings}
               disabled={selectedSkus.size === 0}
-              className="px-3 py-1 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:opacity-50 text-white rounded font-medium flex items-center gap-1"
+              className="px-3 py-1 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:opacity-50 text-[var(--foreground)] rounded font-medium flex items-center gap-1"
             >
               <CheckSquare className="w-4 h-4" />
               Apply to {selectedSkus.size > 0 ? `${selectedSkus.size} selected` : 'selected'}
@@ -460,31 +460,31 @@ export default function BoxCreation({
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-700">
+              <tr className="border-b border-[var(--border)]">
                 <th className="text-center py-3 px-2 w-10">
                   <input
                     type="checkbox"
                     checked={selectedSkus.size === shipmentItems.length && shipmentItems.length > 0}
                     onChange={selectAllSkus}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500 cursor-pointer"
                     title="Select all"
                   />
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400 min-w-[250px]">
+                <th className="text-left py-3 px-4 text-sm font-medium text-[var(--muted-foreground)] min-w-[250px]">
                   SKU details
                 </th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-slate-400 min-w-[100px]">
+                <th className="text-center py-3 px-4 text-sm font-medium text-[var(--muted-foreground)] min-w-[100px]">
                   Units boxed
                   <Info className="w-3 h-3 inline ml-1 opacity-50" />
                 </th>
-                <th className="text-center py-3 px-2 text-sm font-medium text-slate-400 min-w-[90px]">
+                <th className="text-center py-3 px-2 text-sm font-medium text-[var(--muted-foreground)] min-w-[90px]">
                   Prep
                 </th>
-                <th className="text-center py-3 px-2 text-sm font-medium text-slate-400 min-w-[90px]">
+                <th className="text-center py-3 px-2 text-sm font-medium text-[var(--muted-foreground)] min-w-[90px]">
                   Label
                 </th>
                 {boxes.map(box => (
-                  <th key={box.boxNumber} className="text-center py-3 px-2 text-sm font-medium text-slate-400 min-w-[70px]">
+                  <th key={box.boxNumber} className="text-center py-3 px-2 text-sm font-medium text-[var(--muted-foreground)] min-w-[70px]">
                     Box {box.boxNumber}
                   </th>
                 ))}
@@ -503,19 +503,19 @@ export default function BoxCreation({
                         type="checkbox"
                         checked={selectedSkus.has(item.sku)}
                         onChange={() => toggleSkuSelection(item.sku)}
-                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500 cursor-pointer"
+                        className="w-4 h-4 rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500 cursor-pointer"
                       />
                     </td>
                     <td className="py-3 px-4">
-                      <div className="text-white font-medium text-sm">{item.sku}</div>
+                      <div className="text-[var(--foreground)] font-medium text-sm">{item.sku}</div>
                       {formatTitle(item.productName, displaySettings) && (
-                        <div className="text-slate-500 text-xs mt-0.5">
+                        <div className="text-[var(--muted-foreground)] text-xs mt-0.5">
                           {formatTitle(item.productName, displaySettings)}
                         </div>
                       )}
                     </td>
                     <td className={`py-3 px-4 text-center font-medium ${
-                      isComplete ? 'text-emerald-400' : isOver ? 'text-red-400' : 'text-slate-400'
+                      isComplete ? 'text-emerald-400' : isOver ? 'text-red-400' : 'text-[var(--muted-foreground)]'
                     }`}>
                       {totals.assigned} of {totals.needed}
                     </td>
@@ -523,7 +523,7 @@ export default function BoxCreation({
                       <select
                         value={item.prepOwner || 'NONE'}
                         onChange={(e) => onItemPrepChange?.(item.sku, 'prepOwner', e.target.value as 'AMAZON' | 'SELLER' | 'NONE')}
-                        className="w-20 px-1.5 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:border-cyan-500 focus:outline-none"
+                        className="w-20 px-1.5 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--foreground)] text-xs focus:border-cyan-500 focus:outline-none"
                       >
                         <option value="NONE">None</option>
                         <option value="SELLER">Seller</option>
@@ -534,7 +534,7 @@ export default function BoxCreation({
                       <select
                         value={item.labelOwner || 'NONE'}
                         onChange={(e) => onItemPrepChange?.(item.sku, 'labelOwner', e.target.value as 'AMAZON' | 'SELLER' | 'NONE')}
-                        className="w-20 px-1.5 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:border-cyan-500 focus:outline-none"
+                        className="w-20 px-1.5 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--foreground)] text-xs focus:border-cyan-500 focus:outline-none"
                       >
                         <option value="NONE">None</option>
                         <option value="SELLER">Seller</option>
@@ -554,7 +554,7 @@ export default function BoxCreation({
                               item.sku,
                               parseInt(e.target.value) || 0
                             )}
-                            className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                            className="w-14 px-2 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm text-center focus:border-cyan-500 focus:outline-none"
                             placeholder=""
                           />
                         </td>
@@ -566,9 +566,9 @@ export default function BoxCreation({
             </tbody>
             <tfoot>
               {/* Summary Row */}
-              <tr className="border-t border-slate-700 bg-slate-800/30">
+              <tr className="border-t border-[var(--border)] bg-[var(--card)]/30">
                 <td className="py-3 px-2"></td>
-                <td className="py-3 px-4 text-sm font-medium text-slate-300">
+                <td className="py-3 px-4 text-sm font-medium text-[var(--foreground)]">
                   Total SKUs: {shipmentItems.length}
                 </td>
                 <td className={`py-3 px-4 text-center font-medium ${
@@ -576,15 +576,15 @@ export default function BoxCreation({
                 }`}>
                   Units boxed: {totalAssigned} of {totalNeeded}
                 </td>
-                <td colSpan={boxes.length + 2} className="py-3 px-4 text-sm text-slate-400">
+                <td colSpan={boxes.length + 2} className="py-3 px-4 text-sm text-[var(--muted-foreground)]">
                   Enter the box contents above and the box weights and dimensions below
                   <Info className="w-3 h-3 inline ml-1 opacity-50" />
                 </td>
               </tr>
 
               {/* Box Weight Row */}
-              <tr className="border-t border-slate-700">
-                <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right" colSpan={5}>
+              <tr className="border-t border-[var(--border)]">
+                <td className="py-3 px-4 text-sm font-medium text-[var(--foreground)] text-right" colSpan={5}>
                   Box weight (lb):
                 </td>
                 {boxes.map(box => (
@@ -598,7 +598,7 @@ export default function BoxCreation({
                       className={`w-14 px-2 py-1.5 border rounded text-sm text-center focus:outline-none ${
                         box.weightLbs && box.weightLbs > 50
                           ? 'bg-red-900/50 border-red-500 text-red-300'
-                          : 'bg-slate-800 border-slate-600 text-white focus:border-cyan-500'
+                          : 'bg-[var(--card)] border-[var(--border)] text-[var(--foreground)] focus:border-cyan-500'
                       }`}
                       placeholder=""
                     />
@@ -610,7 +610,7 @@ export default function BoxCreation({
               <tr>
                 <td colSpan={5}></td>
                 <td colSpan={boxes.length} className="py-2 px-4 text-right text-sm">
-                  <span className={`${totalWeight > 0 ? 'text-white' : 'text-slate-500'}`}>
+                  <span className={`${totalWeight > 0 ? 'text-[var(--foreground)]' : 'text-[var(--muted-foreground)]'}`}>
                     Total weight: <span className="font-bold">{totalWeight} lb</span>
                     {boxes.some(b => (b.weightLbs || 0) > 50) && (
                       <span className="text-red-400 ml-2">⚠ Exceeds 50 lb</span>
@@ -621,8 +621,8 @@ export default function BoxCreation({
 
               {/* Box Dimensions Rows */}
               {dimensions.map((dim, dimIndex) => (
-                <tr key={dim.id} className={dimIndex === 0 ? "border-t border-slate-700" : ""}>
-                  <td className="py-3 px-4 text-sm font-medium text-slate-300 text-right align-middle" colSpan={5}>
+                <tr key={dim.id} className={dimIndex === 0 ? "border-t border-[var(--border)]" : ""}>
+                  <td className="py-3 px-4 text-sm font-medium text-[var(--foreground)] text-right align-middle" colSpan={5}>
                     <div className="flex items-center justify-end gap-2">
                       {dimensions.length > 1 && (
                         <button
@@ -637,21 +637,21 @@ export default function BoxCreation({
                         type="number"
                         value={dim.length}
                         onChange={(e) => updateDimension(dim.id, 'length', parseFloat(e.target.value) || 0)}
-                        className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                        className="w-14 px-2 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm text-center focus:border-cyan-500 focus:outline-none"
                       />
-                      <span className="text-slate-500">×</span>
+                      <span className="text-[var(--muted-foreground)]">×</span>
                       <input
                         type="number"
                         value={dim.width}
                         onChange={(e) => updateDimension(dim.id, 'width', parseFloat(e.target.value) || 0)}
-                        className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                        className="w-14 px-2 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm text-center focus:border-cyan-500 focus:outline-none"
                       />
-                      <span className="text-slate-500">×</span>
+                      <span className="text-[var(--muted-foreground)]">×</span>
                       <input
                         type="number"
                         value={dim.height}
                         onChange={(e) => updateDimension(dim.id, 'height', parseFloat(e.target.value) || 0)}
-                        className="w-14 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center focus:border-cyan-500 focus:outline-none"
+                        className="w-14 px-2 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm text-center focus:border-cyan-500 focus:outline-none"
                       />
                     </div>
                   </td>
@@ -661,7 +661,7 @@ export default function BoxCreation({
                         type="checkbox"
                         checked={dim.applyToBoxes.includes(box.boxNumber)}
                         onChange={() => toggleBoxDimension(dim.id, box.boxNumber)}
-                        className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-cyan-500 cursor-pointer"
+                        className="w-5 h-5 rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500 cursor-pointer"
                       />
                     </td>
                   ))}

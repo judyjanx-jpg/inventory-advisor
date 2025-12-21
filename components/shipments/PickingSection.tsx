@@ -615,17 +615,17 @@ export default function PickingSection({
     
     if (!currentItem) {
       return (
-        <div className="fixed inset-0 bg-slate-900 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-[var(--secondary)] z-50 flex items-center justify-center">
           <div className="text-center p-6">
             <CheckCircle className="w-24 h-24 text-emerald-400 mx-auto mb-4" />
-            <h1 className="text-3xl font-bold text-white mb-2">Picking Complete!</h1>
-            <p className="text-slate-400 mb-6">
+            <h1 className="text-3xl font-bold text-[var(--foreground)] mb-2">Picking Complete!</h1>
+            <p className="text-[var(--muted-foreground)] mb-6">
               {pickedCount} items picked, {skippedCount} skipped
             </p>
             {skippedCount > 0 && (
               <div className="mb-6 p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg">
                 <p className="text-amber-400 mb-2">⚠ {skippedCount} items were skipped</p>
-                <p className="text-slate-400 text-sm">You can mark them as picked from the picking section</p>
+                <p className="text-[var(--muted-foreground)] text-sm">You can mark them as picked from the picking section</p>
               </div>
             )}
             <Button onClick={() => setShowInteractivePick(false)}>
@@ -645,7 +645,7 @@ export default function PickingSection({
         <div className="fixed inset-0 bg-emerald-900 z-50 flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-3 sm:p-4 border-b border-emerald-700">
-            <h1 className="text-lg sm:text-xl font-bold text-white">✓ Scanned</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-[var(--foreground)]">✓ Scanned</h1>
             <button 
               onClick={() => {
                 stopCamera()
@@ -654,7 +654,7 @@ export default function PickingSection({
                 setScanResult(null)
                 setShowInteractivePick(false)
               }}
-              className="text-emerald-300 hover:text-white text-2xl sm:text-3xl p-2 -mr-2"
+              className="text-emerald-300 hover:text-[var(--foreground)] text-2xl sm:text-3xl p-2 -mr-2"
               aria-label="Close"
             >
               ✕
@@ -663,7 +663,7 @@ export default function PickingSection({
 
           {/* Confirmed Item */}
           <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 text-center">
-            <div className="text-4xl sm:text-7xl font-bold text-white mb-6 sm:mb-8 break-all px-2">
+            <div className="text-4xl sm:text-7xl font-bold text-[var(--foreground)] mb-6 sm:mb-8 break-all px-2">
               {confirmedItem.masterSku}
             </div>
             
@@ -673,7 +673,7 @@ export default function PickingSection({
               <div className="flex items-center gap-3 sm:gap-4">
                 <button
                   onClick={() => setConfirmedQty(Math.max(0, confirmedQty - 1))}
-                  className="w-14 h-14 sm:w-16 sm:h-16 text-3xl sm:text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-white touch-manipulation"
+                  className="w-14 h-14 sm:w-16 sm:h-16 text-3xl sm:text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-[var(--foreground)] touch-manipulation"
                   aria-label="Decrease quantity"
                 >
                   −
@@ -682,11 +682,11 @@ export default function PickingSection({
                   type="number"
                   value={confirmedQty}
                   onChange={(e) => setConfirmedQty(parseInt(e.target.value) || 0)}
-                  className="w-28 sm:w-32 h-16 sm:h-20 text-3xl sm:text-5xl font-bold text-center bg-emerald-800 border-2 border-emerald-600 rounded-lg text-white"
+                  className="w-28 sm:w-32 h-16 sm:h-20 text-3xl sm:text-5xl font-bold text-center bg-emerald-800 border-2 border-emerald-600 rounded-lg text-[var(--foreground)]"
                 />
                 <button
                   onClick={() => setConfirmedQty(confirmedQty + 1)}
-                  className="w-14 h-14 sm:w-16 sm:h-16 text-3xl sm:text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-white touch-manipulation"
+                  className="w-14 h-14 sm:w-16 sm:h-16 text-3xl sm:text-4xl font-bold bg-emerald-800 hover:bg-emerald-700 rounded-lg text-[var(--foreground)] touch-manipulation"
                   aria-label="Increase quantity"
                 >
                   +
@@ -733,20 +733,20 @@ export default function PickingSection({
           {/* Warehouse Update Prompt Modal (when qty changed) */}
           {showWarehouseUpdatePrompt && confirmedItem && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-60">
-              <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md mx-4">
-                <h2 className="text-xl font-bold text-white mb-2">Update Warehouse Quantity?</h2>
-                <p className="text-slate-400 mb-4">
+              <div className="bg-[var(--card)] rounded-lg p-6 w-full max-w-md mx-4">
+                <h2 className="text-xl font-bold text-[var(--foreground)] mb-2">Update Warehouse Quantity?</h2>
+                <p className="text-[var(--muted-foreground)] mb-4">
                   Pick quantity changed from {confirmedItem.adjustedQty} to {confirmedQty}. 
                   Do you want to update the warehouse inventory to match?
                 </p>
                 
                 <div className="space-y-4 mb-4">
                   <div>
-                    <label className="block text-sm text-slate-400 mb-2">Reason for discrepancy</label>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-2">Reason for discrepancy</label>
                     <select
                       value={warehouseUpdateReason}
                       onChange={(e) => setWarehouseUpdateReason(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white"
+                      className="w-full px-4 py-3 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)]"
                     >
                       <option value="">Select reason...</option>
                       <option value="count_error">Count Error</option>
@@ -781,19 +781,19 @@ export default function PickingSection({
           {/* Warehouse Update Modal (manual button) */}
           {showWarehouseUpdateModal && confirmedItem && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-60">
-              <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md mx-4">
-                <h2 className="text-xl font-bold text-white mb-2">Update Warehouse Quantity</h2>
-                <p className="text-slate-400 mb-4">
+              <div className="bg-[var(--card)] rounded-lg p-6 w-full max-w-md mx-4">
+                <h2 className="text-xl font-bold text-[var(--foreground)] mb-2">Update Warehouse Quantity</h2>
+                <p className="text-[var(--muted-foreground)] mb-4">
                   Update warehouse inventory for {confirmedItem.masterSku} to {confirmedQty}?
                 </p>
                 
                 <div className="space-y-4 mb-4">
                   <div>
-                    <label className="block text-sm text-slate-400 mb-2">Reason</label>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-2">Reason</label>
                     <select
                       value={warehouseUpdateReason}
                       onChange={(e) => setWarehouseUpdateReason(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white"
+                      className="w-full px-4 py-3 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)]"
                     >
                       <option value="">Select reason...</option>
                       <option value="count_error">Count Error</option>
@@ -835,17 +835,17 @@ export default function PickingSection({
       <div className={`fixed inset-0 z-50 flex flex-col ${
         scanResult === 'correct' ? 'bg-emerald-900' : 
         scanResult === 'wrong' ? 'bg-red-900' : 
-        'bg-slate-900'
+        'bg-[var(--secondary)]'
       } transition-colors duration-300`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-slate-700">
-          <h1 className="text-lg sm:text-xl font-bold text-white">Interactive Pick</h1>
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-[var(--border)]">
+          <h1 className="text-lg sm:text-xl font-bold text-[var(--foreground)]">Interactive Pick</h1>
           <button 
             onClick={() => {
               stopCamera()
               setShowInteractivePick(false)
             }}
-            className="text-slate-400 hover:text-white text-2xl sm:text-3xl p-2 -mr-2"
+            className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-2xl sm:text-3xl p-2 -mr-2"
             aria-label="Close"
           >
             ✕
@@ -853,12 +853,12 @@ export default function PickingSection({
         </div>
 
         {/* Progress */}
-        <div className="px-3 sm:px-4 py-2 bg-slate-800">
-          <div className="flex items-center justify-between text-xs sm:text-sm text-slate-400 mb-1">
+        <div className="px-3 sm:px-4 py-2 bg-[var(--card)]">
+          <div className="flex items-center justify-between text-xs sm:text-sm text-[var(--muted-foreground)] mb-1">
             <span>Item {currentPickIndex + 1} of {pendingItems.length}</span>
             <span>{pickedCount} picked, {skippedCount} skipped</span>
           </div>
-          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+          <div className="h-2 bg-[var(--muted)] rounded-full overflow-hidden">
             <div 
               className="h-full bg-cyan-500 transition-all"
               style={{ width: `${((currentPickIndex) / pendingItems.length) * 100}%` }}
@@ -871,22 +871,22 @@ export default function PickingSection({
           {scanResult === 'wrong' ? (
             <div className="animate-pulse">
               <AlertCircle className="w-24 h-24 sm:w-32 sm:h-32 text-red-400 mx-auto mb-4" />
-              <h2 className="text-2xl sm:text-4xl font-bold text-white">WRONG ITEM</h2>
+              <h2 className="text-2xl sm:text-4xl font-bold text-[var(--foreground)]">WRONG ITEM</h2>
               <p className="text-lg sm:text-xl text-red-300 mt-2">Expected: {currentItem.masterSku}</p>
             </div>
           ) : (
             <>
-              <div className="text-4xl sm:text-7xl font-bold text-white mb-4 sm:mb-6 break-all px-2">
+              <div className="text-4xl sm:text-7xl font-bold text-[var(--foreground)] mb-4 sm:mb-6 break-all px-2">
                 {currentItem.masterSku}
               </div>
               <div className="text-4xl sm:text-6xl font-bold text-cyan-400 mb-3 sm:mb-4">
                 {currentItem.adjustedQty}
               </div>
-              <div className="text-lg sm:text-xl text-slate-400 mb-2">
+              <div className="text-lg sm:text-xl text-[var(--muted-foreground)] mb-2">
                 {Math.ceil(currentItem.adjustedQty / 5)}/box
               </div>
               {hasLocation && (
-                <div className="text-base sm:text-lg text-slate-400">
+                <div className="text-base sm:text-lg text-[var(--muted-foreground)]">
                   📍 {currentItem.warehouseLocation}
                 </div>
               )}
@@ -896,9 +896,9 @@ export default function PickingSection({
 
         {/* Scan Input */}
         {!scanResult && (
-          <div className="p-4 sm:p-6 bg-slate-800 border-t border-slate-700">
+          <div className="p-4 sm:p-6 bg-[var(--card)] border-t border-[var(--border)]">
             <div className="max-w-md mx-auto">
-              <label className="block text-center text-slate-400 mb-3 text-sm sm:text-base">
+              <label className="block text-center text-[var(--muted-foreground)] mb-3 text-sm sm:text-base">
                 Scan SKU barcode or type manually
               </label>
               
@@ -914,15 +914,15 @@ export default function PickingSection({
                   />
                   <button
                     onClick={stopCamera}
-                    className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-black/70"
+                    className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-[var(--foreground)] hover:bg-black/70"
                   >
                     <X className="w-5 h-5" />
                   </button>
                   {cameraError && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-[var(--foreground)] p-4 text-center">
                       <div>
                         <p className="text-red-400 mb-2">{cameraError}</p>
-                        <p className="text-sm text-slate-300">You can still type the SKU manually</p>
+                        <p className="text-sm text-[var(--foreground)]">You can still type the SKU manually</p>
                       </div>
                     </div>
                   )}
@@ -942,14 +942,14 @@ export default function PickingSection({
                   onChange={(e) => setScanInput(e.target.value)}
                   onKeyDown={handleScan}
                   autoFocus={!showCamera}
-                  className="flex-1 px-4 py-3 sm:py-4 text-lg sm:text-2xl text-center bg-slate-900 border-2 border-slate-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                  className="flex-1 px-4 py-3 sm:py-4 text-lg sm:text-2xl text-center bg-[var(--secondary)] border-2 border-[var(--border)] rounded-lg text-[var(--foreground)] focus:border-cyan-500 focus:outline-none"
                   placeholder="Scan or type SKU..."
                   inputMode="text"
                 />
                 {!showCamera && (
                   <button
                     onClick={startCamera}
-                    className="px-4 sm:px-6 py-3 sm:py-4 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white flex items-center justify-center"
+                    className="px-4 sm:px-6 py-3 sm:py-4 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-[var(--foreground)] flex items-center justify-center"
                     title="Open camera scanner"
                   >
                     <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -979,59 +979,59 @@ export default function PickingSection({
         {/* Adjust Modal */}
         {showAdjustModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-60">
-            <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md mx-4">
-              <h2 className="text-xl font-bold text-white mb-4">Adjust Quantity</h2>
+            <div className="bg-[var(--card)] rounded-lg p-6 w-full max-w-md mx-4">
+              <h2 className="text-xl font-bold text-[var(--foreground)] mb-4">Adjust Quantity</h2>
               
               <div className="space-y-4">
                 {/* Adjust Type */}
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">What to adjust?</label>
+                  <label className="block text-sm text-[var(--muted-foreground)] mb-2">What to adjust?</label>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setAdjustType('shipment')}
                       className={`flex-1 p-3 rounded-lg border text-left ${
                         adjustType === 'shipment'
                           ? 'border-cyan-500 bg-cyan-500/10'
-                          : 'border-slate-600'
+                          : 'border-[var(--border)]'
                       }`}
                     >
-                      <div className="font-medium text-white">Shipment Only</div>
-                      <div className="text-xs text-slate-400">Change qty for this shipment</div>
+                      <div className="font-medium text-[var(--foreground)]">Shipment Only</div>
+                      <div className="text-xs text-[var(--muted-foreground)]">Change qty for this shipment</div>
                     </button>
                     <button
                       onClick={() => setAdjustType('inventory')}
                       className={`flex-1 p-3 rounded-lg border text-left ${
                         adjustType === 'inventory'
                           ? 'border-amber-500 bg-amber-500/10'
-                          : 'border-slate-600'
+                          : 'border-[var(--border)]'
                       }`}
                     >
-                      <div className="font-medium text-white">Warehouse Inventory</div>
-                      <div className="text-xs text-slate-400">Actual stock is different</div>
+                      <div className="font-medium text-[var(--foreground)]">Warehouse Inventory</div>
+                      <div className="text-xs text-[var(--muted-foreground)]">Actual stock is different</div>
                     </button>
                   </div>
                 </div>
 
                 {/* Qty Input */}
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">New Quantity</label>
+                  <label className="block text-sm text-[var(--muted-foreground)] mb-2">New Quantity</label>
                   <input
                     type="number"
                     min="0"
                     value={adjustQty}
                     onChange={(e) => setAdjustQty(parseInt(e.target.value) || 0)}
-                    className="w-full px-4 py-3 text-xl bg-slate-900 border border-slate-600 rounded-lg text-white text-center"
+                    className="w-full px-4 py-3 text-xl bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-center"
                   />
                 </div>
 
                 {/* Reason (for inventory adjustments) */}
                 {adjustType === 'inventory' && (
                   <div>
-                    <label className="block text-sm text-slate-400 mb-2">Reason for discrepancy</label>
+                    <label className="block text-sm text-[var(--muted-foreground)] mb-2">Reason for discrepancy</label>
                     <select
                       value={adjustReason}
                       onChange={(e) => setAdjustReason(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white"
+                      className="w-full px-4 py-3 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)]"
                     >
                       <option value="">Select reason...</option>
                       <option value="damaged">Damaged/Defective</option>
@@ -1084,7 +1084,7 @@ export default function PickingSection({
               <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-4 text-center">
                 <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
                 <p className="text-emerald-400 font-medium">All items picked!</p>
-                <p className="text-sm text-slate-400 mt-1">
+                <p className="text-sm text-[var(--muted-foreground)] mt-1">
                   {pickedCount} picked, {skippedCount} skipped
                 </p>
               </div>
@@ -1100,11 +1100,11 @@ export default function PickingSection({
                     {skippedItems.map(item => (
                       <div 
                         key={item.id}
-                        className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg"
+                        className="flex items-center justify-between p-3 bg-[var(--card)]/50 rounded-lg"
                       >
                         <div>
-                          <div className="font-medium text-white">{item.masterSku}</div>
-                          <div className="text-sm text-slate-400">{item.adjustedQty} units</div>
+                          <div className="font-medium text-[var(--foreground)]">{item.masterSku}</div>
+                          <div className="text-sm text-[var(--muted-foreground)]">{item.adjustedQty} units</div>
                         </div>
                         <Button size="sm" onClick={() => markSkippedAsPicked(item.id)}>
                           <Check className="w-4 h-4 mr-1" />
@@ -1120,12 +1120,12 @@ export default function PickingSection({
             <>
               {/* Pick Methods */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                  <h3 className="font-medium text-white mb-2 flex items-center gap-2">
+                <div className="p-4 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]">
+                  <h3 className="font-medium text-[var(--foreground)] mb-2 flex items-center gap-2">
                     <Printer className="w-4 h-4" />
                     Print Pick Labels
                   </h3>
-                  <p className="text-sm text-slate-400 mb-3">
+                  <p className="text-sm text-[var(--muted-foreground)] mb-3">
                     Print a label for each SKU to place in picking bins
                   </p>
                   <Button variant="outline" size="sm" onClick={printPickLabels}>
@@ -1133,12 +1133,12 @@ export default function PickingSection({
                   </Button>
                 </div>
 
-                <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                  <h3 className="font-medium text-white mb-2 flex items-center gap-2">
+                <div className="p-4 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]">
+                  <h3 className="font-medium text-[var(--foreground)] mb-2 flex items-center gap-2">
                     <Smartphone className="w-4 h-4" />
                     Interactive Pick
                   </h3>
-                  <p className="text-sm text-slate-400 mb-3">
+                  <p className="text-sm text-[var(--muted-foreground)] mb-3">
                     Mobile-friendly with scanning & qty adjustment
                   </p>
                   <Button 
@@ -1157,8 +1157,8 @@ export default function PickingSection({
               </div>
 
               {/* Items List with Qty Adjustment */}
-              <div className="border-t border-slate-700 pt-4">
-                <h3 className="text-sm font-medium text-slate-300 mb-3">
+              <div className="border-t border-[var(--border)] pt-4">
+                <h3 className="text-sm font-medium text-[var(--foreground)] mb-3">
                   Items to Pick ({pendingItems.length} remaining)
                 </h3>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -1170,15 +1170,15 @@ export default function PickingSection({
                         className={`flex items-center gap-4 p-3 rounded-lg ${
                           item.pickStatus === 'picked' ? 'bg-emerald-900/20 border border-emerald-500/30' :
                           item.pickStatus === 'skipped' ? 'bg-amber-900/20 border border-amber-500/30' :
-                          'bg-slate-800/50 border border-slate-700'
+                          'bg-[var(--card)]/50 border border-[var(--border)]'
                         }`}
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-white">{item.masterSku}</div>
-                          <div className="text-sm text-slate-400 truncate">{item.productName}</div>
+                          <div className="font-medium text-[var(--foreground)]">{item.masterSku}</div>
+                          <div className="text-sm text-[var(--muted-foreground)] truncate">{item.productName}</div>
                         </div>
                         {hasLocation && (
-                          <div className="text-sm text-slate-400">
+                          <div className="text-sm text-[var(--muted-foreground)]">
                             📍 {item.warehouseLocation}
                           </div>
                         )}
@@ -1190,7 +1190,7 @@ export default function PickingSection({
                                 min="0"
                                 value={newQty}
                                 onChange={(e) => setNewQty(parseInt(e.target.value) || 0)}
-                                className="w-16 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm"
+                                className="w-16 px-2 py-1 bg-[var(--secondary)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm"
                                 autoFocus
                               />
                               <Button size="sm" onClick={() => adjustItemQty(item.id)}>
@@ -1203,7 +1203,7 @@ export default function PickingSection({
                                 setEditingQty(item.id)
                                 setNewQty(item.adjustedQty)
                               }}
-                              className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-white font-bold"
+                              className="px-3 py-1 bg-[var(--muted)] hover:bg-slate-600 rounded text-[var(--foreground)] font-bold"
                               title="Click to adjust qty"
                             >
                               {item.adjustedQty}
@@ -1216,7 +1216,7 @@ export default function PickingSection({
                               <span className="text-emerald-400 text-sm">✓ Picked</span>
                               <button
                                 onClick={() => resetToPending(item.id)}
-                                className="text-slate-400 hover:text-white"
+                                className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                                 title="Reset to pending"
                               >
                                 <RotateCcw className="w-3 h-3" />
@@ -1234,7 +1234,7 @@ export default function PickingSection({
                             </>
                           )}
                           {(!item.pickStatus || item.pickStatus === 'pending') && (
-                            <span className="text-slate-500 text-sm">Pending</span>
+                            <span className="text-[var(--muted-foreground)] text-sm">Pending</span>
                           )}
                         </div>
                       </div>
@@ -1244,8 +1244,8 @@ export default function PickingSection({
               </div>
 
               {/* Manual Complete */}
-              <div className="border-t border-slate-700 pt-4">
-                <p className="text-sm text-slate-400 mb-2">
+              <div className="border-t border-[var(--border)] pt-4">
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">
                   Already picked using a printed list?
                 </p>
                 <Button variant="outline" onClick={markAllPicked}>

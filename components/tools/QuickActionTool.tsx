@@ -35,7 +35,7 @@ export default function QuickActionTool({ tool }: { tool: Tool }) {
       <div className="p-4">
         <button
           onClick={handleAction}
-          className="w-full px-4 py-2 bg-amber-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
+          className="w-full px-4 py-2 bg-amber-500 text-[var(--foreground)] rounded-lg font-medium hover:opacity-90 transition-opacity"
         >
           {tool.config.buttonLabel || 'Execute'}
         </button>

@@ -38,7 +38,7 @@ interface ExpandableRowProps {
   defaultExpanded?: boolean
 }
 
-function ExpandableRow({ label, value, valueColor = 'text-white', children, defaultExpanded = false }: ExpandableRowProps) {
+function ExpandableRow({ label, value, valueColor = 'text-[var(--foreground)]', children, defaultExpanded = false }: ExpandableRowProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const hasChildren = Boolean(children)
   
@@ -47,12 +47,12 @@ function ExpandableRow({ label, value, valueColor = 'text-white', children, defa
   return (
     <div>
       <div 
-        className={`flex justify-between items-center py-1.5 ${hasChildren ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
+        className={`flex justify-between items-center py-1.5 ${hasChildren ? 'cursor-pointer hover:bg-[var(--muted)]/30' : ''}`}
         onClick={() => hasChildren && setExpanded(!expanded)}
       >
-        <span className="text-slate-300 flex items-center gap-1">
+        <span className="text-[var(--foreground)] flex items-center gap-1">
           {hasChildren && (
-            expanded ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />
+            expanded ? <ChevronDown className="w-4 h-4 text-[var(--muted-foreground)]" /> : <ChevronRight className="w-4 h-4 text-[var(--muted-foreground)]" />
           )}
           {!hasChildren && <span className="w-4" />}
           {label}
@@ -60,7 +60,7 @@ function ExpandableRow({ label, value, valueColor = 'text-white', children, defa
         <span className={valueColor}>{displayValue}</span>
       </div>
       {expanded && children && (
-        <div className="ml-5 border-l border-slate-700 pl-3">
+        <div className="ml-5 border-l border-[var(--border)] pl-3">
           {children}
         </div>
       )}
@@ -68,17 +68,17 @@ function ExpandableRow({ label, value, valueColor = 'text-white', children, defa
   )
 }
 
-function DetailRow({ label, value, valueColor = 'text-slate-300' }: { label: string; value: string; valueColor?: string }) {
+function DetailRow({ label, value, valueColor = 'text-[var(--foreground)]' }: { label: string; value: string; valueColor?: string }) {
   return (
     <div className="flex justify-between items-center py-1">
-      <span className="text-slate-400 text-sm">{label}</span>
+      <span className="text-[var(--muted-foreground)] text-sm">{label}</span>
       <span className={`text-sm ${valueColor}`}>{value}</span>
     </div>
   )
 }
 
 function Divider() {
-  return <div className="border-t border-slate-700 my-2" />
+  return <div className="border-t border-[var(--border)] my-2" />
 }
 
 export function PeriodDetailsModal({ data, isOpen, onClose }: PeriodDetailsModalProps) {
@@ -105,14 +105,14 @@ export function PeriodDetailsModal({ data, isOpen, onClose }: PeriodDetailsModal
       <div className="fixed inset-0 z-40" onClick={onClose} />
       
       {/* Modal */}
-      <div className="absolute top-0 left-0 z-50 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl w-[340px] max-h-[600px] overflow-y-auto">
+      <div className="absolute top-0 left-0 z-50 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-2xl w-[340px] max-h-[600px] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex justify-between items-start">
+        <div className="sticky top-0 bg-[var(--card)] border-b border-[var(--border)] px-4 py-3 flex justify-between items-start">
           <div>
-            <h3 className="font-semibold text-white text-lg">{getPeriodTitle()}</h3>
-            <p className="text-sm text-slate-400">{data.dateRange}</p>
+            <h3 className="font-semibold text-[var(--foreground)] text-lg">{getPeriodTitle()}</h3>
+            <p className="text-sm text-[var(--muted-foreground)]">{data.dateRange}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+          <button onClick={onClose} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -147,17 +147,17 @@ export function PeriodDetailsModal({ data, isOpen, onClose }: PeriodDetailsModal
             <DetailRow 
               label="Sponsored Products" 
               value={data.adCostSP ? formatCurrency(-data.adCostSP) : '-'} 
-              valueColor={data.adCostSP ? 'text-red-400' : 'text-slate-500'} 
+              valueColor={data.adCostSP ? 'text-red-400' : 'text-[var(--muted-foreground)]'} 
             />
             <DetailRow 
               label="Sponsored Brands" 
               value={data.adCostSB ? formatCurrency(-data.adCostSB) : '-'} 
-              valueColor={data.adCostSB ? 'text-red-400' : 'text-slate-500'} 
+              valueColor={data.adCostSB ? 'text-red-400' : 'text-[var(--muted-foreground)]'} 
             />
             <DetailRow 
               label="Sponsored Display" 
               value={data.adCostSD ? formatCurrency(-data.adCostSD) : '-'} 
-              valueColor={data.adCostSD ? 'text-red-400' : 'text-slate-500'} 
+              valueColor={data.adCostSD ? 'text-red-400' : 'text-[var(--muted-foreground)]'} 
             />
           </ExpandableRow>
 
@@ -204,7 +204,7 @@ export function PeriodDetailsModal({ data, isOpen, onClose }: PeriodDetailsModal
 
           {/* Gross Profit */}
           <div className="flex justify-between items-center py-1.5">
-            <span className="text-slate-300 font-medium">Gross profit</span>
+            <span className="text-[var(--foreground)] font-medium">Gross profit</span>
             <span className={data.grossProfit >= 0 ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
               {formatCurrency(data.grossProfit)}
             </span>
@@ -212,15 +212,15 @@ export function PeriodDetailsModal({ data, isOpen, onClose }: PeriodDetailsModal
 
           {/* Indirect Expenses */}
           <div className="flex justify-between items-center py-1.5">
-            <span className="text-slate-300">Indirect expenses</span>
-            <span className="text-white">{formatCurrency(0)}</span>
+            <span className="text-[var(--foreground)]">Indirect expenses</span>
+            <span className="text-[var(--foreground)]">{formatCurrency(0)}</span>
           </div>
 
           <Divider />
 
           {/* Net Profit */}
           <div className="flex justify-between items-center py-2">
-            <span className="text-white font-semibold">Net profit</span>
+            <span className="text-[var(--foreground)] font-semibold">Net profit</span>
             <span className={`font-bold text-lg ${data.netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               {formatCurrency(data.netProfit)}
             </span>
@@ -228,8 +228,8 @@ export function PeriodDetailsModal({ data, isOpen, onClose }: PeriodDetailsModal
 
           {/* Estimated Payout */}
           <div className="flex justify-between items-center py-1.5">
-            <span className="text-slate-300">Estimated payout</span>
-            <span className="text-white">{formatCurrency(data.estPayout)}</span>
+            <span className="text-[var(--foreground)]">Estimated payout</span>
+            <span className="text-[var(--foreground)]">{formatCurrency(data.estPayout)}</span>
           </div>
 
           <Divider />
@@ -237,44 +237,44 @@ export function PeriodDetailsModal({ data, isOpen, onClose }: PeriodDetailsModal
           {/* Metrics Section */}
           <div className="space-y-1 py-1">
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400">Real ACOS</span>
-              <span className={data.realAcos && data.realAcos < 100 ? 'text-emerald-400' : 'text-white'}>
+              <span className="text-[var(--muted-foreground)]">Real ACOS</span>
+              <span className={data.realAcos && data.realAcos < 100 ? 'text-emerald-400' : 'text-[var(--foreground)]'}>
                 {formatPercent(data.realAcos)}
               </span>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400">% Refunds</span>
-              <span className={refundRate > 5 ? 'text-red-400' : 'text-white'}>
+              <span className="text-[var(--muted-foreground)]">% Refunds</span>
+              <span className={refundRate > 5 ? 'text-red-400' : 'text-[var(--foreground)]'}>
                 {formatPercent(refundRate)}
               </span>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400">Sellable returns</span>
-              <span className="text-white">-</span>
+              <span className="text-[var(--muted-foreground)]">Sellable returns</span>
+              <span className="text-[var(--foreground)]">-</span>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400">Margin</span>
+              <span className="text-[var(--muted-foreground)]">Margin</span>
               <span className={data.margin >= 0 ? 'text-emerald-400' : 'text-red-400'}>
                 {formatPercent(data.margin)}
               </span>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400">ROI</span>
+              <span className="text-[var(--muted-foreground)]">ROI</span>
               <span className={data.roi >= 0 ? 'text-emerald-400' : 'text-red-400'}>
                 {formatPercent(data.roi)}
               </span>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400">Active subscriptions (SnS)</span>
-              <span className="text-white">-</span>
+              <span className="text-[var(--muted-foreground)]">Active subscriptions (SnS)</span>
+              <span className="text-[var(--foreground)]">-</span>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400">Sessions</span>
-              <span className="text-white">-</span>
+              <span className="text-[var(--muted-foreground)]">Sessions</span>
+              <span className="text-[var(--foreground)]">-</span>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400">Unit session percentage</span>
-              <span className="text-white">-</span>
+              <span className="text-[var(--muted-foreground)]">Unit session percentage</span>
+              <span className="text-[var(--foreground)]">-</span>
             </div>
           </div>
         </div>

@@ -116,7 +116,7 @@ export default function ProgressTimeline({
       <div className="pb-4">
         {/* Header row */}
         <div className="flex items-center justify-between text-xs mb-3">
-          <span className="text-slate-400">Progress</span>
+          <span className="text-[var(--muted-foreground)]">Progress</span>
           {status === 'received' ? (
             <span className="text-emerald-400 font-medium">✔ Received</span>
           ) : isOverdue ? (
@@ -124,14 +124,14 @@ export default function ProgressTimeline({
           ) : daysUntilExpected !== null ? (
             <span className="text-cyan-400 font-medium">Arriving in {daysUntilExpected}d</span>
           ) : (
-            <span className="text-slate-400">In progress</span>
+            <span className="text-[var(--muted-foreground)]">In progress</span>
           )}
         </div>
 
         {/* Progress bar with markers */}
         <div className="relative h-10">
           {/* Background track */}
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-700 rounded-full" />
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-[var(--muted)] rounded-full" />
 
           {/* Progress fill */}
           <div
@@ -180,12 +180,12 @@ export default function ProgressTimeline({
                         : marker.isGoal
                           ? 'bg-emerald-400 border-emerald-400 shadow-md shadow-emerald-400/50'
                           : 'bg-cyan-400 border-cyan-400'
-                      : 'bg-slate-800 border-slate-600'
+                      : 'bg-[var(--card)] border-[var(--border)]'
                     }
                   `}
                 />
                 <span className={`text-[9px] mt-2 whitespace-nowrap ${labelOffset} ${
-                  marker.reached ? 'text-slate-300' : 'text-slate-500'
+                  marker.reached ? 'text-[var(--foreground)]' : 'text-[var(--muted-foreground)]'
                 } ${marker.isGoal ? 'font-semibold' : ''}`}>
                   {marker.label}
                 </span>
@@ -248,7 +248,7 @@ export default function ProgressTimeline({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         {totalDays !== null && (
-          <span className="text-sm text-slate-400">{totalDays} days total</span>
+          <span className="text-sm text-[var(--muted-foreground)]">{totalDays} days total</span>
         )}
         <div className="flex-1" />
         {status === 'received' ? (
@@ -258,14 +258,14 @@ export default function ProgressTimeline({
         ) : daysUntilExpected !== null ? (
           <span className="text-sm font-medium text-cyan-400">{daysUntilExpected} days remaining</span>
         ) : (
-          <span className="text-sm text-slate-400">In progress</span>
+          <span className="text-sm text-[var(--muted-foreground)]">In progress</span>
         )}
       </div>
 
       {/* Timeline container - fixed height */}
       <div className="relative h-16 mx-2">
         {/* Background line - centered vertically */}
-        <div className="absolute top-1/2 left-0 right-0 h-1 -translate-y-1/2 bg-slate-700 rounded-full" />
+        <div className="absolute top-1/2 left-0 right-0 h-1 -translate-y-1/2 bg-[var(--muted)] rounded-full" />
 
         {/* Progress fill */}
         <div
@@ -311,21 +311,21 @@ export default function ProgressTimeline({
                     : stage.isGoal
                       ? 'bg-emerald-400 border-emerald-400 shadow-lg shadow-emerald-400/50'
                       : 'bg-cyan-400 border-cyan-400'
-                  : 'bg-slate-800 border-slate-600'
+                  : 'bg-[var(--card)] border-[var(--border)]'
                 }
               `}
             />
 
             {/* Label */}
             <span className={`text-[10px] mt-2 whitespace-nowrap ${
-              stage.isWeek ? 'text-slate-500' : stage.reached ? 'text-slate-200 font-medium' : 'text-slate-500'
+              stage.isWeek ? 'text-[var(--muted-foreground)]' : stage.reached ? 'text-[var(--foreground)] font-medium' : 'text-[var(--muted-foreground)]'
             } ${stage.isGoal && !stage.isWeek ? 'font-semibold' : ''}`}>
               {stage.label}
             </span>
 
             {/* Date (only for key stages, not weeks) */}
             {stage.date && !stage.isWeek && (
-              <span className="text-[9px] text-slate-500 whitespace-nowrap">
+              <span className="text-[9px] text-[var(--muted-foreground)] whitespace-nowrap">
                 {formatDate(stage.date)}
               </span>
             )}

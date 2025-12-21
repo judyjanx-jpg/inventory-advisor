@@ -113,7 +113,7 @@ export default function TemplateManagerModal({ isOpen, onClose, suppliers }: Tem
     >
       <div className="p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-400">Manage email templates for purchase orders</p>
+          <p className="text-sm text-[var(--muted-foreground)]">Manage email templates for purchase orders</p>
           <Button variant="primary" size="sm" onClick={() => setEditingTemplate({
             id: '',
             name: 'New Template',
@@ -133,7 +133,7 @@ export default function TemplateManagerModal({ isOpen, onClose, suppliers }: Tem
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-cyan-500"></div>
           </div>
         ) : templates.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
+          <div className="text-center py-12 text-[var(--muted-foreground)]">
             No templates found. Create your first template to get started.
           </div>
         ) : (
@@ -141,21 +141,21 @@ export default function TemplateManagerModal({ isOpen, onClose, suppliers }: Tem
             {templates.map((template) => (
               <div
                 key={template.id}
-                className="flex items-center justify-between p-4 bg-slate-800 border border-slate-700 rounded-lg"
+                className="flex items-center justify-between p-4 bg-[var(--card)] border border-[var(--border)] rounded-lg"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium">{template.name}</span>
+                    <span className="text-[var(--foreground)] font-medium">{template.name}</span>
                     {template.supplierId ? (
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-[var(--muted-foreground)]">
                         ({suppliers.find(s => s.id === parseInt(template.supplierId!))?.name || 'Unknown Supplier'})
                       </span>
                     ) : (
                       <span className="text-xs text-cyan-400 bg-cyan-500/20 px-2 py-0.5 rounded">Default</span>
                     )}
                   </div>
-                  <p className="text-sm text-slate-400 mt-1">{template.subject}</p>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-sm text-[var(--muted-foreground)] mt-1">{template.subject}</p>
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">
                     Updated: {new Date(template.updatedAt).toLocaleDateString()}
                   </p>
                 </div>
@@ -234,21 +234,21 @@ function TemplateEditor({
     >
       <div className="p-6 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Template Name</label>
+          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Template Name</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Supplier (optional)</label>
+          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Supplier (optional)</label>
           <select
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
           >
             <option value="">None (Default Template)</option>
             {suppliers.map(supplier => (
@@ -260,18 +260,18 @@ function TemplateEditor({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Subject</label>
+          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Subject</label>
           <input
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-slate-300">Body</label>
+            <label className="block text-sm font-medium text-[var(--foreground)]">Body</label>
             <Button variant="ghost" size="sm" onClick={onTogglePreview}>
               {previewMode ? (
                 <>
@@ -287,14 +287,14 @@ function TemplateEditor({
             </Button>
           </div>
           {previewMode ? (
-            <div className="min-h-[300px] p-4 bg-slate-900 border border-slate-700 rounded-lg text-white whitespace-pre-wrap">
+            <div className="min-h-[300px] p-4 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)] whitespace-pre-wrap">
               {resolveTemplate(body)}
             </div>
           ) : (
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              className="w-full min-h-[300px] px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono text-sm"
+              className="w-full min-h-[300px] px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono text-sm"
               placeholder="Email body with {{variables}}..."
             />
           )}

@@ -270,34 +270,34 @@ export default function ExportDropdown({ po }: ExportDropdownProps) {
       </Button>
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 min-w-[200px]">
+        <div className="absolute top-full right-0 mt-2 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-xl z-50 min-w-[200px]">
           <button
             onClick={exportItemsCSV}
-            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors rounded-t-lg"
+            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--hover-bg)] transition-colors rounded-t-lg"
           >
-            <FileText className="w-4 h-4 text-slate-400" />
-            <span className="text-white">Export Items (CSV)</span>
+            <FileText className="w-4 h-4 text-[var(--muted-foreground)]" />
+            <span className="text-[var(--foreground)]">Export Items (CSV)</span>
           </button>
           <button
             onClick={exportItemsExcel}
-            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors border-t border-slate-700"
+            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--hover-bg)] transition-colors border-t border-[var(--border)]"
           >
-            <FileSpreadsheet className="w-4 h-4 text-slate-400" />
-            <span className="text-white">Export Items (Excel)</span>
+            <FileSpreadsheet className="w-4 h-4 text-[var(--muted-foreground)]" />
+            <span className="text-[var(--foreground)]">Export Items (Excel)</span>
           </button>
           <button
             onClick={exportFullPOExcel}
-            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors border-t border-slate-700"
+            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--hover-bg)] transition-colors border-t border-[var(--border)]"
           >
-            <FileSpreadsheet className="w-4 h-4 text-slate-400" />
-            <span className="text-white">Export Full PO (Excel)</span>
+            <FileSpreadsheet className="w-4 h-4 text-[var(--muted-foreground)]" />
+            <span className="text-[var(--foreground)]">Export Full PO (Excel)</span>
           </button>
           <button
             onClick={exportPDF}
-            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors border-t border-slate-700 rounded-b-lg"
+            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--hover-bg)] transition-colors border-t border-[var(--border)] rounded-b-lg"
           >
-            <FileText className="w-4 h-4 text-slate-400" />
-            <span className="text-white">Export as PDF</span>
+            <FileText className="w-4 h-4 text-[var(--muted-foreground)]" />
+            <span className="text-[var(--foreground)]">Export as PDF</span>
           </button>
         </div>
       )}

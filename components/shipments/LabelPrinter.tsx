@@ -391,7 +391,7 @@ export default function LabelPrinter({
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-[var(--muted-foreground)]">
             Print FNSKU barcode labels for products and box labels for shipping.
           </p>
         </CardContent>
@@ -400,17 +400,17 @@ export default function LabelPrinter({
       {/* FNSKU Label Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+          <div className="bg-[var(--card)] rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white">Print FNSKU Labels</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
+              <h2 className="text-xl font-bold text-[var(--foreground)]">Print FNSKU Labels</h2>
+              <button onClick={() => setShowModal(false)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Label Size */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-300 mb-2">Label Size</label>
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Label Size</label>
               <div className="flex gap-2">
                 {[
                   { value: '30up', label: '30-up (Avery 5160)', desc: '1" × 2.625"' },
@@ -423,11 +423,11 @@ export default function LabelPrinter({
                     className={`flex-1 p-3 rounded-lg border text-left ${
                       labelSize === opt.value
                         ? 'border-cyan-500 bg-cyan-500/10'
-                        : 'border-slate-600 hover:border-slate-500'
+                        : 'border-[var(--border)] hover:border-[var(--border)]'
                     }`}
                   >
-                    <div className="font-medium text-white text-sm">{opt.label}</div>
-                    <div className="text-xs text-slate-400">{opt.desc}</div>
+                    <div className="font-medium text-[var(--foreground)] text-sm">{opt.label}</div>
+                    <div className="text-xs text-[var(--muted-foreground)]">{opt.desc}</div>
                   </button>
                 ))}
               </div>
@@ -436,10 +436,10 @@ export default function LabelPrinter({
             {/* Items Selection */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-slate-300">Select Items & Quantities</label>
+                <label className="text-sm font-medium text-[var(--foreground)]">Select Items & Quantities</label>
                 <div className="flex gap-2">
                   <button onClick={selectAll} className="text-xs text-cyan-400 hover:text-cyan-300">Select All</button>
-                  <span className="text-slate-600">|</span>
+                  <span className="text-[var(--muted-foreground)]">|</span>
                   <button onClick={selectNone} className="text-xs text-cyan-400 hover:text-cyan-300">Select None</button>
                 </div>
               </div>
@@ -449,22 +449,22 @@ export default function LabelPrinter({
                     key={item.masterSku}
                     className={`flex items-center gap-3 p-3 rounded-lg border ${
                       selectedItems.includes(item.masterSku)
-                        ? 'border-cyan-500/50 bg-slate-700/50'
-                        : 'border-slate-700 bg-slate-800/50'
+                        ? 'border-cyan-500/50 bg-[var(--muted)]/50'
+                        : 'border-[var(--border)] bg-[var(--card)]/50'
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={selectedItems.includes(item.masterSku)}
                       onChange={() => toggleItem(item.masterSku)}
-                      className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500"
+                      className="w-4 h-4 rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="text-white font-medium text-sm">{item.masterSku}</div>
-                      <div className="text-slate-400 text-xs truncate">{item.fnsku || 'No FNSKU'}</div>
+                      <div className="text-[var(--foreground)] font-medium text-sm">{item.masterSku}</div>
+                      <div className="text-[var(--muted-foreground)] text-xs truncate">{item.fnsku || 'No FNSKU'}</div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400">Labels:</span>
+                      <span className="text-xs text-[var(--muted-foreground)]">Labels:</span>
                       <input
                         type="number"
                         min="0"
@@ -473,7 +473,7 @@ export default function LabelPrinter({
                           ...labelsPerItem,
                           [item.masterSku]: parseInt(e.target.value) || 0
                         })}
-                        className="w-16 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center"
+                        className="w-16 px-2 py-1 bg-[var(--secondary)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm text-center"
                         disabled={!selectedItems.includes(item.masterSku)}
                       />
                     </div>
@@ -483,9 +483,9 @@ export default function LabelPrinter({
             </div>
 
             {/* Summary & Print */}
-            <div className="flex items-center justify-between pt-4 border-t border-slate-700">
-              <div className="text-slate-300">
-                <span className="font-bold text-white">{totalLabels}</span> labels to print
+            <div className="flex items-center justify-between pt-4 border-t border-[var(--border)]">
+              <div className="text-[var(--foreground)]">
+                <span className="font-bold text-[var(--foreground)]">{totalLabels}</span> labels to print
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>

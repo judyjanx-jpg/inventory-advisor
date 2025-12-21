@@ -169,7 +169,7 @@ export default function ProductLabelPrinter({
       case 'fnsku_tp': return { label: 'FNSKU + TP', color: 'text-purple-400', bg: 'bg-purple-900/20' }
       case 'fnsku_only': return { label: 'FNSKU', color: 'text-cyan-400', bg: 'bg-cyan-900/20' }
       case 'tp_only': return { label: 'TP Only', color: 'text-amber-400', bg: 'bg-amber-900/20' }
-      case 'none': return { label: 'Pre-labeled', color: 'text-slate-400', bg: 'bg-slate-900/20' }
+      case 'none': return { label: 'Pre-labeled', color: 'text-[var(--muted-foreground)]', bg: 'bg-[var(--secondary)]/20' }
     }
   }
 
@@ -593,7 +593,7 @@ export default function ProductLabelPrinter({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-slate-400 mb-4">
+        <p className="text-sm text-[var(--muted-foreground)] mb-4">
           Print FNSKU and/or Transparency labels for each product. Now supports large batches (500+ labels) without browser crashes.
         </p>
 
@@ -604,17 +604,17 @@ export default function ProductLabelPrinter({
             const display = getLabelTypeDisplay(labelType)
             
             return (
-              <div key={item.masterSku} className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+              <div key={item.masterSku} className="flex items-center gap-4 p-3 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-white">{item.masterSku}</div>
-                  <div className="text-xs text-slate-500 font-mono">
+                  <div className="font-medium text-[var(--foreground)]">{item.masterSku}</div>
+                  <div className="text-xs text-[var(--muted-foreground)] font-mono">
                     FNSKU: {item.fnsku || <span className="text-amber-400">Not set</span>}
                   </div>
-                  <div className="text-sm text-slate-400 truncate">{item.productName}</div>
+                  <div className="text-sm text-[var(--muted-foreground)] truncate">{item.productName}</div>
                 </div>
 
                 <div className="text-center">
-                  <div className="text-sm text-slate-400">Units</div>
+                  <div className="text-sm text-[var(--muted-foreground)]">Units</div>
                   <input
                     type="number"
                     min="1"
@@ -623,7 +623,7 @@ export default function ProductLabelPrinter({
                       ...labelCounts,
                       [item.masterSku]: parseInt(e.target.value) || 0
                     })}
-                    className="w-16 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center"
+                    className="w-16 px-2 py-1 bg-[var(--secondary)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm text-center"
                   />
                 </div>
 
@@ -635,10 +635,10 @@ export default function ProductLabelPrinter({
                     className={`px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer appearance-none pr-6 ${display.bg} ${display.color} focus:outline-none focus:ring-1 focus:ring-slate-500`}
                     style={{ backgroundImage: 'none' }}
                   >
-                    <option value="fnsku_tp" className="bg-slate-800 text-purple-400">FNSKU + TP</option>
-                    <option value="fnsku_only" className="bg-slate-800 text-cyan-400">FNSKU</option>
-                    <option value="tp_only" className="bg-slate-800 text-amber-400">TP Only</option>
-                    <option value="none" className="bg-slate-800 text-slate-400">Pre-labeled</option>
+                    <option value="fnsku_tp" className="bg-[var(--card)] text-purple-400">FNSKU + TP</option>
+                    <option value="fnsku_only" className="bg-[var(--card)] text-cyan-400">FNSKU</option>
+                    <option value="tp_only" className="bg-[var(--card)] text-amber-400">TP Only</option>
+                    <option value="none" className="bg-[var(--card)] text-[var(--muted-foreground)]">Pre-labeled</option>
                   </select>
                   <div className="absolute inset-y-0 right-1 flex items-center pointer-events-none">
                     {savingLabelType === item.masterSku ? (
@@ -652,7 +652,7 @@ export default function ProductLabelPrinter({
                 </div>
 
                 {labelType === 'none' ? (
-                  <div className="text-sm text-slate-400 italic">
+                  <div className="text-sm text-[var(--muted-foreground)] italic">
                     Pre-labeled
                   </div>
                 ) : (
@@ -694,7 +694,7 @@ export default function ProductLabelPrinter({
                               min="1"
                               value={printMoreQty}
                               onChange={(e) => setPrintMoreQty(parseInt(e.target.value) || 1)}
-                              className="w-14 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center"
+                              className="w-14 px-2 py-1 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm text-center"
                               autoFocus
                             />
                             <Button
@@ -715,7 +715,7 @@ export default function ProductLabelPrinter({
                               )}
                             </Button>
                             <button
-                              className="px-2 py-1 text-slate-400 hover:text-white"
+                              className="px-2 py-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                               onClick={() => {
                                 setShowPrintMore(null)
                                 setPrintMoreQty(1)
@@ -778,7 +778,7 @@ export default function ProductLabelPrinter({
                           </Button>
                         </div>
                         {generatingPDF === item.masterSku && pdfProgress && (
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-[var(--muted-foreground)]">
                             {Math.round((pdfProgress.current / pdfProgress.total) * 100)}% complete
                           </div>
                         )}
@@ -792,69 +792,69 @@ export default function ProductLabelPrinter({
         </div>
 
         {/* Summary by Type */}
-        <div className="mt-4 pt-4 border-t border-slate-700">
+        <div className="mt-4 pt-4 border-t border-[var(--border)]">
           <div className="grid grid-cols-4 gap-4 text-center text-sm">
             <div>
               <div className="text-purple-400 font-medium">
                 {itemsByType.fnsku_tp.length} SKUs
               </div>
-              <div className="text-slate-500">FNSKU + TP</div>
+              <div className="text-[var(--muted-foreground)]">FNSKU + TP</div>
             </div>
             <div>
               <div className="text-cyan-400 font-medium">
                 {itemsByType.fnsku_only.length} SKUs
               </div>
-              <div className="text-slate-500">FNSKU Only</div>
+              <div className="text-[var(--muted-foreground)]">FNSKU Only</div>
             </div>
             <div>
               <div className="text-amber-400 font-medium">
                 {itemsByType.tp_only.length} SKUs
               </div>
-              <div className="text-slate-500">TP Only</div>
+              <div className="text-[var(--muted-foreground)]">TP Only</div>
             </div>
             <div>
-              <div className="text-slate-400 font-medium">
+              <div className="text-[var(--muted-foreground)] font-medium">
                 {itemsByType.none.length} SKUs
               </div>
-              <div className="text-slate-500">Pre-labeled</div>
+              <div className="text-[var(--muted-foreground)]">Pre-labeled</div>
             </div>
           </div>
         </div>
 
         {/* Label Size Info */}
-        <div className="mt-4 p-3 bg-slate-800/30 rounded-lg text-xs text-slate-400">
+        <div className="mt-4 p-3 bg-[var(--card)]/30 rounded-lg text-xs text-[var(--muted-foreground)]">
           <strong>Label sizes:</strong> FNSKU/FNSKU+TP: {labelSettings.fnskuLabelSize}" | TP Only: {labelSettings.tpOnlyLabelSize}"
-          <span className="text-slate-500 ml-2">(Change in Settings → Display)</span>
+          <span className="text-[var(--muted-foreground)] ml-2">(Change in Settings → Display)</span>
         </div>
       </CardContent>
 
       {/* Batch Printing Modal */}
       {batchPrinting && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md border border-slate-700">
-            <h3 className="text-xl font-bold text-white mb-4">Batch Printing</h3>
+          <div className="bg-[var(--card)] rounded-lg p-6 w-full max-w-md border border-[var(--border)]">
+            <h3 className="text-xl font-bold text-[var(--foreground)] mb-4">Batch Printing</h3>
             
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-slate-400">Progress</span>
-                <span className="text-white font-medium">
+                <span className="text-[var(--muted-foreground)]">Progress</span>
+                <span className="text-[var(--foreground)] font-medium">
                   Batch {batchPrinting.currentBatch + 1} of {batchPrinting.totalBatches}
                 </span>
               </div>
-              <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden">
+              <div className="w-full bg-[var(--muted)] rounded-full h-3 overflow-hidden">
                 <div
                   className="h-full bg-cyan-500 transition-all duration-300"
                   style={{ width: `${((batchPrinting.currentBatch + 1) / batchPrinting.totalBatches) * 100}%` }}
                 />
               </div>
-              <div className="mt-2 text-sm text-slate-400">
+              <div className="mt-2 text-sm text-[var(--muted-foreground)]">
                 Printing {batchPrinting.batches[batchPrinting.currentBatch]?.quantity} labels in this batch
               </div>
             </div>
 
-            <div className="bg-slate-900/50 rounded-lg p-4 mb-6">
-              <div className="text-sm text-slate-400 mb-1">SKU: {batchPrinting.sku}</div>
-              <div className="text-sm text-slate-400">
+            <div className="bg-[var(--secondary)]/50 rounded-lg p-4 mb-6">
+              <div className="text-sm text-[var(--muted-foreground)] mb-1">SKU: {batchPrinting.sku}</div>
+              <div className="text-sm text-[var(--muted-foreground)]">
                 Total: {batchPrinting.batches.reduce((sum, b) => sum + b.quantity, 0)} labels in {batchPrinting.totalBatches} batches
               </div>
             </div>
@@ -893,10 +893,10 @@ export default function ProductLabelPrinter({
 
             {pdfProgress && (
               <div className="mt-4">
-                <div className="text-xs text-slate-400 mb-1">
+                <div className="text-xs text-[var(--muted-foreground)] mb-1">
                   Generating PDF: {pdfProgress.current} / {pdfProgress.total}
                 </div>
-                <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-[var(--muted)] rounded-full h-2 overflow-hidden">
                   <div
                     className="h-full bg-cyan-400 transition-all duration-200"
                     style={{ width: `${(pdfProgress.current / pdfProgress.total) * 100}%` }}

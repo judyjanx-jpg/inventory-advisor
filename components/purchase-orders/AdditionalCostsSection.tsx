@@ -29,7 +29,7 @@ export default function AdditionalCostsSection({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Additional Costs</h3>
+        <h3 className="text-lg font-semibold text-[var(--foreground)]">Additional Costs</h3>
         <Button variant="ghost" size="sm" onClick={onAdd}>
           <Plus className="w-4 h-4 mr-2" />
           Add Cost
@@ -37,7 +37,7 @@ export default function AdditionalCostsSection({
       </div>
 
       {costs.length === 0 ? (
-        <div className="text-center py-8 text-slate-400 border border-slate-700 rounded-lg">
+        <div className="text-center py-8 text-[var(--muted-foreground)] border border-[var(--border)] rounded-lg">
           No additional costs added
         </div>
       ) : (
@@ -45,25 +45,25 @@ export default function AdditionalCostsSection({
           {costs.map((cost) => (
             <div
               key={cost.id}
-              className="flex items-center gap-4 p-4 bg-slate-800 border border-slate-700 rounded-lg"
+              className="flex items-center gap-4 p-4 bg-[var(--card)] border border-[var(--border)] rounded-lg"
             >
               <div className="flex-1">
                 <EditableField
                   value={cost.description}
                   onChange={(value) => onUpdate(cost.id, 'description', value)}
                   type="text"
-                  className="text-white font-medium"
+                  className="text-[var(--foreground)] font-medium"
                   placeholder="Cost description"
                 />
               </div>
               <div className="w-32">
                 <div className="flex items-center gap-1">
-                  <span className="text-slate-400">$</span>
+                  <span className="text-[var(--muted-foreground)]">$</span>
                   <EditableField
                     value={Number(cost.amount || 0)}
                     onChange={(value) => onUpdate(cost.id, 'amount', value)}
                     type="number"
-                    className="text-white font-medium"
+                    className="text-[var(--foreground)] font-medium"
                     formatValue={(val) => Number(val).toFixed(2)}
                     parseValue={(val) => parseFloat(val) || 0}
                     min={0}
@@ -88,10 +88,10 @@ export default function AdditionalCostsSection({
       )}
 
       {costs.length > 0 && (
-        <div className="pt-4 border-t border-slate-700">
+        <div className="pt-4 border-t border-[var(--border)]">
           <div className="flex items-center justify-between">
-            <span className="text-slate-400">Additional Costs Subtotal</span>
-            <span className="text-white font-semibold">${subtotal.toFixed(2)}</span>
+            <span className="text-[var(--muted-foreground)]">Additional Costs Subtotal</span>
+            <span className="text-[var(--foreground)] font-semibold">${subtotal.toFixed(2)}</span>
           </div>
         </div>
       )}

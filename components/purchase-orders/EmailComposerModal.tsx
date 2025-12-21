@@ -159,24 +159,24 @@ export default function EmailComposerModal({ isOpen, onClose, po, onSend }: Emai
         {/* Recipients */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
               To <span className="text-red-400">*</span>
             </label>
             <input
               type="email"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
               placeholder="supplier@example.com"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Cc</label>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Cc</label>
             <input
               type="email"
               value={cc}
               onChange={(e) => setCc(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
               placeholder="cc@example.com (optional)"
             />
           </div>
@@ -184,18 +184,18 @@ export default function EmailComposerModal({ isOpen, onClose, po, onSend }: Emai
 
         {/* Subject */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Subject</label>
+          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Subject</label>
           <input
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
         </div>
 
         {/* Template Selector */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Template</label>
+          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Template</label>
           <select
             value={selectedTemplate}
             onChange={(e) => {
@@ -206,7 +206,7 @@ export default function EmailComposerModal({ isOpen, onClose, po, onSend }: Emai
                 setBody('')
               }
             }}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
           >
             <option value="default">Default Template</option>
             <option value="supplier">{po.supplier.name} Template</option>
@@ -216,7 +216,7 @@ export default function EmailComposerModal({ isOpen, onClose, po, onSend }: Emai
 
         {/* Variable Insertion */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Insert Variable</label>
+          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Insert Variable</label>
           <div className="flex flex-wrap gap-2">
             {variables.map((variable) => (
               <Button
@@ -234,7 +234,7 @@ export default function EmailComposerModal({ isOpen, onClose, po, onSend }: Emai
         {/* Body Editor */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-slate-300">Body</label>
+            <label className="block text-sm font-medium text-[var(--foreground)]">Body</label>
             <Button
               variant="ghost"
               size="sm"
@@ -254,7 +254,7 @@ export default function EmailComposerModal({ isOpen, onClose, po, onSend }: Emai
             </Button>
           </div>
           {previewMode ? (
-            <div className="min-h-[300px] p-4 bg-slate-900 border border-slate-700 rounded-lg text-white whitespace-pre-wrap">
+            <div className="min-h-[300px] p-4 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)] whitespace-pre-wrap">
               {resolveTemplate(body)}
             </div>
           ) : (
@@ -262,7 +262,7 @@ export default function EmailComposerModal({ isOpen, onClose, po, onSend }: Emai
               id="email-body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              className="w-full min-h-[300px] px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono text-sm"
+              className="w-full min-h-[300px] px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono text-sm"
               placeholder="Email body with {{variables}}..."
             />
           )}
@@ -270,24 +270,24 @@ export default function EmailComposerModal({ isOpen, onClose, po, onSend }: Emai
 
         {/* Attachments */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-300">Attachments</label>
+          <label className="block text-sm font-medium text-[var(--foreground)]">Attachments</label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={attachPDF}
               onChange={(e) => setAttachPDF(e.target.checked)}
-              className="rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+              className="rounded border-[var(--border)] bg-[var(--card)] text-cyan-500 focus:ring-cyan-500"
             />
-            <span className="text-slate-300">Attach PO as PDF</span>
+            <span className="text-[var(--foreground)]">Attach PO as PDF</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={attachExcel}
               onChange={(e) => setAttachExcel(e.target.checked)}
-              className="rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+              className="rounded border-[var(--border)] bg-[var(--card)] text-cyan-500 focus:ring-cyan-500"
             />
-            <span className="text-slate-300">Attach PO as Excel</span>
+            <span className="text-[var(--foreground)]">Attach PO as Excel</span>
           </label>
         </div>
       </div>
