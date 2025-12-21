@@ -531,10 +531,10 @@ export default function ProductsPage() {
       : (hasVariations ? getAggregatedSales(product) : Number(product.salesVelocity?.velocity30d || 0))
 
     return (
-      <div key={product.sku} className={isVariation ? 'border-l-2 border-slate-700 ml-4' : ''}>
+      <div key={product.sku} className={isVariation ? 'border-l-2 border-[var(--border)] ml-4' : ''}>
         {/* Product Row */}
         <div 
-          className={`flex items-center px-6 py-4 hover:bg-slate-800/30 cursor-pointer ${isVariation ? 'bg-slate-900/20' : ''}`}
+          className={`flex items-center px-6 py-4 hover:bg-[var(--secondary)]/30 cursor-pointer ${isVariation ? 'bg-[var(--card)]/20' : ''}`}
           onClick={() => hasVariations && !isSkuView && toggleExpanded(product.sku)}
         >
           {/* Expand/Collapse for parent products with variations (only in parent view) */}
@@ -543,7 +543,7 @@ export default function ProductsPage() {
               isExpanded ? (
                 <ChevronDown className="w-5 h-5 text-cyan-400" />
               ) : (
-                <ChevronRight className="w-5 h-5 text-slate-400" />
+                <ChevronRight className="w-5 h-5 text-[var(--muted-foreground)]" />
               )
             ) : isVariation ? (
               <div className="w-2 h-2 rounded-full bg-slate-600 ml-1.5" />
@@ -561,7 +561,7 @@ export default function ProductsPage() {
                     value={editNameValue}
                     onChange={(e) => setEditNameValue(e.target.value)}
                     placeholder={product.sku}
-                    className="px-2 py-1 bg-slate-900 border border-cyan-500 rounded text-white font-mono text-lg focus:outline-none"
+                    className="px-2 py-1 bg-[var(--card)] border border-cyan-500 rounded text-[var(--foreground)] font-mono text-lg focus:outline-none"
                     autoFocus
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') saveDisplayName(product.sku)
@@ -577,7 +577,7 @@ export default function ProductsPage() {
                 </div>
               ) : (
                 <>
-                  <p className="font-mono font-bold text-white text-lg">{getDisplayName(product)}</p>
+                  <p className="font-mono font-bold text-[var(--foreground)] text-lg">{getDisplayName(product)}</p>
                   {/* Show edit button for parent products or products with Amazon-generated SKUs */}
                   {!isSkuView && (product.isParent || hasVariations || product.sku.startsWith('PARENT-')) && (
                     <Button 
@@ -591,7 +591,7 @@ export default function ProductsPage() {
                     </Button>
                   )}
                   {product.displayName && (
-                    <span className="text-xs text-slate-500 font-mono">({product.sku})</span>
+                    <span className="text-xs text-[var(--muted-foreground)] font-mono">({product.sku})</span>
                   )}
                 </>
               )}
@@ -602,7 +602,7 @@ export default function ProductsPage() {
                 </span>
               )}
               {(isVariation || isSkuView) && product.variationValue && (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-300">
+                <span className="px-2 py-0.5 text-xs rounded-full bg-slate-700 text-[var(--foreground)]">
                   {product.variationType}: {product.variationValue}
                 </span>
               )}
@@ -613,16 +613,16 @@ export default function ProductsPage() {
             {/* ASIN and Title below in gray */}
             <div className="flex items-center gap-4 mt-1.5">
               {product.asin && (
-                <span className="text-sm text-slate-500 font-mono">
+                <span className="text-sm text-[var(--muted-foreground)] font-mono">
                   ASIN: {product.asin}
                 </span>
               )}
-              <span className="text-sm text-slate-400 truncate max-w-md" title={product.title}>
+              <span className="text-sm text-[var(--muted-foreground)] truncate max-w-md" title={product.title}>
                 {product.title}
               </span>
             </div>
             {product.supplier && (
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
                 Supplier: {product.supplier.name}
               </p>
             )}
@@ -634,15 +634,15 @@ export default function ProductsPage() {
             {!hasVariations && !product.isParent ? (
               <>
                 <div className="w-20">
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">Cost</p>
-                  <p className="font-medium text-white">{formatCurrency(product.cost)}</p>
+                  <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Cost</p>
+                  <p className="font-medium text-[var(--foreground)]">{formatCurrency(product.cost)}</p>
                 </div>
                 <div className="w-20">
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">Price</p>
-                  <p className="font-medium text-white">{formatCurrency(product.price)}</p>
+                  <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Price</p>
+                  <p className="font-medium text-[var(--foreground)]">{formatCurrency(product.price)}</p>
                 </div>
                 <div className="w-16">
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">Margin</p>
+                  <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Margin</p>
                   <p className={`font-medium ${getProfitMargin(product) >= 30 ? 'text-emerald-400' : getProfitMargin(product) >= 15 ? 'text-amber-400' : 'text-red-400'}`}>
                     {getProfitMargin(product)}%
                   </p>
@@ -652,13 +652,13 @@ export default function ProductsPage() {
               <div className="w-56" />
             )}
             <div className="w-20">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Stock</p>
-              <p className="font-medium text-white">
+              <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Stock</p>
+              <p className="font-medium text-[var(--foreground)]">
                 {!isSkuView && hasVariations ? getAggregatedInventory(product) : getInventoryTotal(product)}
               </p>
             </div>
             <div className="w-24">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
+              <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">
                 {isSkuView ? 'Sales' : (hasVariations ? 'Total Sales' : 'Sales')}
               </p>
               <p className="font-medium text-cyan-400">
@@ -684,7 +684,7 @@ export default function ProductsPage() {
                 onClick={(e) => toggleHidden(product, e)}
                 title={isHiddenView ? "Unhide" : "Hide"}
               >
-                {isHiddenView ? <Eye className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-slate-400 hover:text-amber-400" />}
+                {isHiddenView ? <Eye className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-[var(--muted-foreground)] hover:text-amber-400" />}
               </Button>
             </div>
           </div>
@@ -692,7 +692,7 @@ export default function ProductsPage() {
 
         {/* Variations (children) - only in parent view */}
         {!isSkuView && hasVariations && isExpanded && (
-          <div className="bg-slate-900/30 border-t border-slate-700/30">
+          <div className="bg-[var(--card)]/30 border-t border-[var(--border)]/30">
             {product.variations!.map((variation) => renderProductRow(variation, true, true, isHiddenView))}
           </div>
         )}
@@ -716,8 +716,8 @@ export default function ProductsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">Products</h1>
-            <p className="text-slate-400 mt-1">Manage your product catalog and variations</p>
+            <h1 className="text-3xl font-bold text-[var(--foreground)]">Products</h1>
+            <p className="text-[var(--muted-foreground)] mt-1">Manage your product catalog and variations</p>
           </div>
           <div className="flex gap-3">
             {hiddenProducts.length > 0 && (
@@ -775,13 +775,13 @@ export default function ProductsPage() {
           <CardContent className="py-4 overflow-visible">
             <div className="flex gap-4 items-center">
               {/* View Mode Toggle */}
-              <div className="flex bg-slate-800 rounded-lg p-1">
+              <div className="flex bg-[var(--secondary)] rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('parent')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                     viewMode === 'parent' 
-                      ? 'bg-cyan-600 text-white' 
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-cyan-600 text-[var(--foreground)]' 
+                      : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                   }`}
                 >
                   <LayoutGrid className="w-4 h-4" />
@@ -791,8 +791,8 @@ export default function ProductsPage() {
                   onClick={() => setViewMode('sku')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                     viewMode === 'sku' 
-                      ? 'bg-cyan-600 text-white' 
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-cyan-600 text-[var(--foreground)]' 
+                      : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                   }`}
                 >
                   <List className="w-4 h-4" />
@@ -802,13 +802,13 @@ export default function ProductsPage() {
 
               {/* Search */}
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--muted-foreground)]" />
                 <input
                   type="text"
                   placeholder="Search by SKU, ASIN, name, or title..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
@@ -829,7 +829,7 @@ export default function ProductsPage() {
                       className="fixed inset-0 z-40" 
                       onClick={() => setShowSortMenu(false)} 
                     />
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 overflow-visible">
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--secondary)] border border-[var(--border)] rounded-lg shadow-2xl z-50 py-1 overflow-visible">
                       {SORT_OPTIONS.map((option) => (
                         <button
                           key={option.id}
@@ -840,7 +840,7 @@ export default function ProductsPage() {
                           className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-700 ${
                             sortOption === option.id 
                               ? 'text-cyan-400 bg-slate-700/50' 
-                              : 'text-white'
+                              : 'text-[var(--foreground)]'
                           }`}
                         >
                           {option.label}
@@ -856,28 +856,28 @@ export default function ProductsPage() {
 
         {/* Stats Summary */}
         <div className="grid grid-cols-4 gap-4">
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-            <p className="text-sm text-slate-400">
+          <div className="bg-[var(--secondary)]/50 border border-[var(--border)]/50 rounded-xl p-4">
+            <p className="text-sm text-[var(--muted-foreground)]">
               {viewMode === 'parent' ? 'Total Products' : 'Child SKUs'}
             </p>
-            <p className="text-2xl font-bold text-white mt-1">
+            <p className="text-2xl font-bold text-[var(--foreground)] mt-1">
               {viewMode === 'parent' ? products.length : allSkuProducts.length}
             </p>
           </div>
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-            <p className="text-sm text-slate-400">Parent Items</p>
-            <p className="text-2xl font-bold text-white mt-1">
+          <div className="bg-[var(--secondary)]/50 border border-[var(--border)]/50 rounded-xl p-4">
+            <p className="text-sm text-[var(--muted-foreground)]">Parent Items</p>
+            <p className="text-2xl font-bold text-[var(--foreground)] mt-1">
               {products.filter(p => p.isParent || (p.variations && p.variations.length > 0)).length}
             </p>
           </div>
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-            <p className="text-sm text-slate-400">Variations</p>
-            <p className="text-2xl font-bold text-white mt-1">
+          <div className="bg-[var(--secondary)]/50 border border-[var(--border)]/50 rounded-xl p-4">
+            <p className="text-sm text-[var(--muted-foreground)]">Variations</p>
+            <p className="text-2xl font-bold text-[var(--foreground)] mt-1">
               {products.reduce((sum, p) => sum + (p.variations?.length || 0), 0)}
             </p>
           </div>
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-            <p className="text-sm text-slate-400">Hidden</p>
+          <div className="bg-[var(--secondary)]/50 border border-[var(--border)]/50 rounded-xl p-4">
+            <p className="text-sm text-[var(--muted-foreground)]">Hidden</p>
             <p className="text-2xl font-bold text-amber-400 mt-1">
               {hiddenProducts.length}
             </p>
@@ -903,10 +903,10 @@ export default function ProductsPage() {
             {sortedAndFilteredProducts.length === 0 ? (
               <div className="text-center py-12">
                 <Package className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                <p className="text-lg text-slate-400">
+                <p className="text-lg text-[var(--muted-foreground)]">
                   {viewMode === 'sku' ? 'No child SKUs found' : 'No products found'}
                 </p>
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-sm text-[var(--muted-foreground)] mt-1">
                   {viewMode === 'sku' 
                     ? 'Products without parent relationships will not appear here'
                     : 'Add products or sync from Amazon'
@@ -929,7 +929,7 @@ export default function ProductsPage() {
         title="Add New Product"
         size="lg"
       >
-        <p className="text-slate-400">Product creation form coming soon. For now, sync products from Amazon using the Settings page.</p>
+        <p className="text-[var(--muted-foreground)]">Product creation form coming soon. For now, sync products from Amazon using the Settings page.</p>
         <ModalFooter>
           <Button variant="ghost" onClick={() => setShowAddProduct(false)}>
             Close

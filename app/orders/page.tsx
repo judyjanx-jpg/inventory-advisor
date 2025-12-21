@@ -368,8 +368,8 @@ export default function OrdersPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">Orders & Sales</h1>
-            <p className="text-slate-400 mt-1">Track orders and view sales history</p>
+            <h1 className="text-3xl font-bold text-[var(--foreground)]">Orders & Sales</h1>
+            <p className="text-[var(--muted-foreground)] mt-1">Track orders and view sales history</p>
           </div>
           {activeTab === 'orders' && (
             <Button onClick={syncOrders} loading={syncing}>
@@ -380,13 +380,13 @@ export default function OrdersPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 border-b border-slate-700">
+        <div className="flex gap-2 border-b border-[var(--border)]">
           <button
             onClick={() => setActiveTab('orders')}
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'orders'
                 ? 'text-cyan-400 border-b-2 border-cyan-400'
-                : 'text-slate-400 hover:text-slate-300'
+                : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -399,7 +399,7 @@ export default function OrdersPage() {
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'sales'
                 ? 'text-cyan-400 border-b-2 border-cyan-400'
-                : 'text-slate-400 hover:text-slate-300'
+                : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -419,11 +419,11 @@ export default function OrdersPage() {
                   <div className="relative z-50">
                     <button
                       onClick={() => setShowOrdersDateDropdown(!showOrdersDateDropdown)}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white hover:bg-slate-700 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
                     >
-                      <Calendar className="w-4 h-4 text-slate-400" />
+                      <Calendar className="w-4 h-4 text-[var(--muted-foreground)]" />
                       <span>{getDateFilterLabel(ordersDateFilter)}</span>
-                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showOrdersDateDropdown ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`w-4 h-4 text-[var(--muted-foreground)] transition-transform ${showOrdersDateDropdown ? 'rotate-180' : ''}`} />
                     </button>
                     
                     {showOrdersDateDropdown && (
@@ -433,7 +433,7 @@ export default function OrdersPage() {
                           className="fixed inset-0 z-40" 
                           onClick={() => setShowOrdersDateDropdown(false)}
                         />
-                        <div className="absolute top-full left-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
+                        <div className="absolute top-full left-0 mt-2 w-64 bg-[var(--secondary)] border border-[var(--border)] rounded-lg shadow-xl z-50">
                           <div className="p-2 space-y-1">
                             {(['today', 'yesterday', '3d', '7d', '30d', 'ytd', '365d', 'all'] as DateFilterType[]).map((filter) => (
                               <button
@@ -444,20 +444,20 @@ export default function OrdersPage() {
                                 }}
                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                                   ordersDateFilter === filter
-                                    ? 'bg-cyan-600 text-white'
-                                    : 'text-slate-300 hover:bg-slate-700'
+                                    ? 'bg-cyan-600 text-[var(--foreground)]'
+                                    : 'text-[var(--foreground)] hover:bg-[var(--muted)]'
                                 }`}
                               >
                                 {getDateFilterLabel(filter)}
                               </button>
                             ))}
-                            <div className="border-t border-slate-700 pt-2 mt-2">
+                            <div className="border-t border-[var(--border)] pt-2 mt-2">
                               <button
                                 onClick={() => setOrdersDateFilter('custom')}
                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                                   ordersDateFilter === 'custom'
-                                    ? 'bg-cyan-600 text-white'
-                                    : 'text-slate-300 hover:bg-slate-700'
+                                    ? 'bg-cyan-600 text-[var(--foreground)]'
+                                    : 'text-[var(--foreground)] hover:bg-[var(--muted)]'
                                 }`}
                               >
                                 Custom Range
@@ -468,18 +468,18 @@ export default function OrdersPage() {
                                     type="date"
                                     value={ordersCustomStartDate}
                                     onChange={(e) => setOrdersCustomStartDate(e.target.value)}
-                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm"
+                                    className="w-full px-3 py-2 bg-[var(--card)] border border-slate-600 rounded-lg text-[var(--foreground)] text-sm"
                                   />
                                   <input
                                     type="date"
                                     value={ordersCustomEndDate}
                                     onChange={(e) => setOrdersCustomEndDate(e.target.value)}
-                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm"
+                                    className="w-full px-3 py-2 bg-[var(--card)] border border-slate-600 rounded-lg text-[var(--foreground)] text-sm"
                                   />
                                   <button
                                     onClick={handleOrdersCustomDateApply}
                                     disabled={!ordersCustomStartDate || !ordersCustomEndDate}
-                                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white text-sm rounded-lg"
+                                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-[var(--foreground)] text-sm rounded-lg"
                                   >
                                     Apply
                                   </button>
@@ -495,21 +495,21 @@ export default function OrdersPage() {
                   {/* Sort Order Toggle */}
                   <button
                     onClick={() => setOrdersSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white hover:bg-slate-700 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
                   >
-                    <ArrowUpDown className="w-4 h-4 text-slate-400" />
+                    <ArrowUpDown className="w-4 h-4 text-[var(--muted-foreground)]" />
                     <span>{ordersSortOrder === 'desc' ? 'Newest First' : 'Oldest First'}</span>
                   </button>
 
                   {/* Search */}
                   <div className="flex-1 min-w-64 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--muted-foreground)]" />
                     <input
                       type="text"
                       placeholder="Search by order ID, SKU, or product..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      className="w-full pl-10 pr-4 py-2 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                     />
                   </div>
                 </div>
@@ -556,8 +556,8 @@ export default function OrdersPage() {
                 {filteredOrders.length === 0 ? (
                   <div className="text-center py-12">
                     <ShoppingCart className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                    <p className="text-lg text-slate-400">No orders found</p>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-lg text-[var(--muted-foreground)]">No orders found</p>
+                    <p className="text-sm text-[var(--muted-foreground)] mt-1">
                       {orders.length === 0 ? 'Sync from Amazon to import orders' : 'Try adjusting your filters'}
                     </p>
                     {orders.length === 0 && (
@@ -570,7 +570,7 @@ export default function OrdersPage() {
                 ) : (
                   <>
                     {/* Table Header */}
-                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-800/30 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-700/50">
+                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-[var(--secondary)]/30 text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider border-b border-[var(--border)]/50">
                       <div className="col-span-3">Order ID</div>
                       <div className="col-span-2">Date</div>
                       <div className="col-span-2">Status</div>
@@ -587,19 +587,19 @@ export default function OrdersPage() {
                         const orderId = order.id
                         
                         return (
-                          <div key={order.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/30 items-center">
+                          <div key={order.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-[var(--secondary)]/30 items-center">
                             <div className="col-span-3">
-                              <p className="font-mono text-white text-sm truncate" title={orderId}>
+                              <p className="font-mono text-[var(--foreground)] text-sm truncate" title={orderId}>
                                 {orderId}
                               </p>
                               {order.fulfillmentChannel && (
-                                <span className="text-xs text-slate-500">{order.fulfillmentChannel}</span>
+                                <span className="text-xs text-[var(--muted-foreground)]">{order.fulfillmentChannel}</span>
                               )}
                             </div>
                             <div className="col-span-2">
-                              <p className="text-white text-sm">{formatDate(new Date(order.purchaseDate))}</p>
+                              <p className="text-[var(--foreground)] text-sm">{formatDate(new Date(order.purchaseDate))}</p>
                               {order.shipCity && (
-                                <p className="text-xs text-slate-500 truncate">
+                                <p className="text-xs text-[var(--muted-foreground)] truncate">
                                   {order.shipCity}, {order.shipState || ''}
                                 </p>
                               )}
@@ -610,10 +610,10 @@ export default function OrdersPage() {
                             <div className="col-span-2">
                               {firstItem && (
                                 <>
-                                  <p className="text-white text-sm truncate" title={firstItem.product?.title || firstItem.masterSku}>
+                                  <p className="text-[var(--foreground)] text-sm truncate" title={firstItem.product?.title || firstItem.masterSku}>
                                     {firstItem.product?.title || firstItem.masterSku}
                                   </p>
-                                  <p className="text-xs text-slate-500 font-mono">
+                                  <p className="text-xs text-[var(--muted-foreground)] font-mono">
                                     {firstItem.product?.sku || firstItem.masterSku}
                                   </p>
                                   {order.orderItems.length > 1 && (
@@ -623,10 +623,10 @@ export default function OrdersPage() {
                               )}
                             </div>
                             <div className="col-span-1 text-right">
-                              <p className="text-white">{itemCount}</p>
+                              <p className="text-[var(--foreground)]">{itemCount}</p>
                             </div>
                             <div className="col-span-2 text-right">
-                              <p className="text-lg font-semibold text-white">
+                              <p className="text-lg font-semibold text-[var(--foreground)]">
                                 {formatCurrency(orderTotal)}
                               </p>
                             </div>
@@ -635,11 +635,11 @@ export default function OrdersPage() {
                       })}
                     </div>
                     {ordersPagination?.hasMore && (
-                      <div className="p-4 border-t border-slate-700/50">
+                      <div className="p-4 border-t border-[var(--border)]/50">
                         <button
                           onClick={() => fetchOrders(ordersOffset + 100, true)}
                           disabled={loadingMoreOrders}
-                          className="w-full py-3 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+                          className="w-full py-3 bg-[var(--secondary)] hover:bg-[var(--muted)] disabled:bg-[var(--secondary)] rounded-lg text-[var(--foreground)] font-medium transition-colors flex items-center justify-center gap-2"
                         >
                           {loadingMoreOrders ? (
                             <>
@@ -650,7 +650,7 @@ export default function OrdersPage() {
                             <>Load More Orders</>
                           )}
                         </button>
-                        <p className="text-center text-sm text-slate-500 mt-2">
+                        <p className="text-center text-sm text-[var(--muted-foreground)] mt-2">
                           Showing {orders.length} of {ordersPagination.total} orders
                         </p>
                       </div>
@@ -667,8 +667,8 @@ export default function OrdersPage() {
               <CardContent className="py-4">
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-slate-400" />
-                    <span className="text-sm text-slate-400">Date Range:</span>
+                    <Calendar className="w-5 h-5 text-[var(--muted-foreground)]" />
+                    <span className="text-sm text-[var(--muted-foreground)]">Date Range:</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {(['7d', '30d', '90d', '1y', '2y'] as const).map((range) => (
@@ -677,8 +677,8 @@ export default function OrdersPage() {
                         onClick={() => setSalesDateRange(range)}
                         className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                           salesDateRange === range
-                            ? 'bg-cyan-600 text-white'
-                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            ? 'bg-cyan-600 text-[var(--foreground)]'
+                            : 'bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--muted)]'
                         }`}
                       >
                         {range === '7d' ? '7 Days' : 
@@ -691,8 +691,8 @@ export default function OrdersPage() {
                       onClick={() => setSalesDateRange('custom')}
                       className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                         salesDateRange === 'custom'
-                          ? 'bg-cyan-600 text-white'
-                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                          ? 'bg-cyan-600 text-[var(--foreground)]'
+                          : 'bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--muted)]'
                       }`}
                     >
                       Custom
@@ -704,19 +704,19 @@ export default function OrdersPage() {
                         type="date"
                         value={customStartDate}
                         onChange={(e) => setCustomStartDate(e.target.value)}
-                        className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                        className="px-3 py-1.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                       />
-                      <span className="text-slate-400">to</span>
+                      <span className="text-[var(--muted-foreground)]">to</span>
                       <input
                         type="date"
                         value={customEndDate}
                         onChange={(e) => setCustomEndDate(e.target.value)}
-                        className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                        className="px-3 py-1.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                       />
                       <button
                         onClick={handleCustomDateApply}
                         disabled={!customStartDate || !customEndDate}
-                        className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white text-sm rounded-lg transition-colors"
+                        className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-[var(--foreground)] text-sm rounded-lg transition-colors"
                       >
                         Apply
                       </button>
@@ -760,13 +760,13 @@ export default function OrdersPage() {
             <Card>
               <CardContent className="py-4">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--muted-foreground)]" />
                   <input
                     type="text"
                     placeholder="Search by SKU, product name, or channel SKU..."
                     value={salesSearchTerm}
                     onChange={(e) => setSalesSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                   />
                 </div>
               </CardContent>
@@ -795,8 +795,8 @@ export default function OrdersPage() {
                 ) : filteredSalesHistory.length === 0 ? (
                   <div className="text-center py-12">
                     <TrendingUp className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                    <p className="text-lg text-slate-400">No sales history found</p>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-lg text-[var(--muted-foreground)]">No sales history found</p>
+                    <p className="text-sm text-[var(--muted-foreground)] mt-1">
                       {salesHistory.length === 0 
                         ? 'Sync sales history from Amazon Settings to import data'
                         : 'No results match your search'}
@@ -805,7 +805,7 @@ export default function OrdersPage() {
                 ) : (
                   <>
                     <div className="divide-y divide-slate-700/50">
-                      <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-800/30 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-[var(--secondary)]/30 text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">
                         <div className="col-span-2">Date</div>
                         <div className="col-span-3">Product</div>
                         <div className="col-span-2">Channel</div>
@@ -814,37 +814,37 @@ export default function OrdersPage() {
                         <div className="col-span-2 text-right">Fees</div>
                       </div>
                       {filteredSalesHistory.map((item) => (
-                        <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/30">
+                        <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-[var(--secondary)]/30">
                           <div className="col-span-2">
-                            <p className="text-white">{formatDate(new Date(item.date))}</p>
+                            <p className="text-[var(--foreground)]">{formatDate(new Date(item.date))}</p>
                           </div>
                           <div className="col-span-3">
-                            <p className="text-white font-medium">{item.skuMapping?.product?.title || item.masterSku}</p>
-                            <p className="text-xs text-slate-400 font-mono">{item.masterSku}</p>
+                            <p className="text-[var(--foreground)] font-medium">{item.skuMapping?.product?.title || item.masterSku}</p>
+                            <p className="text-xs text-[var(--muted-foreground)] font-mono">{item.masterSku}</p>
                           </div>
                           <div className="col-span-2">
-                            <span className="px-2 py-0.5 text-xs rounded bg-slate-700 text-slate-300">
+                            <span className="px-2 py-0.5 text-xs rounded bg-[var(--muted)] text-[var(--foreground)]">
                               {item.channel}
                             </span>
                           </div>
                           <div className="col-span-1 text-right">
-                            <p className="text-white">{item.unitsSold}</p>
+                            <p className="text-[var(--foreground)]">{item.unitsSold}</p>
                           </div>
                           <div className="col-span-2 text-right">
-                            <p className="text-white font-medium">{formatCurrency(Number(item.revenue))}</p>
+                            <p className="text-[var(--foreground)] font-medium">{formatCurrency(Number(item.revenue))}</p>
                           </div>
                           <div className="col-span-2 text-right">
-                            <p className="text-slate-400">{formatCurrency(Number(item.fees))}</p>
+                            <p className="text-[var(--muted-foreground)]">{formatCurrency(Number(item.fees))}</p>
                           </div>
                         </div>
                       ))}
                     </div>
                     {salesHasMore && (
-                      <div className="p-4 border-t border-slate-700/50">
+                      <div className="p-4 border-t border-[var(--border)]/50">
                         <button
                           onClick={() => fetchSalesHistory(salesOffset + 200, true)}
                           disabled={loadingMoreSales}
-                          className="w-full py-3 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+                          className="w-full py-3 bg-[var(--secondary)] hover:bg-[var(--muted)] disabled:bg-[var(--secondary)] rounded-lg text-[var(--foreground)] font-medium transition-colors flex items-center justify-center gap-2"
                         >
                           {loadingMoreSales ? (
                             <>
@@ -855,7 +855,7 @@ export default function OrdersPage() {
                             <>Load More Sales</>
                           )}
                         </button>
-                        <p className="text-center text-sm text-slate-500 mt-2">
+                        <p className="text-center text-sm text-[var(--muted-foreground)] mt-2">
                           Showing {salesHistory.length} of {salesSummary?.totalRecords || 0} records
                         </p>
                       </div>

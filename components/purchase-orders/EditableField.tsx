@@ -86,7 +86,7 @@ export default function EditableField({
         min={min}
         max={max}
         step={step}
-        className={`${className} bg-slate-700 border-2 border-cyan-500 rounded px-2 py-1 focus:outline-none`}
+        className={`${className} bg-[var(--muted)] border-2 border-cyan-500 rounded px-2 py-1 focus:outline-none`}
         placeholder={placeholder}
       />
     )
@@ -95,13 +95,13 @@ export default function EditableField({
   return (
     <div
       onClick={handleClick}
-      className={`${className} cursor-pointer hover:bg-slate-700/50 rounded px-2 py-1 transition-colors group`}
+      className={`${className} cursor-pointer hover:bg-[var(--muted)]/50 rounded px-2 py-1 transition-colors group`}
       title="Click to edit"
     >
       <span className="group-hover:text-cyan-400 transition-colors">
-        {displayValue || <span className="text-slate-500 italic">{placeholder || 'Click to edit'}</span>}
+        {displayValue || <span className="text-[var(--muted-foreground)] italic">{placeholder || 'Click to edit'}</span>}
       </span>
-      <span className="ml-2 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity text-xs">
+      <span className="ml-2 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity text-xs">
         ✏️
       </span>
     </div>

@@ -83,7 +83,7 @@ interface PurchaseOrder {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
-  draft: { label: 'Draft', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', icon: Edit },
+  draft: { label: 'Draft', color: 'bg-slate-500/20 text-[var(--muted-foreground)] border-slate-500/30', icon: Edit },
   sent: { label: 'Sent', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: Send },
   confirmed: { label: 'Confirmed', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', icon: CheckCircle },
   shipped: { label: 'Shipped', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', icon: Truck },
@@ -458,7 +458,7 @@ export default function PurchaseOrderDetailPage() {
     return (
       <MainLayout>
         <div className="text-center py-16">
-          <p className="text-slate-400">Purchase order not found</p>
+          <p className="text-[var(--muted-foreground)]">Purchase order not found</p>
           <Button variant="ghost" onClick={() => router.push('/purchase-orders')} className="mt-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to All POs
@@ -481,7 +481,7 @@ export default function PurchaseOrderDetailPage() {
             Back to All POs
           </Button>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-white">{po.poNumber}</h1>
+            <h1 className="text-3xl font-bold text-[var(--foreground)]">{po.poNumber}</h1>
           </div>
           <div className="flex items-center gap-2">
             {(po.status === 'draft' || po.status === 'sent') && (
@@ -524,7 +524,7 @@ export default function PurchaseOrderDetailPage() {
             {/* Row 1: Supplier | Created Date | Confirmed Date */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <div>
-                <p className="text-sm text-slate-400 mb-2">Supplier</p>
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Supplier</p>
                 <EditableField
                   value={po.supplier.name}
                   onChange={(value) => {
@@ -532,26 +532,26 @@ export default function PurchaseOrderDetailPage() {
                     console.log('Update supplier:', value)
                   }}
                   type="text"
-                  className="text-white font-medium"
+                  className="text-[var(--foreground)] font-medium"
                 />
               </div>
               <div>
-                <p className="text-sm text-slate-400 mb-2">Created Date</p>
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Created Date</p>
                 <EditableField
                   value={po.orderDate || po.createdDate}
                   onChange={(value) => handleFieldUpdate('orderDate', value)}
                   type="date"
-                  className="text-white font-medium"
+                  className="text-[var(--foreground)] font-medium"
                   formatValue={(val) => formatDate(new Date(val as string))}
                 />
               </div>
               <div>
-                <p className="text-sm text-slate-400 mb-2">Confirmed Date</p>
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Confirmed Date</p>
                 <EditableField
                   value={po.confirmedDate || ''}
                   onChange={(value) => handleFieldUpdate('confirmedDate', value)}
                   type="date"
-                  className="text-white font-medium"
+                  className="text-[var(--foreground)] font-medium"
                   formatValue={(val) => val ? formatDate(new Date(val as string)) : 'Not set'}
                   placeholder="Not set"
                 />
@@ -561,54 +561,54 @@ export default function PurchaseOrderDetailPage() {
             {/* Row 2: Expected Date | Exp. Lead Time | Ship Date | Actual Lead Time */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div>
-                <p className="text-sm text-slate-400 mb-2">Expected Date</p>
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Expected Date</p>
                 <EditableField
                   value={po.expectedArrivalDate || ''}
                   onChange={(value) => handleFieldUpdate('expectedArrivalDate', value)}
                   type="date"
-                  className="text-white font-medium"
+                  className="text-[var(--foreground)] font-medium"
                   formatValue={(val) => val ? formatDate(new Date(val as string)) : 'Not set'}
                   placeholder="Not set"
                 />
               </div>
               <div>
-                <p className="text-sm text-slate-400 mb-2">Exp. Lead Time</p>
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Exp. Lead Time</p>
                 <EditableField
                   value={calculateLeadTime() || 0}
                   onChange={(value) => handleFieldUpdate('leadTimeDays', value)}
                   type="number"
-                  className="text-white font-medium"
+                  className="text-[var(--foreground)] font-medium"
                   formatValue={(val) => `${val} days`}
                   min={0}
                 />
               </div>
               <div>
-                <p className="text-sm text-slate-400 mb-2">Ship Date</p>
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Ship Date</p>
                 <EditableField
                   value={po.actualShipDate || ''}
                   onChange={(value) => handleFieldUpdate('actualShipDate', value)}
                   type="date"
-                  className="text-white font-medium"
+                  className="text-[var(--foreground)] font-medium"
                   formatValue={(val) => val ? formatDate(new Date(val as string)) : 'Not set'}
                   placeholder="Not set"
                 />
               </div>
               <div>
-                <p className="text-sm text-slate-400 mb-2">Actual Lead Time</p>
-                <div className="text-white font-medium">
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Actual Lead Time</p>
+                <div className="text-[var(--foreground)] font-medium">
                   {calculateActualLeadTime() !== null ? `${calculateActualLeadTime()} days` : 'Not set'}
                 </div>
               </div>
             </div>
 
             {po.notes && (
-              <div className="mt-6 pt-6 border-t border-slate-700">
-                <p className="text-sm text-slate-400 mb-2">Notes</p>
+              <div className="mt-6 pt-6 border-t border-[var(--border)]">
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Notes</p>
                 <EditableField
                   value={po.notes}
                   onChange={(value) => handleFieldUpdate('notes', value)}
                   type="text"
-                  className="text-white"
+                  className="text-[var(--foreground)]"
                 />
               </div>
             )}
@@ -621,7 +621,7 @@ export default function PurchaseOrderDetailPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <CardTitle>Items</CardTitle>
-                <span className="px-2 py-1 text-xs bg-slate-700 text-slate-300 rounded">
+                <span className="px-2 py-1 text-xs bg-[var(--muted)] text-[var(--foreground)] rounded">
                   {po.items.length} items
                 </span>
               </div>
@@ -636,19 +636,19 @@ export default function PurchaseOrderDetailPage() {
                 </Button>
                 {po && <ExportDropdown po={po} />}
                 <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--muted-foreground)]" />
                   <input
                     type="text"
                     placeholder="Filter items..."
                     value={filterTerm}
                     onChange={(e) => setFilterTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="pl-10 pr-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   />
                 </div>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <option value="sku">Sort by SKU</option>
                   <option value="product">Sort by Product</option>
@@ -675,7 +675,7 @@ export default function PurchaseOrderDetailPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="text-sm text-slate-400 border-b border-slate-700/50">
+                  <tr className="text-sm text-[var(--muted-foreground)] border-b border-[var(--border)]/50">
                     <th className="text-left py-3 font-medium w-12">
                       <input
                         type="checkbox"
@@ -687,7 +687,7 @@ export default function PurchaseOrderDetailPage() {
                             setSelectedItems(new Set())
                           }
                         }}
-                        className="rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+                        className="rounded border-[var(--border)] bg-[var(--card)] text-cyan-500 focus:ring-cyan-500"
                       />
                     </th>
                     <th className="text-left py-3 font-medium">SKU</th>
@@ -703,23 +703,23 @@ export default function PurchaseOrderDetailPage() {
                 </thead>
                 <tbody>
                   {sortedAndFilteredItems.map((item) => (
-                    <tr key={item.id} className="text-sm border-b border-slate-700/30 hover:bg-slate-800/30">
+                    <tr key={item.id} className="text-sm border-b border-[var(--border)]/30 hover:bg-[var(--card)]/30">
                       <td className="py-3">
                         <input
                           type="checkbox"
                           checked={selectedItems.has(item.id)}
                           onChange={() => toggleItemSelection(item.id)}
-                          className="rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+                          className="rounded border-[var(--border)] bg-[var(--card)] text-cyan-500 focus:ring-cyan-500"
                         />
                       </td>
-                      <td className="py-3 font-mono text-white">{item.masterSku}</td>
-                      <td className="py-3 text-slate-300">{item.product?.title || 'Unknown'}</td>
+                      <td className="py-3 font-mono text-[var(--foreground)]">{item.masterSku}</td>
+                      <td className="py-3 text-[var(--foreground)]">{item.product?.title || 'Unknown'}</td>
                       <td className="py-3 text-right">
                         <EditableField
                           value={item.quantityOrdered}
                           onChange={(value) => handleItemUpdate(item.id, 'quantityOrdered', value)}
                           type="number"
-                          className="text-white inline-block"
+                          className="text-[var(--foreground)] inline-block"
                           min={0}
                         />
                       </td>
@@ -732,14 +732,14 @@ export default function PurchaseOrderDetailPage() {
                         {item.quantityDamaged > 0 ? (
                           <span className="text-red-400">{item.quantityDamaged}</span>
                         ) : (
-                          <span className="text-slate-500">-</span>
+                          <span className="text-[var(--muted-foreground)]">-</span>
                         )}
                       </td>
                       <td className="py-3 text-right">
                         {(item.quantityBackordered || 0) > 0 ? (
                           <span className="text-amber-400">{item.quantityBackordered}</span>
                         ) : (
-                          <span className="text-slate-500">-</span>
+                          <span className="text-[var(--muted-foreground)]">-</span>
                         )}
                       </td>
                       <td className="py-3 text-right">
@@ -747,14 +747,14 @@ export default function PurchaseOrderDetailPage() {
                           value={Number(item.unitCost)}
                           onChange={(value) => handleItemUpdate(item.id, 'unitCost', value)}
                           type="number"
-                          className="text-slate-300 inline-block"
+                          className="text-[var(--foreground)] inline-block"
                           formatValue={(val) => formatCurrency(val as number)}
                           parseValue={(val) => parseFloat(val) || 0}
                           min={0}
                           step={0.01}
                         />
                       </td>
-                      <td className="py-3 text-right text-white font-medium">{formatCurrency(item.lineTotal)}</td>
+                      <td className="py-3 text-right text-[var(--foreground)] font-medium">{formatCurrency(item.lineTotal)}</td>
                       <td className="py-3">
                         <Button
                           variant="ghost"
@@ -792,8 +792,8 @@ export default function PurchaseOrderDetailPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex justify-between">
-              <span className="text-slate-400">Items Subtotal</span>
-              <span className="text-white font-medium">{formatCurrency(po.subtotal)}</span>
+              <span className="text-[var(--muted-foreground)]">Items Subtotal</span>
+              <span className="text-[var(--foreground)] font-medium">{formatCurrency(po.subtotal)}</span>
             </div>
           </CardContent>
         </Card>
@@ -846,8 +846,8 @@ export default function PurchaseOrderDetailPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
-              <span className="text-white font-semibold text-lg">Grand Total</span>
-              <span className="text-white font-bold text-2xl">{formatCurrency(po.total)}</span>
+              <span className="text-[var(--foreground)] font-semibold text-lg">Grand Total</span>
+              <span className="text-[var(--foreground)] font-bold text-2xl">{formatCurrency(po.total)}</span>
             </div>
           </CardContent>
         </Card>
@@ -897,33 +897,33 @@ export default function PurchaseOrderDetailPage() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Shipping Cost</label>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Shipping Cost</label>
             <input
               type="number"
               step="0.01"
               value={costsForm.shippingCost}
               onChange={(e) => setCostsForm({ ...costsForm, shippingCost: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Tax</label>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Tax</label>
             <input
               type="number"
               step="0.01"
               value={costsForm.tax}
               onChange={(e) => setCostsForm({ ...costsForm, tax: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Other Costs</label>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Other Costs</label>
             <input
               type="number"
               step="0.01"
               value={costsForm.otherCosts}
               onChange={(e) => setCostsForm({ ...costsForm, otherCosts: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
         </div>
@@ -941,21 +941,21 @@ export default function PurchaseOrderDetailPage() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Order Date</label>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Order Date</label>
             <input
               type="date"
               value={datesForm.orderDate}
               onChange={(e) => setDatesForm({ ...datesForm, orderDate: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Expected Arrival Date</label>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Expected Arrival Date</label>
             <input
               type="date"
               value={datesForm.expectedArrivalDate}
               onChange={(e) => setDatesForm({ ...datesForm, expectedArrivalDate: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
         </div>
@@ -993,19 +993,19 @@ export default function PurchaseOrderDetailPage() {
             const current = receiveItems[item.id] || { received: 0, damaged: 0, backorder: 0 }
             
             return (
-              <div key={item.id} className="p-4 bg-slate-800/50 rounded-lg">
+              <div key={item.id} className="p-4 bg-[var(--card)]/50 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <p className="font-medium text-white">{item.masterSku}</p>
-                    <p className="text-sm text-slate-400">{item.product?.title}</p>
+                    <p className="font-medium text-[var(--foreground)]">{item.masterSku}</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">{item.product?.title}</p>
                   </div>
-                  <div className="text-sm text-slate-400">
+                  <div className="text-sm text-[var(--muted-foreground)]">
                     Ordered: {item.quantityOrdered} | Received: {item.quantityReceived} | Remaining: {remaining}
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Received</label>
+                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">Received</label>
                     <input
                       type="number"
                       min="0"
@@ -1015,11 +1015,11 @@ export default function PurchaseOrderDetailPage() {
                         ...receiveItems,
                         [item.id]: { ...current, received: parseInt(e.target.value) || 0 }
                       })}
-                      className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                      className="w-full px-2 py-1 bg-[var(--muted)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Damaged</label>
+                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">Damaged</label>
                     <input
                       type="number"
                       min="0"
@@ -1029,11 +1029,11 @@ export default function PurchaseOrderDetailPage() {
                         ...receiveItems,
                         [item.id]: { ...current, damaged: parseInt(e.target.value) || 0 }
                       })}
-                      className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                      className="w-full px-2 py-1 bg-[var(--muted)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Backorder</label>
+                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">Backorder</label>
                     <input
                       type="number"
                       min="0"
@@ -1043,7 +1043,7 @@ export default function PurchaseOrderDetailPage() {
                         ...receiveItems,
                         [item.id]: { ...current, backorder: parseInt(e.target.value) || 0 }
                       })}
-                      className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                      className="w-full px-2 py-1 bg-[var(--muted)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm"
                     />
                   </div>
                 </div>
@@ -1067,12 +1067,12 @@ export default function PurchaseOrderDetailPage() {
         size="md"
       >
         <div className="space-y-4">
-          <p className="text-slate-400 text-sm">
+          <p className="text-[var(--muted-foreground)] text-sm">
             Upload a CSV or Excel file with updated item costs, quantities, or other changes.
           </p>
-          <div className="border-2 border-dashed border-slate-700 rounded-lg p-8 text-center">
-            <FileSpreadsheet className="w-12 h-12 mx-auto text-slate-500 mb-4" />
-            <p className="text-slate-400 mb-2">Drop file here or click to browse</p>
+          <div className="border-2 border-dashed border-[var(--border)] rounded-lg p-8 text-center">
+            <FileSpreadsheet className="w-12 h-12 mx-auto text-[var(--muted-foreground)] mb-4" />
+            <p className="text-[var(--muted-foreground)] mb-2">Drop file here or click to browse</p>
             <input type="file" accept=".csv,.xlsx,.xls" className="hidden" id="upload-file" />
             <Button variant="ghost" onClick={() => document.getElementById('upload-file')?.click()}>
               <Upload className="w-4 h-4 mr-2" />
@@ -1095,7 +1095,7 @@ export default function PurchaseOrderDetailPage() {
         onClose={() => setShowDeleteConfirm(false)}
         title="Delete Purchase Order"
       >
-        <p className="text-slate-300 mb-4">
+        <p className="text-[var(--foreground)] mb-4">
           Are you sure you want to delete this purchase order? This action cannot be undone.
         </p>
         <ModalFooter>

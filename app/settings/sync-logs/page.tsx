@@ -152,18 +152,18 @@ export default function SyncLogsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/settings" className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-              <ArrowLeft className="w-5 h-5 text-slate-400" />
+            <Link href="/settings" className="p-2 hover:bg-[var(--card)] rounded-lg transition-colors">
+              <ArrowLeft className="w-5 h-5 text-[var(--muted-foreground)]" />
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-white">Sync Logs</h1>
-              <p className="text-slate-400 text-sm">Monitor API sync activity and data imports</p>
+              <h1 className="text-2xl font-bold text-[var(--foreground)]">Sync Logs</h1>
+              <p className="text-[var(--muted-foreground)] text-sm">Monitor API sync activity and data imports</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {/* Trigger Sync Buttons */}
             <div className="flex items-center gap-1 mr-2">
-              <span className="text-slate-400 text-sm mr-1">Trigger:</span>
+              <span className="text-[var(--muted-foreground)] text-sm mr-1">Trigger:</span>
               {[
                 { type: 'orders-report', label: 'Orders', color: 'blue' },
                 { type: 'inventory', label: 'Inventory', color: 'amber' },
@@ -189,7 +189,7 @@ export default function SyncLogsPage() {
             <button
               onClick={fetchLogs}
               disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-white transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--card)] hover:bg-[var(--hover-bg)] rounded-lg text-sm text-[var(--foreground)] transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
@@ -215,22 +215,22 @@ export default function SyncLogsPage() {
                         <Icon className={`w-5 h-5 text-${info.color}-400`} />
                       </div>
                       <div>
-                        <h3 className="font-medium text-white">{info.label}</h3>
-                        <p className="text-xs text-slate-400">Last 24h</p>
+                        <h3 className="font-medium text-[var(--foreground)]">{info.label}</h3>
+                        <p className="text-xs text-[var(--muted-foreground)]">Last 24h</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="flex items-center gap-1">
                         <CheckCircle className="w-3 h-3 text-emerald-400" />
-                        <span className="text-slate-300">{stats24h.success} success</span>
+                        <span className="text-[var(--foreground)]">{stats24h.success} success</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <XCircle className="w-3 h-3 text-red-400" />
-                        <span className="text-slate-300">{stats24h.failed} failed</span>
+                        <span className="text-[var(--foreground)]">{stats24h.failed} failed</span>
                       </div>
                     </div>
                     {(stats7d.totalProcessed > 0 || stats7d.totalCreated > 0) && (
-                      <div className="mt-2 pt-2 border-t border-slate-700 text-xs text-slate-400">
+                      <div className="mt-2 pt-2 border-t border-[var(--border)] text-xs text-[var(--muted-foreground)]">
                         7d: {stats7d.totalProcessed.toLocaleString()} processed, {stats7d.totalCreated.toLocaleString()} created
                       </div>
                     )}
@@ -243,7 +243,7 @@ export default function SyncLogsPage() {
 
         {/* Filter */}
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-400" />
+          <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
           <div className="flex gap-2">
             {filterOptions.map(opt => (
               <button
@@ -251,8 +251,8 @@ export default function SyncLogsPage() {
                 onClick={() => setFilter(opt.value)}
                 className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                   filter === opt.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    ? 'bg-blue-600 text-[var(--foreground)]'
+                    : 'bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--hover-bg)]'
                 }`}
               >
                 {opt.label}
@@ -277,19 +277,19 @@ export default function SyncLogsPage() {
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
-              <div className="p-8 text-center text-slate-400">
+              <div className="p-8 text-center text-[var(--muted-foreground)]">
                 <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
                 Loading sync logs...
               </div>
             ) : logs.length === 0 ? (
-              <div className="p-8 text-center text-slate-400">
+              <div className="p-8 text-center text-[var(--muted-foreground)]">
                 No sync logs found
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-700 text-slate-400">
+                    <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
                       <th className="text-left p-4 font-medium">Type</th>
                       <th className="text-left p-4 font-medium">Status</th>
                       <th className="text-left p-4 font-medium">Time</th>
@@ -306,11 +306,11 @@ export default function SyncLogsPage() {
                       const Icon = info.icon
 
                       return (
-                        <tr key={log.id} className="border-b border-slate-800 hover:bg-slate-800/50">
+                        <tr key={log.id} className="border-b border-[var(--border)] hover:bg-[var(--card)]/50">
                           <td className="p-4">
                             <div className="flex items-center gap-2">
                               <Icon className={`w-4 h-4 text-${info.color}-400`} />
-                              <span className="text-white">{info.label}</span>
+                              <span className="text-[var(--foreground)]">{info.label}</span>
                             </div>
                           </td>
                           <td className="p-4">
@@ -331,13 +331,13 @@ export default function SyncLogsPage() {
                               </span>
                             )}
                           </td>
-                          <td className="p-4 text-slate-300">
+                          <td className="p-4 text-[var(--foreground)]">
                             {formatTime(log.startedAt)}
                           </td>
-                          <td className="p-4 text-right text-slate-300">
+                          <td className="p-4 text-right text-[var(--foreground)]">
                             {formatDuration(log.duration)}
                           </td>
-                          <td className="p-4 text-right text-slate-300">
+                          <td className="p-4 text-right text-[var(--foreground)]">
                             {log.recordsProcessed > 0 ? log.recordsProcessed.toLocaleString() : '-'}
                           </td>
                           <td className="p-4 text-right text-emerald-400">
@@ -346,7 +346,7 @@ export default function SyncLogsPage() {
                           <td className="p-4 text-right text-blue-400">
                             {log.recordsUpdated > 0 ? log.recordsUpdated.toLocaleString() : '-'}
                           </td>
-                          <td className="p-4 text-slate-400 max-w-[200px] truncate">
+                          <td className="p-4 text-[var(--muted-foreground)] max-w-[200px] truncate">
                             {log.errorMessage || (log.metadata ? formatMetadata(log.metadata) : '-')}
                           </td>
                         </tr>

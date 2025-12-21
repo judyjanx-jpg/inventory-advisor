@@ -86,8 +86,8 @@ export default function DisplaySettingsPage() {
                 }`}
               >
                 <div className="flex flex-col items-center gap-3">
-                  <div className="w-16 h-12 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shadow-lg">
-                    <Moon className="w-6 h-6 text-slate-400" />
+                  <div className="w-16 h-12 rounded-lg bg-slate-900 border border-[var(--border)] flex items-center justify-center shadow-lg">
+                    <Moon className="w-6 h-6 text-[var(--muted-foreground)]" />
                   </div>
                   <div className="text-center">
                     <div className="font-medium text-[var(--foreground)]">Dark</div>
@@ -138,7 +138,7 @@ export default function DisplaySettingsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-[var(--muted-foreground)]">
               Choose how product titles are displayed throughout the app
             </p>
 
@@ -149,7 +149,7 @@ export default function DisplaySettingsPage() {
                   className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
                     settings.titleDisplay === option.value
                       ? 'border-cyan-500 bg-cyan-500/10'
-                      : 'border-slate-700 hover:border-slate-600'
+                      : 'border-[var(--border)] hover:border-[var(--border)]'
                   }`}
                 >
                   <input
@@ -158,19 +158,19 @@ export default function DisplaySettingsPage() {
                     value={option.value}
                     checked={settings.titleDisplay === option.value}
                     onChange={(e) => setSettings({ ...settings, titleDisplay: e.target.value as TitleDisplayMode })}
-                    className="mt-1 w-4 h-4 text-cyan-500 bg-slate-800 border-slate-600"
+                    className="mt-1 w-4 h-4 text-cyan-500 bg-[var(--card)] border-[var(--border)]"
                   />
                   <div>
-                    <div className="font-medium text-white">{option.label}</div>
-                    <div className="text-sm text-slate-400">{option.description}</div>
+                    <div className="font-medium text-[var(--foreground)]">{option.label}</div>
+                    <div className="text-sm text-[var(--muted-foreground)]">{option.description}</div>
                   </div>
                 </label>
               ))}
             </div>
 
             {settings.titleDisplay === 'short' && (
-              <div className="pt-4 border-t border-slate-700">
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+              <div className="pt-4 border-t border-[var(--border)]">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   Short title length (characters)
                 </label>
                 <input
@@ -179,28 +179,28 @@ export default function DisplaySettingsPage() {
                   max="100"
                   value={settings.shortTitleLength}
                   onChange={(e) => setSettings({ ...settings, shortTitleLength: parseInt(e.target.value) || 30 })}
-                  className="w-24 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                  className="w-24 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)]"
                 />
               </div>
             )}
 
             {/* Preview */}
-            <div className="pt-4 border-t border-slate-700">
-              <p className="text-sm font-medium text-slate-300 mb-2">Preview</p>
-              <div className="p-4 bg-slate-800/50 rounded-lg">
-                <div className="text-white font-medium">MJBC116</div>
+            <div className="pt-4 border-t border-[var(--border)]">
+              <p className="text-sm font-medium text-[var(--foreground)] mb-2">Preview</p>
+              <div className="p-4 bg-[var(--card)]/50 rounded-lg">
+                <div className="text-[var(--foreground)] font-medium">MJBC116</div>
                 {settings.titleDisplay === 'full' && (
-                  <div className="text-slate-400 text-sm mt-1">
+                  <div className="text-[var(--muted-foreground)] text-sm mt-1">
                     KISPER 24k Gold Box Chain Necklace – Thin, Dainty, Gold Plated Stainless Steel Jewelry for Women with Lobster Clasp, 16"
                   </div>
                 )}
                 {settings.titleDisplay === 'short' && (
-                  <div className="text-slate-400 text-sm mt-1">
+                  <div className="text-[var(--muted-foreground)] text-sm mt-1">
                     {`KISPER 24k Gold Box Chain Necklace – Thin, Dainty, Gold Plated Stainless Steel Jewelry for Women with Lobster Clasp, 16"`.slice(0, settings.shortTitleLength)}...
                   </div>
                 )}
                 {settings.titleDisplay === 'none' && (
-                  <div className="text-slate-500 text-sm mt-1 italic">
+                  <div className="text-[var(--muted-foreground)] text-sm mt-1 italic">
                     (title hidden)
                   </div>
                 )}
@@ -218,13 +218,13 @@ export default function DisplaySettingsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-[var(--muted-foreground)]">
               Configure default label sizes for printing
             </p>
 
             {/* FNSKU / FNSKU+TP Label Size */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                 FNSKU & FNSKU+Transparency Labels
               </label>
               <div className="flex gap-2">
@@ -235,21 +235,21 @@ export default function DisplaySettingsPage() {
                     className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
                       settings.fnskuLabelSize === size
                         ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                        : 'border-slate-700 text-slate-300 hover:border-slate-600'
+                        : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--border)]'
                     }`}
                   >
                     {size}"
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
                 Used for FNSKU-only and FNSKU+Transparency combo labels
               </p>
             </div>
 
             {/* TP Only Label Size */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                 Transparency-Only Labels
               </label>
               <div className="flex gap-2">
@@ -260,33 +260,33 @@ export default function DisplaySettingsPage() {
                     className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
                       settings.tpOnlyLabelSize === size
                         ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400'
-                        : 'border-slate-700 text-slate-300 hover:border-slate-600'
+                        : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--border)]'
                     }`}
                   >
                     {size}"
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
                 Used for products that already have FNSKU on packaging
               </p>
             </div>
 
             {/* Label Type Info */}
-            <div className="pt-4 border-t border-slate-700">
-              <p className="text-sm font-medium text-slate-300 mb-3">Label Types (set per product)</p>
+            <div className="pt-4 border-t border-[var(--border)]">
+              <p className="text-sm font-medium text-[var(--foreground)] mb-3">Label Types (set per product)</p>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="w-24 text-slate-400">FNSKU+TP:</span>
-                  <span className="text-white">Barcode + Transparency QR code (combo label)</span>
+                  <span className="w-24 text-[var(--muted-foreground)]">FNSKU+TP:</span>
+                  <span className="text-[var(--foreground)]">Barcode + Transparency QR code (combo label)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-24 text-slate-400">FNSKU:</span>
-                  <span className="text-white">Barcode only (no transparency)</span>
+                  <span className="w-24 text-[var(--muted-foreground)]">FNSKU:</span>
+                  <span className="text-[var(--foreground)]">Barcode only (no transparency)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-24 text-slate-400">TP Only:</span>
-                  <span className="text-white">Transparency QR only (product already has FNSKU)</span>
+                  <span className="w-24 text-[var(--muted-foreground)]">TP Only:</span>
+                  <span className="text-[var(--foreground)]">Transparency QR only (product already has FNSKU)</span>
                 </div>
               </div>
             </div>

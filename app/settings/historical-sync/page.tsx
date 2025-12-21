@@ -152,7 +152,7 @@ export default function HistoricalSyncPage() {
                 value={totalDays}
                 onChange={(e) => setTotalDays(parseInt(e.target.value) || 720)}
                 disabled={syncState?.isRunning}
-                className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-800 text-white disabled:opacity-50"
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-md bg-[var(--card)] text-[var(--foreground)] disabled:opacity-50"
               />
               <p className="text-xs text-muted-foreground">
                 720 days = ~2 years
@@ -166,7 +166,7 @@ export default function HistoricalSyncPage() {
                 value={batchSize}
                 onChange={(e) => setBatchSize(parseInt(e.target.value) || 90)}
                 disabled={syncState?.isRunning}
-                className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-800 text-white disabled:opacity-50"
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-md bg-[var(--card)] text-[var(--foreground)] disabled:opacity-50"
               />
               <p className="text-xs text-muted-foreground">
                 {Math.ceil(totalDays / batchSize)} batches total

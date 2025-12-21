@@ -323,8 +323,8 @@ export default function AmazonSettingsPage() {
       {toast.show && (
         <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg transform transition-all duration-300 ${
           toast.type === 'success' 
-            ? 'bg-emerald-500/90 text-white' 
-            : 'bg-red-500/90 text-white'
+            ? 'bg-emerald-500/90 text-[var(--foreground)]' 
+            : 'bg-red-500/90 text-[var(--foreground)]'
         }`}>
           <div className="flex items-center gap-3">
             <span className="text-xl">{toast.type === 'success' ? '✓' : '✗'}</span>
@@ -347,14 +347,14 @@ export default function AmazonSettingsPage() {
               <span className="text-2xl">📦</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">Amazon SP-API</h1>
-              <p className="text-slate-400">Connect to Amazon Seller Central</p>
+              <h1 className="text-2xl font-bold text-[var(--foreground)]">Amazon SP-API</h1>
+              <p className="text-[var(--muted-foreground)]">Connect to Amazon Seller Central</p>
             </div>
           </div>
           <div className={`px-4 py-2 rounded-full text-sm font-medium ${
             isConnected 
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-              : 'bg-slate-700/50 text-slate-400 border border-slate-600'
+              : 'bg-slate-700/50 text-[var(--muted-foreground)] border border-[var(--border)]'
           }`}>
             {isConnected ? '✓ Connected' : '○ Not Connected'}
           </div>
@@ -362,8 +362,8 @@ export default function AmazonSettingsPage() {
 
         {/* Sync Section */}
         {isConnected && (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <div className="bg-[var(--card)]/50 border border-[var(--border)]/50 rounded-xl p-6">
+            <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4 flex items-center gap-2">
               <span className="text-cyan-400">⟳</span> Data Sync
             </h2>
 
@@ -385,14 +385,14 @@ export default function AmazonSettingsPage() {
                     )}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white text-lg">Initial Historical Sync</h3>
-                    <p className="text-slate-400 text-sm">Pull 2 years of orders, fees, returns, reimbursements & more</p>
+                    <h3 className="font-semibold text-[var(--foreground)] text-lg">Initial Historical Sync</h3>
+                    <p className="text-[var(--muted-foreground)] text-sm">Pull 2 years of orders, fees, returns, reimbursements & more</p>
                   </div>
                 </div>
                 <button
                   onClick={handleInitialSync}
                   disabled={syncState.status === 'syncing'}
-                  className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 disabled:from-slate-600 disabled:to-slate-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all flex items-center gap-2 shadow-lg shadow-purple-500/20"
+                  className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 disabled:from-slate-600 disabled:to-slate-600 disabled:cursor-not-allowed rounded-lg text-[var(--foreground)] font-medium transition-all flex items-center gap-2 shadow-lg shadow-purple-500/20"
                 >
                   {syncState.type === 'initial' && syncState.status === 'syncing' ? (
                     <>
@@ -409,16 +409,16 @@ export default function AmazonSettingsPage() {
               {syncResults.initial?.error && !(syncState.type === 'initial' && syncState.status === 'syncing') && (
                 <p className="mt-3 text-sm text-red-400">✗ {syncResults.initial.error}</p>
               )}
-              <p className="mt-3 text-xs text-slate-500">
+              <p className="mt-3 text-xs text-[var(--muted-foreground)]">
                 ⚠️ This can take 1-4+ hours for large accounts. You can continue using the app while it runs.
               </p>
             </div>
 
             {/* Quick Syncs */}
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Quick Syncs</h3>
+            <h3 className="text-sm font-medium text-[var(--muted-foreground)] mb-3">Quick Syncs</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Products Sync */}
-              <div className={`bg-slate-900/50 rounded-lg p-4 ${syncState.type === 'products' && syncState.status === 'syncing' ? 'ring-2 ring-blue-500' : ''}`}>
+              <div className={`bg-[var(--secondary)]/50 rounded-lg p-4 ${syncState.type === 'products' && syncState.status === 'syncing' ? 'ring-2 ring-blue-500' : ''}`}>
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                     {syncState.type === 'products' && syncState.status === 'syncing' ? (
@@ -428,8 +428,8 @@ export default function AmazonSettingsPage() {
                     )}
                   </div>
                   <div>
-                    <h3 className="font-medium text-white">Products</h3>
-                    <p className="text-xs text-slate-400">Catalog data & SKUs</p>
+                    <h3 className="font-medium text-[var(--foreground)]">Products</h3>
+                    <p className="text-xs text-[var(--muted-foreground)]">Catalog data & SKUs</p>
                   </div>
                 </div>
                 {syncResults.products?.success && (
@@ -441,7 +441,7 @@ export default function AmazonSettingsPage() {
                 <button
                   onClick={() => handleSync('products')}
                   disabled={syncState.status === 'syncing'}
-                  className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-[var(--foreground)] text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   {syncState.type === 'products' && syncState.status === 'syncing' ? (
                     <>
@@ -454,7 +454,7 @@ export default function AmazonSettingsPage() {
               </div>
 
               {/* Inventory Sync */}
-              <div className={`bg-slate-900/50 rounded-lg p-4 ${syncState.type === 'inventory' && syncState.status === 'syncing' ? 'ring-2 ring-emerald-500' : ''}`}>
+              <div className={`bg-[var(--secondary)]/50 rounded-lg p-4 ${syncState.type === 'inventory' && syncState.status === 'syncing' ? 'ring-2 ring-emerald-500' : ''}`}>
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
                     {syncState.type === 'inventory' && syncState.status === 'syncing' ? (
@@ -464,8 +464,8 @@ export default function AmazonSettingsPage() {
                     )}
                   </div>
                   <div>
-                    <h3 className="font-medium text-white">Inventory</h3>
-                    <p className="text-xs text-slate-400">FBA stock levels</p>
+                    <h3 className="font-medium text-[var(--foreground)]">Inventory</h3>
+                    <p className="text-xs text-[var(--muted-foreground)]">FBA stock levels</p>
                   </div>
                 </div>
                 {syncResults.inventory?.success && (
@@ -477,7 +477,7 @@ export default function AmazonSettingsPage() {
                 <button
                   onClick={() => handleSync('inventory')}
                   disabled={syncState.status === 'syncing'}
-                  className="w-full py-2 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-[var(--foreground)] text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   {syncState.type === 'inventory' && syncState.status === 'syncing' ? (
                     <>
@@ -490,7 +490,7 @@ export default function AmazonSettingsPage() {
               </div>
 
               {/* Orders Sync */}
-              <div className={`bg-slate-900/50 rounded-lg p-4 ${syncState.type === 'orders' && syncState.status === 'syncing' ? 'ring-2 ring-amber-500' : ''}`}>
+              <div className={`bg-[var(--secondary)]/50 rounded-lg p-4 ${syncState.type === 'orders' && syncState.status === 'syncing' ? 'ring-2 ring-amber-500' : ''}`}>
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
                     {syncState.type === 'orders' && syncState.status === 'syncing' ? (
@@ -500,8 +500,8 @@ export default function AmazonSettingsPage() {
                     )}
                   </div>
                   <div>
-                    <h3 className="font-medium text-white">Orders</h3>
-                    <p className="text-xs text-slate-400">12 months history</p>
+                    <h3 className="font-medium text-[var(--foreground)]">Orders</h3>
+                    <p className="text-xs text-[var(--muted-foreground)]">12 months history</p>
                   </div>
                 </div>
                 {syncResults.orders?.success && (
@@ -513,7 +513,7 @@ export default function AmazonSettingsPage() {
                 <button
                   onClick={() => handleSync('orders')}
                   disabled={syncState.status === 'syncing'}
-                  className="w-full py-2 px-4 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2 px-4 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-[var(--foreground)] text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   {syncState.type === 'orders' && syncState.status === 'syncing' ? (
                     <>
@@ -526,7 +526,7 @@ export default function AmazonSettingsPage() {
               </div>
 
               {/* Sales History Sync */}
-              <div className={`bg-slate-900/50 rounded-lg p-4 ${syncState.type === 'sales' && syncState.status === 'syncing' ? 'ring-2 ring-purple-500' : ''}`}>
+              <div className={`bg-[var(--secondary)]/50 rounded-lg p-4 ${syncState.type === 'sales' && syncState.status === 'syncing' ? 'ring-2 ring-purple-500' : ''}`}>
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
                     {syncState.type === 'sales' && syncState.status === 'syncing' ? (
@@ -536,8 +536,8 @@ export default function AmazonSettingsPage() {
                     )}
                   </div>
                   <div>
-                    <h3 className="font-medium text-white">Sales History</h3>
-                    <p className="text-xs text-slate-400">2 years for trends</p>
+                    <h3 className="font-medium text-[var(--foreground)]">Sales History</h3>
+                    <p className="text-xs text-[var(--muted-foreground)]">2 years for trends</p>
                   </div>
                 </div>
                 {syncResults.sales?.success && (
@@ -549,7 +549,7 @@ export default function AmazonSettingsPage() {
                 <button
                   onClick={() => handleSync('sales')}
                   disabled={syncState.status === 'syncing'}
-                  className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-[var(--foreground)] text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   {syncState.type === 'sales' && syncState.status === 'syncing' ? (
                     <>
@@ -563,18 +563,18 @@ export default function AmazonSettingsPage() {
             </div>
 
             {/* Scheduled Syncs */}
-            <div className="mt-6 pt-6 border-t border-slate-700/50">
-              <h3 className="text-sm font-medium text-slate-400 mb-3">🔄 Scheduled Syncs (for keeping data fresh)</h3>
+            <div className="mt-6 pt-6 border-t border-[var(--border)]/50">
+              <h3 className="text-sm font-medium text-[var(--muted-foreground)] mb-3">🔄 Scheduled Syncs (for keeping data fresh)</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Quick Sync */}
-                <div className="bg-slate-900/50 rounded-lg p-4">
+                <div className="bg-[var(--secondary)]/50 rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center">
                       <span className="text-cyan-400">⚡</span>
                     </div>
                     <div>
-                      <h4 className="font-medium text-white text-sm">Quick</h4>
-                      <p className="text-xs text-slate-500">Last 24 hours</p>
+                      <h4 className="font-medium text-[var(--foreground)] text-sm">Quick</h4>
+                      <p className="text-xs text-[var(--muted-foreground)]">Last 24 hours</p>
                     </div>
                   </div>
                   {syncResults.quick?.success && <p className="text-xs text-emerald-400 mb-2">✓ {syncResults.quick.message}</p>}
@@ -582,21 +582,21 @@ export default function AmazonSettingsPage() {
                   <button
                     onClick={() => handleScheduledSync('quick')}
                     disabled={syncState.status === 'syncing'}
-                    className="w-full py-1.5 px-3 bg-cyan-600/80 hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors"
+                    className="w-full py-1.5 px-3 bg-cyan-600/80 hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-[var(--foreground)] text-xs font-medium transition-colors"
                   >
                     Run Now
                   </button>
                 </div>
 
                 {/* Hourly Sync */}
-                <div className="bg-slate-900/50 rounded-lg p-4">
+                <div className="bg-[var(--secondary)]/50 rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
                       <span className="text-green-400">🕐</span>
                     </div>
                     <div>
-                      <h4 className="font-medium text-white text-sm">Hourly</h4>
-                      <p className="text-xs text-slate-500">Last 2 days</p>
+                      <h4 className="font-medium text-[var(--foreground)] text-sm">Hourly</h4>
+                      <p className="text-xs text-[var(--muted-foreground)]">Last 2 days</p>
                     </div>
                   </div>
                   {syncResults.hourly?.success && <p className="text-xs text-emerald-400 mb-2">✓ {syncResults.hourly.message}</p>}
@@ -604,21 +604,21 @@ export default function AmazonSettingsPage() {
                   <button
                     onClick={() => handleScheduledSync('hourly')}
                     disabled={syncState.status === 'syncing'}
-                    className="w-full py-1.5 px-3 bg-green-600/80 hover:bg-green-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors"
+                    className="w-full py-1.5 px-3 bg-green-600/80 hover:bg-green-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-[var(--foreground)] text-xs font-medium transition-colors"
                   >
                     Run Now
                   </button>
                 </div>
 
                 {/* Daily Sync */}
-                <div className="bg-slate-900/50 rounded-lg p-4">
+                <div className="bg-[var(--secondary)]/50 rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center">
                       <span className="text-yellow-400">📅</span>
                     </div>
                     <div>
-                      <h4 className="font-medium text-white text-sm">Daily</h4>
-                      <p className="text-xs text-slate-500">Last 7 days</p>
+                      <h4 className="font-medium text-[var(--foreground)] text-sm">Daily</h4>
+                      <p className="text-xs text-[var(--muted-foreground)]">Last 7 days</p>
                     </div>
                   </div>
                   {syncResults.daily?.success && <p className="text-xs text-emerald-400 mb-2">✓ {syncResults.daily.message}</p>}
@@ -626,21 +626,21 @@ export default function AmazonSettingsPage() {
                   <button
                     onClick={() => handleScheduledSync('daily')}
                     disabled={syncState.status === 'syncing'}
-                    className="w-full py-1.5 px-3 bg-yellow-600/80 hover:bg-yellow-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors"
+                    className="w-full py-1.5 px-3 bg-yellow-600/80 hover:bg-yellow-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-[var(--foreground)] text-xs font-medium transition-colors"
                   >
                     Run Now
                   </button>
                 </div>
 
                 {/* Weekly Sync */}
-                <div className="bg-slate-900/50 rounded-lg p-4">
+                <div className="bg-[var(--secondary)]/50 rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
                       <span className="text-orange-400">📊</span>
                     </div>
                     <div>
-                      <h4 className="font-medium text-white text-sm">Weekly</h4>
-                      <p className="text-xs text-slate-500">Last 30 days</p>
+                      <h4 className="font-medium text-[var(--foreground)] text-sm">Weekly</h4>
+                      <p className="text-xs text-[var(--muted-foreground)]">Last 30 days</p>
                     </div>
                   </div>
                   {syncResults.weekly?.success && <p className="text-xs text-emerald-400 mb-2">✓ {syncResults.weekly.message}</p>}
@@ -648,41 +648,41 @@ export default function AmazonSettingsPage() {
                   <button
                     onClick={() => handleScheduledSync('weekly')}
                     disabled={syncState.status === 'syncing'}
-                    className="w-full py-1.5 px-3 bg-orange-600/80 hover:bg-orange-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors"
+                    className="w-full py-1.5 px-3 bg-orange-600/80 hover:bg-orange-600 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-[var(--foreground)] text-xs font-medium transition-colors"
                   >
                     Run Now
                   </button>
                 </div>
               </div>
               
-              <div className="mt-4 p-4 bg-slate-900/30 rounded-lg">
-                <h4 className="text-sm font-medium text-slate-300 mb-2">⏰ Recommended Auto-Sync Schedule</h4>
+              <div className="mt-4 p-4 bg-[var(--secondary)]/30 rounded-lg">
+                <h4 className="text-sm font-medium text-[var(--foreground)] mb-2">⏰ Recommended Auto-Sync Schedule</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                   <div>
-                    <span className="text-slate-400">Orders:</span>
-                    <span className="text-white ml-2">Every 15 min</span>
+                    <span className="text-[var(--muted-foreground)]">Orders:</span>
+                    <span className="text-[var(--foreground)] ml-2">Every 15 min</span>
                   </div>
                   <div>
-                    <span className="text-slate-400">Inventory:</span>
-                    <span className="text-white ml-2">Every 2 hours</span>
+                    <span className="text-[var(--muted-foreground)]">Inventory:</span>
+                    <span className="text-[var(--foreground)] ml-2">Every 2 hours</span>
                   </div>
                   <div>
-                    <span className="text-slate-400">Daily Sync:</span>
-                    <span className="text-white ml-2">6 AM daily</span>
+                    <span className="text-[var(--muted-foreground)]">Daily Sync:</span>
+                    <span className="text-[var(--foreground)] ml-2">6 AM daily</span>
                   </div>
                   <div>
-                    <span className="text-slate-400">Weekly Sync:</span>
-                    <span className="text-white ml-2">Sunday 5 AM</span>
+                    <span className="text-[var(--muted-foreground)]">Weekly Sync:</span>
+                    <span className="text-[var(--foreground)] ml-2">Sunday 5 AM</span>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 mt-3">
+                <p className="text-xs text-[var(--muted-foreground)] mt-3">
                   💡 Set up cron jobs or use a service like cron-job.org to automate these syncs
                 </p>
               </div>
             </div>
 
             {syncStatus.lastSuccessfulSync && (
-              <p className="text-xs text-slate-500 mt-4">
+              <p className="text-xs text-[var(--muted-foreground)] mt-4">
                 Last successful sync: {new Date(syncStatus.lastSuccessfulSync).toLocaleString()}
               </p>
             )}
@@ -690,10 +690,10 @@ export default function AmazonSettingsPage() {
         )}
 
         {/* Credentials Form */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+        <div className="bg-[var(--card)]/50 border border-[var(--border)]/50 rounded-xl p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <span className="text-slate-400">⚙</span> API Credentials
+            <h2 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
+              <span className="text-[var(--muted-foreground)]">⚙</span> API Credentials
             </h2>
             {isConnected && (
               <button
@@ -712,7 +712,7 @@ export default function AmazonSettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               {/* Seller ID */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   Seller ID <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -720,19 +720,19 @@ export default function AmazonSettingsPage() {
                   value={sellerId}
                   onChange={(e) => setSellerId(e.target.value)}
                   placeholder="AEQATM2NEGVIR"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
               {/* Marketplace */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   Marketplace <span className="text-red-400">*</span>
                 </label>
                 <select
                   value={marketplaceId}
                   onChange={(e) => setMarketplaceId(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 >
                   {MARKETPLACES.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -746,7 +746,7 @@ export default function AmazonSettingsPage() {
             <div className="space-y-4 mb-6">
               {/* LWA Client ID */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   LWA Client ID <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -754,13 +754,13 @@ export default function AmazonSettingsPage() {
                   value={clientId}
                   onChange={(e) => setClientId(e.target.value)}
                   placeholder="amzn1.application-oa2-client.xxxxx"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
               {/* LWA Client Secret */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   LWA Client Secret <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -768,13 +768,13 @@ export default function AmazonSettingsPage() {
                   value={clientSecret}
                   onChange={(e) => setClientSecret(e.target.value)}
                   placeholder="amzn1.oa2-cs.v1.xxxxx"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
               {/* Refresh Token */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   Refresh Token <span className="text-red-400">*</span>
                 </label>
                 <textarea
@@ -782,7 +782,7 @@ export default function AmazonSettingsPage() {
                   onChange={(e) => setRefreshToken(e.target.value)}
                   placeholder="Atzr|IwEBIF..."
                   rows={3}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none font-mono text-sm"
+                  className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 resize-none font-mono text-sm"
                 />
               </div>
             </div>
@@ -791,7 +791,7 @@ export default function AmazonSettingsPage() {
               <button
                 onClick={handleSave}
                 disabled={saving || !sellerId || !clientId || !clientSecret || !refreshToken}
-                className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:from-slate-600 disabled:to-slate-600 rounded-lg text-white font-medium transition-all"
+                className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:from-slate-600 disabled:to-slate-600 rounded-lg text-[var(--foreground)] font-medium transition-all"
               >
                 {saving ? 'Saving...' : isConnected ? 'Update Connection' : 'Connect to Amazon'}
               </button>
@@ -808,17 +808,17 @@ export default function AmazonSettingsPage() {
           </div>
 
           {isConnected && (
-            <div className="text-sm text-slate-400">
-              <p>✓ Connected as Seller ID: <span className="text-white font-mono">{sellerId}</span></p>
-              <p>✓ Marketplace: <span className="text-white">{MARKETPLACES.find(m => m.id === marketplaceId)?.name || 'Unknown'}</span></p>
+            <div className="text-sm text-[var(--muted-foreground)]">
+              <p>✓ Connected as Seller ID: <span className="text-[var(--foreground)] font-mono">{sellerId}</span></p>
+              <p>✓ Marketplace: <span className="text-[var(--foreground)]">{MARKETPLACES.find(m => m.id === marketplaceId)?.name || 'Unknown'}</span></p>
             </div>
           )}
         </div>
 
         {/* Help Section */}
-        <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">📚 Setup Guide</h3>
-          <ol className="text-sm text-slate-400 space-y-2 list-decimal list-inside">
+        <div className="bg-[var(--card)]/30 border border-[var(--border)]/30 rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-[var(--foreground)] mb-3">📚 Setup Guide</h3>
+          <ol className="text-sm text-[var(--muted-foreground)] space-y-2 list-decimal list-inside">
             <li>Register as a developer in <a href="https://sellercentral.amazon.com/apps/store/developer" target="_blank" className="text-cyan-400 hover:underline">Seller Central Developer Portal</a></li>
             <li>Create an SP-API app with required roles (Product Listing, Inventory, Orders)</li>
             <li>Get your LWA credentials from the app settings</li>

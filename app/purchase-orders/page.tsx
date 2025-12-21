@@ -76,7 +76,7 @@ interface PurchaseOrder {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
-  draft: { label: 'Draft', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', icon: FileText },
+  draft: { label: 'Draft', color: 'bg-slate-500/20 text-[var(--muted-foreground)] border-slate-500/30', icon: FileText },
   sent: { label: 'Sent', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: Send },
   confirmed: { label: 'Confirmed', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', icon: CheckCircle },
   shipped: { label: 'Shipped', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', icon: Truck },
@@ -718,8 +718,8 @@ export default function PurchaseOrdersPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">Purchase Orders</h1>
-            <p className="text-slate-400 mt-1">Manage supplier orders and receiving</p>
+            <h1 className="text-3xl font-bold text-[var(--foreground)]">Purchase Orders</h1>
+            <p className="text-[var(--muted-foreground)] mt-1">Manage supplier orders and receiving</p>
           </div>
           <Button onClick={() => setShowCreatePO(true)}>
             <Plus className="w-4 h-4 mr-2" />
@@ -745,10 +745,10 @@ export default function PurchaseOrdersPage() {
                   <CardContent className={`py-4 ${isActive ? 'bg-cyan-500/10' : ''}`}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-2xl font-bold text-white">{count}</p>
-                        <p className="text-sm text-slate-400">{config.label}</p>
+                        <p className="text-2xl font-bold text-[var(--foreground)]">{count}</p>
+                        <p className="text-sm text-[var(--muted-foreground)]">{config.label}</p>
                       </div>
-                      <Icon className={`w-8 h-8 ${config.color.split(' ').find(c => c.startsWith('text-')) || 'text-slate-400'}`} />
+                      <Icon className={`w-8 h-8 ${config.color.split(' ').find(c => c.startsWith('text-')) || 'text-[var(--muted-foreground)]'}`} />
                     </div>
                   </CardContent>
                 </Card>
@@ -764,8 +764,8 @@ export default function PurchaseOrdersPage() {
               <div className="flex items-center gap-4">
                 <AlertCircle className="w-6 h-6 text-amber-400" />
                 <div className="flex-1">
-                  <p className="font-medium text-white">{backorders.length} items in backorder</p>
-                  <p className="text-sm text-slate-400">Items awaiting receipt from previous POs</p>
+                  <p className="font-medium text-[var(--foreground)]">{backorders.length} items in backorder</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">Items awaiting receipt from previous POs</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => window.location.href = '/backorders'}>
                   View Backorders
@@ -780,19 +780,19 @@ export default function PurchaseOrdersPage() {
           <CardContent className="py-4">
             <div className="flex gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--muted-foreground)]" />
                 <input
                   type="text"
                   placeholder="Search by PO number or supplier..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               >
                 <option value="all">All Statuses</option>
                 {Object.entries(STATUS_CONFIG).map(([status, config]) => (
@@ -812,9 +812,9 @@ export default function PurchaseOrdersPage() {
           <CardContent className="p-0">
             {filteredPOs.length === 0 ? (
               <div className="text-center py-12">
-                <FileText className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                <p className="text-lg text-slate-400">No purchase orders found</p>
-                <p className="text-sm text-slate-500 mt-1">Create your first PO to get started</p>
+                <FileText className="w-16 h-16 text-[var(--muted-foreground)] mx-auto mb-4" />
+                <p className="text-lg text-[var(--muted-foreground)]">No purchase orders found</p>
+                <p className="text-sm text-[var(--muted-foreground)] mt-1">Create your first PO to get started</p>
                 <Button className="mt-4" onClick={() => setShowCreatePO(true)}>
                   <Plus className="w-4 h-4 mr-2" />
                   Create Purchase Order
@@ -837,7 +837,7 @@ export default function PurchaseOrdersPage() {
                         {/* Header Row */}
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <p className="font-semibold text-white font-mono text-lg">{po.poNumber}</p>
+                            <p className="font-semibold text-[var(--foreground)] font-mono text-lg">{po.poNumber}</p>
                             <div onClick={(e) => e.stopPropagation()} className="relative z-10">
                               <StatusButton
                                 currentStatus={po.status}
@@ -845,7 +845,7 @@ export default function PurchaseOrdersPage() {
                               />
                             </div>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-slate-400">
+                          <div className="flex items-center gap-4 text-sm text-[var(--muted-foreground)]">
                             <span>{po.supplier.name}</span>
                             <span>•</span>
                             <span>{po.items.length} items</span>
@@ -865,13 +865,13 @@ export default function PurchaseOrdersPage() {
                         />
 
                         {/* Footer Row */}
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">
+                        <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]/50">
                           <div className="flex items-center gap-4 text-sm">
-                            <span className="text-slate-400">
+                            <span className="text-[var(--muted-foreground)]">
                               {progress}% Received
                             </span>
-                            <span className="text-slate-400">
-                              Total: <span className="text-white font-medium">{formatCurrency(po.total)}</span>
+                            <span className="text-[var(--muted-foreground)]">
+                              Total: <span className="text-[var(--foreground)] font-medium">{formatCurrency(po.total)}</span>
                             </span>
                           </div>
                           <div onClick={(e) => e.stopPropagation()}>
@@ -908,13 +908,13 @@ export default function PurchaseOrdersPage() {
           {/* Supplier Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                 Supplier <span className="text-red-400">*</span>
               </label>
               <select
                 value={createForm.supplierId}
                 onChange={(e) => setCreateForm({ ...createForm, supplierId: e.target.value })}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               >
                 <option value="">Select a supplier...</option>
                 {suppliers.map((supplier) => (
@@ -925,14 +925,14 @@ export default function PurchaseOrdersPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                 Order Date
               </label>
               <input
                 type="date"
                 value={createForm.orderDate}
                 onChange={(e) => setCreateForm({ ...createForm, orderDate: e.target.value })}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               />
             </div>
           </div>
@@ -940,7 +940,7 @@ export default function PurchaseOrdersPage() {
           {/* Expected Arrival */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                 Lead Time (days)
               </label>
               <input
@@ -950,11 +950,11 @@ export default function PurchaseOrdersPage() {
                   lastChangedField.current = 'days'
                   setCreateForm({ ...createForm, expectedDays: parseInt(e.target.value) || 0 })
                 }}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                 Expected Arrival Date
               </label>
               <input
@@ -964,7 +964,7 @@ export default function PurchaseOrdersPage() {
                   lastChangedField.current = 'date'
                   setCreateForm({ ...createForm, expectedDate: e.target.value })
                 }}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               />
             </div>
           </div>
@@ -972,7 +972,7 @@ export default function PurchaseOrdersPage() {
           {/* Items */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-slate-300">
+              <label className="block text-sm font-medium text-[var(--foreground)]">
                 Items <span className="text-red-400">*</span>
               </label>
               <div className="flex gap-2">
@@ -999,9 +999,9 @@ export default function PurchaseOrdersPage() {
             </div>
             
             {createForm.items.length === 0 ? (
-              <div className="text-center py-8 bg-slate-900/30 rounded-lg border border-dashed border-slate-700">
-                <Package className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                <p className="text-sm text-slate-400">No items added yet</p>
+              <div className="text-center py-8 bg-[var(--secondary)]/30 rounded-lg border border-dashed border-[var(--border)]">
+                <Package className="w-8 h-8 text-[var(--muted-foreground)] mx-auto mb-2" />
+                <p className="text-sm text-[var(--muted-foreground)]">No items added yet</p>
                 <div className="flex gap-2 justify-center mt-3">
                   <Button variant="ghost" size="sm" onClick={() => itemsFileInputRef?.click()}>
                     <Upload className="w-4 h-4 mr-1" />
@@ -1023,10 +1023,10 @@ export default function PurchaseOrdersPage() {
                   const isDropdownOpen = openSkuDropdown === index
                   
                   return (
-                  <div key={index} className="flex items-center gap-3 p-3 bg-slate-900/50 rounded-lg">
+                  <div key={index} className="flex items-center gap-3 p-3 bg-[var(--secondary)]/50 rounded-lg">
                     <div className="flex-1 relative">
                       <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)] pointer-events-none" />
                         <input
                           type="text"
                           placeholder="Search SKU..."
@@ -1055,11 +1055,11 @@ export default function PurchaseOrdersPage() {
                               }
                             }, 200)
                           }}
-                          className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                          className="w-full pl-9 pr-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                         />
                       </div>
                       {isDropdownOpen && filteredProducts.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        <div className="absolute z-50 w-full mt-1 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg max-h-60 overflow-y-auto">
                           {filteredProducts.map((product) => (
                             <button
                               key={product.sku}
@@ -1069,7 +1069,7 @@ export default function PurchaseOrdersPage() {
                                 setSkuSearchTerms({ ...skuSearchTerms, [index]: '' })
                                 setOpenSkuDropdown(null)
                               }}
-                              className="w-full text-left px-3 py-2 text-sm text-white hover:bg-slate-700 focus:bg-slate-700 focus:outline-none"
+                              className="w-full text-left px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[var(--hover-bg)] focus:bg-[var(--muted)] focus:outline-none"
                             >
                               {product.sku}
                             </button>
@@ -1083,21 +1083,21 @@ export default function PurchaseOrdersPage() {
                       onChange={(e) => updateFormItem(index, 'quantityOrdered', parseInt(e.target.value) || 0)}
                       placeholder="Qty"
                       min="1"
-                      className="w-24 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                      className="w-24 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                     />
                     <div className="relative w-28">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">$</span>
                       <input
                         type="number"
                         value={item.unitCost}
                         onChange={(e) => updateFormItem(index, 'unitCost', parseFloat(e.target.value) || 0)}
                         placeholder="Cost"
                         step="0.01"
-                        className="w-full pl-7 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                        className="w-full pl-7 pr-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                       />
                     </div>
                     <div className="w-24 text-right">
-                      <span className="text-white font-medium">
+                      <span className="text-[var(--foreground)] font-medium">
                         {formatCurrency(item.quantityOrdered * item.unitCost)}
                       </span>
                     </div>
@@ -1109,10 +1109,10 @@ export default function PurchaseOrdersPage() {
                 })}
                 
                 {/* Totals */}
-                <div className="flex justify-end pt-3 border-t border-slate-700">
+                <div className="flex justify-end pt-3 border-t border-[var(--border)]">
                   <div className="text-right">
-                    <p className="text-sm text-slate-400">Subtotal</p>
-                    <p className="text-xl font-bold text-white">
+                    <p className="text-sm text-[var(--muted-foreground)]">Subtotal</p>
+                    <p className="text-xl font-bold text-[var(--foreground)]">
                       {formatCurrency(createForm.items.reduce((sum, item) => sum + (item.quantityOrdered * item.unitCost), 0))}
                     </p>
                   </div>
@@ -1123,7 +1123,7 @@ export default function PurchaseOrdersPage() {
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
               Notes
             </label>
             <textarea
@@ -1131,7 +1131,7 @@ export default function PurchaseOrdersPage() {
               onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
               placeholder="Add any notes for this order..."
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 resize-none"
             />
           </div>
         </div>
@@ -1160,11 +1160,11 @@ export default function PurchaseOrdersPage() {
       >
         {selectedPO && (
           <div className="space-y-4">
-            <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
-              <p className="text-sm text-slate-400">Supplier: <span className="text-white">{selectedPO.supplier.name}</span></p>
+            <div className="bg-[var(--secondary)]/50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-[var(--muted-foreground)]">Supplier: <span className="text-[var(--foreground)]">{selectedPO.supplier.name}</span></p>
               {selectedPO.expectedArrivalDate && (
-                <p className="text-sm text-slate-400 mt-1">
-                  Expected: <span className="text-white">{formatDate(new Date(selectedPO.expectedArrivalDate))}</span>
+                <p className="text-sm text-[var(--muted-foreground)] mt-1">
+                  Expected: <span className="text-[var(--foreground)]">{formatDate(new Date(selectedPO.expectedArrivalDate))}</span>
                 </p>
               )}
             </div>
@@ -1175,22 +1175,22 @@ export default function PurchaseOrdersPage() {
                 if (remaining <= 0) return null
                 
                 return (
-                  <div key={item.id} className="p-4 bg-slate-900/50 rounded-lg">
+                  <div key={item.id} className="p-4 bg-[var(--secondary)]/50 rounded-lg">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <p className="font-medium text-white">{item.masterSku}</p>
-                        <p className="text-sm text-slate-400">{item.product?.title}</p>
+                        <p className="font-medium text-[var(--foreground)]">{item.masterSku}</p>
+                        <p className="text-sm text-[var(--muted-foreground)]">{item.product?.title}</p>
                       </div>
                       <div className="text-right text-sm">
-                        <p className="text-slate-400">Ordered: {item.quantityOrdered}</p>
-                        <p className="text-slate-400">Already received: {item.quantityReceived}</p>
+                        <p className="text-[var(--muted-foreground)]">Ordered: {item.quantityOrdered}</p>
+                        <p className="text-[var(--muted-foreground)]">Already received: {item.quantityReceived}</p>
                         <p className="text-cyan-400">Remaining: {remaining}</p>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-4">
                       <div className="flex-1">
-                        <label className="block text-xs text-slate-400 mb-1">Good Qty</label>
+                        <label className="block text-xs text-[var(--muted-foreground)] mb-1">Good Qty</label>
                         <input
                           type="number"
                           value={receiveItems[item.id]?.received || 0}
@@ -1205,11 +1205,11 @@ export default function PurchaseOrdersPage() {
                           }}
                           max={remaining}
                           min={0}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                          className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                         />
                       </div>
                       <div className="flex-1">
-                        <label className="block text-xs text-slate-400 mb-1">Damaged Qty</label>
+                        <label className="block text-xs text-[var(--muted-foreground)] mb-1">Damaged Qty</label>
                         <input
                           type="number"
                           value={receiveItems[item.id]?.damaged || 0}
@@ -1224,7 +1224,7 @@ export default function PurchaseOrdersPage() {
                           }}
                           max={remaining}
                           min={0}
-                          className="w-full px-3 py-2 bg-slate-800 border border-red-700/50 rounded-lg text-white focus:outline-none focus:border-red-500"
+                          className="w-full px-3 py-2 bg-[var(--card)] border border-red-700/50 rounded-lg text-[var(--foreground)] focus:outline-none focus:border-red-500"
                         />
                       </div>
                       <div className="flex-1">
@@ -1241,7 +1241,7 @@ export default function PurchaseOrdersPage() {
                           }}
                           max={remaining}
                           min={0}
-                          className="w-full px-3 py-2 bg-slate-800 border border-amber-700/50 rounded-lg text-white focus:outline-none focus:border-amber-500"
+                          className="w-full px-3 py-2 bg-[var(--card)] border border-amber-700/50 rounded-lg text-[var(--foreground)] focus:outline-none focus:border-amber-500"
                         />
                       </div>
                     </div>
@@ -1278,45 +1278,45 @@ export default function PurchaseOrdersPage() {
       >
         {selectedPO && (
           <div className="space-y-4">
-            <div className="p-4 bg-slate-800/50 rounded-lg">
-              <p className="text-sm text-slate-400 mb-2">PO Number</p>
-              <p className="text-white font-medium">{selectedPO.poNumber}</p>
+            <div className="p-4 bg-[var(--card)]/50 rounded-lg">
+              <p className="text-sm text-[var(--muted-foreground)] mb-2">PO Number</p>
+              <p className="text-[var(--foreground)] font-medium">{selectedPO.poNumber}</p>
             </div>
             
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Order Date <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="date"
                   value={datesForm.orderDate}
                   onChange={(e) => setDatesForm({ ...datesForm, orderDate: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                   required
                 />
-                <p className="text-xs text-slate-500 mt-1">The date the order was placed with the supplier</p>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">The date the order was placed with the supplier</p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Expected Arrival Date
                 </label>
                 <input
                   type="date"
                   value={datesForm.expectedArrivalDate}
                   onChange={(e) => setDatesForm({ ...datesForm, expectedArrivalDate: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 />
-                <p className="text-xs text-slate-500 mt-1">Expected delivery date from supplier</p>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">Expected delivery date from supplier</p>
               </div>
             </div>
             
             {datesForm.orderDate && datesForm.expectedArrivalDate && (
-              <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+              <div className="p-4 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]">
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Lead Time</span>
-                  <span className="text-white font-medium">
+                  <span className="text-[var(--muted-foreground)]">Lead Time</span>
+                  <span className="text-[var(--foreground)] font-medium">
                     {Math.round((new Date(datesForm.expectedArrivalDate).getTime() - new Date(datesForm.orderDate).getTime()) / (1000 * 60 * 60 * 24))} days
                   </span>
                 </div>
@@ -1344,14 +1344,14 @@ export default function PurchaseOrdersPage() {
       >
         {selectedPO && (
           <div className="space-y-4">
-            <div className="p-4 bg-slate-800/50 rounded-lg">
-              <p className="text-sm text-slate-400 mb-2">PO Number</p>
-              <p className="text-white font-medium">{selectedPO.poNumber}</p>
+            <div className="p-4 bg-[var(--card)]/50 rounded-lg">
+              <p className="text-sm text-[var(--muted-foreground)] mb-2">PO Number</p>
+              <p className="text-[var(--foreground)] font-medium">{selectedPO.poNumber}</p>
             </div>
             
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Shipping Cost
                 </label>
                 <input
@@ -1360,12 +1360,12 @@ export default function PurchaseOrdersPage() {
                   min="0"
                   value={costsForm.shippingCost}
                   onChange={(e) => setCostsForm({ ...costsForm, shippingCost: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Tax
                 </label>
                 <input
@@ -1374,12 +1374,12 @@ export default function PurchaseOrdersPage() {
                   min="0"
                   value={costsForm.tax}
                   onChange={(e) => setCostsForm({ ...costsForm, tax: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Other Costs
                 </label>
                 <input
@@ -1388,34 +1388,34 @@ export default function PurchaseOrdersPage() {
                   min="0"
                   value={costsForm.otherCosts}
                   onChange={(e) => setCostsForm({ ...costsForm, otherCosts: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                   placeholder="Additional fees, handling, etc."
                 />
               </div>
             </div>
             
-            <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+            <div className="p-4 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-slate-400">Subtotal</span>
-                <span className="text-white font-medium">{formatCurrency(selectedPO.subtotal)}</span>
+                <span className="text-[var(--muted-foreground)]">Subtotal</span>
+                <span className="text-[var(--foreground)] font-medium">{formatCurrency(selectedPO.subtotal)}</span>
               </div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-slate-400">Shipping</span>
-                <span className="text-white">{formatCurrency(costsForm.shippingCost)}</span>
+                <span className="text-[var(--muted-foreground)]">Shipping</span>
+                <span className="text-[var(--foreground)]">{formatCurrency(costsForm.shippingCost)}</span>
               </div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-slate-400">Tax</span>
-                <span className="text-white">{formatCurrency(costsForm.tax)}</span>
+                <span className="text-[var(--muted-foreground)]">Tax</span>
+                <span className="text-[var(--foreground)]">{formatCurrency(costsForm.tax)}</span>
               </div>
               {costsForm.otherCosts > 0 && (
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-slate-400">Other Costs</span>
-                  <span className="text-white">{formatCurrency(costsForm.otherCosts)}</span>
+                  <span className="text-[var(--muted-foreground)]">Other Costs</span>
+                  <span className="text-[var(--foreground)]">{formatCurrency(costsForm.otherCosts)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center pt-2 border-t border-slate-700">
-                <span className="text-white font-medium">Total</span>
-                <span className="text-white font-bold text-lg">
+              <div className="flex justify-between items-center pt-2 border-t border-[var(--border)]">
+                <span className="text-[var(--foreground)] font-medium">Total</span>
+                <span className="text-[var(--foreground)] font-bold text-lg">
                   {formatCurrency(selectedPO.subtotal + costsForm.shippingCost + costsForm.tax + costsForm.otherCosts)}
                 </span>
               </div>
@@ -1442,13 +1442,13 @@ export default function PurchaseOrdersPage() {
       >
         {selectedPO && (
           <div className="space-y-4">
-            <div className="p-4 bg-slate-800/50 rounded-lg">
-              <p className="text-sm text-slate-400 mb-1">PO Number</p>
-              <p className="text-white font-medium">{selectedPO.poNumber}</p>
-              <p className="text-sm text-slate-400 mt-2 mb-1">Supplier</p>
-              <p className="text-white">{selectedPO.supplier.name}</p>
+            <div className="p-4 bg-[var(--card)]/50 rounded-lg">
+              <p className="text-sm text-[var(--muted-foreground)] mb-1">PO Number</p>
+              <p className="text-[var(--foreground)] font-medium">{selectedPO.poNumber}</p>
+              <p className="text-sm text-[var(--muted-foreground)] mt-2 mb-1">Supplier</p>
+              <p className="text-[var(--foreground)]">{selectedPO.supplier.name}</p>
               {(selectedPO.supplier as any).email && (
-                <p className="text-sm text-slate-400 mt-2">{(selectedPO.supplier as any).email}</p>
+                <p className="text-sm text-[var(--muted-foreground)] mt-2">{(selectedPO.supplier as any).email}</p>
               )}
             </div>
             
@@ -1456,21 +1456,21 @@ export default function PurchaseOrdersPage() {
               <p className="text-sm text-blue-400">
                 This will:
               </p>
-              <ul className="text-sm text-slate-300 mt-2 space-y-1 list-disc list-inside">
+              <ul className="text-sm text-[var(--foreground)] mt-2 space-y-1 list-disc list-inside">
                 <li>Generate an Excel file with SKU and Quantity columns</li>
                 <li>Open your email client with a pre-filled message</li>
                 <li>Allow you to attach the Excel file manually</li>
               </ul>
             </div>
             
-            <div className="flex items-center gap-2 p-3 bg-slate-800/50 rounded-lg">
+            <div className="flex items-center gap-2 p-3 bg-[var(--card)]/50 rounded-lg">
               <input
                 type="checkbox"
                 id="markAsSent"
                 defaultChecked={true}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-cyan-500"
+                className="w-4 h-4 rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500"
               />
-              <label htmlFor="markAsSent" className="text-sm text-slate-300 cursor-pointer">
+              <label htmlFor="markAsSent" className="text-sm text-[var(--foreground)] cursor-pointer">
                 Mark purchase order as "Sent" after opening email
               </label>
             </div>
@@ -1502,43 +1502,43 @@ export default function PurchaseOrdersPage() {
           <div className="flex items-start gap-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
             <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-white">Are you sure you want to delete {selectedPO?.poNumber}?</p>
-              <p className="text-sm text-slate-400 mt-2">This action cannot be undone.</p>
+              <p className="font-medium text-[var(--foreground)]">Are you sure you want to delete {selectedPO?.poNumber}?</p>
+              <p className="text-sm text-[var(--muted-foreground)] mt-2">This action cannot be undone.</p>
             </div>
           </div>
           
           {/* Show inventory options only if items were received */}
           {(selectedPO?.status === 'received' || selectedPO?.status === 'partial') && (
-            <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-lg space-y-3">
-              <p className="text-sm font-medium text-white">What should happen to the received inventory?</p>
+            <div className="p-4 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg space-y-3">
+              <p className="text-sm font-medium text-[var(--foreground)]">What should happen to the received inventory?</p>
               
-              <label className="flex items-start gap-3 p-3 rounded-lg cursor-pointer hover:bg-slate-700/50 transition-colors">
+              <label className="flex items-start gap-3 p-3 rounded-lg cursor-pointer hover:bg-[var(--hover-bg)]/50 transition-colors">
                 <input
                   type="radio"
                   name="deductOption"
                   checked={deductOnDelete}
                   onChange={() => setDeductOnDelete(true)}
-                  className="mt-1 w-4 h-4 text-cyan-500 bg-slate-700 border-slate-600 focus:ring-cyan-500"
+                  className="mt-1 w-4 h-4 text-cyan-500 bg-[var(--muted)] border-[var(--border)] focus:ring-cyan-500"
                 />
                 <div>
-                  <p className="font-medium text-white">Deduct from inventory</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="font-medium text-[var(--foreground)]">Deduct from inventory</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">
                     Remove the received quantities from warehouse inventory (use if items are being returned or were never actually received)
                   </p>
                 </div>
               </label>
               
-              <label className="flex items-start gap-3 p-3 rounded-lg cursor-pointer hover:bg-slate-700/50 transition-colors">
+              <label className="flex items-start gap-3 p-3 rounded-lg cursor-pointer hover:bg-[var(--hover-bg)]/50 transition-colors">
                 <input
                   type="radio"
                   name="deductOption"
                   checked={!deductOnDelete}
                   onChange={() => setDeductOnDelete(false)}
-                  className="mt-1 w-4 h-4 text-cyan-500 bg-slate-700 border-slate-600 focus:ring-cyan-500"
+                  className="mt-1 w-4 h-4 text-cyan-500 bg-[var(--muted)] border-[var(--border)] focus:ring-cyan-500"
                 />
                 <div>
-                  <p className="font-medium text-white">Keep inventory as is</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="font-medium text-[var(--foreground)]">Keep inventory as is</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">
                     Keep the received quantities in inventory (use if items are already in stock and you just want to delete the PO record)
                   </p>
                 </div>

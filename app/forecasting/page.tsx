@@ -397,7 +397,7 @@ export default function ForecastingPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-[var(--foreground)] flex items-center gap-2">
               <Brain className="w-7 h-7 text-cyan-500" />
               Smart Inventory Forecasting
             </h1>
@@ -406,7 +406,7 @@ export default function ForecastingPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700"
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--card)] hover:bg-[var(--secondary)] rounded-lg border border-[var(--border)]"
             >
               <Settings className="w-4 h-4" />
               Settings
@@ -427,7 +427,7 @@ export default function ForecastingPage() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-2 border-b border-slate-700 pb-4 overflow-x-auto">
+        <div className="flex gap-2 border-b border-[var(--border)] pb-4 overflow-x-auto">
           {tabOrder.map((tabId) => {
             const tabConfig: Record<string, { icon: React.ReactNode; label: string; count?: number; color: string }> = {
               trends: {
@@ -605,7 +605,7 @@ function TabButton({ active, onClick, icon, label, count, color }: {
     <button
       onClick={onClick}
       className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
-        active ? `${color} text-white` : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+        active ? `${color} text-[var(--foreground)]` : 'bg-[var(--card)] text-gray-400 hover:bg-[var(--secondary)]'
       }`}
     >
       {icon}
@@ -631,10 +631,10 @@ function SettingsPanel({ settings, setSettings, onClose }: {
   onClose: () => void
 }) {
   return (
-    <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
+    <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-white">Forecast Settings</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-white">
+        <h3 className="text-lg font-medium text-[var(--foreground)]">Forecast Settings</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-[var(--foreground)]">
           <X className="w-5 h-5" />
         </button>
       </div>
@@ -647,7 +647,7 @@ function SettingsPanel({ settings, setSettings, onClose }: {
             <select
               value={settings.purchaseInterval}
               onChange={(e) => setSettings({ ...settings, purchaseInterval: e.target.value as any })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
             >
               <option value="as_needed">As Needed</option>
               <option value="weekly">Weekly</option>
@@ -661,7 +661,7 @@ function SettingsPanel({ settings, setSettings, onClose }: {
               id="roundTo5"
               checked={settings.roundToNearest5}
               onChange={(e) => setSettings({ ...settings, roundToNearest5: e.target.checked })}
-              className="rounded bg-slate-900 border-slate-700"
+              className="rounded bg-[var(--background)] border-[var(--border)]"
             />
             <label htmlFor="roundTo5" className="text-sm text-gray-300">Round quantities to nearest 5</label>
           </div>
@@ -675,7 +675,7 @@ function SettingsPanel({ settings, setSettings, onClose }: {
               type="number"
               value={settings.fbaCapacity}
               onChange={(e) => setSettings({ ...settings, fbaCapacity: parseInt(e.target.value) || 0 })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
             />
           </div>
           <div>
@@ -684,7 +684,7 @@ function SettingsPanel({ settings, setSettings, onClose }: {
               type="number"
               value={settings.fbaTargetDays}
               onChange={(e) => setSettings({ ...settings, fbaTargetDays: parseInt(e.target.value) || 45 })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
             />
           </div>
         </div>
@@ -697,7 +697,7 @@ function SettingsPanel({ settings, setSettings, onClose }: {
               type="number"
               value={settings.warehouseTargetDays}
               onChange={(e) => setSettings({ ...settings, warehouseTargetDays: parseInt(e.target.value) || 135 })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
             />
           </div>
           <div className="pt-2 text-sm text-gray-400">
@@ -786,20 +786,20 @@ function TrendsTab({ items, selectedSkus, setSelectedSkus }: {
   return (
     <div className="space-y-6">
       {/* Multi-Select SKU Selector */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-4">
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4">
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm text-gray-400">Select Products to Compare (max 10)</label>
           <div className="flex gap-2">
             <button
               onClick={selectTop10}
-              className="px-3 py-1 text-xs bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors"
+              className="px-3 py-1 text-xs bg-cyan-600 hover:bg-cyan-700 text-[var(--foreground)] rounded-lg transition-colors"
             >
               Top 10 Sellers
             </button>
             {selectedSkus.length > 0 && (
               <button
                 onClick={clearSelection}
-                className="px-3 py-1 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
+                className="px-3 py-1 text-xs bg-slate-600 hover:bg-slate-500 text-[var(--foreground)] rounded-lg transition-colors"
               >
                 Clear All
               </button>
@@ -811,7 +811,7 @@ function TrendsTab({ items, selectedSkus, setSelectedSkus }: {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-left text-white flex items-center justify-between"
+            className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2 text-left text-[var(--foreground)] flex items-center justify-between"
           >
             <span className="truncate">
               {selectedSkus.length === 0 
@@ -823,7 +823,7 @@ function TrendsTab({ items, selectedSkus, setSelectedSkus }: {
           </button>
 
           {dropdownOpen && (
-            <div className="absolute z-50 w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-80 overflow-y-auto">
+            <div className="absolute z-50 w-full mt-1 bg-[var(--background)] border border-[var(--border)] rounded-lg shadow-xl max-h-80 overflow-y-auto">
               {sortedItems.map((item, index) => {
                 const isSelected = selectedSkus.includes(item.sku)
                 const isDisabled = !isSelected && selectedSkus.length >= 10
@@ -833,18 +833,18 @@ function TrendsTab({ items, selectedSkus, setSelectedSkus }: {
                     key={item.sku}
                     onClick={() => !isDisabled && toggleSku(item.sku)}
                     disabled={isDisabled}
-                    className={`w-full px-3 py-2 text-left flex items-center gap-3 hover:bg-slate-800 transition-colors ${
+                    className={`w-full px-3 py-2 text-left flex items-center gap-3 hover:bg-[var(--card)] transition-colors ${
                       isDisabled ? 'opacity-50 cursor-not-allowed' : ''
-                    } ${isSelected ? 'bg-slate-800' : ''}`}
+                    } ${isSelected ? 'bg-[var(--card)]' : ''}`}
                   >
                     <div className={`w-5 h-5 rounded border flex items-center justify-center ${
                       isSelected ? 'bg-cyan-600 border-cyan-600' : 'border-slate-600'
                     }`}>
-                      {isSelected && <Check className="w-3 h-3 text-white" />}
+                      {isSelected && <Check className="w-3 h-3 text-[var(--foreground)]" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">{item.sku}</span>
+                        <span className="text-[var(--foreground)] font-medium">{item.sku}</span>
                         {index < 10 && (
                           <span className="text-xs px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded">#{index + 1}</span>
                         )}
@@ -887,8 +887,8 @@ function TrendsTab({ items, selectedSkus, setSelectedSkus }: {
       {/* Chart */}
       {selectedSkus.length > 0 && (
         <>
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-            <h3 className="text-lg font-medium text-white mb-4">Sales Trend Comparison (Units/Month)</h3>
+          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+            <h3 className="text-lg font-medium text-[var(--foreground)] mb-4">Sales Trend Comparison (Units/Month)</h3>
             
             {loading ? (
               <div className="h-80 flex items-center justify-center">
@@ -924,13 +924,13 @@ function TrendsTab({ items, selectedSkus, setSelectedSkus }: {
           </div>
 
           {/* Comparison Table */}
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-700">
-              <h3 className="text-lg font-medium text-white">Velocity Comparison</h3>
+          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--border)]">
+              <h3 className="text-lg font-medium text-[var(--foreground)]">Velocity Comparison</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-slate-900">
+                <thead className="bg-[var(--background)]">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">SKU</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">7-Day</th>
@@ -942,22 +942,22 @@ function TrendsTab({ items, selectedSkus, setSelectedSkus }: {
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {selectedItems.map((item, index) => (
-                    <tr key={item.sku} className="hover:bg-slate-700/50">
+                    <tr key={item.sku} className="hover:bg-[var(--secondary)]/50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: LINE_COLORS[index % LINE_COLORS.length] }} />
-                          <span className="font-medium text-white">{item.sku}</span>
+                          <span className="font-medium text-[var(--foreground)]">{item.sku}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right text-white">{item.velocity7d.toFixed(2)}/day</td>
-                      <td className="px-4 py-3 text-right text-white">{item.velocity30d.toFixed(2)}/day</td>
-                      <td className="px-4 py-3 text-right text-white">{item.velocity90d.toFixed(2)}/day</td>
+                      <td className="px-4 py-3 text-right text-[var(--foreground)]">{item.velocity7d.toFixed(2)}/day</td>
+                      <td className="px-4 py-3 text-right text-[var(--foreground)]">{item.velocity30d.toFixed(2)}/day</td>
+                      <td className="px-4 py-3 text-right text-[var(--foreground)]">{item.velocity90d.toFixed(2)}/day</td>
                       <td className="px-4 py-3 text-right">
                         <span className={item.velocityChange7d >= 0 ? 'text-green-400' : 'text-red-400'}>
                           {item.velocityChange7d >= 0 ? '+' : ''}{item.velocityChange7d?.toFixed(1) || 0}%
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right text-white">{Math.round(item.totalDaysOfSupply)} days</td>
+                      <td className="px-4 py-3 text-right text-[var(--foreground)]">{Math.round(item.totalDaysOfSupply)} days</td>
                     </tr>
                   ))}
                 </tbody>
@@ -968,12 +968,12 @@ function TrendsTab({ items, selectedSkus, setSelectedSkus }: {
       )}
 
       {selectedSkus.length === 0 && (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-12 text-center">
+        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-12 text-center">
           <BarChart3 className="w-12 h-12 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400">Select products above to compare trends</p>
           <button
             onClick={selectTop10}
-            className="mt-4 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors"
+            className="mt-4 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-[var(--foreground)] rounded-lg transition-colors"
           >
             Quick Start: Compare Top 10 Sellers
           </button>
@@ -1047,7 +1047,7 @@ function PurchasingTab({
 
   const SortHeader = ({ column, label, className = '' }: { column: PurchasingSortColumn; label: string; className?: string }) => (
     <th
-      className={`px-2 py-2 cursor-pointer hover:bg-slate-700/50 select-none transition-colors text-xs whitespace-nowrap ${className}`}
+      className={`px-2 py-2 cursor-pointer hover:bg-[var(--secondary)]/50 select-none transition-colors text-xs whitespace-nowrap ${className}`}
       onClick={() => handleSort(column)}
     >
       <div className="flex items-center gap-1 justify-center">
@@ -1068,7 +1068,7 @@ function PurchasingTab({
           <select
             value={selectedSupplier}
             onChange={(e) => setSelectedSupplier(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
-            className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white"
+            className="bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1.5 text-sm text-[var(--foreground)]"
           >
             <option value="all">All Suppliers</option>
             {suppliers.map((s: Supplier) => (
@@ -1077,7 +1077,7 @@ function PurchasingTab({
           </select>
         </div>
 
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white">
+        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1.5 text-sm text-[var(--foreground)]">
           <option value="all">All Urgency</option>
           <option value="critical">Critical</option>
           <option value="high">High</option>
@@ -1093,7 +1093,7 @@ function PurchasingTab({
           </button>
         )}
 
-        <button className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-sm">
+        <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--card)] hover:bg-[var(--secondary)] rounded border border-[var(--border)] text-sm">
           <Download className="w-4 h-4" />
           Export
         </button>
@@ -1101,21 +1101,21 @@ function PurchasingTab({
 
       {/* Table */}
       {sortedItems.length === 0 ? (
-        <div className="bg-slate-800 rounded-xl p-8 text-center">
+        <div className="bg-[var(--card)] rounded-xl p-8 text-center">
           <Package className="w-12 h-12 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400">No items need purchasing right now</p>
         </div>
       ) : (
-        <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+        <div className="bg-[var(--card)] rounded-lg border border-[var(--border)] overflow-hidden">
           <table className="w-full table-fixed">
             <thead>
-              <tr className="border-b border-slate-700 text-gray-400 bg-slate-900">
+              <tr className="border-b border-[var(--border)] text-gray-400 bg-[var(--background)]">
                 <th className="w-8 px-2 py-2">
                   <input
                     type="checkbox"
                     checked={selectedSkus.size === sortedItems.length && sortedItems.length > 0}
                     onChange={selectAll}
-                    className="rounded bg-slate-800 border-slate-700"
+                    className="rounded bg-[var(--card)] border-[var(--border)]"
                   />
                 </th>
                 <SortHeader column="sku" label="SKU" className="text-left w-[22%]" />
@@ -1133,13 +1133,13 @@ function PurchasingTab({
 
                 return (
                   <React.Fragment key={item.sku}>
-                    <tr className={`border-b border-slate-700/50 hover:bg-slate-750 transition-colors ${selectedSkus.has(item.sku) ? 'bg-cyan-900/10' : ''}`}>
+                    <tr className={`border-b border-[var(--border)]/50 hover:bg-slate-750 transition-colors ${selectedSkus.has(item.sku) ? 'bg-cyan-900/10' : ''}`}>
                       <td className="px-2 py-2">
                         <input
                           type="checkbox"
                           checked={selectedSkus.has(item.sku)}
                           onChange={() => toggleSelection(item.sku)}
-                          className="rounded bg-slate-900 border-slate-700"
+                          className="rounded bg-[var(--background)] border-[var(--border)]"
                         />
                       </td>
                       <td className="px-2 py-2">
@@ -1147,14 +1147,14 @@ function PurchasingTab({
                           className="cursor-pointer truncate"
                           onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)}
                         >
-                          <p className="font-medium text-white truncate">{item.sku}</p>
+                          <p className="font-medium text-[var(--foreground)] truncate">{item.sku}</p>
                           <p className="text-xs text-gray-500 truncate">
                             {(item.displayName || item.title)?.substring(0, 30)}
                           </p>
                         </div>
                       </td>
                       <td className="px-2 py-2 text-center">
-                        <span className="text-white">{item.velocity30d.toFixed(1)}</span>
+                        <span className="text-[var(--foreground)]">{item.velocity30d.toFixed(1)}</span>
                         {item.velocityChange7d !== 0 && (
                           <span className={`ml-0.5 ${item.velocityChange7d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {item.velocityChange7d >= 0 ? <TrendingUp className="w-3 h-3 inline" /> : <TrendingDown className="w-3 h-3 inline" />}
@@ -1193,7 +1193,7 @@ function PurchasingTab({
                             <span className={`font-medium ${
                               (item.daysToPurchase || 0) <= 0 ? 'text-red-400' :
                               (item.daysToPurchase || 0) <= 7 ? 'text-orange-400' :
-                              (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-white'
+                              (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-[var(--foreground)]'
                             }`}>
                               {new Date(item.purchaseByDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </span>
@@ -1209,14 +1209,14 @@ function PurchasingTab({
                         <div className="flex items-center justify-center gap-0.5">
                           <button
                             onClick={(e) => { e.stopPropagation(); onHideProduct(item.sku); }}
-                            className="p-1 hover:bg-slate-700 rounded"
+                            className="p-1 hover:bg-[var(--secondary)] rounded"
                             title="Hide from forecasting"
                           >
                             <EyeOff className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
                           </button>
                           <button
                             onClick={() => setExpandedSku(expandedSku === item.sku ? null : item.sku)}
-                            className="p-1 hover:bg-slate-700 rounded"
+                            className="p-1 hover:bg-[var(--secondary)] rounded"
                           >
                             {expandedSku === item.sku ?
                               <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> :
@@ -1229,16 +1229,16 @@ function PurchasingTab({
 
                       {/* Expanded Details Row */}
                       {expandedSku === item.sku && (
-                        <tr className="bg-slate-900/50">
+                        <tr className="bg-[var(--background)]/50">
                           <td colSpan={8} className="px-4 py-4">
                             <div className="grid grid-cols-5 gap-6">
                               <div>
                                 <h4 className="text-sm font-medium text-gray-400 mb-2">Inventory Breakdown</h4>
                                 <div className="space-y-1 text-sm">
-                                  <div className="flex justify-between"><span className="text-gray-500">FBA</span><span className="text-white">{item.fbaAvailable || 0}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">FBA</span><span className="text-[var(--foreground)]">{item.fbaAvailable || 0}</span></div>
                                   <div className="flex justify-between"><span className="text-gray-500">FBA Inbound</span><span className="text-cyan-400">{item.fbaInbound || 0}</span></div>
-                                  <div className="flex justify-between"><span className="text-gray-500">Warehouse</span><span className="text-white">{item.warehouseAvailable || 0}</span></div>
-                                  <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-gray-400 font-medium">On Hand</span><span className="text-white font-medium">{item.currentInventory || 0}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Warehouse</span><span className="text-[var(--foreground)]">{item.warehouseAvailable || 0}</span></div>
+                                  <div className="flex justify-between border-t border-[var(--border)] pt-1"><span className="text-gray-400 font-medium">On Hand</span><span className="text-[var(--foreground)] font-medium">{item.currentInventory || 0}</span></div>
                                 </div>
                               </div>
 
@@ -1252,7 +1252,7 @@ function PurchasingTab({
                                         <span className="text-green-400">+{po.qty}</span>
                                       </div>
                                     ))}
-                                    <div className="flex justify-between border-t border-slate-700 pt-1">
+                                    <div className="flex justify-between border-t border-[var(--border)] pt-1">
                                       <span className="text-gray-400 font-medium">Total PO</span>
                                       <span className="text-green-400 font-medium">+{item.incomingFromPO}</span>
                                     </div>
@@ -1265,10 +1265,10 @@ function PurchasingTab({
                               <div>
                                 <h4 className="text-sm font-medium text-gray-400 mb-2">Supplier</h4>
                                 <div className="space-y-1 text-sm">
-                                  <div className="flex justify-between"><span className="text-gray-500">Name</span><span className="text-white">{item.supplierName || 'Not set'}</span></div>
-                                  <div className="flex justify-between"><span className="text-gray-500">Lead Time</span><span className="text-white">{item.leadTimeDays} days</span></div>
-                                  <div className="flex justify-between"><span className="text-gray-500">Unit Cost</span><span className="text-white">{formatCurrency(item.cost)}</span></div>
-                                  {item.moq && <div className="flex justify-between"><span className="text-gray-500">MOQ</span><span className="text-white">{item.moq}</span></div>}
+                                  <div className="flex justify-between"><span className="text-gray-500">Name</span><span className="text-[var(--foreground)]">{item.supplierName || 'Not set'}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Lead Time</span><span className="text-[var(--foreground)]">{item.leadTimeDays} days</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Unit Cost</span><span className="text-[var(--foreground)]">{formatCurrency(item.cost)}</span></div>
+                                  {item.moq && <div className="flex justify-between"><span className="text-gray-500">MOQ</span><span className="text-[var(--foreground)]">{item.moq}</span></div>}
                                 </div>
                               </div>
 
@@ -1282,20 +1282,20 @@ function PurchasingTab({
                                         <span className={`font-medium ${
                                           (item.daysToPurchase || 0) <= 0 ? 'text-red-400' :
                                           (item.daysToPurchase || 0) <= 7 ? 'text-orange-400' :
-                                          (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-white'
+                                          (item.daysToPurchase || 0) <= 14 ? 'text-yellow-400' : 'text-[var(--foreground)]'
                                         }`}>
                                           {new Date(item.purchaseByDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                         </span>
                                       </div>
                                       <div className="flex justify-between">
                                         <span className="text-gray-500">Days Left</span>
-                                        <span className="text-white">{item.daysToPurchase || 0}</span>
+                                        <span className="text-[var(--foreground)]">{item.daysToPurchase || 0}</span>
                                       </div>
                                     </>
                                   ) : (
                                     <p className="text-gray-500">No order needed</p>
                                   )}
-                                  <div className="flex justify-between"><span className="text-gray-500">Reorder Point</span><span className="text-white">{item.reorderPoint}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Reorder Point</span><span className="text-[var(--foreground)]">{item.reorderPoint}</span></div>
                                 </div>
                               </div>
 
@@ -1319,12 +1319,12 @@ function PurchasingTab({
             </table>
 
           {/* Summary Footer */}
-          <div className="px-3 py-2 bg-slate-900 border-t border-slate-700 flex items-center justify-between text-xs">
+          <div className="px-3 py-2 bg-[var(--background)] border-t border-[var(--border)] flex items-center justify-between text-xs">
             <span className="text-gray-400">
               {sortedItems.length} items{selectedSkus.size > 0 && <span className="text-cyan-400 ml-2">({selectedSkus.size} selected)</span>}
             </span>
             <span className="text-gray-400">
-              Total: <span className="text-white font-medium">{formatCurrency(sortedItems.reduce((sum: number, i: ForecastItem) => sum + (applyRounding(i.recommendedOrderQty) * i.cost), 0))}</span>
+              Total: <span className="text-[var(--foreground)] font-medium">{formatCurrency(sortedItems.reduce((sum: number, i: ForecastItem) => sum + (applyRounding(i.recommendedOrderQty) * i.cost), 0))}</span>
             </span>
           </div>
         </div>
@@ -1595,7 +1595,7 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
 
   const SortHeader = ({ column, label, className = '' }: { column: typeof sortColumn; label: string; className?: string }) => (
     <th 
-      className={`p-3 cursor-pointer hover:bg-slate-700/50 select-none ${className}`}
+      className={`p-3 cursor-pointer hover:bg-[var(--secondary)]/50 select-none ${className}`}
       onClick={() => handleSort(column)}
     >
       <div className="flex items-center justify-center gap-1">
@@ -1734,16 +1734,16 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
                 <span className="text-green-400">today</span>
               ) : (
                 // Coming soon
-                <span className="text-slate-400">in {item.daysUntil}d</span>
+                <span className="text-[var(--muted-foreground)]">in {item.daysUntil}d</span>
               )
             ) : (
               // No date set - show date if available
               item.expectedDate ? (
-                <span className="text-slate-500">
+                <span className="text-[var(--muted-foreground)]">
                   {new Date(item.expectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
               ) : (
-                <span className="text-slate-500">(no ETA)</span>
+                <span className="text-[var(--muted-foreground)]">(no ETA)</span>
               )
             )}
           </div>
@@ -1769,7 +1769,7 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
   return (
     <div className="space-y-4">
       {/* Capacity Bar & Controls */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-4">
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4">
         <div className="flex items-center gap-6 flex-wrap">
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-400">Daily Capacity:</label>
@@ -1777,20 +1777,20 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
               type="number"
               value={settings.fbaCapacity}
               onChange={(e) => setSettings({ ...settings, fbaCapacity: parseInt(e.target.value) || 0 })}
-              className="w-24 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white"
+              className="w-24 bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-[var(--foreground)]"
             />
             <span className="text-gray-400">units</span>
           </div>
           
           <div className="flex-1 min-w-48">
             <div className="flex items-center gap-2">
-              <div className="flex-1 bg-slate-700 rounded-full h-3">
+              <div className="flex-1 bg-[var(--secondary)] rounded-full h-3">
                 <div 
                   className={`h-3 rounded-full transition-all ${capacityUsed > 100 ? 'bg-red-500' : capacityUsed > 80 ? 'bg-orange-500' : 'bg-purple-500'}`}
                   style={{ width: `${Math.min(100, capacityUsed)}%` }}
                 />
               </div>
-              <span className={`text-sm font-medium ${capacityUsed > 100 ? 'text-red-400' : 'text-white'}`}>
+              <span className={`text-sm font-medium ${capacityUsed > 100 ? 'text-red-400' : 'text-[var(--foreground)]'}`}>
                 {totalSelectedUnits} / {settings.fbaCapacity}
               </span>
             </div>
@@ -1802,7 +1802,7 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
               id="roundFbaTo5"
               checked={roundFbaTo5}
               onChange={(e) => setRoundFbaTo5(e.target.checked)}
-              className="rounded bg-slate-900 border-slate-700"
+              className="rounded bg-[var(--background)] border-[var(--border)]"
             />
             <label htmlFor="roundFbaTo5" className="text-sm text-gray-300">Round to 5s</label>
           </div>
@@ -1811,7 +1811,7 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
           <div className="relative">
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white hover:bg-slate-800"
+              className="flex items-center gap-2 px-3 py-1.5 bg-[var(--background)] border border-[var(--border)] rounded-lg text-sm text-[var(--foreground)] hover:bg-[var(--card)]"
             >
               <Filter className="w-4 h-4" />
               {statusFilter === 'all' ? 'All Status' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
@@ -1819,12 +1819,12 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
             </button>
             
             {showFilterDropdown && (
-              <div className="absolute z-10 mt-1 w-40 bg-slate-900 border border-slate-700 rounded-lg shadow-xl">
+              <div className="absolute z-10 mt-1 w-40 bg-[var(--background)] border border-[var(--border)] rounded-lg shadow-xl">
                 {['all', 'outOfStock', 'critical', 'warning', 'ok'].map((status) => (
                   <button
                     key={status}
                     onClick={() => { setStatusFilter(status as any); setShowFilterDropdown(false) }}
-                    className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-800 ${statusFilter === status ? 'text-cyan-400' : 'text-white'}`}
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-[var(--card)] ${statusFilter === status ? 'text-cyan-400' : 'text-[var(--foreground)]'}`}
                   >
                     {status === 'all' ? 'All Status' : status === 'outOfStock' ? 'Out of Stock' : status.charAt(0).toUpperCase() + status.slice(1)}
                   </button>
@@ -1836,7 +1836,7 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
           <button
             onClick={createFbaShipment}
             disabled={selectedItems.length === 0 || isCreatingShipment}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white"
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-[var(--foreground)]"
           >
             {isCreatingShipment ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
@@ -1848,10 +1848,10 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
         </div>
         
         {/* Quick Stats */}
-        <div className="flex gap-4 mt-3 pt-3 border-t border-slate-700">
+        <div className="flex gap-4 mt-3 pt-3 border-t border-[var(--border)]">
           <div className="text-sm">
             <span className="text-gray-400">Selected:</span>
-            <span className="ml-1 text-white font-medium">{selectedItems.length} items</span>
+            <span className="ml-1 text-[var(--foreground)] font-medium">{selectedItems.length} items</span>
           </div>
           <div className="text-sm">
             <span className="text-gray-400">Total Units:</span>
@@ -1861,24 +1861,24 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
       </div>
       
       {sortedAndFilteredItems.length === 0 ? (
-        <div className="bg-slate-800 rounded-xl p-8 text-center">
+        <div className="bg-[var(--card)] rounded-xl p-8 text-center">
           <Truck className="w-12 h-12 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400">
             {shipmentItems.length === 0 ? 'No FBA replenishment needed right now' : 'No items match your filter'}
           </p>
         </div>
       ) : (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-700 text-left text-sm text-gray-400">
+                <tr className="border-b border-[var(--border)] text-left text-sm text-gray-400">
                   <th className="p-3 w-10">
                     <input 
                       type="checkbox" 
                       checked={sortedAndFilteredItems.length > 0 && sortedAndFilteredItems.every(i => i.selected)} 
                       onChange={toggleSelectAll} 
-                      className="rounded bg-slate-900 border-slate-700" 
+                      className="rounded bg-[var(--background)] border-[var(--border)]" 
                     />
                   </th>
                   <SortHeader column="sku" label="SKU" className="text-left" />
@@ -1900,12 +1900,12 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
                   const cantFulfill = item.replenishmentNeeded > item.warehouseAvailable
                   
                   return (
-                    <tr key={item.sku} className={`border-b border-slate-700/50 hover:bg-slate-750 ${item.selected ? 'bg-purple-900/10' : ''}`}>
+                    <tr key={item.sku} className={`border-b border-[var(--border)]/50 hover:bg-slate-750 ${item.selected ? 'bg-purple-900/10' : ''}`}>
                       <td className="p-3">
-                        <input type="checkbox" checked={item.selected} onChange={() => toggleSelect(item.sku)} className="rounded bg-slate-900 border-slate-700" />
+                        <input type="checkbox" checked={item.selected} onChange={() => toggleSelect(item.sku)} className="rounded bg-[var(--background)] border-[var(--border)]" />
                       </td>
                       <td className="p-3">
-                        <p className="font-medium text-white">{item.sku}</p>
+                        <p className="font-medium text-[var(--foreground)]">{item.sku}</p>
                       </td>
                       <td className="p-3 text-center">
                         <span className={`inline-flex items-center justify-center min-w-[5.5rem] px-2 py-1 rounded text-xs font-medium border ${item.statusDisplay.color}`}>
@@ -1915,8 +1915,8 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
                       <td className="p-3 text-center">
                         {getShipByBadge(item.shipBy)}
                       </td>
-                      <td className="p-3 text-center text-white">{item.velocity30d.toFixed(1)}/day</td>
-                      <td className="p-3 text-center text-white">{item.fbaAvailable}</td>
+                      <td className="p-3 text-center text-[var(--foreground)]">{item.velocity30d.toFixed(1)}/day</td>
+                      <td className="p-3 text-center text-[var(--foreground)]">{item.fbaAvailable}</td>
                       <td className="p-3 text-center text-cyan-400">{item.fbaInbound || 0}</td>
                       <td className="p-3 text-center">
                         <span className={`font-medium ${cantFulfill ? 'text-orange-400' : 'text-cyan-400'}`}>
@@ -1927,7 +1927,7 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
                         )}
                       </td>
                       <td className="p-3 text-center">
-                        <span className="text-white">{item.warehouseAvailable}</span>
+                        <span className="text-[var(--foreground)]">{item.warehouseAvailable}</span>
                       </td>
                       <td className="p-3 text-center">
                         {renderIncomingCell(item.incoming)}
@@ -1941,14 +1941,14 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
                             onBlur={() => handleQtyBlur(item.sku)}
                             onKeyDown={(e) => handleQtyKeyDown(e, item.sku)}
                             onFocus={(e) => setEditingQty({ sku: item.sku, value: String(item.sendQty) })}
-                            className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-center"
+                            className="w-20 bg-[var(--background)] border border-slate-600 rounded px-2 py-1 text-[var(--foreground)] text-center"
                             min={0}
                             max={item.warehouseAvailable}
                           />
-                          <button onClick={() => updateQty(item.sku, item.replenishmentNeeded)} className="p-1 hover:bg-slate-700 rounded text-gray-400 hover:text-white" title="Set to replenishment needed">
+                          <button onClick={() => updateQty(item.sku, item.replenishmentNeeded)} className="p-1 hover:bg-[var(--secondary)] rounded text-gray-400 hover:text-[var(--foreground)]" title="Set to replenishment needed">
                             <RefreshCw className="w-3 h-3" />
                           </button>
-                          <button onClick={() => onHideProduct(item.sku)} className="p-1 hover:bg-slate-700 rounded text-gray-500 hover:text-red-400" title="Hide from forecasting">
+                          <button onClick={() => onHideProduct(item.sku)} className="p-1 hover:bg-[var(--secondary)] rounded text-gray-500 hover:text-red-400" title="Hide from forecasting">
                             <EyeOff className="w-3 h-3" />
                           </button>
                         </div>
@@ -1973,26 +1973,26 @@ function StockoutsTab({ stockouts, onRefresh }: { stockouts: StockoutEvent[]; on
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-4 gap-4">
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <p className="text-sm text-gray-400">Total Stockouts (90d)</p>
           <p className="text-2xl font-bold text-red-400 mt-1">{stockouts.length}</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <p className="text-sm text-gray-400">Days Lost</p>
           <p className="text-2xl font-bold text-orange-400 mt-1">{stockouts.reduce((sum, s) => sum + s.daysOutOfStock, 0)}</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <p className="text-sm text-gray-400">Est. Lost Sales</p>
           <p className="text-2xl font-bold text-yellow-400 mt-1">${stockouts.reduce((sum, s) => sum + s.estimatedLostSales, 0).toLocaleString()}</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <p className="text-sm text-gray-400">Unresolved</p>
-          <p className="text-2xl font-bold text-white mt-1">{stockouts.filter(s => !s.resolved).length}</p>
+          <p className="text-2xl font-bold text-[var(--foreground)] mt-1">{stockouts.filter(s => !s.resolved).length}</p>
         </div>
       </div>
 
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-        <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+        <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
           <Brain className="w-5 h-5 text-cyan-500" />
           Root Cause Analysis
         </h3>
@@ -2005,10 +2005,10 @@ function StockoutsTab({ stockouts, onRefresh }: { stockouts: StockoutEvent[]; on
         ) : (
           <div className="space-y-4">
             {stockouts.map((stockout) => (
-              <div key={stockout.id} className={`p-4 rounded-lg border ${stockout.resolved ? 'bg-slate-900/50 border-slate-700' : 'bg-red-900/10 border-red-500/30'}`}>
+              <div key={stockout.id} className={`p-4 rounded-lg border ${stockout.resolved ? 'bg-[var(--background)]/50 border-[var(--border)]' : 'bg-red-900/10 border-red-500/30'}`}>
                 <div className="flex items-start justify-between">
                   <div>
-                    <h4 className="font-medium text-white">{stockout.sku}</h4>
+                    <h4 className="font-medium text-[var(--foreground)]">{stockout.sku}</h4>
                     <p className="text-xs text-gray-500">{stockout.title?.substring(0, 50)}</p>
                   </div>
                   <div className="text-right">

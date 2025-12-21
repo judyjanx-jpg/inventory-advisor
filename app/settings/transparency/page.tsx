@@ -118,8 +118,8 @@ export default function TransparencySettingsPage() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-white">Transparency API</h1>
-            <p className="text-slate-400">Configure Amazon Transparency program integration</p>
+            <h1 className="text-2xl font-bold text-[var(--foreground)]">Transparency API</h1>
+            <p className="text-[var(--muted-foreground)]">Configure Amazon Transparency program integration</p>
           </div>
         </div>
 
@@ -141,12 +141,12 @@ export default function TransparencySettingsPage() {
               ) : (
                 <>
                   <div className="w-3 h-3 bg-slate-500 rounded-full"></div>
-                  <span className="text-slate-400">Not configured</span>
+                  <span className="text-[var(--muted-foreground)]">Not configured</span>
                 </>
               )}
             </div>
             {settings.configured && (
-              <p className="text-sm text-slate-400 mt-2">
+              <p className="text-sm text-[var(--muted-foreground)] mt-2">
                 Client ID: {settings.clientId?.slice(0, 8)}...
               </p>
             )}
@@ -164,7 +164,7 @@ export default function TransparencySettingsPage() {
           <CardContent>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   Client ID
                 </label>
                 <input
@@ -172,12 +172,12 @@ export default function TransparencySettingsPage() {
                   value={formData.clientId}
                   onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
                   placeholder="e.g., 55n109uplvpo5q9spnoldgf1n2"
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none font-mono"
+                  className="w-full px-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:border-cyan-500 focus:outline-none font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   Client Secret
                 </label>
                 <div className="relative">
@@ -186,18 +186,18 @@ export default function TransparencySettingsPage() {
                     value={formData.clientSecret}
                     onChange={(e) => setFormData({ ...formData, clientSecret: e.target.value })}
                     placeholder={settings.hasSecret ? '••••••••••••••••' : 'Enter client secret'}
-                    className="w-full px-4 py-2 pr-12 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none font-mono"
+                    className="w-full px-4 py-2 pr-12 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:border-cyan-500 focus:outline-none font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => setShowSecret(!showSecret)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                   >
                     {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 {settings.hasSecret && !formData.clientSecret && (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">
                     Leave blank to keep existing secret
                   </p>
                 )}
@@ -243,14 +243,14 @@ export default function TransparencySettingsPage() {
         {/* Info */}
         <Card>
           <CardContent className="pt-6">
-            <h3 className="font-medium text-white mb-2">About Transparency</h3>
-            <p className="text-sm text-slate-400 mb-4">
+            <h3 className="font-medium text-[var(--foreground)] mb-2">About Transparency</h3>
+            <p className="text-sm text-[var(--muted-foreground)] mb-4">
               Amazon Transparency is a product serialization service that helps protect your brand
               from counterfeit products. Each unit receives a unique code that Amazon and customers
               can scan to verify authenticity.
             </p>
-            <h3 className="font-medium text-white mb-2">How it works</h3>
-            <ul className="text-sm text-slate-400 space-y-1 list-disc list-inside">
+            <h3 className="font-medium text-[var(--foreground)] mb-2">How it works</h3>
+            <ul className="text-sm text-[var(--muted-foreground)] space-y-1 list-disc list-inside">
               <li>Products enrolled in Transparency receive unique serial codes</li>
               <li>Codes are printed as 2D barcodes (QR codes) on labels</li>
               <li>This integration automatically fetches codes when printing labels</li>

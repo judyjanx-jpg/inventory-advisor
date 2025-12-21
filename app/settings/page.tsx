@@ -98,8 +98,8 @@ export default function SettingsPage() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-white">Settings</h1>
-          <p className="text-slate-400 mt-1">Manage your account and integrations</p>
+          <h1 className="text-3xl font-bold text-[var(--foreground)]">Settings</h1>
+          <p className="text-[var(--muted-foreground)] mt-1">Manage your account and integrations</p>
         </div>
 
         {/* Settings Grid */}
@@ -110,25 +110,25 @@ export default function SettingsPage() {
               <Card hover={!section.disabled} className={section.disabled ? 'opacity-60' : ''}>
                 <CardContent className="p-6">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <div className="w-12 h-12 bg-[var(--secondary)] rounded-xl flex items-center justify-center flex-shrink-0">
                       {Icon ? (
-                        <Icon className="w-6 h-6 text-slate-400" />
+                        <Icon className="w-6 h-6 text-[var(--muted-foreground)]" />
                       ) : (
                         <span className="text-2xl">{typeof section.icon === 'string' ? section.icon : ''}</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-white">{section.name}</h3>
+                        <h3 className="font-semibold text-[var(--foreground)]">{section.name}</h3>
                         {section.disabled && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-400">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]">
                             {section.status}
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-slate-400 mt-1">{section.description}</p>
+                      <p className="text-sm text-[var(--muted-foreground)] mt-1">{section.description}</p>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-500" />
+                    <ChevronRight className="w-5 h-5 text-[var(--muted-foreground)]" />
                   </div>
                 </CardContent>
               </Card>
@@ -154,8 +154,8 @@ export default function SettingsPage() {
                 <Database className="w-6 h-6 text-emerald-400" />
               </div>
               <div>
-                <h3 className="font-semibold text-white">Database Status</h3>
-                <p className="text-sm text-slate-400 mt-1">PostgreSQL • Connected</p>
+                <h3 className="font-semibold text-[var(--foreground)]">Database Status</h3>
+                <p className="text-sm text-[var(--muted-foreground)] mt-1">PostgreSQL • Connected</p>
               </div>
               <div className="ml-auto flex items-center gap-2">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>

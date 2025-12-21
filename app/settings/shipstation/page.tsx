@@ -128,8 +128,8 @@ export default function ShipStationSettingsPage() {
       {toast.show && (
         <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg transform transition-all duration-300 ${
           toast.type === 'success'
-            ? 'bg-emerald-500/90 text-white'
-            : 'bg-red-500/90 text-white'
+            ? 'bg-emerald-500/90 text-[var(--foreground)]'
+            : 'bg-red-500/90 text-[var(--foreground)]'
         }`}>
           <div className="flex items-center gap-3">
             <span className="text-xl">{toast.type === 'success' ? '✓' : '✗'}</span>
@@ -152,14 +152,14 @@ export default function ShipStationSettingsPage() {
               <span className="text-2xl">🚢</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">ShipStation</h1>
-              <p className="text-slate-400">Connect to ShipStation for shipping management</p>
+              <h1 className="text-2xl font-bold text-[var(--foreground)]">ShipStation</h1>
+              <p className="text-[var(--muted-foreground)]">Connect to ShipStation for shipping management</p>
             </div>
           </div>
           <div className={`px-4 py-2 rounded-full text-sm font-medium ${
             isConnected
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-              : 'bg-slate-700/50 text-slate-400 border border-slate-600'
+              : 'bg-slate-700/50 text-[var(--muted-foreground)] border border-[var(--border)]'
           }`}>
             {isConnected ? '✓ Connected' : '○ Not Connected'}
           </div>
@@ -167,44 +167,44 @@ export default function ShipStationSettingsPage() {
 
         {/* Features Overview */}
         {isConnected && (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <div className="bg-[var(--card)]/50 border border-[var(--border)]/50 rounded-xl p-6">
+            <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4 flex items-center gap-2">
               <span className="text-orange-400">📦</span> ShipStation Integration
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-slate-900/50 rounded-lg p-4">
+              <div className="bg-[var(--secondary)]/50 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                     <span className="text-blue-400">📋</span>
                   </div>
                   <div>
-                    <h3 className="font-medium text-white">Orders</h3>
-                    <p className="text-xs text-slate-400">Import & sync orders</p>
+                    <h3 className="font-medium text-[var(--foreground)]">Orders</h3>
+                    <p className="text-xs text-[var(--muted-foreground)]">Import & sync orders</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-slate-900/50 rounded-lg p-4">
+              <div className="bg-[var(--secondary)]/50 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
                     <span className="text-emerald-400">🏷️</span>
                   </div>
                   <div>
-                    <h3 className="font-medium text-white">Labels</h3>
-                    <p className="text-xs text-slate-400">Create shipping labels</p>
+                    <h3 className="font-medium text-[var(--foreground)]">Labels</h3>
+                    <p className="text-xs text-[var(--muted-foreground)]">Create shipping labels</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-slate-900/50 rounded-lg p-4">
+              <div className="bg-[var(--secondary)]/50 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
                     <span className="text-purple-400">📍</span>
                   </div>
                   <div>
-                    <h3 className="font-medium text-white">Tracking</h3>
-                    <p className="text-xs text-slate-400">Real-time tracking updates</p>
+                    <h3 className="font-medium text-[var(--foreground)]">Tracking</h3>
+                    <p className="text-xs text-[var(--muted-foreground)]">Real-time tracking updates</p>
                   </div>
                 </div>
               </div>
@@ -214,7 +214,7 @@ export default function ShipStationSettingsPage() {
               <button
                 onClick={handleTest}
                 disabled={testing}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-[var(--card)] rounded-lg text-[var(--foreground)] text-sm font-medium transition-colors flex items-center gap-2"
               >
                 {testing ? (
                   <>
@@ -229,10 +229,10 @@ export default function ShipStationSettingsPage() {
         )}
 
         {/* Credentials Form */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+        <div className="bg-[var(--card)]/50 border border-[var(--border)]/50 rounded-xl p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <span className="text-slate-400">⚙</span> API Credentials
+            <h2 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
+              <span className="text-[var(--muted-foreground)]">⚙</span> API Credentials
             </h2>
             {isConnected && (
               <button
@@ -251,7 +251,7 @@ export default function ShipStationSettingsPage() {
             <div className="space-y-4 mb-6">
               {/* API Key */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   API Key <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -259,13 +259,13 @@ export default function ShipStationSettingsPage() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="Enter your ShipStation API Key"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
               {/* API Secret */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   API Secret <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -273,7 +273,7 @@ export default function ShipStationSettingsPage() {
                   value={apiSecret}
                   onChange={(e) => setApiSecret(e.target.value)}
                   placeholder="Enter your ShipStation API Secret"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                 />
               </div>
             </div>
@@ -282,7 +282,7 @@ export default function ShipStationSettingsPage() {
               <button
                 onClick={handleSave}
                 disabled={saving || !apiKey || !apiSecret}
-                className="px-6 py-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:from-slate-600 disabled:to-slate-600 rounded-lg text-white font-medium transition-all"
+                className="px-6 py-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:from-slate-600 disabled:to-slate-600 rounded-lg text-[var(--foreground)] font-medium transition-all"
               >
                 {saving ? 'Saving...' : isConnected ? 'Update Connection' : 'Connect to ShipStation'}
               </button>
@@ -299,17 +299,17 @@ export default function ShipStationSettingsPage() {
           </div>
 
           {isConnected && (
-            <div className="text-sm text-slate-400">
+            <div className="text-sm text-[var(--muted-foreground)]">
               <p>✓ Connected to ShipStation</p>
-              <p className="text-xs text-slate-500 mt-1">API credentials are securely stored</p>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">API credentials are securely stored</p>
             </div>
           )}
         </div>
 
         {/* Help Section */}
-        <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">📚 Setup Guide</h3>
-          <ol className="text-sm text-slate-400 space-y-2 list-decimal list-inside">
+        <div className="bg-[var(--card)]/30 border border-[var(--border)]/30 rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-[var(--foreground)] mb-3">📚 Setup Guide</h3>
+          <ol className="text-sm text-[var(--muted-foreground)] space-y-2 list-decimal list-inside">
             <li>Log in to your <a href="https://ship.shipstation.com/settings/api" target="_blank" className="text-cyan-400 hover:underline">ShipStation account</a></li>
             <li>Go to Settings → Account → API Settings</li>
             <li>Generate a new API Key and Secret if you don&apos;t have one</li>
@@ -317,9 +317,9 @@ export default function ShipStationSettingsPage() {
             <li>Click &quot;Connect to ShipStation&quot; to save</li>
           </ol>
 
-          <div className="mt-4 p-4 bg-slate-900/30 rounded-lg">
-            <h4 className="text-sm font-medium text-slate-300 mb-2">🔒 Security Note</h4>
-            <p className="text-xs text-slate-500">
+          <div className="mt-4 p-4 bg-[var(--secondary)]/30 rounded-lg">
+            <h4 className="text-sm font-medium text-[var(--foreground)] mb-2">🔒 Security Note</h4>
+            <p className="text-xs text-[var(--muted-foreground)]">
               Your API credentials are encrypted and stored securely. ShipStation API uses Basic
               Authentication. Never share your API Secret with anyone.
             </p>

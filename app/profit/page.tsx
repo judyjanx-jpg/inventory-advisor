@@ -290,8 +290,8 @@ export default function ProfitDashboard() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">Profit Dashboard</h1>
-            <p className="text-slate-400 mt-1">Track profitability by product and period</p>
+            <h1 className="text-3xl font-bold text-[var(--foreground)]">Profit Dashboard</h1>
+            <p className="text-[var(--muted-foreground)] mt-1">Track profitability by product and period</p>
           </div>
           <div className="flex items-center gap-3">
             <PeriodSelector
@@ -320,7 +320,7 @@ export default function ProfitDashboard() {
             <button
               onClick={fetchDashboardData}
               disabled={loading}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--hover-bg)] rounded-lg transition-colors disabled:opacity-50"
               title="Refresh"
             >
               <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -337,11 +337,11 @@ export default function ProfitDashboard() {
         />
 
         {/* Product Table Section */}
-        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
           {/* Table Header */}
-          <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <h2 className="font-semibold text-white text-lg">
+              <h2 className="font-semibold text-[var(--foreground)] text-lg">
                 {getPeriodLabel()}
               </h2>
               
@@ -352,7 +352,7 @@ export default function ProfitDashboard() {
                   className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'products' 
                       ? 'text-cyan-400 border-cyan-400' 
-                      : 'text-slate-400 border-transparent hover:text-white'
+                      : 'text-[var(--muted-foreground)] border-transparent hover:text-[var(--foreground)]'
                   }`}
                 >
                   <Package className="w-4 h-4" />
@@ -363,7 +363,7 @@ export default function ProfitDashboard() {
                   className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'orders' 
                       ? 'text-cyan-400 border-cyan-400' 
-                      : 'text-slate-400 border-transparent hover:text-white'
+                      : 'text-[var(--muted-foreground)] border-transparent hover:text-[var(--foreground)]'
                   }`}
                 >
                   <FileText className="w-4 h-4" />
@@ -380,7 +380,7 @@ export default function ProfitDashboard() {
               />
               <button 
                 onClick={handleExport}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--hover-bg)] rounded transition-colors"
                 title="Export CSV"
               >
                 <Download className="w-5 h-5" />
@@ -397,7 +397,7 @@ export default function ProfitDashboard() {
               groupBy={groupBy}
             />
           ) : (
-            <div className="p-12 text-center text-slate-500">
+            <div className="p-12 text-center text-[var(--muted-foreground)]">
               <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>Order Items view coming soon</p>
             </div>

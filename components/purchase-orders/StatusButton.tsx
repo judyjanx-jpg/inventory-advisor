@@ -67,7 +67,7 @@ export default function StatusButton({ currentStatus, onStatusChange, className 
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-[9999] min-w-[200px]">
+        <div className="absolute top-full left-0 mt-2 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-xl z-[9999] min-w-[200px]">
           {STATUSES.map((status, index) => {
             const StatusIcon = status.icon
             const isDisabled = index < currentIndex
@@ -78,12 +78,12 @@ export default function StatusButton({ currentStatus, onStatusChange, className 
                 key={status.value}
                 onClick={() => !isDisabled && handleStatusSelect(status.value)}
                 disabled={isDisabled}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors ${
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--hover-bg)] transition-colors ${
                   isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                } ${isCurrent ? 'bg-slate-700/50' : ''} ${
+                } ${isCurrent ? 'bg-[var(--muted)]' : ''} ${
                   index === 0 ? 'rounded-t-lg' : ''
                 } ${
-                  index === STATUSES.length - 1 ? 'rounded-b-lg' : 'border-b border-slate-700'
+                  index === STATUSES.length - 1 ? 'rounded-b-lg' : 'border-b border-[var(--border)]'
                 }`}
               >
                 <StatusIcon className="w-4 h-4" />
@@ -94,7 +94,7 @@ export default function StatusButton({ currentStatus, onStatusChange, className 
                   </span>
                 )}
                 {isDisabled && (
-                  <span className="text-xs text-slate-500">Locked</span>
+                  <span className="text-xs text-[var(--muted-foreground)]">Locked</span>
                 )}
               </button>
             )

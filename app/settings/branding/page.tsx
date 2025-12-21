@@ -260,8 +260,8 @@ export default function BrandingSettingsPage() {
             </div>
 
             {/* Preview */}
-            <div className="mt-4 p-4 bg-slate-950 rounded-lg border border-slate-800">
-              <p className="text-xs text-slate-400 mb-3">Preview:</p>
+            <div className="mt-4 p-4 bg-[var(--card)] rounded-lg border border-[var(--border)]">
+              <p className="text-xs text-[var(--muted-foreground)] mb-3">Preview:</p>
               <div className="flex items-center gap-3">
                 <div 
                   className="w-10 h-10 rounded-lg flex items-center justify-center"
@@ -272,14 +272,14 @@ export default function BrandingSettingsPage() {
                   </span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-white">{settings.brandName} Support</h3>
+                  <h3 className="font-bold text-[var(--foreground)]">{settings.brandName} Support</h3>
                   {settings.tagline && (
-                    <p className="text-xs text-slate-400">{settings.tagline}</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">{settings.tagline}</p>
                   )}
                 </div>
               </div>
               <button
-                className="mt-3 px-4 py-2 rounded-lg text-white text-sm font-medium"
+                className="mt-3 px-4 py-2 rounded-lg text-[var(--foreground)] text-sm font-medium"
                 style={{ backgroundColor: settings.primaryColor }}
               >
                 Start Chat
