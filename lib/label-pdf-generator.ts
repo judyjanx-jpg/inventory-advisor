@@ -12,8 +12,41 @@ import jsPDF from 'jspdf'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 
-// Transparency "T" icon as base64 PNG (simple black icon, 64x64)
-const TRANSPARENCY_ICON_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACXBIWXMAAAsTAAALEwEAmpwYAAADT0lEQVR4nO2bW07DMBBFz1D2wgYQYgHsgA2wA1gDK2IH7AAJdsMOYAewBBYAQggJ8ThMSpO4je3x2E5LpfJRxXHm+s7EySQDTJkyZUo+ALgEVoGZwPctYBe4A7YC1/NVHbAO3AMfwI+y/wA3wLoy2dBsA4fAe0n9H+C5GFP5MllbwAPw6qj/DbANbCmT9c02sAe8+dT/AmwAa8pkfbMN7AMvPvW/ApvAqjLZ0GwDB8CzT/13xZjnykRDswUcAk8+9V/HmMfKJEOzDRwBjz71X8aYR8oEQ7MFHAMPPvVfxJj7ymR9sw2cAPc+9cfjmLvKRH2zBRwWF6Xu10SRxMQ8UCbpm23gELjNbxIxpgE+pAksKJP1zRZwANzk1p8dY64qk/TNNrAP3OTUH49jriuT9M0WcADc5NY/pRhzXZmgb7aAA+A6t/4p0bME+yXx15sGp4NtDjZwFgD2gKuc+kv2c1OZpG+2gH3gMqf+Mv1cr0wyJBvAHnCeU38p0cW6MsHQrAO7wFlu/aVEF2vK5EKzCuwAZzn1JwyH56oywdCsANvAaU79xYlyj5VJhmYZ2AJOcupPJh1z3CsTDM0SsAkc59afKJk0TLqvTDI0S8AmcJRT/zfJyNjN2MV/AmJD08PuxzYP+CrDMDpd/Fhw4KJBh3/9HLCg1R+wqU0sJsvAG6JDAOLrR4fAKw8dfKZMLCaP0Y5w+LFtSL1TbHrCw2cdgnY8O/jchLn2AYyBT/i8OYS28y3wDyxLuFMcuLy16YQ7UPh41+E8Ey82Hc4w4N8Q5V4JLOWsWz8c+RbS2h8pX2h0FuY8oN3S2n+pfJHQ+e+S+r+UL7Sn8n8q/6vyB/r/O+XPS/95mUv5cpr7D+WbC5w/pnwxi/89T/mQ9l8oXzBw/ozyJSrnryr/WaT8S7H7z5UvpLn/Qvli2vs/K19Ie/+l8sW093+g/P8a7ZP/J/G9BmDY8/6K8gW175+VL6a9/0L5Ytr7L5Uvpr3/UvmC2vu/lC+mvf9a+WLa+38ofyBc+38qf6Bc+38pf6Bc+38rf1D7/oXyB7Xvn5U/qH3/pPxh7ftH5Y9q3z8of1T7/l75o9r3j8qfUb7/ovwZ7fsvyh/Xvn9S/gzl+wflzyhfIHJ+gO0O3U+ZMmXKFL/8ApMMl7d2XVzAAAAAAElFTkSuQmCC'
+/**
+ * Draw the official Amazon Transparency logo
+ * The logo consists of:
+ * - Top: checkerboard/pixelated pattern
+ * - Bottom: label/tag shape with curved corner
+ */
+function drawTransparencyLogo(pdf: jsPDF, x: number, y: number, size: number) {
+  const unit = size / 8 // Divide into 8x8 grid
+  
+  pdf.setFillColor(0, 0, 0)
+  
+  // Row 1 - checkerboard top
+  pdf.rect(x + unit, y, unit, unit, 'F')
+  pdf.rect(x + 3 * unit, y, unit, unit, 'F')
+  pdf.rect(x + 5 * unit, y, 3 * unit, unit, 'F')
+  
+  // Row 2
+  pdf.rect(x, y + unit, unit, unit, 'F')
+  pdf.rect(x + 2 * unit, y + unit, unit, unit, 'F')
+  pdf.rect(x + 4 * unit, y + unit, unit, unit, 'F')
+  pdf.rect(x + 6 * unit, y + unit, 2 * unit, unit, 'F')
+  
+  // Row 3
+  pdf.rect(x + unit, y + 2 * unit, unit, unit, 'F')
+  pdf.rect(x + 3 * unit, y + 2 * unit, unit, unit, 'F')
+  pdf.rect(x + 5 * unit, y + 2 * unit, unit, unit, 'F')
+  
+  // Vertical stem (rows 4-7)
+  pdf.rect(x + 5 * unit, y + 3 * unit, unit, 4 * unit, 'F')
+  
+  // Curved label bottom - approximate with rectangles and a small curve
+  pdf.rect(x + 5 * unit, y + 7 * unit, unit, unit, 'F')
+  // Add the curved "peel" effect on bottom right
+  pdf.rect(x + 6 * unit, y + 6.5 * unit, unit * 0.8, unit * 1.2, 'F')
+}
 
 interface LabelItem {
   masterSku: string
@@ -177,30 +210,19 @@ async function drawTPOnlyLabel(
   const centerX = widthMm / 2
   const centerY = heightMm / 2
 
-  // Draw Transparency header
+  // Draw Transparency header with official Amazon Transparency logo
   pdf.setFontSize(5)
   pdf.setFont('helvetica', 'normal')
 
-  // Add Transparency icon - draw a bold "T" in a circle
-  // This is more reliable than base64 images
-  const iconX = 2
-  const iconY = 1
-  const iconSize = 3
-  
-  // Draw circle background
-  pdf.setDrawColor(0, 0, 0) // Black border
-  pdf.setFillColor(255, 255, 255) // White fill
-  pdf.circle(iconX + iconSize/2, iconY + iconSize/2, iconSize/2, 'FD')
-  
-  // Draw bold "T" text inside circle
-  pdf.setFontSize(4)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setTextColor(0, 0, 0) // Black text
-  pdf.text('T', iconX + iconSize/2 - 0.5, iconY + iconSize/2 + 0.7, { align: 'center' })
+  // Draw the official Transparency logo
+  const iconSize = 4
+  drawTransparencyLogo(pdf, 1.5, 0.5, iconSize)
 
   // Header text
-  pdf.text('Scan with the', 7, 3)
-  pdf.text('Transparency app', 7, 5)
+  pdf.setFontSize(4)
+  pdf.setTextColor(0, 0, 0)
+  pdf.text('Scan with the', 7, 2.5)
+  pdf.text('Transparency app', 7, 4.5)
 
   // QR Code (centered)
   if (qrImage) {
@@ -244,28 +266,16 @@ async function drawComboLabel(
 
   // === TP SECTION (LEFT) ===
 
-  // Transparency icon - draw a bold "T" in a circle
-  // This is more reliable than base64 images
-  const iconX = 1
-  const iconY = 1
-  const iconSize = 3
-  
-  // Draw circle background
-  pdf.setDrawColor(0, 0, 0) // Black border
-  pdf.setFillColor(255, 255, 255) // White fill
-  pdf.circle(iconX + iconSize/2, iconY + iconSize/2, iconSize/2, 'FD')
-  
-  // Draw bold "T" text inside circle
-  pdf.setFontSize(4)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setTextColor(0, 0, 0) // Black text
-  pdf.text('T', iconX + iconSize/2 - 0.5, iconY + iconSize/2 + 0.7, { align: 'center' })
+  // Draw the official Transparency logo
+  const iconSize = 3.5
+  drawTransparencyLogo(pdf, 1, 0.5, iconSize)
 
-  // Header text - adjusted to account for larger icon
+  // "Scan with the Transparency app" text
   pdf.setFontSize(4)
   pdf.setFont('helvetica', 'normal')
-  pdf.text('Scan with the', 6, 2)
-  pdf.text('Transparency app', 6, 3.5)
+  pdf.setTextColor(0, 0, 0)
+  pdf.text('Scan with the', 5.5, 2)
+  pdf.text('Transparency app', 5.5, 3.5)
 
   // QR Code - CENTERED in the TP section with proper margins
   if (qrImage) {
