@@ -46,23 +46,23 @@ function TableSkeleton({ columns }: { columns: number }) {
   return (
     <>
       {[...Array(8)].map((_, i) => (
-        <tr key={i} className="animate-pulse border-b border-slate-700/50">
+        <tr key={i} className="animate-pulse border-b border-[var(--border)]/50">
           <td className="px-4 py-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-slate-700 rounded-lg"></div>
+              <div className="w-12 h-12 bg-[var(--muted)] rounded-lg"></div>
               <div>
-                <div className="h-4 bg-slate-700 rounded w-28 mb-2"></div>
-                <div className="h-3 bg-slate-700 rounded w-48"></div>
+                <div className="h-4 bg-[var(--muted)] rounded w-28 mb-2"></div>
+                <div className="h-3 bg-[var(--muted)] rounded w-48"></div>
               </div>
             </div>
           </td>
           {[...Array(columns)].map((_, j) => (
             <td key={j} className="px-4 py-4">
-              <div className="h-4 bg-slate-700 rounded w-16 ml-auto"></div>
+              <div className="h-4 bg-[var(--muted)] rounded w-16 ml-auto"></div>
             </td>
           ))}
           <td className="px-4 py-4">
-            <div className="h-4 bg-slate-700 rounded w-12"></div>
+            <div className="h-4 bg-[var(--muted)] rounded w-12"></div>
           </td>
         </tr>
       ))}
@@ -88,13 +88,13 @@ function ProductRow({
       case 'refunds':
         return product.refunds > 0 ? (
           <span className="text-red-400 font-medium">{product.refunds}</span>
-        ) : <span className="text-slate-500">-</span>
+        ) : <span className="text-[var(--muted-foreground)]">-</span>
       case 'sales':
         return <span className="font-medium">{formatCurrency(product.sales)}</span>
       case 'adSpend':
         return product.adSpend > 0 ? (
           <span className="text-red-400">-{formatCurrency(product.adSpend)}</span>
-        ) : <span className="text-slate-500">-</span>
+        ) : <span className="text-[var(--muted-foreground)]">-</span>
       case 'cogs':
         return product.cogsTotal > 0 ? (
           <span className="text-red-400">-{formatCurrency(product.cogsTotal)}</span>
@@ -116,18 +116,18 @@ function ProductRow({
           </span>
         )
       case 'realAcos':
-        if (product.realAcos === null) return <span className="text-slate-500">-</span>
+        if (product.realAcos === null) return <span className="text-[var(--muted-foreground)]">-</span>
         return (
           <span className={product.realAcos < 100 ? 'text-emerald-400' : 'text-red-400'}>
             {formatPercent(product.realAcos)}
           </span>
         )
       case 'sessions':
-        return product.sessions > 0 ? formatNumber(product.sessions) : <span className="text-slate-500">-</span>
+        return product.sessions > 0 ? formatNumber(product.sessions) : <span className="text-[var(--muted-foreground)]">-</span>
       case 'unitSessionPct':
-        return product.unitSessionPct > 0 ? formatPercent(product.unitSessionPct) : <span className="text-slate-500">-</span>
+        return product.unitSessionPct > 0 ? formatPercent(product.unitSessionPct) : <span className="text-[var(--muted-foreground)]">-</span>
       case 'bsr':
-        if (!product.bsr) return <span className="text-slate-500">-</span>
+        if (!product.bsr) return <span className="text-[var(--muted-foreground)]">-</span>
         return (
           <div className="flex items-center justify-end gap-1">
             {product.bsrChange !== undefined && (
@@ -141,18 +141,18 @@ function ProductRow({
           </div>
         )
       default:
-        return <span className="text-slate-500">-</span>
+        return <span className="text-[var(--muted-foreground)]">-</span>
     }
   }
 
   return (
-    <tr className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors group">
+    <tr className="border-b border-[var(--border)]/50 hover:bg-[var(--muted)]/30 transition-colors group">
       {/* Product Info */}
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <button 
             onClick={onToggle}
-            className="text-slate-500 hover:text-white transition-colors"
+            className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
           >
             {isExpanded ? (
               <ChevronDown className="w-4 h-4" />
@@ -164,30 +164,30 @@ function ProductRow({
             <img 
               src={product.imageUrl} 
               alt={product.title}
-              className="w-12 h-12 object-cover rounded-lg bg-slate-700"
+              className="w-12 h-12 object-cover rounded-lg bg-[var(--muted)]"
             />
           ) : (
-            <div className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center text-slate-500 text-xs">
+            <div className="w-12 h-12 bg-[var(--muted)] rounded-lg flex items-center justify-center text-[var(--muted-foreground)] text-xs">
               No img
             </div>
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               {/* Show internal name (displayName) if set, otherwise Amazon SKU */}
-              <p className="font-medium text-white">{product.displayName || product.sku}</p>
+              <p className="font-medium text-[var(--foreground)]">{product.displayName || product.sku}</p>
               {product.asin && (
                 <a
                   href={`https://www.amazon.com/dp/${product.asin}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-slate-500 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="text-[var(--muted-foreground)] hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <ExternalLink className="w-3 h-3" />
                 </a>
               )}
             </div>
             {/* Always show Amazon product title as subtitle */}
-            <p className="text-sm text-slate-400 truncate max-w-[300px]">{product.title}</p>
+            <p className="text-sm text-[var(--muted-foreground)] truncate max-w-[300px]">{product.title}</p>
           </div>
         </div>
       </td>
@@ -243,19 +243,19 @@ export function ProductProfitTable({
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead>
-          <tr className="border-b border-slate-700">
-            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <tr className="border-b border-[var(--border)]">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
               Parent / Product
             </th>
             {visibleColumnDefs.map((col) => (
               <th 
                 key={col.key}
-                className="px-4 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap"
+                className="px-4 py-3 text-right text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider whitespace-nowrap"
               >
                 {col.label}
               </th>
             ))}
-            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
               Info
             </th>
           </tr>
@@ -269,7 +269,7 @@ export function ProductProfitTable({
                 colSpan={visibleColumns.length + 2} 
                 className="px-4 py-16 text-center"
               >
-                <div className="text-slate-500">
+                <div className="text-[var(--muted-foreground)]">
                   <p className="text-lg mb-1">No data for this period</p>
                   <p className="text-sm">Try selecting a different time period</p>
                 </div>
@@ -287,8 +287,8 @@ export function ProductProfitTable({
                 />
               ))}
               {/* Totals Row */}
-              <tr className="bg-slate-700/50 border-t-2 border-slate-600 font-semibold">
-                <td className="px-4 py-3 text-white">
+              <tr className="bg-[var(--muted)]/50 border-t-2 border-[var(--border)] font-semibold">
+                <td className="px-4 py-3 text-[var(--foreground)]">
                   Total ({products.length} products)
                 </td>
                 {visibleColumns.map((colKey) => (

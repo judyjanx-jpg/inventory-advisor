@@ -65,19 +65,19 @@ export function PeriodSelector({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg hover:bg-[var(--hover-bg)] transition-colors"
       >
-        <Calendar className="w-4 h-4 text-slate-400" />
-        <span className="text-sm text-white">Period</span>
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <Calendar className="w-4 h-4 text-[var(--muted-foreground)]" />
+        <span className="text-sm text-[var(--foreground)]">Period</span>
+        <ChevronDown className={`w-4 h-4 text-[var(--muted-foreground)] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 flex">
+        <div className="absolute right-0 mt-2 bg-[var(--card)] rounded-lg shadow-xl border border-[var(--border)] z-50 flex">
           {/* Period Presets - Always visible */}
-          <div className="w-80 border-r border-slate-700">
-            <div className="p-2 border-b border-slate-700">
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2">
+          <div className="w-80 border-r border-[var(--border)]">
+            <div className="p-2 border-b border-[var(--border)]">
+              <h3 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2 px-2">
                 Period Presets
               </h3>
               {periodPresets.map((preset) => (
@@ -89,8 +89,8 @@ export function PeriodSelector({
                       setIsOpen(false)
                     }
                   }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
-                    selectedPreset === preset.value ? 'text-cyan-400' : 'text-slate-300'
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-[var(--hover-bg)] ${
+                    selectedPreset === preset.value ? 'text-cyan-400' : 'text-[var(--foreground)]'
                   }`}
                 >
                   {selectedPreset === preset.value && (
@@ -105,15 +105,15 @@ export function PeriodSelector({
 
             {/* Compare Mode */}
             <div className="p-2">
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2">
+              <h3 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2 px-2">
                 Comparison
               </h3>
               {compareModes.map((mode) => (
                 <button
                   key={mode.value}
                   onClick={() => onCompareModeChange(mode.value as any)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-slate-700 ${
-                    compareMode === mode.value ? 'text-cyan-400' : 'text-slate-300'
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded hover:bg-[var(--hover-bg)] ${
+                    compareMode === mode.value ? 'text-cyan-400' : 'text-[var(--foreground)]'
                   }`}
                 >
                   {compareMode === mode.value && (
@@ -131,7 +131,7 @@ export function PeriodSelector({
           {selectedPreset === 'custom' && (
             <div className="w-[700px]">
               <div className="p-4">
-                <h3 className="text-sm font-semibold text-white mb-4">Custom Date Range</h3>
+                <h3 className="text-sm font-semibold text-[var(--foreground)] mb-4">Custom Date Range</h3>
                 <CalendarDatePicker
                   startDate={localStartDate}
                   endDate={localEndDate}
@@ -151,7 +151,7 @@ export function PeriodSelector({
                 <div className="flex justify-end gap-2 mt-4">
                   <button
                     onClick={() => setIsOpen(false)}
-                    className="px-4 py-2 text-sm text-slate-300 hover:text-white transition-colors"
+                    className="px-4 py-2 text-sm text-[var(--foreground)] hover:text-[var(--foreground)] transition-colors"
                   >
                     Cancel
                   </button>
@@ -163,7 +163,7 @@ export function PeriodSelector({
                       setIsOpen(false)
                     }}
                     disabled={!localStartDate || !localEndDate}
-                    className="px-4 py-2 text-sm bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 disabled:text-slate-500 text-white rounded-lg transition-colors"
+                    className="px-4 py-2 text-sm bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 disabled:text-slate-500 text-[var(--foreground)] rounded-lg transition-colors"
                   >
                     Apply
                   </button>

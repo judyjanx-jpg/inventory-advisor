@@ -103,7 +103,7 @@ function PeriodCard({
     <div className="relative flex-1 min-w-0">
       <div
         className={`bg-gradient-to-br ${gradient} rounded-xl p-5 text-white h-full cursor-pointer transition-all ${
-          isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900' : 'hover:brightness-110'
+          isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[var(--background)]' : 'hover:brightness-110'
         }`}
         onClick={onClick}
       >

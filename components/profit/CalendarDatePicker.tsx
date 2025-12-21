@@ -110,11 +110,11 @@ export function CalendarDatePicker({ startDate, endDate, onStartDateChange, onEn
                 setEndMonth(subMonths(month, 1))
               }
             }}
-            className="p-1 hover:bg-slate-700 rounded transition-colors"
+            className="p-1 hover:bg-[var(--muted)] rounded transition-colors"
           >
-            <ChevronLeft className="w-4 h-4 text-slate-400" />
+            <ChevronLeft className="w-4 h-4 text-[var(--muted-foreground)]" />
           </button>
-          <h3 className="text-sm font-medium text-white">
+          <h3 className="text-sm font-medium text-[var(--foreground)]">
             {format(month, 'MMMM yyyy')}
           </h3>
           <button
@@ -125,16 +125,16 @@ export function CalendarDatePicker({ startDate, endDate, onStartDateChange, onEn
                 setEndMonth(addMonths(month, 1))
               }
             }}
-            className="p-1 hover:bg-slate-700 rounded transition-colors"
+            className="p-1 hover:bg-[var(--muted)] rounded transition-colors"
           >
-            <ChevronRight className="w-4 h-4 text-slate-400" />
+            <ChevronRight className="w-4 h-4 text-[var(--muted-foreground)]" />
           </button>
         </div>
 
         {/* Day Labels */}
         <div className="grid grid-cols-7 gap-1 mb-2">
           {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
-            <div key={day} className="text-xs text-slate-500 text-center py-1">
+            <div key={day} className="text-xs text-[var(--muted-foreground)] text-center py-1">
               {day}
             </div>
           ))}
@@ -160,14 +160,14 @@ export function CalendarDatePicker({ startDate, endDate, onStartDateChange, onEn
                 className={`
                   aspect-square text-xs rounded transition-colors
                   ${isSelected 
-                    ? 'bg-cyan-600 text-white font-semibold' 
+                    ? 'bg-cyan-600 text-[var(--foreground)] font-semibold' 
                     : inRange && !isSelected
-                    ? 'bg-cyan-600/30 text-white'
+                    ? 'bg-cyan-600/30 text-[var(--foreground)]'
                     : isToday
-                    ? 'bg-slate-700 text-white font-medium'
+                    ? 'bg-[var(--muted)] text-[var(--foreground)] font-medium'
                     : isOtherMonth
-                    ? 'text-slate-600'
-                    : 'text-slate-300 hover:bg-slate-700'
+                    ? 'text-[var(--muted-foreground)]'
+                    : 'text-[var(--foreground)] hover:bg-[var(--muted)]'
                   }
                 `}
               >
@@ -185,7 +185,7 @@ export function CalendarDatePicker({ startDate, endDate, onStartDateChange, onEn
       {/* Start Date Calendar */}
       <div className="flex-1">
         <div className="mb-2">
-          <label className="text-xs text-slate-400 mb-1 block">Start Date</label>
+          <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Start Date</label>
           <input
             type="date"
             value={startDate ? format(startDate, 'yyyy-MM-dd') : ''}
@@ -196,7 +196,7 @@ export function CalendarDatePicker({ startDate, endDate, onStartDateChange, onEn
                 onStartDateChange(null)
               }
             }}
-            className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+            className="w-full px-3 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
           />
         </div>
         {renderCalendar(startMonth, startDays, true)}
@@ -205,7 +205,7 @@ export function CalendarDatePicker({ startDate, endDate, onStartDateChange, onEn
       {/* End Date Calendar */}
       <div className="flex-1">
         <div className="mb-2">
-          <label className="text-xs text-slate-400 mb-1 block">End Date</label>
+          <label className="text-xs text-[var(--muted-foreground)] mb-1 block">End Date</label>
           <input
             type="date"
             value={endDate ? format(endDate, 'yyyy-MM-dd') : ''}
@@ -216,7 +216,7 @@ export function CalendarDatePicker({ startDate, endDate, onStartDateChange, onEn
                 onEndDateChange(null)
               }
             }}
-            className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+            className="w-full px-3 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
           />
         </div>
         {renderCalendar(endMonth, endDays, false)}
