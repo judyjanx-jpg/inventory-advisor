@@ -39,14 +39,14 @@ export function GroupBySelector({ value, onChange }: GroupBySelectorProps) {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded hover:bg-slate-600 transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-[var(--muted)] border border-[var(--border)] rounded hover:bg-[var(--hover-bg)] transition-colors"
       >
-        <span className="text-slate-300">Group by {selectedOption?.label || 'parent'}</span>
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <span className="text-[var(--foreground)]">Group by {selectedOption?.label || 'parent'}</span>
+        <ChevronDown className={`w-4 h-4 text-[var(--muted-foreground)] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-1 w-48 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 py-1">
+        <div className="absolute right-0 mt-1 w-48 bg-[var(--card)] rounded-lg shadow-xl border border-[var(--border)] z-50 py-1">
           {groupOptions.map((option) => (
             <button
               key={option.value}
@@ -54,8 +54,8 @@ export function GroupBySelector({ value, onChange }: GroupBySelectorProps) {
                 onChange(option.value)
                 setIsOpen(false)
               }}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-700 ${
-                value === option.value ? 'text-cyan-400 bg-slate-700/50' : 'text-slate-300'
+              className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--muted)] ${
+                value === option.value ? 'text-cyan-400 bg-[var(--muted)]/50' : 'text-[var(--foreground)]'
               }`}
             >
               {value === option.value && (
@@ -67,9 +67,9 @@ export function GroupBySelector({ value, onChange }: GroupBySelectorProps) {
             </button>
           ))}
           
-          <div className="border-t border-slate-700 mt-1 pt-1 px-3 py-2">
-            <label className="flex items-center gap-2 text-sm text-slate-300">
-              <input type="checkbox" className="rounded border-slate-600 bg-slate-700 text-cyan-500" />
+          <div className="border-t border-[var(--border)] mt-1 pt-1 px-3 py-2">
+            <label className="flex items-center gap-2 text-sm text-[var(--foreground)]">
+              <input type="checkbox" className="rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500" />
               Split SKUs by marketplace
             </label>
           </div>

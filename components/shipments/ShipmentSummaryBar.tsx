@@ -52,26 +52,26 @@ export default function ShipmentSummaryBar({
   const qtyPerBox = totalBoxes > 0 ? Math.round(totalUnits / totalBoxes) : 0
 
   return (
-    <div className="sticky top-0 z-40 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-700 shadow-lg">
+    <div className="sticky top-0 z-40 bg-gradient-to-r from-[var(--card)] via-[var(--card)] to-[var(--card)] border-b border-[var(--border)] shadow-lg">
       <div className="max-w-7xl mx-auto px-6 py-4">
         {/* Title and Metrics */}
         <div className="text-center mb-4">
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <h2 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">
             Shipment Summary
           </h2>
           <div className="flex items-center justify-center gap-6 text-lg">
-            <span className="text-white font-bold">{totalSkus} SKUs</span>
-            <span className="text-slate-500">|</span>
-            <span className="text-white font-bold">{totalUnits.toLocaleString()} pcs</span>
-            <span className="text-slate-500">|</span>
-            <span className="text-white font-bold">
+            <span className="text-[var(--foreground)] font-bold">{totalSkus} SKUs</span>
+            <span className="text-[var(--muted-foreground)]">|</span>
+            <span className="text-[var(--foreground)] font-bold">{totalUnits.toLocaleString()} pcs</span>
+            <span className="text-[var(--muted-foreground)]">|</span>
+            <span className="text-[var(--foreground)] font-bold">
               {totalBoxes > 0 ? `${qtyPerBox}/BOX` : '—/BOX'}
             </span>
           </div>
         </div>
 
         {/* Progress Bar */}
-        <div className="relative h-2 bg-slate-700 rounded-full mb-4 overflow-hidden">
+        <div className="relative h-2 bg-[var(--muted)] rounded-full mb-4 overflow-hidden">
           <div
             className="absolute left-0 top-0 h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-500"
             style={{ width: `${getProgressPercent()}%` }}
@@ -91,8 +91,8 @@ export default function ShipmentSummaryBar({
                     ? 'text-emerald-400'
                     : stageStatus === 'current'
                     ? 'text-cyan-400'
-                    : 'text-slate-500'
-                } hover:bg-slate-700/50`}
+                    : 'text-[var(--muted-foreground)]'
+                } hover:bg-[var(--muted)]/50`}
               >
                 {stageStatus === 'complete' ? (
                   <Check className="w-5 h-5" />

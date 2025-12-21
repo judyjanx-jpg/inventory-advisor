@@ -57,38 +57,38 @@ export function ColumnSelector({ visibleColumns, onChange }: ColumnSelectorProps
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+        className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] rounded transition-colors"
         title="Select columns"
       >
         <Settings2 className="w-5 h-5" />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-1 w-64 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 py-2 max-h-96 overflow-y-auto">
-          <div className="px-3 pb-2 mb-2 border-b border-slate-700">
-            <label className="flex items-center gap-2 text-sm text-slate-300">
-              <input type="checkbox" className="rounded border-slate-600 bg-slate-700 text-cyan-500" />
+        <div className="absolute right-0 mt-1 w-64 bg-[var(--card)] rounded-lg shadow-xl border border-[var(--border)] z-50 py-2 max-h-96 overflow-y-auto">
+          <div className="px-3 pb-2 mb-2 border-b border-[var(--border)]">
+            <label className="flex items-center gap-2 text-sm text-[var(--foreground)]">
+              <input type="checkbox" className="rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500" />
               Vertical lines
             </label>
           </div>
 
           <div className="px-3 pb-1">
-            <span className="text-xs font-medium text-slate-500 uppercase">Columns</span>
+            <span className="text-xs font-medium text-[var(--muted-foreground)] uppercase">Columns</span>
           </div>
 
           {allColumns.map((column) => (
             <button
               key={column.key}
               onClick={() => toggleColumn(column.key)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-slate-700"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[var(--muted)]"
             >
               <input
                 type="checkbox"
                 checked={visibleColumns.includes(column.key)}
                 onChange={() => {}}
-                className="rounded border-slate-600 bg-slate-700 text-cyan-500"
+                className="rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500"
               />
-              <span className="text-slate-300">{column.label}</span>
+              <span className="text-[var(--foreground)]">{column.label}</span>
             </button>
           ))}
         </div>
