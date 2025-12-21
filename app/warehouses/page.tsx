@@ -223,8 +223,8 @@ export default function WarehousesPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">Warehouses</h1>
-            <p className="text-slate-400 mt-1">Manage local warehouses and inventory</p>
+            <h1 className="text-3xl font-bold text-[var(--foreground)]">Warehouses</h1>
+            <p className="text-[var(--muted-foreground)] mt-1">Manage local warehouses and inventory</p>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setShowUploadModal(true)}>
@@ -261,13 +261,13 @@ export default function WarehousesPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleOpenModal(warehouse)}
-                      className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
+                      className="p-1.5 hover:bg-[var(--muted)] rounded-lg transition-colors"
                     >
-                      <Edit className="w-4 h-4 text-slate-400" />
+                      <Edit className="w-4 h-4 text-[var(--muted-foreground)]" />
                     </button>
                     <button
                       onClick={() => handleDelete(warehouse.id)}
-                      className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
+                      className="p-1.5 hover:bg-[var(--muted)] rounded-lg transition-colors"
                     >
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </button>
@@ -277,7 +277,7 @@ export default function WarehousesPage() {
               <CardContent>
                 <div className="space-y-3">
                   {(warehouse.address || warehouse.city) && (
-                    <div className="flex items-start gap-2 text-sm text-slate-400">
+                    <div className="flex items-start gap-2 text-sm text-[var(--muted-foreground)]">
                       <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
                       <div>
                         {warehouse.address && <p>{warehouse.address}</p>}
@@ -294,7 +294,7 @@ export default function WarehousesPage() {
                   )}
 
                   {warehouse.contactName && (
-                    <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
                       <Phone className="w-4 h-4" />
                       <span>{warehouse.contactName}</span>
                       {warehouse.contactPhone && <span>• {warehouse.contactPhone}</span>}
@@ -302,24 +302,24 @@ export default function WarehousesPage() {
                   )}
 
                   {warehouse.contactEmail && (
-                    <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
                       <Mail className="w-4 h-4" />
                       <span>{warehouse.contactEmail}</span>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-700">
+                  <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
                     <div className="flex items-center gap-2">
                       {warehouse.isActive ? (
                         <CheckCircle className="w-4 h-4 text-emerald-400" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-500" />
+                        <XCircle className="w-4 h-4 text-[var(--muted-foreground)]" />
                       )}
-                      <span className="text-sm text-slate-400">
+                      <span className="text-sm text-[var(--muted-foreground)]">
                         {warehouse.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    <span className="text-sm text-slate-400">
+                    <span className="text-sm text-[var(--muted-foreground)]">
                       {warehouse._count?.inventory || 0} SKUs
                     </span>
                   </div>
@@ -332,9 +332,9 @@ export default function WarehousesPage() {
         {warehouses.length === 0 && (
           <Card>
             <CardContent className="py-12 text-center">
-              <Warehouse className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-              <p className="text-lg text-slate-400">No warehouses yet</p>
-              <p className="text-sm text-slate-500 mt-1">Add your first warehouse to start tracking inventory</p>
+              <Warehouse className="w-16 h-16 text-[var(--muted-foreground)] mx-auto mb-4" />
+              <p className="text-lg text-[var(--muted-foreground)]">No warehouses yet</p>
+              <p className="text-sm text-[var(--muted-foreground)] mt-1">Add your first warehouse to start tracking inventory</p>
               <Button className="mt-4" onClick={() => handleOpenModal()}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Warehouse
@@ -352,7 +352,7 @@ export default function WarehousesPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Name *
                 </label>
                 <input
@@ -360,11 +360,11 @@ export default function WarehousesPage() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Code *
                 </label>
                 <input
@@ -372,93 +372,93 @@ export default function WarehousesPage() {
                   required
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                   placeholder="WH1"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                 Address
               </label>
               <input
                 type="text"
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               />
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   City
                 </label>
                 <input
                   type="text"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   State
                 </label>
                 <input
                   type="text"
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   ZIP Code
                 </label>
                 <input
                   type="text"
                   value={formData.zipCode}
                   onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                 Contact Name
               </label>
               <input
                 type="text"
                 value={formData.contactName}
                 onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Contact Email
                 </label>
                 <input
                   type="email"
                   value={formData.contactEmail}
                   onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Contact Phone
                 </label>
                 <input
                   type="tel"
                   value={formData.contactPhone}
                   onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
             </div>
@@ -469,9 +469,9 @@ export default function WarehousesPage() {
                 id="isDefault"
                 checked={formData.isDefault}
                 onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
-                className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+                className="w-4 h-4 rounded border-[var(--border)] bg-[var(--card)] text-cyan-500 focus:ring-cyan-500"
               />
-              <label htmlFor="isDefault" className="text-sm text-slate-300">
+              <label htmlFor="isDefault" className="text-sm text-[var(--foreground)]">
                 Set as default warehouse
               </label>
             </div>
@@ -499,13 +499,13 @@ export default function WarehousesPage() {
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                 Select Warehouse *
               </label>
               <select
                 value={selectedWarehouse || ''}
                 onChange={(e) => setSelectedWarehouse(parseInt(e.target.value))}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               >
                 <option value="">Choose a warehouse...</option>
                 {warehouses.map((wh) => (
@@ -517,10 +517,10 @@ export default function WarehousesPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
                 Inventory Data (CSV or JSON) *
               </label>
-              <p className="text-xs text-slate-400 mb-2">
+              <p className="text-xs text-[var(--muted-foreground)] mb-2">
                 CSV format: SKU,Available,Reserved (header row optional)<br />
                 JSON format: [&#123;"masterSku": "SKU1", "available": 100, "reserved": 0&#125;, ...]
               </p>
@@ -528,7 +528,7 @@ export default function WarehousesPage() {
                 value={uploadData}
                 onChange={(e) => setUploadData(e.target.value)}
                 rows={10}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-cyan-500"
+                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] font-mono text-sm focus:outline-none focus:border-cyan-500"
                 placeholder="SKU,Available,Reserved&#10;SKU1,100,0&#10;SKU2,50,5"
               />
             </div>

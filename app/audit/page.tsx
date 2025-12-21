@@ -102,8 +102,8 @@ export default function AuditSetupPage() {
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white">Start New Audit</h1>
-            <p className="text-slate-400 mt-1 text-sm md:text-base">Perform physical warehouse inventory count</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-[var(--foreground)]">Start New Audit</h1>
+            <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">Perform physical warehouse inventory count</p>
           </div>
           <Button 
             variant="outline" 
@@ -121,8 +121,8 @@ export default function AuditSetupPage() {
             <CardContent className="p-4 md:pt-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h3 className="text-white font-semibold mb-1">Active Audit Session Found</h3>
-                  <p className="text-sm text-slate-400">You have an audit in progress. Would you like to resume it?</p>
+                  <h3 className="text-[var(--foreground)] font-semibold mb-1">Active Audit Session Found</h3>
+                  <p className="text-sm text-[var(--muted-foreground)]">You have an audit in progress. Would you like to resume it?</p>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -168,14 +168,14 @@ export default function AuditSetupPage() {
           <CardContent className="space-y-4 md:space-y-6">
             {/* Select Warehouse */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2 flex items-center gap-2">
                 <Warehouse className="w-4 h-4" />
                 SELECT WAREHOUSE
               </label>
               <select
                 value={selectedWarehouse || ''}
                 onChange={(e) => setSelectedWarehouse(parseInt(e.target.value))}
-                className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm md:text-base"
+                className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm md:text-base"
               >
                 <option value="">Select warehouse...</option>
                 {warehouses.map(wh => (
@@ -188,14 +188,14 @@ export default function AuditSetupPage() {
 
             {/* Audit Mode - Card Style */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-3">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-3">
                 AUDIT MODE
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <label className={`relative p-4 md:p-5 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                <label className={`relative p-4 md:p-5 bg-[var(--card)] border-2 rounded-lg cursor-pointer transition-all ${
                   auditMode === 'parent' 
                     ? 'border-cyan-500 bg-cyan-500/10' 
-                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                    : 'border-[var(--border)] hover:border-[var(--border)] hover:bg-[var(--muted)]/50'
                 }`}>
                   <input
                     type="radio"
@@ -207,25 +207,25 @@ export default function AuditSetupPage() {
                   />
                   <div className="flex items-start gap-3">
                     <div className={`p-2 rounded-lg flex-shrink-0 ${
-                      auditMode === 'parent' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                      auditMode === 'parent' ? 'bg-cyan-500/20' : 'bg-[var(--muted)]'
                     }`}>
                       <Layers className={`w-5 h-5 md:w-6 md:h-6 ${
-                        auditMode === 'parent' ? 'text-cyan-400' : 'text-slate-400'
+                        auditMode === 'parent' ? 'text-cyan-400' : 'text-[var(--muted-foreground)]'
                       }`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-white font-semibold mb-1 text-sm md:text-base">Parent Listing</div>
-                      <div className="text-xs md:text-sm text-slate-400">Audit all SKU variants of a parent together</div>
+                      <div className="text-[var(--foreground)] font-semibold mb-1 text-sm md:text-base">Parent Listing</div>
+                      <div className="text-xs md:text-sm text-[var(--muted-foreground)]">Audit all SKU variants of a parent together</div>
                     </div>
                     {auditMode === 'parent' && (
                       <CheckCircle2 className="w-5 h-5 text-cyan-400 flex-shrink-0" />
                     )}
                   </div>
                 </label>
-                <label className={`relative p-4 md:p-5 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                <label className={`relative p-4 md:p-5 bg-[var(--card)] border-2 rounded-lg cursor-pointer transition-all ${
                   auditMode === 'single_sku' 
                     ? 'border-cyan-500 bg-cyan-500/10' 
-                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                    : 'border-[var(--border)] hover:border-[var(--border)] hover:bg-[var(--muted)]/50'
                 }`}>
                   <input
                     type="radio"
@@ -237,15 +237,15 @@ export default function AuditSetupPage() {
                   />
                   <div className="flex items-start gap-3">
                     <div className={`p-2 rounded-lg flex-shrink-0 ${
-                      auditMode === 'single_sku' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                      auditMode === 'single_sku' ? 'bg-cyan-500/20' : 'bg-[var(--muted)]'
                     }`}>
                       <List className={`w-5 h-5 md:w-6 md:h-6 ${
-                        auditMode === 'single_sku' ? 'text-cyan-400' : 'text-slate-400'
+                        auditMode === 'single_sku' ? 'text-cyan-400' : 'text-[var(--muted-foreground)]'
                       }`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-white font-semibold mb-1 text-sm md:text-base">One SKU at a Time</div>
-                      <div className="text-xs md:text-sm text-slate-400">Audit individual SKUs sequentially</div>
+                      <div className="text-[var(--foreground)] font-semibold mb-1 text-sm md:text-base">One SKU at a Time</div>
+                      <div className="text-xs md:text-sm text-[var(--muted-foreground)]">Audit individual SKUs sequentially</div>
                     </div>
                     {auditMode === 'single_sku' && (
                       <CheckCircle2 className="w-5 h-5 text-cyan-400 flex-shrink-0" />
@@ -257,14 +257,14 @@ export default function AuditSetupPage() {
 
             {/* Sort Order - Card Style */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-3">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-3">
                 SORT ORDER
               </label>
               <div className="grid grid-cols-3 gap-2 md:gap-3">
-                <label className={`relative p-3 md:p-4 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                <label className={`relative p-3 md:p-4 bg-[var(--card)] border-2 rounded-lg cursor-pointer transition-all ${
                   sortOrder === 'asc' 
                     ? 'border-cyan-500 bg-cyan-500/10' 
-                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                    : 'border-[var(--border)] hover:border-[var(--border)] hover:bg-[var(--muted)]/50'
                 }`}>
                   <input
                     type="radio"
@@ -276,22 +276,22 @@ export default function AuditSetupPage() {
                   />
                   <div className="flex flex-col items-center text-center gap-1 md:gap-2">
                     <div className={`p-1.5 md:p-2 rounded-lg ${
-                      sortOrder === 'asc' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                      sortOrder === 'asc' ? 'bg-cyan-500/20' : 'bg-[var(--muted)]'
                     }`}>
                       <ArrowUpAZ className={`w-4 h-4 md:w-5 md:h-5 ${
-                        sortOrder === 'asc' ? 'text-cyan-400' : 'text-slate-400'
+                        sortOrder === 'asc' ? 'text-cyan-400' : 'text-[var(--muted-foreground)]'
                       }`} />
                     </div>
-                    <div className="text-white font-medium text-xs md:text-sm">A-Z</div>
+                    <div className="text-[var(--foreground)] font-medium text-xs md:text-sm">A-Z</div>
                     {sortOrder === 'asc' && (
                       <CheckCircle2 className="w-4 h-4 text-cyan-400" />
                     )}
                   </div>
                 </label>
-                <label className={`relative p-3 md:p-4 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                <label className={`relative p-3 md:p-4 bg-[var(--card)] border-2 rounded-lg cursor-pointer transition-all ${
                   sortOrder === 'desc' 
                     ? 'border-cyan-500 bg-cyan-500/10' 
-                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                    : 'border-[var(--border)] hover:border-[var(--border)] hover:bg-[var(--muted)]/50'
                 }`}>
                   <input
                     type="radio"
@@ -303,22 +303,22 @@ export default function AuditSetupPage() {
                   />
                   <div className="flex flex-col items-center text-center gap-1 md:gap-2">
                     <div className={`p-1.5 md:p-2 rounded-lg ${
-                      sortOrder === 'desc' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                      sortOrder === 'desc' ? 'bg-cyan-500/20' : 'bg-[var(--muted)]'
                     }`}>
                       <ArrowDownZA className={`w-4 h-4 md:w-5 md:h-5 ${
-                        sortOrder === 'desc' ? 'text-cyan-400' : 'text-slate-400'
+                        sortOrder === 'desc' ? 'text-cyan-400' : 'text-[var(--muted-foreground)]'
                       }`} />
                     </div>
-                    <div className="text-white font-medium text-xs md:text-sm">Z-A</div>
+                    <div className="text-[var(--foreground)] font-medium text-xs md:text-sm">Z-A</div>
                     {sortOrder === 'desc' && (
                       <CheckCircle2 className="w-4 h-4 text-cyan-400" />
                     )}
                   </div>
                 </label>
-                <label className={`relative p-3 md:p-4 bg-slate-800 border-2 rounded-lg cursor-pointer transition-all ${
+                <label className={`relative p-3 md:p-4 bg-[var(--card)] border-2 rounded-lg cursor-pointer transition-all ${
                   sortOrder === 'custom' 
                     ? 'border-cyan-500 bg-cyan-500/10' 
-                    : 'border-slate-700 hover:border-slate-600 hover:bg-slate-700/50'
+                    : 'border-[var(--border)] hover:border-[var(--border)] hover:bg-[var(--muted)]/50'
                 }`}>
                   <input
                     type="radio"
@@ -330,13 +330,13 @@ export default function AuditSetupPage() {
                   />
                   <div className="flex flex-col items-center text-center gap-1 md:gap-2">
                     <div className={`p-1.5 md:p-2 rounded-lg ${
-                      sortOrder === 'custom' ? 'bg-cyan-500/20' : 'bg-slate-700'
+                      sortOrder === 'custom' ? 'bg-cyan-500/20' : 'bg-[var(--muted)]'
                     }`}>
                       <LayoutGrid className={`w-4 h-4 md:w-5 md:h-5 ${
-                        sortOrder === 'custom' ? 'text-cyan-400' : 'text-slate-400'
+                        sortOrder === 'custom' ? 'text-cyan-400' : 'text-[var(--muted-foreground)]'
                       }`} />
                     </div>
-                    <div className="text-white font-medium text-xs md:text-sm">Custom</div>
+                    <div className="text-[var(--foreground)] font-medium text-xs md:text-sm">Custom</div>
                     {sortOrder === 'custom' && (
                       <CheckCircle2 className="w-4 h-4 text-cyan-400" />
                     )}

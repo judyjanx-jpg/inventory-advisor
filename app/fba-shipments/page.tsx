@@ -341,14 +341,14 @@ export default function FbaShipmentsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'draft': return 'bg-slate-700 text-slate-300'
+      case 'draft': return 'bg-[var(--muted)] text-[var(--foreground)]'
       case 'ready': return 'bg-blue-900/50 text-blue-400'
       case 'shipped': return 'bg-purple-900/50 text-purple-400'
       case 'in_transit': return 'bg-purple-900/50 text-purple-400'
       case 'receiving': return 'bg-amber-900/50 text-amber-400'
       case 'received': return 'bg-emerald-900/50 text-emerald-400'
       case 'closed': return 'bg-emerald-900/50 text-emerald-400'
-      default: return 'bg-slate-700 text-slate-300'
+      default: return 'bg-[var(--muted)] text-[var(--foreground)]'
     }
   }
 
@@ -373,8 +373,8 @@ export default function FbaShipmentsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">FBA Shipments</h1>
-            <p className="text-slate-400 mt-1">Manage shipments to Amazon fulfillment centers</p>
+            <h1 className="text-3xl font-bold text-[var(--foreground)]">FBA Shipments</h1>
+            <p className="text-[var(--muted-foreground)] mt-1">Manage shipments to Amazon fulfillment centers</p>
           </div>
           <div className="flex gap-2">
             <Button
@@ -407,7 +407,7 @@ export default function FbaShipmentsPage() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-400 mb-1">
+                  <label className="block text-sm font-medium text-[var(--muted-foreground)] mb-1">
                     FBA Shipment ID
                   </label>
                   <input
@@ -415,13 +415,13 @@ export default function FbaShipmentsPage() {
                     value={amazonShipmentId}
                     onChange={(e) => setAmazonShipmentId(e.target.value)}
                     placeholder="e.g., FBA193YSY6V4"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                     disabled={deductionLoading}
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-400 mb-1">
-                    Inbound Plan ID <span className="text-slate-500">(Workflow ID)</span>
+                  <label className="block text-sm font-medium text-[var(--muted-foreground)] mb-1">
+                    Inbound Plan ID <span className="text-[var(--muted-foreground)]">(Workflow ID)</span>
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -429,7 +429,7 @@ export default function FbaShipmentsPage() {
                       value={inboundPlanId}
                       onChange={(e) => setInboundPlanId(e.target.value)}
                       placeholder="e.g., wf97fdd5bb-759c-46d1-..."
-                      className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      className="flex-1 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                       disabled={deductionLoading || loadingPlanShipments}
                     />
                     <Button
@@ -449,9 +449,9 @@ export default function FbaShipmentsPage() {
 
               {/* Shipment Selection from Plan */}
               {planShipments.length > 0 && (
-                <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="p-3 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]">
                   <div className="flex justify-between items-center mb-3">
-                    <p className="text-sm text-slate-400">Shipments in this plan ({planShipments.length}):</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">Shipments in this plan ({planShipments.length}):</p>
                     <Button
                       size="sm"
                       onClick={deductAllShipments}
@@ -468,23 +468,23 @@ export default function FbaShipmentsPage() {
                         className={`p-3 rounded-lg border transition-colors ${
                           shipment.deducted
                             ? 'bg-emerald-900/20 border-emerald-700'
-                            : 'bg-slate-800 border-slate-600'
+                            : 'bg-[var(--card)] border-[var(--border)]'
                         }`}
                       >
                         <div className="flex justify-between items-center">
                           <div className="flex-1">
-                            <span className="text-white font-medium">
+                            <span className="text-[var(--foreground)] font-medium">
                               {shipment.shipmentConfirmationId || shipment.shipmentId}
                             </span>
                             {shipment.destination?.warehouseId && (
-                              <span className="text-slate-400 ml-2">→ {shipment.destination.warehouseId}</span>
+                              <span className="text-[var(--muted-foreground)] ml-2">→ {shipment.destination.warehouseId}</span>
                             )}
                             <div className="text-sm mt-1">
-                              <span className="text-slate-400">{shipment.itemCount} SKUs</span>
-                              <span className="text-slate-500 mx-2">•</span>
+                              <span className="text-[var(--muted-foreground)]">{shipment.itemCount} SKUs</span>
+                              <span className="text-[var(--muted-foreground)] mx-2">•</span>
                               <span className="text-cyan-400">{shipment.totalUnits} units</span>
                               {shipment.status && (
-                                <span className="text-slate-500 ml-2">• {shipment.status}</span>
+                                <span className="text-[var(--muted-foreground)] ml-2">• {shipment.status}</span>
                               )}
                             </div>
                           </div>
@@ -521,13 +521,13 @@ export default function FbaShipmentsPage() {
 
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-400 mb-1">
+                  <label className="block text-sm font-medium text-[var(--muted-foreground)] mb-1">
                     Origin Warehouse
                   </label>
                   <select
                     value={selectedWarehouseId || ''}
                     onChange={(e) => setSelectedWarehouseId(parseInt(e.target.value) || null)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                     disabled={deductionLoading}
                   >
                     <option value="">Select warehouse...</option>
@@ -574,7 +574,7 @@ export default function FbaShipmentsPage() {
               {deductionPreview && (
                 <div className="mt-4 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-white font-medium">Preview: {deductionPreview.amazonShipmentId}</h4>
+                    <h4 className="text-[var(--foreground)] font-medium">Preview: {deductionPreview.amazonShipmentId}</h4>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={handleCancelPreview}>
                         <X className="w-4 h-4 mr-1" />
@@ -597,25 +597,25 @@ export default function FbaShipmentsPage() {
 
                   {/* Summary Stats */}
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                    <div className="bg-slate-800 rounded-lg p-3 text-center">
-                      <p className="text-2xl font-bold text-white">{deductionPreview.summary.totalItems}</p>
-                      <p className="text-xs text-slate-400">Total Items</p>
+                    <div className="bg-[var(--card)] rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-[var(--foreground)]">{deductionPreview.summary.totalItems}</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Total Items</p>
                     </div>
-                    <div className="bg-slate-800 rounded-lg p-3 text-center">
+                    <div className="bg-[var(--card)] rounded-lg p-3 text-center">
                       <p className="text-2xl font-bold text-cyan-400">{deductionPreview.summary.itemsToProcess}</p>
-                      <p className="text-xs text-slate-400">To Process</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">To Process</p>
                     </div>
-                    <div className="bg-slate-800 rounded-lg p-3 text-center">
+                    <div className="bg-[var(--card)] rounded-lg p-3 text-center">
                       <p className="text-2xl font-bold text-purple-400">{deductionPreview.summary.totalUnitsToDeduct}</p>
-                      <p className="text-xs text-slate-400">Units to Deduct</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Units to Deduct</p>
                     </div>
-                    <div className="bg-slate-800 rounded-lg p-3 text-center">
+                    <div className="bg-[var(--card)] rounded-lg p-3 text-center">
                       <p className="text-2xl font-bold text-amber-400">{deductionPreview.summary.itemsNotFound}</p>
-                      <p className="text-xs text-slate-400">Not Found</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Not Found</p>
                     </div>
-                    <div className="bg-slate-800 rounded-lg p-3 text-center">
-                      <p className="text-2xl font-bold text-slate-400">{deductionPreview.summary.itemsAlreadyDeducted}</p>
-                      <p className="text-xs text-slate-400">Already Done</p>
+                    <div className="bg-[var(--card)] rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-[var(--muted-foreground)]">{deductionPreview.summary.itemsAlreadyDeducted}</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Already Done</p>
                     </div>
                   </div>
 
@@ -634,11 +634,11 @@ export default function FbaShipmentsPage() {
                         </div>
                       )}
                       {deductionPreview.warnings.alreadyDeducted.length > 0 && (
-                        <div className="p-3 bg-slate-800 border border-slate-700 rounded-lg">
-                          <p className="text-sm text-slate-400 font-medium mb-1">
+                        <div className="p-3 bg-[var(--card)] border border-[var(--border)] rounded-lg">
+                          <p className="text-sm text-[var(--muted-foreground)] font-medium mb-1">
                             Already deducted ({deductionPreview.warnings.alreadyDeducted.length}):
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-[var(--muted-foreground)]">
                             {deductionPreview.warnings.alreadyDeducted.slice(0, 10).join(', ')}
                             {deductionPreview.warnings.alreadyDeducted.length > 10 && ` +${deductionPreview.warnings.alreadyDeducted.length - 10} more`}
                           </p>
@@ -651,31 +651,31 @@ export default function FbaShipmentsPage() {
                   {deductionPreview.deductions.length > 0 && (
                     <div className="overflow-x-auto max-h-64 overflow-y-auto">
                       <table className="w-full text-sm">
-                        <thead className="bg-slate-800 sticky top-0">
+                        <thead className="bg-[var(--card)] sticky top-0">
                           <tr>
-                            <th className="text-left py-2 px-3 text-slate-400 font-medium">SKU</th>
-                            <th className="text-left py-2 px-3 text-slate-400 font-medium">Product</th>
-                            <th className="text-right py-2 px-3 text-slate-400 font-medium">Shipped</th>
-                            <th className="text-right py-2 px-3 text-slate-400 font-medium">Before</th>
-                            <th className="text-right py-2 px-3 text-slate-400 font-medium">After</th>
-                            <th className="text-center py-2 px-3 text-slate-400 font-medium">Status</th>
+                            <th className="text-left py-2 px-3 text-[var(--muted-foreground)] font-medium">SKU</th>
+                            <th className="text-left py-2 px-3 text-[var(--muted-foreground)] font-medium">Product</th>
+                            <th className="text-right py-2 px-3 text-[var(--muted-foreground)] font-medium">Shipped</th>
+                            <th className="text-right py-2 px-3 text-[var(--muted-foreground)] font-medium">Before</th>
+                            <th className="text-right py-2 px-3 text-[var(--muted-foreground)] font-medium">After</th>
+                            <th className="text-center py-2 px-3 text-[var(--muted-foreground)] font-medium">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                           {deductionPreview.deductions.map((item, idx) => (
-                            <tr key={idx} className={!item.found ? 'bg-amber-900/10' : item.alreadyDeducted ? 'bg-slate-800/50 opacity-60' : ''}>
-                              <td className="py-2 px-3 text-white font-mono text-xs">{item.sellerSku}</td>
-                              <td className="py-2 px-3 text-slate-300 truncate max-w-[200px]" title={item.productName}>
+                            <tr key={idx} className={!item.found ? 'bg-amber-900/10' : item.alreadyDeducted ? 'bg-[var(--card)]/50 opacity-60' : ''}>
+                              <td className="py-2 px-3 text-[var(--foreground)] font-mono text-xs">{item.sellerSku}</td>
+                              <td className="py-2 px-3 text-[var(--foreground)] truncate max-w-[200px]" title={item.productName}>
                                 {item.productName.slice(0, 40)}{item.productName.length > 40 ? '...' : ''}
                               </td>
-                              <td className="py-2 px-3 text-right text-white">{item.quantityShipped}</td>
-                              <td className="py-2 px-3 text-right text-slate-400">{item.found ? item.warehouseInventoryBefore : '—'}</td>
+                              <td className="py-2 px-3 text-right text-[var(--foreground)]">{item.quantityShipped}</td>
+                              <td className="py-2 px-3 text-right text-[var(--muted-foreground)]">{item.found ? item.warehouseInventoryBefore : '—'}</td>
                               <td className="py-2 px-3 text-right text-cyan-400">{item.found && !item.alreadyDeducted ? item.warehouseInventoryAfter : '—'}</td>
                               <td className="py-2 px-3 text-center">
                                 {!item.found ? (
                                   <span className="px-2 py-0.5 rounded text-xs bg-amber-900/50 text-amber-400">Not Found</span>
                                 ) : item.alreadyDeducted ? (
-                                  <span className="px-2 py-0.5 rounded text-xs bg-slate-700 text-slate-400">Done</span>
+                                  <span className="px-2 py-0.5 rounded text-xs bg-[var(--muted)] text-[var(--muted-foreground)]">Done</span>
                                 ) : (
                                   <span className="px-2 py-0.5 rounded text-xs bg-cyan-900/50 text-cyan-400">Ready</span>
                                 )}
@@ -702,8 +702,8 @@ export default function FbaShipmentsPage() {
                   <Package className="w-6 h-6 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">{stats.working}</p>
-                  <p className="text-sm text-slate-400">Working</p>
+                  <p className="text-2xl font-bold text-[var(--foreground)]">{stats.working}</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">Working</p>
                 </div>
               </div>
             </CardContent>
@@ -715,8 +715,8 @@ export default function FbaShipmentsPage() {
                   <Truck className="w-6 h-6 text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">{stats.inTransit}</p>
-                  <p className="text-sm text-slate-400">In Transit</p>
+                  <p className="text-2xl font-bold text-[var(--foreground)]">{stats.inTransit}</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">In Transit</p>
                 </div>
               </div>
             </CardContent>
@@ -728,8 +728,8 @@ export default function FbaShipmentsPage() {
                   <Clock className="w-6 h-6 text-amber-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">{stats.receiving}</p>
-                  <p className="text-sm text-slate-400">Receiving</p>
+                  <p className="text-2xl font-bold text-[var(--foreground)]">{stats.receiving}</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">Receiving</p>
                 </div>
               </div>
             </CardContent>
@@ -741,8 +741,8 @@ export default function FbaShipmentsPage() {
                   <CheckCircle className="w-6 h-6 text-emerald-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">{stats.closed}</p>
-                  <p className="text-sm text-slate-400">Closed</p>
+                  <p className="text-2xl font-bold text-[var(--foreground)]">{stats.closed}</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">Closed</p>
                 </div>
               </div>
             </CardContent>
@@ -754,9 +754,9 @@ export default function FbaShipmentsPage() {
           <Card>
             <CardContent className="py-12">
               <div className="text-center">
-                <Truck className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                <p className="text-lg text-slate-400">No FBA shipments yet</p>
-                <p className="text-sm text-slate-500 mt-1">Create a shipment to send inventory to Amazon FBA</p>
+                <Truck className="w-16 h-16 text-[var(--muted-foreground)] mx-auto mb-4" />
+                <p className="text-lg text-[var(--muted-foreground)]">No FBA shipments yet</p>
+                <p className="text-sm text-[var(--muted-foreground)] mt-1">Create a shipment to send inventory to Amazon FBA</p>
                 <Button className="mt-4" onClick={() => window.location.href = '/shipments/new'}>
                   <Plus className="w-4 h-4 mr-2" />
                   Create Shipment
@@ -772,33 +772,33 @@ export default function FbaShipmentsPage() {
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-slate-800/50">
+                  <thead className="bg-[var(--card)]/50">
                     <tr>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">ID</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Created</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">From</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Destination</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Items</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-[var(--muted-foreground)]">ID</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-[var(--muted-foreground)]">Created</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-[var(--muted-foreground)]">From</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-[var(--muted-foreground)]">Destination</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-[var(--muted-foreground)]">Items</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-[var(--muted-foreground)]">Status</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-[var(--muted-foreground)]">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
                     {shipments.map(shipment => (
-                      <tr key={shipment.id} className="hover:bg-slate-800/30">
-                        <td className="py-3 px-4 text-white font-medium">
+                      <tr key={shipment.id} className="hover:bg-[var(--card)]/30">
+                        <td className="py-3 px-4 text-[var(--foreground)] font-medium">
                           {shipment.internalId || `SHP-${shipment.id}`}
                         </td>
-                        <td className="py-3 px-4 text-slate-300">
+                        <td className="py-3 px-4 text-[var(--foreground)]">
                           {formatDate(shipment.createdAt)}
                         </td>
-                        <td className="py-3 px-4 text-slate-300">
+                        <td className="py-3 px-4 text-[var(--foreground)]">
                           {shipment.fromLocation?.name || 'Warehouse'}
                         </td>
-                        <td className="py-3 px-4 text-slate-300">
+                        <td className="py-3 px-4 text-[var(--foreground)]">
                           FBA {shipment.destinationFc || 'US'}
                         </td>
-                        <td className="py-3 px-4 text-slate-300">
+                        <td className="py-3 px-4 text-[var(--foreground)]">
                           {shipment.totalItems || '—'} SKUs / {shipment.totalUnits || '—'} units
                         </td>
                         <td className="py-3 px-4">
