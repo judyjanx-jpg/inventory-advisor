@@ -1110,7 +1110,7 @@ function PurchasingTab({
           <table className="w-full table-fixed">
             <thead>
               <tr className="border-b border-[var(--border)] text-gray-400 bg-[var(--background)]">
-                <th className="w-8 px-2 py-2">
+                <th className="w-10 px-3 py-2 text-center align-middle">
                   <input
                     type="checkbox"
                     checked={selectedSkus.size === sortedItems.length && sortedItems.length > 0}
@@ -1134,7 +1134,7 @@ function PurchasingTab({
                 return (
                   <React.Fragment key={item.sku}>
                     <tr className={`border-b border-[var(--border)]/50 hover:bg-slate-750 transition-colors ${selectedSkus.has(item.sku) ? 'bg-cyan-900/10' : ''}`}>
-                      <td className="px-2 py-2">
+                      <td className="w-10 px-3 py-2 text-center align-middle">
                         <input
                           type="checkbox"
                           checked={selectedSkus.has(item.sku)}
@@ -1873,7 +1873,7 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--border)] text-left text-sm text-gray-400">
-                  <th className="p-3 w-10">
+                  <th className="p-3 w-10 text-center align-middle">
                     <input 
                       type="checkbox" 
                       checked={sortedAndFilteredItems.length > 0 && sortedAndFilteredItems.every(i => i.selected)} 
@@ -1901,7 +1901,7 @@ function FbaTab({ items, settings, setSettings, getUrgencyColor, onHideProduct }
                   
                   return (
                     <tr key={item.sku} className={`border-b border-[var(--border)]/50 hover:bg-slate-750 ${item.selected ? 'bg-purple-900/10' : ''}`}>
-                      <td className="p-3">
+                      <td className="p-3 w-10 text-center align-middle">
                         <input type="checkbox" checked={item.selected} onChange={() => toggleSelect(item.sku)} className="rounded bg-[var(--background)] border-[var(--border)]" />
                       </td>
                       <td className="p-3">
