@@ -562,7 +562,7 @@ export default function ProductSettingsModal({
                           value={(form as any)[field]}
                           onChange={(e) => setForm({ ...form, [field]: e.target.value })}
                           placeholder="0.00"
-                          className="w-full pl-8 pr-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
+                          className="w-full pl-8 pr-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                         />
                       </div>
                     </div>
@@ -577,13 +577,13 @@ export default function ProductSettingsModal({
                     <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Packaging</label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">$</span>
-                      <input type="number" step="0.01" min="0" value={form.packagingCost} onChange={(e) => handleFieldChange('packagingCost', e.target.value)} placeholder="0.00" className="w-full pl-8 pr-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                      <input type="number" step="0.01" min="0" value={form.packagingCost} onChange={(e) => handleFieldChange('packagingCost', e.target.value)} placeholder="0.00" className="w-full pl-8 pr-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Tariff %</label>
                     <div className="relative">
-                      <input type="number" step="0.1" min="0" max="100" value={form.tariffPercent} onChange={(e) => handleFieldChange('tariffPercent', e.target.value)} placeholder="0" className="w-full pl-4 pr-8 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                      <input type="number" step="0.1" min="0" max="100" value={form.tariffPercent} onChange={(e) => handleFieldChange('tariffPercent', e.target.value)} placeholder="0" className="w-full pl-4 pr-8 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">%</span>
                     </div>
                     <p className="text-xs text-[var(--muted-foreground)] mt-1">= ${profitCalc.tariffCost.toFixed(2)}/unit</p>
@@ -609,10 +609,10 @@ export default function ProductSettingsModal({
                 )}
                 
                 <div className="mt-4 flex gap-2">
-                  <input type="text" value={newCostName} onChange={(e) => setNewCostName(e.target.value)} placeholder="Cost name..." className="flex-1 px-4 py-2 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 text-sm" />
+                  <input type="text" value={newCostName} onChange={(e) => setNewCostName(e.target.value)} placeholder="Cost name..." className="flex-1 px-4 py-2 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 text-sm" />
                   <div className="relative w-24">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] text-sm">$</span>
-                    <input type="number" step="0.01" min="0" value={newCostAmount} onChange={(e) => setNewCostAmount(e.target.value)} placeholder="0.00" className="w-full pl-7 pr-2 py-2 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 text-sm" />
+                    <input type="number" step="0.01" min="0" value={newCostAmount} onChange={(e) => setNewCostAmount(e.target.value)} placeholder="0.00" className="w-full pl-7 pr-2 py-2 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 text-sm" />
                   </div>
                   <Button size="sm" onClick={addCustomCost} disabled={!newCostName || !newCostAmount}><Plus className="w-4 h-4" /></Button>
                 </div>
@@ -623,14 +623,14 @@ export default function ProductSettingsModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Supplier</label>
-                    <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500">
+                    <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500">
                       <option value="">No supplier</option>
                       {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Supplier SKU</label>
-                    <input type="text" value={form.supplierSku} onChange={(e) => setForm({ ...form, supplierSku: e.target.value })} placeholder="Supplier's SKU" className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                    <input type="text" value={form.supplierSku} onChange={(e) => setForm({ ...form, supplierSku: e.target.value })} placeholder="Supplier's SKU" className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                   </div>
                 </div>
               </div>
@@ -642,27 +642,27 @@ export default function ProductSettingsModal({
                     <label className="block text-sm font-medium text-[var(--foreground)] mb-2">FBA Fee</label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">$</span>
-                      <input type="number" step="0.01" min="0" value={form.fbaFeeEstimate} onChange={(e) => handleFieldChange('fbaFeeEstimate', e.target.value)} placeholder="0.00" className="w-full pl-8 pr-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                      <input type="number" step="0.01" min="0" value={form.fbaFeeEstimate} onChange={(e) => handleFieldChange('fbaFeeEstimate', e.target.value)} placeholder="0.00" className="w-full pl-8 pr-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Referral %</label>
                     <div className="relative">
-                      <input type="number" step="0.1" min="0" max="100" value={form.referralFeePercent} onChange={(e) => handleFieldChange('referralFeePercent', e.target.value)} placeholder="20" className="w-full pl-4 pr-8 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                      <input type="number" step="0.1" min="0" max="100" value={form.referralFeePercent} onChange={(e) => handleFieldChange('referralFeePercent', e.target.value)} placeholder="20" className="w-full pl-4 pr-8 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">%</span>
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Refund %</label>
                     <div className="relative">
-                      <input type="number" step="0.1" min="0" max="100" value={form.refundPercent} onChange={(e) => handleFieldChange('refundPercent', e.target.value)} placeholder="2" className="w-full pl-4 pr-8 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                      <input type="number" step="0.1" min="0" max="100" value={form.refundPercent} onChange={(e) => handleFieldChange('refundPercent', e.target.value)} placeholder="2" className="w-full pl-4 pr-8 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">%</span>
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Ads %</label>
                     <div className="relative">
-                      <input type="number" step="0.1" min="0" max="100" value={form.adsPercent} onChange={(e) => handleFieldChange('adsPercent', e.target.value)} placeholder="0" className="w-full pl-4 pr-8 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                      <input type="number" step="0.1" min="0" max="100" value={form.adsPercent} onChange={(e) => handleFieldChange('adsPercent', e.target.value)} placeholder="0" className="w-full pl-4 pr-8 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">%</span>
                     </div>
                   </div>
@@ -694,15 +694,15 @@ export default function ProductSettingsModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-[var(--foreground)] mb-2">FNSKU</label>
-                  <input type="text" value={form.fnsku} onChange={(e) => setForm({ ...form, fnsku: e.target.value })} placeholder="X001ABC123" className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 font-mono" />
+                  <input type="text" value={form.fnsku} onChange={(e) => setForm({ ...form, fnsku: e.target.value })} placeholder="X001ABC123" className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 font-mono" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--foreground)] mb-2">UPC</label>
-                  <input type="text" value={form.upc} onChange={(e) => setForm({ ...form, upc: e.target.value })} placeholder="12-14 digit" maxLength={14} className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 font-mono" />
+                  <input type="text" value={form.upc} onChange={(e) => setForm({ ...form, upc: e.target.value })} placeholder="12-14 digit" maxLength={14} className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 font-mono" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Label Type</label>
-                  <select value={form.labelType} onChange={(e) => setForm({ ...form, labelType: e.target.value })} className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500">
+                  <select value={form.labelType} onChange={(e) => setForm({ ...form, labelType: e.target.value })} className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500">
                     <option value="fnsku_only">FNSKU Only</option>
                     <option value="fnsku_tp">FNSKU + Transparency</option>
                     <option value="tp_only">Transparency Only</option>
@@ -710,7 +710,7 @@ export default function ProductSettingsModal({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Warehouse Location</label>
-                  <input type="text" value={form.warehouseLocation} onChange={(e) => setForm({ ...form, warehouseLocation: e.target.value })} placeholder="A-12-3" className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                  <input type="text" value={form.warehouseLocation} onChange={(e) => setForm({ ...form, warehouseLocation: e.target.value })} placeholder="A-12-3" className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                 </div>
               </div>
             </div>
@@ -754,7 +754,7 @@ export default function ProductSettingsModal({
                     type="date"
                     value={form.launchDate}
                     onChange={(e) => setForm({ ...form, launchDate: e.target.value })}
-                    className="px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
+                    className="px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                   />
                   <p className="text-xs text-[var(--muted-foreground)] mt-2">
                     Product will be marked as "new" for 6 months from this date.
@@ -794,7 +794,7 @@ export default function ProductSettingsModal({
                         value={recreateSearchTerm}
                         onChange={(e) => setRecreateSearchTerm(e.target.value)}
                         placeholder="Search for old SKU..."
-                        className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-purple-500"
+                        className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-purple-500"
                       />
                       {recreateSearchTerm && filteredRecreateProducts.length > 0 && (
                         <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
@@ -893,12 +893,12 @@ export default function ProductSettingsModal({
               {showAddMapping && (
                 <div className="bg-[var(--card)]/30 rounded-xl p-4 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <select value={mappingForm.channel} onChange={(e) => setMappingForm({ ...mappingForm, channel: e.target.value })} className="px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500">
+                    <select value={mappingForm.channel} onChange={(e) => setMappingForm({ ...mappingForm, channel: e.target.value })} className="px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500">
                       <option value="">Select channel...</option>
                       {CHANNELS.map((c) => <option key={c.id} value={c.id}>{c.flag} {c.name}</option>)}
                     </select>
-                    <input type="text" value={mappingForm.channelSku} onChange={(e) => setMappingForm({ ...mappingForm, channelSku: e.target.value })} placeholder="Channel SKU" className="px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
-                    <input type="text" value={mappingForm.channelProductId} onChange={(e) => setMappingForm({ ...mappingForm, channelProductId: e.target.value })} placeholder="Product ID (optional)" className="px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                    <input type="text" value={mappingForm.channelSku} onChange={(e) => setMappingForm({ ...mappingForm, channelSku: e.target.value })} placeholder="Channel SKU" className="px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                    <input type="text" value={mappingForm.channelProductId} onChange={(e) => setMappingForm({ ...mappingForm, channelProductId: e.target.value })} placeholder="Product ID (optional)" className="px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={async () => { if (onSaveMapping && mappingForm.channel && mappingForm.channelSku) { await onSaveMapping(mappingForm.channel, mappingForm.channelSku, mappingForm.channelProductId); setMappingForm({ channel: '', channelSku: '', channelProductId: '' }); setShowAddMapping(false) } }} disabled={!mappingForm.channel || !mappingForm.channelSku}>Save</Button>
@@ -956,7 +956,7 @@ export default function ProductSettingsModal({
               
               <div>
                 <h4 className="text-sm font-medium text-[var(--foreground)] mb-3">Add Link</h4>
-                <input type="text" value={linkSearchTerm} onChange={(e) => handleLinkSearch(e.target.value)} placeholder="Search SKU or title..." className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
+                <input type="text" value={linkSearchTerm} onChange={(e) => handleLinkSearch(e.target.value)} placeholder="Search SKU or title..." className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500" />
                 {linkSearchResults.length > 0 && (
                   <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
                     {linkSearchResults.map((r) => (
@@ -981,19 +981,19 @@ export default function ProductSettingsModal({
               
               <div className="flex items-center justify-between p-4 bg-[var(--card)]/30 rounded-xl">
                 <div><p className="text-sm font-medium text-[var(--foreground)]">Warranty Eligible</p><p className="text-xs text-[var(--muted-foreground)]">Allow warranty claims</p></div>
-                <button onClick={() => setForm({ ...form, isWarrantied: !form.isWarrantied })} className={`relative w-12 h-6 rounded-full transition-colors ${form.isWarrantied ? 'bg-cyan-500' : 'bg-slate-600'}`}>
+                <button onClick={() => setForm({ ...form, isWarrantied: !form.isWarrantied })} className={`relative w-12 h-6 rounded-full transition-colors ${form.isWarrantied ? 'bg-cyan-500' : 'bg-[var(--muted)]'}`}>
                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${form.isWarrantied ? 'left-7' : 'left-1'}`} />
                 </button>
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Care Instructions</label>
-                <textarea value={form.careInstructions} onChange={(e) => setForm({ ...form, careInstructions: e.target.value })} placeholder="Care instructions..." rows={3} className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 resize-none" />
+                <textarea value={form.careInstructions} onChange={(e) => setForm({ ...form, careInstructions: e.target.value })} placeholder="Care instructions..." rows={3} className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 resize-none" />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Sizing Guide</label>
-                <textarea value={form.sizingGuide} onChange={(e) => setForm({ ...form, sizingGuide: e.target.value })} placeholder="Sizing info..." rows={3} className="w-full px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 resize-none" />
+                <textarea value={form.sizingGuide} onChange={(e) => setForm({ ...form, sizingGuide: e.target.value })} placeholder="Sizing info..." rows={3} className="w-full px-4 py-2.5 bg-[var(--input)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 resize-none" />
               </div>
             </div>
           )}
