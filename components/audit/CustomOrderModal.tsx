@@ -62,23 +62,23 @@ function SortableItem({ sku, title, parentSku, available }: SKU) {
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700/50 touch-manipulation"
+      className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-[var(--card)] border border-[var(--border)] rounded-lg hover:bg-[var(--hover-bg)] touch-manipulation"
     >
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-300 p-1 -ml-1 touch-manipulation"
+        className="cursor-grab active:cursor-grabbing text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1 -ml-1 touch-manipulation"
       >
         <GripVertical className="w-6 h-6 sm:w-5 sm:h-5" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-white font-medium truncate text-sm sm:text-base">{sku}</div>
-        <div className="text-xs sm:text-sm text-slate-400 truncate">{title}</div>
+        <div className="text-[var(--foreground)] font-medium truncate text-sm sm:text-base">{sku}</div>
+        <div className="text-xs sm:text-sm text-[var(--muted-foreground)] truncate">{title}</div>
         {parentSku && (
-          <div className="text-xs text-slate-500">Parent: {parentSku}</div>
+          <div className="text-xs text-[var(--muted-foreground)]">Parent: {parentSku}</div>
         )}
       </div>
-      <div className="text-xs sm:text-sm text-slate-400 flex-shrink-0">
+      <div className="text-xs sm:text-sm text-[var(--muted-foreground)] flex-shrink-0">
         Qty: {available}
       </div>
     </div>
@@ -111,26 +111,26 @@ function SortableParentItem({ parentSku, parentDisplayName, items }: { parentSku
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700/50 touch-manipulation"
+      className="bg-[var(--card)] border border-[var(--border)] rounded-lg hover:bg-[var(--hover-bg)] touch-manipulation"
     >
       <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-300 p-1 -ml-1 touch-manipulation"
+          className="cursor-grab active:cursor-grabbing text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1 -ml-1 touch-manipulation"
         >
           <GripVertical className="w-6 h-6 sm:w-5 sm:h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-white font-semibold truncate text-sm sm:text-base">{displayLabel}</div>
+          <div className="text-[var(--foreground)] font-semibold truncate text-sm sm:text-base">{displayLabel}</div>
           {parentDisplayName && (
-            <div className="text-xs text-slate-500 font-mono truncate">{parentSku}</div>
+            <div className="text-xs text-[var(--muted-foreground)] font-mono truncate">{parentSku}</div>
           )}
-          <div className="text-xs sm:text-sm text-slate-400">
+          <div className="text-xs sm:text-sm text-[var(--muted-foreground)]">
             {isStandalone ? 'Standalone SKU' : `${items.length} variant${items.length !== 1 ? 's' : ''}`}
           </div>
         </div>
-        <div className="text-xs sm:text-sm text-slate-400 flex-shrink-0">
+        <div className="text-xs sm:text-sm text-[var(--muted-foreground)] flex-shrink-0">
           Total: {totalQty}
         </div>
       </div>
@@ -405,21 +405,21 @@ export default function CustomOrderModal({
     >
       <div className="space-y-3 sm:space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-          <div className="text-xs sm:text-sm text-slate-400">
+          <div className="text-xs sm:text-sm text-[var(--muted-foreground)]">
             Drag and drop to reorder. Used when "Custom Order" is selected.
           </div>
           {skus.length > 0 && (
-            <div className="text-xs sm:text-sm text-slate-300 flex-shrink-0">
+            <div className="text-xs sm:text-sm text-[var(--foreground)] flex-shrink-0">
               {skus.length} SKU{skus.length !== 1 ? 's' : ''}
             </div>
           )}
         </div>
 
         {/* Group by Parent Toggle */}
-        <div className="flex items-center justify-between p-3 bg-slate-800/50 border border-slate-700 rounded-lg">
+        <div className="flex items-center justify-between p-3 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-slate-400 flex-shrink-0" />
-            <span className="text-xs sm:text-sm text-slate-300">Group by Parent SKU</span>
+            <Layers className="w-4 h-4 text-[var(--muted-foreground)] flex-shrink-0" />
+            <span className="text-xs sm:text-sm text-[var(--foreground)]">Group by Parent SKU</span>
           </div>
           <label className="relative inline-flex items-center cursor-pointer touch-manipulation">
             <input
@@ -428,7 +428,7 @@ export default function CustomOrderModal({
               onChange={(e) => setGroupByParent(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-cyan-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+            <div className="w-11 h-6 bg-[var(--muted)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-cyan-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
           </label>
         </div>
 
@@ -437,7 +437,7 @@ export default function CustomOrderModal({
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-cyan-500"></div>
           </div>
         ) : skus.length === 0 ? (
-          <div className="text-center py-8 text-slate-400">
+          <div className="text-center py-8 text-[var(--muted-foreground)]">
             No SKUs found for this warehouse
           </div>
         ) : groupByParent ? (

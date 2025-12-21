@@ -69,8 +69,8 @@ export default function AdvisorChat() {
               <div
                 className={`max-w-[80%] rounded-lg p-3 ${
                   message.role === 'user'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                    ? 'bg-[var(--primary)] text-white'
+                    : 'bg-[var(--muted)] text-[var(--foreground)]'
                 }`}
               >
                 <p className="text-sm">{message.content}</p>
@@ -82,8 +82,8 @@ export default function AdvisorChat() {
           ))}
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg p-3">
-                <p className="text-sm text-gray-600">Thinking...</p>
+              <div className="bg-[var(--muted)] rounded-lg p-3">
+                <p className="text-sm text-[var(--muted-foreground)]">Thinking...</p>
               </div>
             </div>
           )}
@@ -96,7 +96,7 @@ export default function AdvisorChat() {
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSend()}
               placeholder="Ask me anything about your inventory..."
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="flex-1 px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             <Button onClick={handleSend} disabled={isLoading}>
               <Send className="h-4 w-4" />

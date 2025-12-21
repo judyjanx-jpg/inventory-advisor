@@ -69,7 +69,7 @@ export default function AIPanel({ onClose, position }: AIPanelProps) {
         ...(panelPosition.right !== undefined ? { right: `${panelPosition.right}px` } : {})
       }}
     >
-      <div className="w-full h-full bg-slate-900/85 backdrop-blur-xl border border-indigo-500/30 rounded-3xl shadow-[0_0_40px_rgba(99,102,241,0.15),inset_0_0_60px_rgba(139,92,246,0.05)] flex flex-col overflow-hidden">
+      <div className="w-full h-full bg-[var(--secondary)]/85 backdrop-blur-xl border border-indigo-500/30 rounded-3xl shadow-[0_0_40px_rgba(99,102,241,0.15),inset_0_0_60px_rgba(139,92,246,0.05)] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-indigo-500/20">
           <div className="flex items-center gap-2 text-white text-base font-semibold">
             <Sparkles className="w-5 h-5 text-purple-400" />
