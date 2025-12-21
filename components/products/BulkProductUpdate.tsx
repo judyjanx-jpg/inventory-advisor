@@ -627,7 +627,7 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
       {/* Step 1: Select Fields to Update */}
       {step === 'select' && (
         <div className="space-y-6">
-          <p className="text-slate-400">
+          <p className="text-[var(--muted-foreground)]">
             Select which fields you want to update, then export a template or upload your own file.
           </p>
           
@@ -636,12 +636,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Identifiers</h4>
               {SYSTEM_COLUMNS.filter(c => ['displayName', 'fnsku', 'asin', 'upc'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -652,12 +652,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Supplier</h4>
               {SYSTEM_COLUMNS.filter(c => ['supplierId', 'supplierSku', 'cost'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -668,12 +668,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Pricing</h4>
               {SYSTEM_COLUMNS.filter(c => ['price', 'mapPrice', 'msrp'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -684,12 +684,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Additional Costs</h4>
               {SYSTEM_COLUMNS.filter(c => ['packagingCost', 'tariffPercent'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -700,12 +700,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Amazon Fees</h4>
               {SYSTEM_COLUMNS.filter(c => ['fbaFeeEstimate', 'referralFeePercent', 'refundPercent', 'adsPercent'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -716,12 +716,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Labeling & Prep</h4>
               {SYSTEM_COLUMNS.filter(c => ['labelType', 'transparencyEnabled', 'prepType', 'labelingRequired', 'prepOwner', 'labelOwner'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -732,12 +732,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Organization</h4>
               {SYSTEM_COLUMNS.filter(c => ['warehouseLocation', 'category', 'status', 'isHidden'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -748,12 +748,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Lifecycle</h4>
               {SYSTEM_COLUMNS.filter(c => ['launchDate', 'recreatedFromSku', 'discontinuedAt'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -764,12 +764,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Physical</h4>
               {SYSTEM_COLUMNS.filter(c => ['weightOz', 'lengthIn', 'widthIn', 'heightIn', 'unitsPerCase'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -780,12 +780,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Support & Warranty</h4>
               {SYSTEM_COLUMNS.filter(c => ['isWarrantied', 'careInstructions', 'sizingGuide'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -796,12 +796,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-cyan-400">Other</h4>
               {SYSTEM_COLUMNS.filter(c => ['physicalProductGroupId', 'notes'].includes(c.key)).map(col => (
-                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-white text-slate-300">
+                <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--foreground)] text-[var(--foreground)]">
                   <input
                     type="checkbox"
                     checked={selectedFields.includes(col.key)}
                     onChange={() => toggleField(col.key)}
-                    className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    className="w-4 h-4 rounded bg-[var(--muted)] border-[var(--border)] text-cyan-500 focus:ring-cyan-500"
                   />
                   {col.label}
                 </label>
@@ -809,8 +809,8 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             </div>
           </div>
 
-          <div className="space-y-3 pt-4 border-t border-slate-700">
-            <p className="text-sm text-slate-400">Export Options:</p>
+          <div className="space-y-3 pt-4 border-t border-[var(--border)]">
+            <p className="text-sm text-[var(--muted-foreground)]">Export Options:</p>
             <div className="grid grid-cols-2 gap-3">
               <Button onClick={() => exportTemplate(false)} variant="outline" className="flex-1">
                 <Download className="w-4 h-4 mr-2" />
@@ -821,7 +821,7 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
                 Export with Data ({products.length})
               </Button>
             </div>
-            <p className="text-sm text-slate-400 mt-4">Or upload your own file:</p>
+            <p className="text-sm text-[var(--muted-foreground)] mt-4">Or upload your own file:</p>
             <Button onClick={() => setStep('upload')} className="w-full">
               <Upload className="w-4 h-4 mr-2" />
               Upload File
@@ -834,12 +834,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
       {step === 'upload' && (
         <div className="space-y-6">
           <div 
-            className="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center hover:border-cyan-500/50 transition-colors cursor-pointer"
+            className="border-2 border-dashed border-[var(--border)] rounded-lg p-8 text-center hover:border-cyan-500/50 transition-colors cursor-pointer"
             onClick={() => fileInputRef.current?.click()}
           >
-            <FileSpreadsheet className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <p className="text-white font-medium mb-2">Click to upload or drag & drop</p>
-            <p className="text-sm text-slate-400">Excel (.xlsx, .xls) or CSV files</p>
+            <FileSpreadsheet className="w-12 h-12 text-[var(--muted-foreground)] mx-auto mb-4" />
+            <p className="text-[var(--foreground)] font-medium mb-2">Click to upload or drag & drop</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Excel (.xlsx, .xls) or CSV files</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -849,9 +849,9 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             />
           </div>
           
-          <div className="p-4 bg-slate-800/50 rounded-lg">
-            <h4 className="text-sm font-medium text-white mb-2">File Requirements:</h4>
-            <ul className="text-sm text-slate-400 space-y-1">
+          <div className="p-4 bg-[var(--card)]/50 rounded-lg">
+            <h4 className="text-sm font-medium text-[var(--foreground)] mb-2">File Requirements:</h4>
+            <ul className="text-sm text-[var(--muted-foreground)] space-y-1">
               <li>• First row must contain column headers</li>
               <li>• Must include a SKU column to identify products</li>
               <li>• You'll map your columns to system fields in the next step</li>
@@ -870,7 +870,7 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
       {step === 'map' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <p className="text-slate-400">
+            <p className="text-[var(--muted-foreground)]">
               Map your file columns to system fields. Found {uploadedData.length} rows.
             </p>
             {!columnMapping.sku && (
@@ -882,7 +882,7 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
             {SYSTEM_COLUMNS.map(col => (
               <div key={col.key} className="flex items-center gap-4">
                 <div className="w-1/3">
-                  <span className={`text-sm ${col.required ? 'text-white font-medium' : 'text-slate-300'}`}>
+                  <span className={`text-sm ${col.required ? 'text-[var(--foreground)] font-medium' : 'text-[var(--foreground)]'}`}>
                     {col.label}
                     {col.required && <span className="text-red-400 ml-1">*</span>}
                   </span>
@@ -891,7 +891,7 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
                 <select
                   value={columnMapping[col.key] || ''}
                   onChange={(e) => setColumnMapping({ ...columnMapping, [col.key]: e.target.value })}
-                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="flex-1 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                 >
                   <option value="">-- Not mapped --</option>
                   {fileColumns.map(fc => (
@@ -904,12 +904,12 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
 
           {/* Preview */}
           {uploadedData.length > 0 && columnMapping.sku && (
-            <div className="p-4 bg-slate-800/50 rounded-lg">
-              <h4 className="text-sm font-medium text-white mb-2">Preview (first 3 rows):</h4>
+            <div className="p-4 bg-[var(--card)]/50 rounded-lg">
+              <h4 className="text-sm font-medium text-[var(--foreground)] mb-2">Preview (first 3 rows):</h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-slate-400 border-b border-slate-700">
+                    <tr className="text-[var(--muted-foreground)] border-b border-[var(--border)]">
                       {Object.entries(columnMapping).filter(([_, v]) => v).map(([key, _]) => (
                         <th key={key} className="text-left py-2 px-2">{SYSTEM_COLUMNS.find(c => c.key === key)?.label}</th>
                       ))}
@@ -917,9 +917,9 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
                   </thead>
                   <tbody>
                     {uploadedData.slice(0, 3).map((row, i) => (
-                      <tr key={i} className="border-b border-slate-700/50">
+                      <tr key={i} className="border-b border-[var(--border)]/50">
                         {Object.entries(columnMapping).filter(([_, v]) => v).map(([key, fileCol]) => (
-                          <td key={key} className="py-2 px-2 text-slate-300">{String(row[fileCol] ?? '')}</td>
+                          <td key={key} className="py-2 px-2 text-[var(--foreground)]">{String(row[fileCol] ?? '')}</td>
                         ))}
                       </tr>
                     ))}
@@ -952,25 +952,25 @@ export default function BulkProductUpdate({ isOpen, onClose, onComplete, supplie
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
               <CheckCircle2 className="w-8 h-8 text-green-400 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-white">{result.success}</p>
+              <p className="text-2xl font-bold text-[var(--foreground)]">{result.success}</p>
               <p className="text-sm text-green-400">Updated Successfully</p>
             </div>
             <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-center">
               <X className="w-8 h-8 text-red-400 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-white">{result.failed}</p>
+              <p className="text-2xl font-bold text-[var(--foreground)]">{result.failed}</p>
               <p className="text-sm text-red-400">Failed</p>
             </div>
           </div>
 
           {result.errors.length > 0 && (
-            <div className="p-4 bg-slate-800/50 rounded-lg max-h-[200px] overflow-y-auto">
-              <h4 className="text-sm font-medium text-white mb-2">Errors:</h4>
+            <div className="p-4 bg-[var(--card)]/50 rounded-lg max-h-[200px] overflow-y-auto">
+              <h4 className="text-sm font-medium text-[var(--foreground)] mb-2">Errors:</h4>
               <ul className="text-sm text-red-400 space-y-1">
                 {result.errors.slice(0, 20).map((err, i) => (
                   <li key={i}>• {err}</li>
                 ))}
                 {result.errors.length > 20 && (
-                  <li className="text-slate-400">...and {result.errors.length - 20} more</li>
+                  <li className="text-[var(--muted-foreground)]">...and {result.errors.length - 20} more</li>
                 )}
               </ul>
             </div>

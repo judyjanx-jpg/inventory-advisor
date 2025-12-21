@@ -162,30 +162,30 @@ export default function SupplierScorecard() {
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">Total Suppliers</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Total Suppliers</p>
             <Truck className="w-5 h-5 text-cyan-400" />
           </div>
-          <p className="text-2xl font-bold text-white mt-1">{scorecards.length}</p>
+          <p className="text-2xl font-bold text-[var(--foreground)] mt-1">{scorecards.length}</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">Avg Reliability</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Avg Reliability</p>
             <Award className="w-5 h-5 text-green-400" />
           </div>
           <p className="text-2xl font-bold text-green-400 mt-1">{avgReliability}%</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">Avg On-Time Rate</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Avg On-Time Rate</p>
             <Clock className="w-5 h-5 text-purple-400" />
           </div>
           <p className="text-2xl font-bold text-purple-400 mt-1">{avgOnTime}%</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">Suppliers with Issues</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Suppliers with Issues</p>
             <AlertTriangle className="w-5 h-5 text-orange-400" />
           </div>
           <p className="text-2xl font-bold text-orange-400 mt-1">{suppliersWithIssues}</p>
@@ -193,8 +193,8 @@ export default function SupplierScorecard() {
       </div>
 
       {/* Lead Time Comparison Chart */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-        <h3 className="text-lg font-medium text-white mb-4">Lead Time: Stated vs Actual</h3>
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+        <h3 className="text-lg font-medium text-[var(--foreground)] mb-4">Lead Time: Stated vs Actual</h3>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={leadTimeChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -210,11 +210,11 @@ export default function SupplierScorecard() {
 
       {/* Filters */}
       <div className="flex items-center gap-4">
-        <span className="text-sm text-gray-400">Sort by:</span>
+        <span className="text-sm text-[var(--muted-foreground)]">Sort by:</span>
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as any)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"
+          className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)] text-sm"
         >
           <option value="grade">Grade</option>
           <option value="leadTime">Lead Time (fastest)</option>
@@ -222,7 +222,7 @@ export default function SupplierScorecard() {
         </select>
         <button
           onClick={fetchScorecards}
-          className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm text-gray-400 hover:text-white ml-auto"
+          className="flex items-center gap-2 px-3 py-2 bg-[var(--card)] hover:bg-[var(--hover-bg)] border border-[var(--border)] rounded-lg text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] ml-auto"
         >
           <RefreshCw className="w-4 h-4" />
           Refresh
@@ -239,8 +239,8 @@ export default function SupplierScorecard() {
           return (
             <div
               key={supplier.id}
-              className={`bg-slate-800 rounded-xl border transition-all ${
-                isExpanded ? 'border-cyan-500/50' : 'border-slate-700'
+              className={`bg-[var(--card)] rounded-xl border transition-all ${
+                isExpanded ? 'border-cyan-500/50' : 'border-[var(--border)]'
               }`}
             >
               <div
@@ -251,33 +251,33 @@ export default function SupplierScorecard() {
                   {/* Grade Badge */}
                   <div className={`w-16 h-16 rounded-xl ${gradeConfig.bgColor} ${gradeConfig.borderColor} border flex flex-col items-center justify-center`}>
                     <span className={`text-2xl font-bold ${gradeConfig.color}`}>{supplier.grade}</span>
-                    <span className="text-xs text-gray-400">{gradeConfig.label}</span>
+                    <span className="text-xs text-[var(--muted-foreground)]">{gradeConfig.label}</span>
                   </div>
 
                   {/* Supplier Info */}
                   <div className="flex-1">
-                    <h4 className="font-medium text-white">{supplier.name}</h4>
-                    <p className="text-sm text-gray-400">{supplier.poCount} POs tracked</p>
+                    <h4 className="font-medium text-[var(--foreground)]">{supplier.name}</h4>
+                    <p className="text-sm text-[var(--muted-foreground)]">{supplier.poCount} POs tracked</p>
                   </div>
 
                   {/* Key Metrics */}
                   <div className="flex items-center gap-8">
                     <div className="text-center">
-                      <p className="text-xs text-gray-500 uppercase">Reliability</p>
+                      <p className="text-xs text-[var(--muted-foreground)] uppercase">Reliability</p>
                       <p className={`text-lg font-bold ${Number(supplier.metrics.reliabilityScore) >= 80 ? 'text-green-400' : Number(supplier.metrics.reliabilityScore) >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
                         {supplier.metrics.reliabilityScore}%
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-xs text-gray-500 uppercase">On-Time</p>
+                      <p className="text-xs text-[var(--muted-foreground)] uppercase">On-Time</p>
                       <p className={`text-lg font-bold ${Number(supplier.metrics.onTimeRate) >= 90 ? 'text-green-400' : Number(supplier.metrics.onTimeRate) >= 70 ? 'text-yellow-400' : 'text-red-400'}`}>
                         {supplier.metrics.onTimeRate}%
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-xs text-gray-500 uppercase">Avg Lead Time</p>
+                      <p className="text-xs text-[var(--muted-foreground)] uppercase">Avg Lead Time</p>
                       <div className="flex items-center gap-1 justify-center">
-                        <p className="text-lg font-bold text-white">{supplier.metrics.avgLeadTime}d</p>
+                        <p className="text-lg font-bold text-[var(--foreground)]">{supplier.metrics.avgLeadTime}d</p>
                         {leadTimeDiff > 0 ? (
                           <span className="text-xs text-red-400 flex items-center">
                             <TrendingUp className="w-3 h-3" />+{leadTimeDiff}d
@@ -291,27 +291,27 @@ export default function SupplierScorecard() {
                     </div>
                   </div>
 
-                  <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-5 h-5 text-[var(--muted-foreground)] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                 </div>
               </div>
 
               {/* Expanded Details */}
               {isExpanded && (
-                <div className="px-4 pb-4 pt-2 border-t border-slate-700">
+                <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
                   <div className="grid grid-cols-4 gap-6">
                     <div>
-                      <h5 className="text-sm font-medium text-gray-400 mb-3">Lead Time Metrics</h5>
+                      <h5 className="text-sm font-medium text-[var(--muted-foreground)] mb-3">Lead Time Metrics</h5>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Stated</span>
-                          <span className="text-white">{supplier.metrics.statedLeadTime} days</span>
+                          <span className="text-[var(--muted-foreground)]">Stated</span>
+                          <span className="text-[var(--foreground)]">{supplier.metrics.statedLeadTime} days</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Actual Avg</span>
-                          <span className="text-white">{supplier.metrics.avgLeadTime} days</span>
+                          <span className="text-[var(--muted-foreground)]">Actual Avg</span>
+                          <span className="text-[var(--foreground)]">{supplier.metrics.avgLeadTime} days</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Variance</span>
+                          <span className="text-[var(--muted-foreground)]">Variance</span>
                           <span className={`${Number(supplier.metrics.leadTimeVariance) > 5 ? 'text-red-400' : 'text-green-400'}`}>
                             {supplier.metrics.leadTimeVariance === 'N/A' ? 'N/A' : `${supplier.metrics.leadTimeVariance} days`}
                           </span>
@@ -320,60 +320,60 @@ export default function SupplierScorecard() {
                     </div>
 
                     <div>
-                      <h5 className="text-sm font-medium text-gray-400 mb-3">Performance</h5>
+                      <h5 className="text-sm font-medium text-[var(--muted-foreground)] mb-3">Performance</h5>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Reliability Score</span>
-                          <span className="text-white">{supplier.metrics.reliabilityScore}%</span>
+                          <span className="text-[var(--muted-foreground)]">Reliability Score</span>
+                          <span className="text-[var(--foreground)]">{supplier.metrics.reliabilityScore}%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">On-Time Rate</span>
-                          <span className="text-white">{supplier.metrics.onTimeRate}%</span>
+                          <span className="text-[var(--muted-foreground)]">On-Time Rate</span>
+                          <span className="text-[var(--foreground)]">{supplier.metrics.onTimeRate}%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Total POs</span>
-                          <span className="text-white">{supplier.poCount}</span>
+                          <span className="text-[var(--muted-foreground)]">Total POs</span>
+                          <span className="text-[var(--foreground)]">{supplier.poCount}</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="col-span-2">
-                      <h5 className="text-sm font-medium text-gray-400 mb-3">Recommendations</h5>
+                      <h5 className="text-sm font-medium text-[var(--muted-foreground)] mb-3">Recommendations</h5>
                       <div className="space-y-2">
                         {supplier.grade === 'A' && (
                           <div className="flex items-start gap-2 text-sm">
                             <CheckCircle className="w-4 h-4 text-green-400 mt-0.5" />
-                            <span className="text-gray-300">Excellent supplier. Consider increasing order volume.</span>
+                            <span className="text-[var(--foreground)]">Excellent supplier. Consider increasing order volume.</span>
                           </div>
                         )}
                         {supplier.grade === 'B' && (
                           <div className="flex items-start gap-2 text-sm">
                             <CheckCircle className="w-4 h-4 text-cyan-400 mt-0.5" />
-                            <span className="text-gray-300">Good performance. Monitor for potential improvements.</span>
+                            <span className="text-[var(--foreground)]">Good performance. Monitor for potential improvements.</span>
                           </div>
                         )}
                         {supplier.grade === 'C' && (
                           <div className="flex items-start gap-2 text-sm">
                             <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5" />
-                            <span className="text-gray-300">Average performance. Add buffer to stated lead times.</span>
+                            <span className="text-[var(--foreground)]">Average performance. Add buffer to stated lead times.</span>
                           </div>
                         )}
                         {(supplier.grade === 'D' || supplier.grade === 'F') && (
                           <>
                             <div className="flex items-start gap-2 text-sm">
                               <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5" />
-                              <span className="text-gray-300">Consider using 95th percentile lead time for ordering.</span>
+                              <span className="text-[var(--foreground)]">Consider using 95th percentile lead time for ordering.</span>
                             </div>
                             <div className="flex items-start gap-2 text-sm">
                               <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5" />
-                              <span className="text-gray-300">Evaluate alternative suppliers or increase safety stock.</span>
+                              <span className="text-[var(--foreground)]">Evaluate alternative suppliers or increase safety stock.</span>
                             </div>
                           </>
                         )}
                         {leadTimeDiff > 5 && (
                           <div className="flex items-start gap-2 text-sm">
                             <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5" />
-                            <span className="text-gray-300">Actual lead time significantly exceeds stated. System will use actual data.</span>
+                            <span className="text-[var(--foreground)]">Actual lead time significantly exceeds stated. System will use actual data.</span>
                           </div>
                         )}
                       </div>
@@ -387,10 +387,10 @@ export default function SupplierScorecard() {
       </div>
 
       {scorecards.length === 0 && (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-8 text-center">
-          <Truck className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-400">No supplier data available yet</p>
-          <p className="text-sm text-gray-500 mt-2">Supplier performance is tracked automatically as POs are fulfilled</p>
+        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-8 text-center">
+          <Truck className="w-12 h-12 text-[var(--muted-foreground)] mx-auto mb-4" />
+          <p className="text-[var(--muted-foreground)]">No supplier data available yet</p>
+          <p className="text-sm text-[var(--muted-foreground)] mt-2">Supplier performance is tracked automatically as POs are fulfilled</p>
         </div>
       )}
     </div>

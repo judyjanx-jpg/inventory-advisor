@@ -197,11 +197,11 @@ export default function ModelBreakdown() {
       {/* Header with SKU Filter */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <h2 className="text-xl font-bold text-[var(--foreground)] flex items-center gap-2">
             <Brain className="w-6 h-6 text-cyan-500" />
             AI Forecasting Engine
           </h2>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[var(--muted-foreground)] mt-1">
             {selectedSku ? `Viewing: ${selectedSku}` : 'Account-wide performance overview'}
           </p>
         </div>
@@ -209,7 +209,7 @@ export default function ModelBreakdown() {
           {selectedSku && (
             <button
               onClick={() => setSelectedSku(null)}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white"
+              className="flex items-center gap-2 px-3 py-2 bg-[var(--muted)] hover:bg-[var(--hover-bg)] rounded-lg text-sm text-[var(--foreground)]"
             >
               <X className="w-4 h-4" />
               Clear Filter
@@ -218,7 +218,7 @@ export default function ModelBreakdown() {
           <div className="relative">
             <button
               onClick={() => setShowSkuSelector(!showSkuSelector)}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-white"
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--card)] hover:bg-[var(--muted)] border border-[var(--border)] rounded-lg text-[var(--foreground)]"
             >
               <Filter className="w-4 h-4" />
               {selectedSku || 'Filter by SKU'}
@@ -226,14 +226,14 @@ export default function ModelBreakdown() {
             </button>
 
             {showSkuSelector && (
-              <div className="absolute right-0 mt-2 w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
-                <div className="p-2 border-b border-slate-700">
+              <div className="absolute right-0 mt-2 w-80 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-xl z-50">
+                <div className="p-2 border-b border-[var(--border)]">
                   <input
                     type="text"
                     placeholder="Search SKUs..."
                     value={skuFilter}
                     onChange={(e) => setSkuFilter(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"
+                    className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)] text-sm"
                     autoFocus
                   />
                 </div>
@@ -246,19 +246,19 @@ export default function ModelBreakdown() {
                         setShowSkuSelector(false)
                         setSkuFilter('')
                       }}
-                      className={`w-full px-3 py-2 text-left hover:bg-slate-700 flex items-center justify-between ${
-                        selectedSku === sku.masterSku ? 'bg-slate-700' : ''
+                      className={`w-full px-3 py-2 text-left hover:bg-[var(--muted)] flex items-center justify-between ${
+                        selectedSku === sku.masterSku ? 'bg-[var(--muted)]' : ''
                       }`}
                     >
                       <div>
-                        <p className="text-white text-sm font-medium">{sku.masterSku}</p>
-                        <p className="text-xs text-gray-500 truncate max-w-[200px]">{sku.title}</p>
+                        <p className="text-[var(--foreground)] text-sm font-medium">{sku.masterSku}</p>
+                        <p className="text-xs text-[var(--muted-foreground)] truncate max-w-[200px]">{sku.title}</p>
                       </div>
-                      <span className="text-xs text-gray-400">{sku.confidence.toFixed(0)}%</span>
+                      <span className="text-xs text-[var(--muted-foreground)]">{sku.confidence.toFixed(0)}%</span>
                     </button>
                   ))}
                   {filteredSkus.length === 0 && (
-                    <p className="px-3 py-4 text-sm text-gray-500 text-center">No SKUs found</p>
+                    <p className="px-3 py-4 text-sm text-[var(--muted-foreground)] text-center">No SKUs found</p>
                   )}
                 </div>
               </div>
@@ -266,7 +266,7 @@ export default function ModelBreakdown() {
           </div>
           <button
             onClick={fetchAccountData}
-            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white"
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-[var(--foreground)]"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -279,30 +279,30 @@ export default function ModelBreakdown() {
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-6 gap-4">
-            <div className={`bg-slate-800 rounded-xl p-4 border ${getHealthBg(accountSummary.forecastHealth)}`}>
-              <p className="text-sm text-gray-400">Forecast Health</p>
+            <div className={`bg-[var(--card)] rounded-xl p-4 border ${getHealthBg(accountSummary.forecastHealth)}`}>
+              <p className="text-sm text-[var(--muted-foreground)]">Forecast Health</p>
               <p className={`text-2xl font-bold mt-1 capitalize ${getHealthColor(accountSummary.forecastHealth)}`}>
                 {accountSummary.forecastHealth}
               </p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">Total SKUs</p>
-              <p className="text-2xl font-bold text-white mt-1">{accountSummary.totalSkus}</p>
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">Total SKUs</p>
+              <p className="text-2xl font-bold text-[var(--foreground)] mt-1">{accountSummary.totalSkus}</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">Avg Accuracy</p>
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">Avg Accuracy</p>
               <p className="text-2xl font-bold text-green-400 mt-1">{accountSummary.avgAccuracy.toFixed(1)}%</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">Seasonal SKUs</p>
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">Seasonal SKUs</p>
               <p className="text-2xl font-bold text-blue-400 mt-1">{accountSummary.skusWithSeasonality}</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">Spiking SKUs</p>
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">Spiking SKUs</p>
               <p className="text-2xl font-bold text-orange-400 mt-1">{accountSummary.skusWithSpikes}</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">New Items</p>
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">New Items</p>
               <p className="text-2xl font-bold text-purple-400 mt-1">{accountSummary.newItems}</p>
             </div>
           </div>
@@ -310,8 +310,8 @@ export default function ModelBreakdown() {
           {/* Model Performance */}
           <div className="grid grid-cols-2 gap-6">
             {/* Weight Distribution */}
-            <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+              <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
                 <Brain className="w-5 h-5 text-cyan-500" />
                 Model Weight Distribution (Account Average)
               </h3>
@@ -343,24 +343,24 @@ export default function ModelBreakdown() {
                     <div key={model.model} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: model.color }} />
-                        <span className="text-sm text-gray-300">{MODEL_LABELS[model.model] || model.model}</span>
+                        <span className="text-sm text-[var(--foreground)]">{MODEL_LABELS[model.model] || model.model}</span>
                       </div>
                       <div className="flex items-center gap-4">
-                        <span className="text-sm text-white font-medium">{(model.weight * 100).toFixed(0)}%</span>
-                        <span className="text-xs text-gray-500">{model.accuracy.toFixed(1)}% acc</span>
+                        <span className="text-sm text-[var(--foreground)] font-medium">{(model.weight * 100).toFixed(0)}%</span>
+                        <span className="text-xs text-[var(--muted-foreground)]">{model.accuracy.toFixed(1)}% acc</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mt-4">
+              <p className="text-xs text-[var(--muted-foreground)] mt-4">
                 Weights are dynamically optimized weekly based on each model's MAPE accuracy
               </p>
             </div>
 
             {/* Model Accuracy Comparison */}
-            <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+              <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-cyan-500" />
                 Model Accuracy Comparison
               </h3>
@@ -387,53 +387,53 @@ export default function ModelBreakdown() {
           </div>
 
           {/* How It Works */}
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-            <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+            <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
               <Info className="w-5 h-5 text-cyan-500" />
               How the AI Engine Works
             </h3>
             <div className="grid grid-cols-4 gap-4">
-              <div className="p-4 bg-slate-900/50 rounded-lg">
+              <div className="p-4 bg-[var(--secondary)]/50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
                     <span className="text-purple-400 font-bold">1</span>
                   </div>
-                  <h4 className="text-white font-medium">Prophet</h4>
+                  <h4 className="text-[var(--foreground)] font-medium">Prophet</h4>
                 </div>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-[var(--muted-foreground)]">
                   Handles seasonality and trends. Best for products with yearly patterns and holiday effects.
                 </p>
               </div>
-              <div className="p-4 bg-slate-900/50 rounded-lg">
+              <div className="p-4 bg-[var(--secondary)]/50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center">
                     <span className="text-cyan-400 font-bold">2</span>
                   </div>
-                  <h4 className="text-white font-medium">Exp Smoothing</h4>
+                  <h4 className="text-[var(--foreground)] font-medium">Exp Smoothing</h4>
                 </div>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-[var(--muted-foreground)]">
                   Captures recent trends quickly. Best for products with changing demand patterns.
                 </p>
               </div>
-              <div className="p-4 bg-slate-900/50 rounded-lg">
+              <div className="p-4 bg-[var(--secondary)]/50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
                     <span className="text-emerald-400 font-bold">3</span>
                   </div>
-                  <h4 className="text-white font-medium">ARIMA</h4>
+                  <h4 className="text-[var(--foreground)] font-medium">ARIMA</h4>
                 </div>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-[var(--muted-foreground)]">
                   Statistical baseline model. Provides stable predictions for consistent sellers.
                 </p>
               </div>
-              <div className="p-4 bg-slate-900/50 rounded-lg">
+              <div className="p-4 bg-[var(--secondary)]/50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
                     <span className="text-amber-400 font-bold">4</span>
                   </div>
-                  <h4 className="text-white font-medium">LSTM</h4>
+                  <h4 className="text-[var(--foreground)] font-medium">LSTM</h4>
                 </div>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-[var(--muted-foreground)]">
                   Deep learning patterns. Recognizes complex patterns and anomalies in data.
                 </p>
               </div>
@@ -447,15 +447,15 @@ export default function ModelBreakdown() {
           </div>
 
           {/* SKU List */}
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-              <h3 className="font-medium text-white">SKU Forecast Overview</h3>
-              <span className="text-sm text-gray-400">{skuForecasts.length} products</span>
+          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+              <h3 className="font-medium text-[var(--foreground)]">SKU Forecast Overview</h3>
+              <span className="text-sm text-[var(--muted-foreground)]">{skuForecasts.length} products</span>
             </div>
             <div className="overflow-x-auto max-h-96">
               <table className="w-full">
-                <thead className="bg-slate-900 sticky top-0">
-                  <tr className="text-xs font-medium text-gray-400 uppercase">
+                <thead className="bg-[var(--secondary)] sticky top-0">
+                  <tr className="text-xs font-medium text-[var(--muted-foreground)] uppercase">
                     <th className="px-4 py-3 text-left">SKU</th>
                     <th className="px-4 py-3 text-center">Confidence</th>
                     <th className="px-4 py-3 text-center">Dominant Model</th>
@@ -467,10 +467,10 @@ export default function ModelBreakdown() {
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {skuForecasts.slice(0, 50).map(sku => (
-                    <tr key={sku.masterSku} className="hover:bg-slate-700/50">
+                    <tr key={sku.masterSku} className="hover:bg-[var(--muted)]/50">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-white">{sku.masterSku}</p>
-                        <p className="text-xs text-gray-500 truncate max-w-[200px]">{sku.title}</p>
+                        <p className="font-medium text-[var(--foreground)]">{sku.masterSku}</p>
+                        <p className="text-xs text-[var(--muted-foreground)] truncate max-w-[200px]">{sku.title}</p>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`font-medium ${sku.confidence >= 80 ? 'text-green-400' : sku.confidence >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
@@ -488,7 +488,7 @@ export default function ModelBreakdown() {
                           {MODEL_LABELS[sku.dominantModel] || sku.dominantModel}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center text-white">
+                      <td className="px-4 py-3 text-center text-[var(--foreground)]">
                         {sku.avgDailyForecast.toFixed(1)}
                       </td>
                       <td className="px-4 py-3 text-center text-cyan-400 font-medium">
@@ -532,28 +532,28 @@ export default function ModelBreakdown() {
         <>
           {/* SKU Summary Cards */}
           <div className="grid grid-cols-5 gap-4">
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">Avg Daily Forecast</p>
-              <p className="text-2xl font-bold text-white mt-1">
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">Avg Daily Forecast</p>
+              <p className="text-2xl font-bold text-[var(--foreground)] mt-1">
                 {selectedSkuData.avgDailyForecast.toFixed(1)}
               </p>
-              <p className="text-xs text-gray-500">units/day</p>
+              <p className="text-xs text-[var(--muted-foreground)]">units/day</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">30-Day Total</p>
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">30-Day Total</p>
               <p className="text-2xl font-bold text-cyan-400 mt-1">
                 {Math.round(selectedSkuData.totalForecast)}
               </p>
-              <p className="text-xs text-gray-500">units</p>
+              <p className="text-xs text-[var(--muted-foreground)]">units</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">Confidence</p>
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">Confidence</p>
               <p className={`text-2xl font-bold mt-1 ${selectedSkuData.confidence >= 80 ? 'text-green-400' : selectedSkuData.confidence >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
                 {selectedSkuData.confidence.toFixed(0)}%
               </p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">Dominant Model</p>
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">Dominant Model</p>
               <p
                 className="text-xl font-bold mt-1"
                 style={{ color: MODEL_COLORS[selectedSkuData.dominantModel] }}
@@ -561,8 +561,8 @@ export default function ModelBreakdown() {
                 {MODEL_LABELS[selectedSkuData.dominantModel]}
               </p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <p className="text-sm text-gray-400">Status</p>
+            <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
+              <p className="text-sm text-[var(--muted-foreground)]">Status</p>
               <div className="flex items-center gap-2 mt-1">
                 {selectedSkuData.hasSeasonality && (
                   <span className="px-2 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded text-xs">Seasonal</span>
@@ -582,8 +582,8 @@ export default function ModelBreakdown() {
 
           {/* Model Weights for this SKU */}
           <div className="grid grid-cols-2 gap-6">
-            <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+              <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
                 <Brain className="w-5 h-5 text-cyan-500" />
                 Model Weights for {selectedSku}
               </h3>
@@ -617,23 +617,23 @@ export default function ModelBreakdown() {
                       <div key={model} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: MODEL_COLORS[model] }} />
-                          <span className="text-sm text-gray-300">{MODEL_LABELS[model]}</span>
+                          <span className="text-sm text-[var(--foreground)]">{MODEL_LABELS[model]}</span>
                         </div>
-                        <span className="text-sm text-white font-medium">{(weight * 100).toFixed(0)}%</span>
+                        <span className="text-sm text-[var(--foreground)] font-medium">{(weight * 100).toFixed(0)}%</span>
                       </div>
                     ))}
                 </div>
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+            <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+              <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
                 <Info className="w-5 h-5 text-cyan-500" />
                 Why These Weights?
               </h3>
               <div className="space-y-3 text-sm">
-                <div className="p-3 bg-slate-900/50 rounded-lg">
-                  <p className="text-gray-300">
+                <div className="p-3 bg-[var(--secondary)]/50 rounded-lg">
+                  <p className="text-[var(--foreground)]">
                     <span style={{ color: MODEL_COLORS[selectedSkuData.dominantModel] }} className="font-medium">
                       {MODEL_LABELS[selectedSkuData.dominantModel]}
                     </span>

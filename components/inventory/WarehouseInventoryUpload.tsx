@@ -572,7 +572,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
       // Show toast notification (non-blocking)
       try {
         const toast = document.createElement('div')
-        toast.className = 'fixed top-4 right-4 z-[100] px-6 py-4 rounded-lg shadow-lg bg-emerald-500 text-white flex items-center gap-3'
+        toast.className = 'fixed top-4 right-4 z-[100] px-6 py-4 rounded-lg shadow-lg bg-emerald-500 text-[var(--foreground)] flex items-center gap-3'
         toast.innerHTML = `
           <span class="text-xl">✓</span>
           <span class="font-medium">Warehouse inventory updated</span>
@@ -658,11 +658,11 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 rounded-xl border border-slate-700 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-700 px-6 py-4 flex items-center justify-between z-10">
+      <div className="bg-[var(--secondary)] rounded-xl border border-[var(--border)] w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-[var(--secondary)] border-b border-[var(--border)] px-6 py-4 flex items-center justify-between z-10">
           <div>
-            <h2 className="text-xl font-bold text-white">Bulk Upload Warehouse Inventory</h2>
-            <p className="text-sm text-slate-400 mt-1">
+            <h2 className="text-xl font-bold text-[var(--foreground)]">Bulk Upload Warehouse Inventory</h2>
+            <p className="text-sm text-[var(--muted-foreground)] mt-1">
               {step === 'upload' && 'Upload Excel or CSV file and map columns'}
               {step === 'missing-skus' && `${missingSkus.length} SKUs not found - choose action for each`}
               {step === 'complete' && 'Upload complete!'}
@@ -670,7 +670,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
           </div>
           <button
             onClick={handleClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -681,7 +681,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
             <>
               {/* File Selection */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                   Select File (CSV or Excel)
                 </label>
                 <input
@@ -689,10 +689,10 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                   type="file"
                   accept=".csv,.xlsx,.xls"
                   onChange={handleFileSelect}
-                  className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/20 file:text-cyan-400 hover:file:bg-cyan-500/30"
+                  className="block w-full text-sm text-[var(--muted-foreground)] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/20 file:text-cyan-400 hover:file:bg-cyan-500/30"
                 />
                 {file && (
-                  <p className="mt-2 text-sm text-slate-400 flex items-center gap-2">
+                  <p className="mt-2 text-sm text-[var(--muted-foreground)] flex items-center gap-2">
                     <FileText className="w-4 h-4" />
                     {file.name} ({(file.size / 1024).toFixed(1)} KB)
                   </p>
@@ -702,13 +702,13 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
               {/* Warehouse Selection */}
               {warehouses.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                     Warehouse {mapping.warehouse ? '(or map from file)' : '(required)'}
                   </label>
                   <select
                     value={selectedWarehouse || ''}
                     onChange={(e) => setSelectedWarehouse(parseInt(e.target.value))}
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full px-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
                     disabled={!!mapping.warehouse}
                   >
                     <option value="">Select warehouse...</option>
@@ -719,7 +719,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                     ))}
                   </select>
                   {mapping.warehouse && (
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                       Warehouse will be determined from the "{mapping.warehouse}" column
                     </p>
                   )}
@@ -729,16 +729,16 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
               {/* Column Mapping */}
               {headers.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-3">
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-3">
                     Map Columns
                   </label>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">SKU *</label>
+                      <label className="block text-xs text-[var(--muted-foreground)] mb-1">SKU *</label>
                       <select
                         value={mapping.sku || ''}
                         onChange={(e) => setMapping({ ...mapping, sku: e.target.value || null })}
-                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                        className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                       >
                         <option value="">Select column...</option>
                         {headers.map(h => (
@@ -747,11 +747,11 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Available *</label>
+                      <label className="block text-xs text-[var(--muted-foreground)] mb-1">Available *</label>
                       <select
                         value={mapping.available || ''}
                         onChange={(e) => setMapping({ ...mapping, available: e.target.value || null })}
-                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                        className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                       >
                         <option value="">Select column...</option>
                         {headers.map(h => (
@@ -760,11 +760,11 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Reserved (optional)</label>
+                      <label className="block text-xs text-[var(--muted-foreground)] mb-1">Reserved (optional)</label>
                       <select
                         value={mapping.reserved || ''}
                         onChange={(e) => setMapping({ ...mapping, reserved: e.target.value || null })}
-                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                        className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                       >
                         <option value="">Select column...</option>
                         {headers.map(h => (
@@ -773,7 +773,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Warehouse (optional)</label>
+                      <label className="block text-xs text-[var(--muted-foreground)] mb-1">Warehouse (optional)</label>
                       <select
                         value={mapping.warehouse || ''}
                         onChange={(e) => {
@@ -782,7 +782,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                             setSelectedWarehouse(null)
                           }
                         }}
-                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                        className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                       >
                         <option value="">Select column...</option>
                         {headers.map(h => (
@@ -797,15 +797,15 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
               {/* Preview */}
               {previewRows.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
                     Preview (first 10 rows)
                   </label>
-                  <div className="overflow-x-auto border border-slate-700 rounded-lg">
+                  <div className="overflow-x-auto border border-[var(--border)] rounded-lg">
                     <table className="w-full text-sm">
-                      <thead className="bg-slate-800">
+                      <thead className="bg-[var(--card)]">
                         <tr>
                           {headers.map(h => (
-                            <th key={h} className="px-3 py-2 text-left text-slate-300 font-medium border-b border-slate-700">
+                            <th key={h} className="px-3 py-2 text-left text-[var(--foreground)] font-medium border-b border-[var(--border)]">
                               {h}
                               {mapping.sku === h && <span className="ml-1 text-cyan-400">(SKU)</span>}
                               {mapping.available === h && <span className="ml-1 text-cyan-400">(Available)</span>}
@@ -817,9 +817,9 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                       </thead>
                       <tbody>
                         {previewRows.map((row, idx) => (
-                          <tr key={idx} className="border-b border-slate-700/50">
+                          <tr key={idx} className="border-b border-[var(--border)]/50">
                             {headers.map(h => (
-                              <td key={h} className="px-3 py-2 text-slate-400">
+                              <td key={h} className="px-3 py-2 text-[var(--muted-foreground)]">
                                 {String(row[h] || '')}
                               </td>
                             ))}
@@ -857,7 +857,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                   )}
                 </Button>
                 {progressMessage && (
-                  <p className="text-xs text-slate-400 mt-2">{progressMessage}</p>
+                  <p className="text-xs text-[var(--muted-foreground)] mt-2">{progressMessage}</p>
                 )}
               </div>
             </>
@@ -868,13 +868,13 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
               <div className="flex items-center justify-between mb-4">
                 <div className="flex-1 max-w-md">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)]" />
                     <input
                       type="text"
                       placeholder="Search SKUs..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      className="w-full pl-10 pr-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                     />
                   </div>
                 </div>
@@ -903,9 +903,9 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                 </div>
               </div>
 
-              <div className="border border-slate-700 rounded-lg overflow-hidden">
-                <div className="bg-slate-800 px-4 py-3 border-b border-slate-700">
-                  <div className="grid grid-cols-12 gap-4 text-xs font-medium text-slate-300">
+              <div className="border border-[var(--border)] rounded-lg overflow-hidden">
+                <div className="bg-[var(--card)] px-4 py-3 border-b border-[var(--border)]">
+                  <div className="grid grid-cols-12 gap-4 text-xs font-medium text-[var(--foreground)]">
                     <div className="col-span-3">SKU</div>
                     <div className="col-span-2">Available</div>
                     <div className="col-span-2">Reserved</div>
@@ -915,11 +915,11 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                 </div>
                 <div className="max-h-96 overflow-y-auto">
                   {filteredMissingSkus.map((item, idx) => (
-                    <div key={idx} className="px-4 py-3 border-b border-slate-700/50 hover:bg-slate-800/30">
+                    <div key={idx} className="px-4 py-3 border-b border-[var(--border)]/50 hover:bg-[var(--card)]/30">
                       <div className="grid grid-cols-12 gap-4 items-center">
-                        <div className="col-span-3 font-mono text-sm text-white">{item.sku}</div>
-                        <div className="col-span-2 text-slate-400">{item.available}</div>
-                        <div className="col-span-2 text-slate-400">{item.reserved}</div>
+                        <div className="col-span-3 font-mono text-sm text-[var(--foreground)]">{item.sku}</div>
+                        <div className="col-span-2 text-[var(--muted-foreground)]">{item.available}</div>
+                        <div className="col-span-2 text-[var(--muted-foreground)]">{item.reserved}</div>
                         <div className="col-span-2">
                           <select
                             value={item.action}
@@ -931,7 +931,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                               }
                               setMissingSkus(newSkus)
                             }}
-                            className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-cyan-500"
+                            className="w-full px-2 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm focus:outline-none focus:border-cyan-500"
                           >
                             <option value="ignore">Ignore</option>
                             <option value="create">Create New</option>
@@ -942,7 +942,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                           {item.action === 'map' ? (
                             <div className="relative">
                               <div className="relative">
-                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--muted-foreground)] pointer-events-none" />
                                 <input
                                   type="text"
                                   placeholder="Type to search SKU..."
@@ -974,11 +974,11 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                                       }
                                     }, 200)
                                   }}
-                                  className="w-full pl-8 pr-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
+                                  className="w-full pl-8 pr-2 py-1.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500 font-mono"
                                 />
                               </div>
                               {openDropdownIndex === idx && (
-                                <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                <div className="absolute z-50 w-full mt-1 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg max-h-60 overflow-y-auto">
                                   {availableProducts
                                     .filter(p => {
                                       const search = (skuSearchTerm[idx] || '').toLowerCase()
@@ -998,8 +998,8 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                                           setSkuSearchTerm({ ...skuSearchTerm, [idx]: '' })
                                           setOpenDropdownIndex(null)
                                         }}
-                                        className={`w-full text-left px-3 py-2 text-sm font-mono hover:bg-slate-700 transition-colors ${
-                                          item.mappedToSku === p.sku ? 'bg-cyan-500/20 text-cyan-400' : 'text-white'
+                                        className={`w-full text-left px-3 py-2 text-sm font-mono hover:bg-[var(--muted)] transition-colors ${
+                                          item.mappedToSku === p.sku ? 'bg-cyan-500/20 text-cyan-400' : 'text-[var(--foreground)]'
                                         }`}
                                       >
                                         {p.sku}
@@ -1009,13 +1009,13 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                                     const search = (skuSearchTerm[idx] || '').toLowerCase()
                                     return !search || p.sku.toLowerCase().includes(search)
                                   }).length === 0 && (
-                                    <div className="px-3 py-2 text-sm text-slate-400">No SKUs found</div>
+                                    <div className="px-3 py-2 text-sm text-[var(--muted-foreground)]">No SKUs found</div>
                                   )}
                                   {availableProducts.filter(p => {
                                     const search = (skuSearchTerm[idx] || '').toLowerCase()
                                     return !search || p.sku.toLowerCase().includes(search)
                                   }).length > 100 && (
-                                    <div className="px-3 py-2 text-xs text-slate-500 border-t border-slate-700">
+                                    <div className="px-3 py-2 text-xs text-[var(--muted-foreground)] border-t border-[var(--border)]">
                                       Showing first 100 results. Refine search for more.
                                     </div>
                                   )}
@@ -1023,7 +1023,7 @@ export default function WarehouseInventoryUpload({ onUploadComplete }: Warehouse
                               )}
                             </div>
                           ) : (
-                            <span className="text-slate-500 text-sm">—</span>
+                            <span className="text-[var(--muted-foreground)] text-sm">—</span>
                           )}
                         </div>
                       </div>

@@ -210,11 +210,11 @@ export default function SeasonalityManager() {
             {upcomingEvents.map(event => (
               <div
                 key={event.id}
-                className="flex items-center gap-3 px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700"
+                className="flex items-center gap-3 px-3 py-2 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]"
               >
                 <div>
-                  <p className="text-sm font-medium text-white">{event.name}</p>
-                  <p className="text-xs text-gray-400">{event.daysUntil} days away</p>
+                  <p className="text-sm font-medium text-[var(--foreground)]">{event.name}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">{event.daysUntil} days away</p>
                 </div>
                 <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-xs font-medium">
                   +{((event.learnedMultiplier || event.baseMultiplier) - 1) * 100}%
@@ -228,17 +228,17 @@ export default function SeasonalityManager() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-medium text-white flex items-center gap-2">
+          <h3 className="text-lg font-medium text-[var(--foreground)] flex items-center gap-2">
             <Calendar className="w-5 h-5 text-cyan-500" />
             Seasonal Events
           </h3>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[var(--muted-foreground)] mt-1">
             Manage seasonal events and their demand multipliers
           </p>
         </div>
         <button
           onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white"
+          className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-[var(--foreground)]"
         >
           <Plus className="w-4 h-4" />
           Add Event
@@ -247,30 +247,30 @@ export default function SeasonalityManager() {
 
       {/* Add Event Form */}
       {showAddForm && (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
+        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
           <div className="flex items-center justify-between mb-4">
-            <h4 className="font-medium text-white">New Seasonal Event</h4>
-            <button onClick={() => setShowAddForm(false)} className="text-gray-400 hover:text-white">
+            <h4 className="font-medium text-[var(--foreground)]">New Seasonal Event</h4>
+            <button onClick={() => setShowAddForm(false)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
               <X className="w-5 h-5" />
             </button>
           </div>
           <div className="grid grid-cols-4 gap-4">
             <div className="col-span-2">
-              <label className="text-sm text-gray-400 block mb-1">Event Name</label>
+              <label className="text-sm text-[var(--muted-foreground)] block mb-1">Event Name</label>
               <input
                 type="text"
                 value={newEvent.name}
                 onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
                 placeholder="e.g., Summer Sale"
               />
             </div>
             <div>
-              <label className="text-sm text-gray-400 block mb-1">Type</label>
+              <label className="text-sm text-[var(--muted-foreground)] block mb-1">Type</label>
               <select
                 value={newEvent.eventType}
                 onChange={(e) => setNewEvent({ ...newEvent, eventType: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
               >
                 {EVENT_TYPES.map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
@@ -278,7 +278,7 @@ export default function SeasonalityManager() {
               </select>
             </div>
             <div>
-              <label className="text-sm text-gray-400 block mb-1">Multiplier</label>
+              <label className="text-sm text-[var(--muted-foreground)] block mb-1">Multiplier</label>
               <input
                 type="number"
                 step="0.1"
@@ -286,15 +286,15 @@ export default function SeasonalityManager() {
                 max="5"
                 value={newEvent.baseMultiplier}
                 onChange={(e) => setNewEvent({ ...newEvent, baseMultiplier: parseFloat(e.target.value) })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
               />
             </div>
             <div>
-              <label className="text-sm text-gray-400 block mb-1">Start Month</label>
+              <label className="text-sm text-[var(--muted-foreground)] block mb-1">Start Month</label>
               <select
                 value={newEvent.startMonth}
                 onChange={(e) => setNewEvent({ ...newEvent, startMonth: parseInt(e.target.value) })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
               >
                 {MONTHS.map((m, i) => (
                   <option key={i} value={i + 1}>{m}</option>
@@ -302,22 +302,22 @@ export default function SeasonalityManager() {
               </select>
             </div>
             <div>
-              <label className="text-sm text-gray-400 block mb-1">Start Day</label>
+              <label className="text-sm text-[var(--muted-foreground)] block mb-1">Start Day</label>
               <input
                 type="number"
                 min="1"
                 max="31"
                 value={newEvent.startDay}
                 onChange={(e) => setNewEvent({ ...newEvent, startDay: parseInt(e.target.value) })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
               />
             </div>
             <div>
-              <label className="text-sm text-gray-400 block mb-1">End Month</label>
+              <label className="text-sm text-[var(--muted-foreground)] block mb-1">End Month</label>
               <select
                 value={newEvent.endMonth}
                 onChange={(e) => setNewEvent({ ...newEvent, endMonth: parseInt(e.target.value) })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
               >
                 {MONTHS.map((m, i) => (
                   <option key={i} value={i + 1}>{m}</option>
@@ -325,28 +325,28 @@ export default function SeasonalityManager() {
               </select>
             </div>
             <div>
-              <label className="text-sm text-gray-400 block mb-1">End Day</label>
+              <label className="text-sm text-[var(--muted-foreground)] block mb-1">End Day</label>
               <input
                 type="number"
                 min="1"
                 max="31"
                 value={newEvent.endDay}
                 onChange={(e) => setNewEvent({ ...newEvent, endDay: parseInt(e.target.value) })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
               />
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
               onClick={() => setShowAddForm(false)}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white"
+              className="px-4 py-2 bg-[var(--muted)] hover:bg-[var(--hover-bg)] rounded-lg text-[var(--foreground)]"
             >
               Cancel
             </button>
             <button
               onClick={createEvent}
               disabled={!newEvent.name}
-              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 rounded-lg text-white"
+              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 rounded-lg text-[var(--foreground)]"
             >
               Create Event
             </button>
@@ -355,10 +355,10 @@ export default function SeasonalityManager() {
       )}
 
       {/* Events Table */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
         <table className="w-full">
-          <thead className="bg-slate-900">
-            <tr className="text-xs font-medium text-gray-400 uppercase">
+          <thead className="bg-[var(--secondary)]">
+            <tr className="text-xs font-medium text-[var(--muted-foreground)] uppercase">
               <th className="px-4 py-3 text-left">Event</th>
               <th className="px-4 py-3 text-left">Type</th>
               <th className="px-4 py-3 text-center">Date Range</th>
@@ -375,14 +375,14 @@ export default function SeasonalityManager() {
               const isUpcoming = (event.daysUntil || 999) <= 30
 
               return (
-                <tr key={event.id} className={`hover:bg-slate-700/50 ${!event.isActive ? 'opacity-50' : ''}`}>
+                <tr key={event.id} className={`hover:bg-[var(--muted)]/50 ${!event.isActive ? 'opacity-50' : ''}`}>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-white">{event.name}</p>
+                    <p className="font-medium text-[var(--foreground)]">{event.name}</p>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-sm ${typeConfig.color}`}>{typeConfig.label}</span>
                   </td>
-                  <td className="px-4 py-3 text-center text-sm text-gray-300">
+                  <td className="px-4 py-3 text-center text-sm text-[var(--foreground)]">
                     {formatDateRange(event)}
                   </td>
                   <td className="px-4 py-3 text-center">
@@ -391,11 +391,11 @@ export default function SeasonalityManager() {
                         {event.daysUntil}d
                       </span>
                     ) : (
-                      <span className="text-sm text-gray-400">{event.daysUntil}d</span>
+                      <span className="text-sm text-[var(--muted-foreground)]">{event.daysUntil}d</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className="text-white font-medium">
+                    <span className="text-[var(--foreground)] font-medium">
                       +{((event.baseMultiplier - 1) * 100).toFixed(0)}%
                     </span>
                   </td>
@@ -405,7 +405,7 @@ export default function SeasonalityManager() {
                         +{((event.learnedMultiplier - 1) * 100).toFixed(0)}%
                       </span>
                     ) : (
-                      <span className="text-gray-500">-</span>
+                      <span className="text-[var(--muted-foreground)]">-</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-center">
@@ -414,7 +414,7 @@ export default function SeasonalityManager() {
                       className={`px-2 py-1 rounded text-xs font-medium border ${
                         event.isActive
                           ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                          : 'bg-slate-700 text-gray-400 border-slate-600'
+                          : 'bg-[var(--muted)] text-[var(--muted-foreground)] border-[var(--border)]'
                       }`}
                     >
                       {event.isActive ? 'Active' : 'Inactive'}
@@ -424,13 +424,13 @@ export default function SeasonalityManager() {
                     <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={() => setEditingEvent(event)}
-                        className="p-1.5 hover:bg-slate-600 rounded text-gray-400 hover:text-white"
+                        className="p-1.5 hover:bg-[var(--hover-bg)] rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => deleteEvent(event.id)}
-                        className="p-1.5 hover:bg-slate-600 rounded text-gray-400 hover:text-red-400"
+                        className="p-1.5 hover:bg-[var(--hover-bg)] rounded text-[var(--muted-foreground)] hover:text-red-400"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -444,11 +444,11 @@ export default function SeasonalityManager() {
       </div>
 
       {/* Info Box */}
-      <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-4">
+      <div className="bg-[var(--card)]/50 rounded-xl border border-[var(--border)] p-4">
         <div className="flex items-start gap-3">
           <Info className="w-5 h-5 text-cyan-500 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-gray-400">
-            <p className="text-gray-300 font-medium mb-1">How Seasonal Multipliers Work</p>
+          <div className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-[var(--foreground)] font-medium mb-1">How Seasonal Multipliers Work</p>
             <ul className="list-disc list-inside space-y-1">
               <li><strong>Base Multiplier:</strong> Your estimated demand increase during this event</li>
               <li><strong>Learned Multiplier:</strong> Automatically calculated from historical data (more accurate)</li>
@@ -462,30 +462,30 @@ export default function SeasonalityManager() {
       {/* Edit Modal */}
       {editingEvent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-lg">
+          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6 w-full max-w-lg">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-medium text-white">Edit Event: {editingEvent.name}</h4>
-              <button onClick={() => setEditingEvent(null)} className="text-gray-400 hover:text-white">
+              <h4 className="font-medium text-[var(--foreground)]">Edit Event: {editingEvent.name}</h4>
+              <button onClick={() => setEditingEvent(null)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-sm text-gray-400 block mb-1">Event Name</label>
+                <label className="text-sm text-[var(--muted-foreground)] block mb-1">Event Name</label>
                 <input
                   type="text"
                   value={editingEvent.name}
                   onChange={(e) => setEditingEvent({ ...editingEvent, name: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-gray-400 block mb-1">Type</label>
+                  <label className="text-sm text-[var(--muted-foreground)] block mb-1">Type</label>
                   <select
                     value={editingEvent.eventType}
                     onChange={(e) => setEditingEvent({ ...editingEvent, eventType: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
                   >
                     {EVENT_TYPES.map(type => (
                       <option key={type.value} value={type.value}>{type.label}</option>
@@ -493,7 +493,7 @@ export default function SeasonalityManager() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-400 block mb-1">Base Multiplier</label>
+                  <label className="text-sm text-[var(--muted-foreground)] block mb-1">Base Multiplier</label>
                   <input
                     type="number"
                     step="0.1"
@@ -501,7 +501,7 @@ export default function SeasonalityManager() {
                     max="5"
                     value={editingEvent.baseMultiplier}
                     onChange={(e) => setEditingEvent({ ...editingEvent, baseMultiplier: parseFloat(e.target.value) })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    className="w-full bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)]"
                   />
                 </div>
               </div>
@@ -509,7 +509,7 @@ export default function SeasonalityManager() {
             <div className="flex justify-end gap-2 mt-6">
               <button
                 onClick={() => setEditingEvent(null)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white"
+                className="px-4 py-2 bg-[var(--muted)] hover:bg-[var(--hover-bg)] rounded-lg text-[var(--foreground)]"
               >
                 Cancel
               </button>
@@ -519,7 +519,7 @@ export default function SeasonalityManager() {
                   eventType: editingEvent.eventType,
                   baseMultiplier: editingEvent.baseMultiplier,
                 })}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white"
+                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-[var(--foreground)]"
               >
                 Save Changes
               </button>

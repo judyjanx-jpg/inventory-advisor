@@ -157,7 +157,7 @@ export default function KPIDashboard() {
   const getTrendIcon = (trend: string) => {
     if (trend === 'improving') return <TrendingUp className="w-4 h-4 text-green-400" />
     if (trend === 'declining') return <TrendingDown className="w-4 h-4 text-red-400" />
-    return <Activity className="w-4 h-4 text-gray-400" />
+    return <Activity className="w-4 h-4 text-[var(--muted-foreground)]" />
   }
 
   if (loading) {
@@ -173,14 +173,14 @@ export default function KPIDashboard() {
       {/* Time Range Selector */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-gray-400" />
-          <div className="flex bg-slate-800 rounded-lg border border-slate-700 p-1">
+          <Calendar className="w-5 h-5 text-[var(--muted-foreground)]" />
+          <div className="flex bg-[var(--card)] rounded-lg border border-[var(--border)] p-1">
             {(['7d', '30d', '90d'] as const).map(range => (
               <button
                 key={range}
                 onClick={() => setTimeRange(range)}
                 className={`px-3 py-1.5 rounded text-sm transition-colors ${
-                  timeRange === range ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'
+                  timeRange === range ? 'bg-cyan-600 text-[var(--foreground)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                 }`}
               >
                 {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : '90 Days'}
@@ -191,12 +191,12 @@ export default function KPIDashboard() {
         <div className="flex items-center gap-2">
           <button
             onClick={fetchDashboardData}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm text-gray-400 hover:text-white"
+            className="flex items-center gap-2 px-3 py-2 bg-[var(--card)] hover:bg-[var(--muted)] border border-[var(--border)] rounded-lg text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-sm text-white">
+          <button className="flex items-center gap-2 px-3 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-sm text-[var(--foreground)]">
             <Download className="w-4 h-4" />
             Export Report
           </button>
@@ -206,52 +206,52 @@ export default function KPIDashboard() {
       {/* KPI Cards */}
       {kpis && (
         <div className="grid grid-cols-5 gap-4">
-          <div className={`bg-slate-800 rounded-xl p-4 border ${kpis.forecastAccuracy.status ? STATUS_COLORS[kpis.forecastAccuracy.status].border : 'border-slate-700'}`}>
+          <div className={`bg-[var(--card)] rounded-xl p-4 border ${kpis.forecastAccuracy.status ? STATUS_COLORS[kpis.forecastAccuracy.status].border : 'border-[var(--border)]'}`}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-400">Forecast Accuracy</p>
+              <p className="text-sm text-[var(--muted-foreground)]">Forecast Accuracy</p>
               {getKPIIcon(kpis.forecastAccuracy.status)}
             </div>
-            <p className="text-2xl font-bold text-white">{formatNumber(kpis.forecastAccuracy.value, kpis.forecastAccuracy.unit)}</p>
+            <p className="text-2xl font-bold text-[var(--foreground)]">{formatNumber(kpis.forecastAccuracy.value, kpis.forecastAccuracy.unit)}</p>
             {kpis.forecastAccuracy.target && (
-              <p className="text-xs text-gray-500 mt-1">Target: {kpis.forecastAccuracy.target}%</p>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">Target: {kpis.forecastAccuracy.target}%</p>
             )}
           </div>
 
-          <div className={`bg-slate-800 rounded-xl p-4 border ${kpis.stockoutPreventionRate.status ? STATUS_COLORS[kpis.stockoutPreventionRate.status].border : 'border-slate-700'}`}>
+          <div className={`bg-[var(--card)] rounded-xl p-4 border ${kpis.stockoutPreventionRate.status ? STATUS_COLORS[kpis.stockoutPreventionRate.status].border : 'border-[var(--border)]'}`}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-400">Stockout Prevention</p>
+              <p className="text-sm text-[var(--muted-foreground)]">Stockout Prevention</p>
               {getKPIIcon(kpis.stockoutPreventionRate.status)}
             </div>
-            <p className="text-2xl font-bold text-white">{formatNumber(kpis.stockoutPreventionRate.value, kpis.stockoutPreventionRate.unit)}</p>
+            <p className="text-2xl font-bold text-[var(--foreground)]">{formatNumber(kpis.stockoutPreventionRate.value, kpis.stockoutPreventionRate.unit)}</p>
             {kpis.stockoutPreventionRate.target && (
-              <p className="text-xs text-gray-500 mt-1">Target: {kpis.stockoutPreventionRate.target}%</p>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">Target: {kpis.stockoutPreventionRate.target}%</p>
             )}
           </div>
 
-          <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+          <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-400">Inventory Value</p>
+              <p className="text-sm text-[var(--muted-foreground)]">Inventory Value</p>
               <Package className="w-5 h-5 text-purple-400" />
             </div>
             <p className="text-2xl font-bold text-purple-400">{formatNumber(kpis.inventoryValue.value, kpis.inventoryValue.unit)}</p>
           </div>
 
-          <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+          <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-400">Avg Lead Time</p>
+              <p className="text-sm text-[var(--muted-foreground)]">Avg Lead Time</p>
               <Clock className="w-5 h-5 text-orange-400" />
             </div>
             <p className="text-2xl font-bold text-orange-400">{formatNumber(kpis.avgLeadTime.value, kpis.avgLeadTime.unit)}</p>
           </div>
 
-          <div className={`bg-slate-800 rounded-xl p-4 border ${kpis.manualOverrideRate.status ? STATUS_COLORS[kpis.manualOverrideRate.status].border : 'border-slate-700'}`}>
+          <div className={`bg-[var(--card)] rounded-xl p-4 border ${kpis.manualOverrideRate.status ? STATUS_COLORS[kpis.manualOverrideRate.status].border : 'border-[var(--border)]'}`}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-400">Manual Override Rate</p>
+              <p className="text-sm text-[var(--muted-foreground)]">Manual Override Rate</p>
               {getKPIIcon(kpis.manualOverrideRate.status)}
             </div>
-            <p className="text-2xl font-bold text-white">{formatNumber(kpis.manualOverrideRate.value, kpis.manualOverrideRate.unit)}</p>
+            <p className="text-2xl font-bold text-[var(--foreground)]">{formatNumber(kpis.manualOverrideRate.value, kpis.manualOverrideRate.unit)}</p>
             {kpis.manualOverrideRate.target && (
-              <p className="text-xs text-gray-500 mt-1">Target: &lt;{kpis.manualOverrideRate.target}%</p>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">Target: &lt;{kpis.manualOverrideRate.target}%</p>
             )}
           </div>
         </div>
@@ -260,9 +260,9 @@ export default function KPIDashboard() {
       {/* Charts Row */}
       <div className="grid grid-cols-2 gap-6">
         {/* Accuracy Trend */}
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
+        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-white flex items-center gap-2">
+            <h3 className="text-lg font-medium text-[var(--foreground)] flex items-center gap-2">
               <Target className="w-5 h-5 text-cyan-500" />
               Forecast Accuracy Trend
             </h3>
@@ -271,7 +271,7 @@ export default function KPIDashboard() {
                 {getTrendIcon(weeklySummary.forecastAccuracy.trend)}
                 <span className={`text-sm ${
                   weeklySummary.forecastAccuracy.trend === 'improving' ? 'text-green-400' :
-                  weeklySummary.forecastAccuracy.trend === 'declining' ? 'text-red-400' : 'text-gray-400'
+                  weeklySummary.forecastAccuracy.trend === 'declining' ? 'text-red-400' : 'text-[var(--muted-foreground)]'
                 }`}>
                   {weeklySummary.forecastAccuracy.trend}
                 </span>
@@ -292,8 +292,8 @@ export default function KPIDashboard() {
         </div>
 
         {/* Model Performance */}
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-          <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+          <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
             <Brain className="w-5 h-5 text-cyan-500" />
             Model Performance Comparison
           </h3>
@@ -301,12 +301,12 @@ export default function KPIDashboard() {
             {modelPerformance.map((model, i) => (
               <div key={model.model} className="flex items-center gap-4">
                 <div className="w-32">
-                  <p className="text-sm text-white">{model.model}</p>
-                  <p className="text-xs text-gray-500">{model.skuCount} SKUs</p>
+                  <p className="text-sm text-[var(--foreground)]">{model.model}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">{model.skuCount} SKUs</p>
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-slate-700 rounded-full h-3">
+                    <div className="flex-1 bg-[var(--muted)] rounded-full h-3">
                       <div
                         className={`h-3 rounded-full ${
                           i === 0 ? 'bg-green-500' :
@@ -316,13 +316,13 @@ export default function KPIDashboard() {
                         style={{ width: `${parseFloat(model.accuracy)}%` }}
                       />
                     </div>
-                    <span className="text-sm text-white font-medium w-12 text-right">{model.accuracy}%</span>
+                    <span className="text-sm text-[var(--foreground)] font-medium w-12 text-right">{model.accuracy}%</span>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-4">
+          <p className="text-xs text-[var(--muted-foreground)] mt-4">
             Accuracy measured as (1 - MAPE) × 100 over rolling 30-day window
           </p>
         </div>
@@ -332,8 +332,8 @@ export default function KPIDashboard() {
       {weeklySummary && (
         <div className="grid grid-cols-3 gap-6">
           {/* SKUs Requiring Orders */}
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-            <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+            <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
               <Package className="w-5 h-5 text-orange-500" />
               SKUs Requiring Orders
             </h3>
@@ -341,7 +341,7 @@ export default function KPIDashboard() {
             <div className="mt-4 space-y-2">
               {weeklySummary.skusRequiringOrders.items.slice(0, 5).map(item => (
                 <div key={item.masterSku} className="flex items-center justify-between text-sm">
-                  <span className="text-white">{item.masterSku}</span>
+                  <span className="text-[var(--foreground)]">{item.masterSku}</span>
                   <span className={`px-2 py-0.5 rounded text-xs ${
                     item.urgency === 'critical' ? 'bg-red-500/20 text-red-400' :
                     item.urgency === 'high' ? 'bg-orange-500/20 text-orange-400' : 'bg-yellow-500/20 text-yellow-400'
@@ -354,20 +354,20 @@ export default function KPIDashboard() {
           </div>
 
           {/* Upcoming Events */}
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-            <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+            <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-blue-500" />
               Upcoming Events
             </h3>
             {weeklySummary.upcomingEvents.length === 0 ? (
-              <p className="text-gray-400 text-sm">No events in the next 45 days</p>
+              <p className="text-[var(--muted-foreground)] text-sm">No events in the next 45 days</p>
             ) : (
               <div className="space-y-3">
                 {weeklySummary.upcomingEvents.map((event, i) => (
                   <div key={i} className="flex items-center justify-between">
                     <div>
-                      <p className="text-white font-medium">{event.name}</p>
-                      <p className="text-xs text-gray-400">{event.daysUntil} days away</p>
+                      <p className="text-[var(--foreground)] font-medium">{event.name}</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">{event.daysUntil} days away</p>
                     </div>
                     <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-sm font-medium">
                       +{((event.multiplier - 1) * 100).toFixed(0)}%
@@ -379,8 +379,8 @@ export default function KPIDashboard() {
           </div>
 
           {/* Anomalies */}
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-            <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+            <h3 className="text-lg font-medium text-[var(--foreground)] mb-4 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-yellow-500" />
               Active Anomalies
             </h3>
@@ -390,7 +390,7 @@ export default function KPIDashboard() {
                 {weeklySummary.anomalies.summary.map((anomaly, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm">
                     <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                    <span className="text-gray-300">{anomaly}</span>
+                    <span className="text-[var(--foreground)]">{anomaly}</span>
                   </div>
                 ))}
               </div>
@@ -400,36 +400,36 @@ export default function KPIDashboard() {
       )}
 
       {/* System Health */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-        <h3 className="text-lg font-medium text-white mb-4">System Health</h3>
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+        <h3 className="text-lg font-medium text-[var(--foreground)] mb-4">System Health</h3>
         <div className="grid grid-cols-4 gap-4">
-          <div className="p-4 bg-slate-900/50 rounded-lg">
+          <div className="p-4 bg-[var(--secondary)]/50 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-green-400" />
-              <span className="text-sm text-gray-400">Forecasting Engine</span>
+              <span className="text-sm text-[var(--muted-foreground)]">Forecasting Engine</span>
             </div>
-            <p className="text-white font-medium">Operational</p>
+            <p className="text-[var(--foreground)] font-medium">Operational</p>
           </div>
-          <div className="p-4 bg-slate-900/50 rounded-lg">
+          <div className="p-4 bg-[var(--secondary)]/50 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-green-400" />
-              <span className="text-sm text-gray-400">Data Pipeline</span>
+              <span className="text-sm text-[var(--muted-foreground)]">Data Pipeline</span>
             </div>
-            <p className="text-white font-medium">Healthy</p>
+            <p className="text-[var(--foreground)] font-medium">Healthy</p>
           </div>
-          <div className="p-4 bg-slate-900/50 rounded-lg">
+          <div className="p-4 bg-[var(--secondary)]/50 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-green-400" />
-              <span className="text-sm text-gray-400">Model Training</span>
+              <span className="text-sm text-[var(--muted-foreground)]">Model Training</span>
             </div>
-            <p className="text-white font-medium">Up to date</p>
+            <p className="text-[var(--foreground)] font-medium">Up to date</p>
           </div>
-          <div className="p-4 bg-slate-900/50 rounded-lg">
+          <div className="p-4 bg-[var(--secondary)]/50 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-green-400" />
-              <span className="text-sm text-gray-400">Alert System</span>
+              <span className="text-sm text-[var(--muted-foreground)]">Alert System</span>
             </div>
-            <p className="text-white font-medium">Active</p>
+            <p className="text-[var(--foreground)] font-medium">Active</p>
           </div>
         </div>
       </div>

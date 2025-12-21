@@ -148,52 +148,52 @@ export default function SafetyStockView() {
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-5 gap-4">
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">Total SKUs</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Total SKUs</p>
             <Shield className="w-5 h-5 text-cyan-400" />
           </div>
-          <p className="text-2xl font-bold text-white mt-1">{summary.total}</p>
+          <p className="text-2xl font-bold text-[var(--foreground)] mt-1">{summary.total}</p>
         </div>
         <div
-          className={`bg-slate-800 rounded-xl p-4 border cursor-pointer transition-all ${
-            filter === 'adequate' ? 'border-green-500 ring-1 ring-green-500' : 'border-slate-700 hover:border-green-500/50'
+          className={`bg-[var(--card)] rounded-xl p-4 border cursor-pointer transition-all ${
+            filter === 'adequate' ? 'border-green-500 ring-1 ring-green-500' : 'border-[var(--border)] hover:border-green-500/50'
           }`}
           onClick={() => setFilter(filter === 'adequate' ? 'all' : 'adequate')}
         >
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">Adequate</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Adequate</p>
             <CheckCircle className="w-5 h-5 text-green-400" />
           </div>
           <p className="text-2xl font-bold text-green-400 mt-1">{summary.adequate}</p>
         </div>
         <div
-          className={`bg-slate-800 rounded-xl p-4 border cursor-pointer transition-all ${
-            filter === 'low' ? 'border-yellow-500 ring-1 ring-yellow-500' : 'border-slate-700 hover:border-yellow-500/50'
+          className={`bg-[var(--card)] rounded-xl p-4 border cursor-pointer transition-all ${
+            filter === 'low' ? 'border-yellow-500 ring-1 ring-yellow-500' : 'border-[var(--border)] hover:border-yellow-500/50'
           }`}
           onClick={() => setFilter(filter === 'low' ? 'all' : 'low')}
         >
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">Low</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Low</p>
             <AlertTriangle className="w-5 h-5 text-yellow-400" />
           </div>
           <p className="text-2xl font-bold text-yellow-400 mt-1">{summary.low}</p>
         </div>
         <div
-          className={`bg-slate-800 rounded-xl p-4 border cursor-pointer transition-all ${
-            filter === 'critical' ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-700 hover:border-red-500/50'
+          className={`bg-[var(--card)] rounded-xl p-4 border cursor-pointer transition-all ${
+            filter === 'critical' ? 'border-red-500 ring-1 ring-red-500' : 'border-[var(--border)] hover:border-red-500/50'
           }`}
           onClick={() => setFilter(filter === 'critical' ? 'all' : 'critical')}
         >
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">Critical</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Critical</p>
             <AlertTriangle className="w-5 h-5 text-red-400" />
           </div>
           <p className="text-2xl font-bold text-red-400 mt-1">{summary.critical}</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[var(--card)] rounded-xl p-4 border border-[var(--border)]">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">Avg Safety Days</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Avg Safety Days</p>
             <Calculator className="w-5 h-5 text-purple-400" />
           </div>
           <p className="text-2xl font-bold text-purple-400 mt-1">{summary.avgSafetyDays}</p>
@@ -201,10 +201,10 @@ export default function SafetyStockView() {
       </div>
 
       {/* Service Level Selector & Formula */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-4">
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-400">Default Service Level:</span>
+            <span className="text-sm text-[var(--muted-foreground)]">Default Service Level:</span>
             <div className="flex gap-2">
               {SERVICE_LEVELS.map(level => (
                 <button
@@ -212,15 +212,15 @@ export default function SafetyStockView() {
                   onClick={() => setDefaultServiceLevel(level.level)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     defaultServiceLevel === level.level
-                      ? 'bg-cyan-600 text-white'
-                      : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                      ? 'bg-cyan-600 text-[var(--foreground)]'
+                      : 'bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--hover-bg)]'
                   }`}
                 >
                   {level.label}
                 </button>
               ))}
             </div>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-[var(--muted-foreground)]">
               {SERVICE_LEVELS.find(l => l.level === defaultServiceLevel)?.description}
             </span>
           </div>
@@ -234,27 +234,27 @@ export default function SafetyStockView() {
         </div>
 
         {showFormula && (
-          <div className="mt-4 p-4 bg-slate-900/50 rounded-lg">
-            <h4 className="text-sm font-medium text-white mb-2">Safety Stock Formula</h4>
+          <div className="mt-4 p-4 bg-[var(--secondary)]/50 rounded-lg">
+            <h4 className="text-sm font-medium text-[var(--foreground)] mb-2">Safety Stock Formula</h4>
             <div className="font-mono text-cyan-400 text-center py-2 text-lg">
               Safety Stock = Z × √(L × σd² + d² × σL²)
             </div>
             <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
               <div>
-                <p className="text-gray-400">Z (Z-score)</p>
-                <p className="text-white">{SERVICE_LEVELS.find(l => l.level === defaultServiceLevel)?.zScore} for {(defaultServiceLevel * 100).toFixed(0)}% service level</p>
+                <p className="text-[var(--muted-foreground)]">Z (Z-score)</p>
+                <p className="text-[var(--foreground)]">{SERVICE_LEVELS.find(l => l.level === defaultServiceLevel)?.zScore} for {(defaultServiceLevel * 100).toFixed(0)}% service level</p>
               </div>
               <div>
-                <p className="text-gray-400">L (Lead Time)</p>
-                <p className="text-white">Days from order to delivery</p>
+                <p className="text-[var(--muted-foreground)]">L (Lead Time)</p>
+                <p className="text-[var(--foreground)]">Days from order to delivery</p>
               </div>
               <div>
-                <p className="text-gray-400">σd (Demand Std Dev)</p>
-                <p className="text-white">Variability in daily sales</p>
+                <p className="text-[var(--muted-foreground)]">σd (Demand Std Dev)</p>
+                <p className="text-[var(--foreground)]">Variability in daily sales</p>
               </div>
               <div>
-                <p className="text-gray-400">σL (Lead Time Std Dev)</p>
-                <p className="text-white">Variability in supplier delivery</p>
+                <p className="text-[var(--muted-foreground)]">σL (Lead Time Std Dev)</p>
+                <p className="text-[var(--foreground)]">Variability in supplier delivery</p>
               </div>
             </div>
           </div>
@@ -263,8 +263,8 @@ export default function SafetyStockView() {
 
       {/* Chart */}
       {chartData.length > 0 && (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-          <h3 className="text-lg font-medium text-white mb-4">Current Stock vs Safety Stock (Top 10)</h3>
+        <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6">
+          <h3 className="text-lg font-medium text-[var(--foreground)] mb-4">Current Stock vs Safety Stock (Top 10)</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -280,12 +280,12 @@ export default function SafetyStockView() {
       )}
 
       {/* Items List */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-          <h3 className="font-medium text-white">Safety Stock Recommendations</h3>
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+          <h3 className="font-medium text-[var(--foreground)]">Safety Stock Recommendations</h3>
           <button
             onClick={fetchSafetyStock}
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-gray-300"
+            className="flex items-center gap-2 px-3 py-1.5 bg-[var(--muted)] hover:bg-[var(--hover-bg)] rounded-lg text-sm text-[var(--foreground)]"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -294,8 +294,8 @@ export default function SafetyStockView() {
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-900">
-              <tr className="text-xs font-medium text-gray-400 uppercase">
+            <thead className="bg-[var(--secondary)]">
+              <tr className="text-xs font-medium text-[var(--muted-foreground)] uppercase">
                 <th className="px-4 py-3 text-left">SKU</th>
                 <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Current Stock</th>
@@ -315,10 +315,10 @@ export default function SafetyStockView() {
 
                 return (
                   <>
-                    <tr key={item.masterSku} className="hover:bg-slate-700/50">
+                    <tr key={item.masterSku} className="hover:bg-[var(--muted)]/50">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-white">{item.masterSku}</p>
-                        <p className="text-xs text-gray-500 truncate max-w-[200px]">{item.title}</p>
+                        <p className="font-medium text-[var(--foreground)]">{item.masterSku}</p>
+                        <p className="text-xs text-[var(--muted-foreground)] truncate max-w-[200px]">{item.title}</p>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border ${statusConfig.bgColor} ${statusConfig.color} ${statusConfig.borderColor}`}>
@@ -326,7 +326,7 @@ export default function SafetyStockView() {
                           {item.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center text-white">{item.currentStock}</td>
+                      <td className="px-4 py-3 text-center text-[var(--foreground)]">{item.currentStock}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`font-medium ${deficit > 0 ? 'text-orange-400' : 'text-green-400'}`}>
                           {item.safetyStockUnits}
@@ -335,52 +335,52 @@ export default function SafetyStockView() {
                           <p className="text-xs text-red-400">-{deficit} deficit</p>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center text-white">{item.recommendedDays}d</td>
-                      <td className="px-4 py-3 text-center text-white">{item.avgDailyDemand.toFixed(1)}/day</td>
-                      <td className="px-4 py-3 text-center text-white">{item.leadTimeDays}d</td>
+                      <td className="px-4 py-3 text-center text-[var(--foreground)]">{item.recommendedDays}d</td>
+                      <td className="px-4 py-3 text-center text-[var(--foreground)]">{item.avgDailyDemand.toFixed(1)}/day</td>
+                      <td className="px-4 py-3 text-center text-[var(--foreground)]">{item.leadTimeDays}d</td>
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => setExpandedSku(isExpanded ? null : item.masterSku)}
-                          className="p-1 hover:bg-slate-600 rounded text-gray-400 hover:text-white"
+                          className="p-1 hover:bg-[var(--hover-bg)] rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                         >
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
                       </td>
                     </tr>
                     {isExpanded && (
-                      <tr className="bg-slate-900/50">
+                      <tr className="bg-[var(--secondary)]/50">
                         <td colSpan={8} className="px-4 py-4">
                           <div className="grid grid-cols-4 gap-6">
                             <div>
-                              <h5 className="text-sm font-medium text-gray-400 mb-2">Calculation Inputs</h5>
+                              <h5 className="text-sm font-medium text-[var(--muted-foreground)] mb-2">Calculation Inputs</h5>
                               <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
-                                  <span className="text-gray-500">Service Level</span>
-                                  <span className="text-white">{(item.serviceLevel * 100).toFixed(0)}%</span>
+                                  <span className="text-[var(--muted-foreground)]">Service Level</span>
+                                  <span className="text-[var(--foreground)]">{(item.serviceLevel * 100).toFixed(0)}%</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-gray-500">Demand Variability</span>
-                                  <span className="text-white">{(item.demandVariability * 100).toFixed(0)}%</span>
+                                  <span className="text-[var(--muted-foreground)]">Demand Variability</span>
+                                  <span className="text-[var(--foreground)]">{(item.demandVariability * 100).toFixed(0)}%</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-gray-500">Lead Time Variability</span>
-                                  <span className="text-white">{(item.leadTimeVariability * 100).toFixed(0)}%</span>
+                                  <span className="text-[var(--muted-foreground)]">Lead Time Variability</span>
+                                  <span className="text-[var(--foreground)]">{(item.leadTimeVariability * 100).toFixed(0)}%</span>
                                 </div>
                               </div>
                             </div>
                             <div>
-                              <h5 className="text-sm font-medium text-gray-400 mb-2">Stock Analysis</h5>
+                              <h5 className="text-sm font-medium text-[var(--muted-foreground)] mb-2">Stock Analysis</h5>
                               <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
-                                  <span className="text-gray-500">Current Stock</span>
-                                  <span className="text-white">{item.currentStock} units</span>
+                                  <span className="text-[var(--muted-foreground)]">Current Stock</span>
+                                  <span className="text-[var(--foreground)]">{item.currentStock} units</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-gray-500">Safety Stock</span>
-                                  <span className="text-white">{item.safetyStockUnits} units</span>
+                                  <span className="text-[var(--muted-foreground)]">Safety Stock</span>
+                                  <span className="text-[var(--foreground)]">{item.safetyStockUnits} units</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-gray-500">Coverage</span>
+                                  <span className="text-[var(--muted-foreground)]">Coverage</span>
                                   <span className={item.currentStock >= item.safetyStockUnits ? 'text-green-400' : 'text-red-400'}>
                                     {((item.currentStock / item.safetyStockUnits) * 100).toFixed(0)}%
                                   </span>
@@ -388,7 +388,7 @@ export default function SafetyStockView() {
                               </div>
                             </div>
                             <div className="col-span-2">
-                              <h5 className="text-sm font-medium text-gray-400 mb-2">Recommendation</h5>
+                              <h5 className="text-sm font-medium text-[var(--muted-foreground)] mb-2">Recommendation</h5>
                               {item.status === 'critical' && (
                                 <div className="p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
                                   <p className="text-sm text-red-300">

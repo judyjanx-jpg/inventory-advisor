@@ -88,7 +88,7 @@ export function GlobalSyncBar() {
         <div className="bg-emerald-900/90 border-b border-emerald-700/50 backdrop-blur-sm px-4 py-3">
           <div className="max-w-7xl mx-auto flex items-center gap-3">
             <span className="text-emerald-300 text-xl">✓</span>
-            <span className="text-white font-medium">
+            <span className="text-[var(--foreground)] font-medium">
               {syncState.type ? `${syncState.type} sync` : 'Sync'} completed successfully!
             </span>
             {syncState.message && (
@@ -107,7 +107,7 @@ export function GlobalSyncBar() {
         <div className="bg-red-900/90 border-b border-red-700/50 backdrop-blur-sm px-4 py-3">
           <div className="max-w-7xl mx-auto flex items-center gap-3">
             <span className="text-red-300 text-xl">✗</span>
-            <span className="text-white font-medium">
+            <span className="text-[var(--foreground)] font-medium">
               {syncState.type ? `${syncState.type} sync` : 'Sync'} failed
             </span>
             {syncState.message && (
