@@ -90,8 +90,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all time entries in date range
+    // Use timestamp for filtering to catch entries regardless of date field value
     const where: any = {
-      date: {
+      timestamp: {
         gte: start,
         lte: end
       }
@@ -128,7 +129,9 @@ export async function GET(request: NextRequest) {
 
     timeEntries.forEach(entry => {
       const empKey = `${entry.employee.id}-${entry.employee.employeeNumber}`
-      const dateKey = entry.date.toISOString().split('T')[0]
+      // Use timestamp's date for grouping (more accurate than date field)
+      const entryDate = new Date(entry.timestamp)
+      const dateKey = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate()).toISOString().split('T')[0]
 
       if (!timesheet[empKey]) {
         timesheet[empKey] = {}

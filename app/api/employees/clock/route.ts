@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { employeeNumber } = body
+    const { employeeNumber, timestamp } = body
 
     if (!employeeNumber) {
       return NextResponse.json(
@@ -16,13 +16,7 @@ export async function POST(request: NextRequest) {
 
     // Find employee
     const employee = await prisma.employee.findUnique({
-      where: { employeeNumber },
-      include: {
-        timeEntries: {
-          orderBy: { timestamp: 'desc' },
-          take: 1
-        }
-      }
+      where: { employeeNumber }
     })
 
     if (!employee) {
@@ -39,21 +33,47 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    // Use custom timestamp if provided, otherwise use current time
+    const entryTime = timestamp ? new Date(timestamp) : new Date()
+    // Create date in local timezone (not UTC) - use the timestamp's local date components
+    const entryDate = new Date(entryTime.getFullYear(), entryTime.getMonth(), entryTime.getDate())
+    entryDate.setHours(0, 0, 0, 0)
+    
+    // Ensure entryTime is valid
+    if (isNaN(entryTime.getTime())) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid timestamp provided' },
+        { status: 400 }
+      )
+    }
 
-    // Get last entry
-    const lastEntry = employee.timeEntries[0]
+    // Get last entry for this employee
+    const lastEntry = await prisma.timeEntry.findFirst({
+      where: { employeeId: employee.id },
+      orderBy: { timestamp: 'desc' }
+    })
+    
     const shouldClockIn = !lastEntry || lastEntry.entryType === 'clock_out'
+    const entryType = shouldClockIn ? 'clock_in' : 'clock_out'
+    
+    // Validate: if clocking out, clock out time should be after clock in time
+    if (entryType === 'clock_out' && lastEntry && lastEntry.entryType === 'clock_in') {
+      const clockInTime = new Date(lastEntry.timestamp)
+      if (entryTime <= clockInTime) {
+        return NextResponse.json(
+          { success: false, error: 'Clock out time must be after clock in time' },
+          { status: 400 }
+        )
+      }
+    }
 
     // Create new time entry
-    const entryType = shouldClockIn ? 'clock_in' : 'clock_out'
     const timeEntry = await prisma.timeEntry.create({
       data: {
         employeeId: employee.id,
         entryType,
-        timestamp: now,
-        date: today
+        timestamp: entryTime,
+        date: entryDate
       }
     })
 
@@ -63,7 +83,7 @@ export async function POST(request: NextRequest) {
     // If clocking out, calculate hours worked for the day
     if (entryType === 'clock_out' && lastEntry && lastEntry.entryType === 'clock_in') {
       const clockInTime = new Date(lastEntry.timestamp)
-      const clockOutTime = now
+      const clockOutTime = entryTime
       const diffMs = clockOutTime.getTime() - clockInTime.getTime()
       const diffHours = diffMs / (1000 * 60 * 60) // Convert to decimal hours
       
@@ -75,31 +95,31 @@ export async function POST(request: NextRequest) {
         data: { hoursWorked }
       })
 
-      // Calculate total hours for the day
-      const todayEntries = await prisma.timeEntry.findMany({
+      // Calculate total hours for the day (use entryDate, not today)
+      const dayEntries = await prisma.timeEntry.findMany({
         where: {
           employeeId: employee.id,
-          date: today,
+          date: entryDate,
           entryType: 'clock_out',
           hoursWorked: { not: null }
         }
       })
 
-      dailyTotal = todayEntries.reduce((sum, entry) => {
+      dailyTotal = dayEntries.reduce((sum, entry) => {
         return sum + (entry.hoursWorked ? parseFloat(entry.hoursWorked.toString()) : 0)
       }, 0)
     } else if (entryType === 'clock_in') {
-      // If clocking in, get today's total so far (in case they clocked in/out multiple times)
-      const todayEntries = await prisma.timeEntry.findMany({
+      // If clocking in, get the day's total so far (in case they clocked in/out multiple times)
+      const dayEntries = await prisma.timeEntry.findMany({
         where: {
           employeeId: employee.id,
-          date: today,
+          date: entryDate,
           entryType: 'clock_out',
           hoursWorked: { not: null }
         }
       })
 
-      dailyTotal = todayEntries.reduce((sum, entry) => {
+      dailyTotal = dayEntries.reduce((sum, entry) => {
         return sum + (entry.hoursWorked ? parseFloat(entry.hoursWorked.toString()) : 0)
       }, 0)
     }
@@ -135,13 +155,7 @@ export async function GET(request: NextRequest) {
     }
 
     const employee = await prisma.employee.findUnique({
-      where: { employeeNumber },
-      include: {
-        timeEntries: {
-          orderBy: { timestamp: 'desc' },
-          take: 1
-        }
-      }
+      where: { employeeNumber }
     })
 
     if (!employee) {
@@ -151,11 +165,19 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const lastEntry = employee.timeEntries[0]
+    // Get last entry for this employee
+    const lastEntry = await prisma.timeEntry.findFirst({
+      where: { employeeId: employee.id },
+      orderBy: { timestamp: 'desc' }
+    })
+    
     const isClockedIn = lastEntry?.entryType === 'clock_in'
 
-    // Get today's total hours
-    const today = new Date()
+    // Get today's total hours from completed clock out entries only
+    // The frontend will calculate and add current session hours in real-time
+    // Use local date, not UTC
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     today.setHours(0, 0, 0, 0)
     
     const todayEntries = await prisma.timeEntry.findMany({

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Calendar, DollarSign, Hash, User, Clock, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
+import { Plus, Trash2, Calendar, DollarSign, Hash, User, Clock, ChevronLeft, ChevronRight, ExternalLink, Edit, X } from 'lucide-react'
 import MainLayout from '@/components/layout/MainLayout'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
@@ -31,6 +31,9 @@ export default function EmployeesPage() {
   const [timesheetData, setTimesheetData] = useState<any>(null)
   const [timesheetLoading, setTimesheetLoading] = useState(false)
   const [timesheetDate, setTimesheetDate] = useState<Date>(new Date()) // For navigating between periods
+  const [editingEntry, setEditingEntry] = useState<any>(null)
+  const [showEditEntryModal, setShowEditEntryModal] = useState(false)
+  const [entryEditData, setEntryEditData] = useState({ timestamp: '', hoursWorked: '' })
   
   const [formData, setFormData] = useState({
     employeeNumber: '',
@@ -191,6 +194,77 @@ export default function EmployeesPage() {
       console.error('Error fetching timesheet:', error)
     } finally {
       setTimesheetLoading(false)
+    }
+  }
+
+  const handleEditEntry = (entry: any) => {
+    const entryDate = new Date(entry.timestamp)
+    // Format for datetime-local input (YYYY-MM-DDTHH:mm)
+    const year = entryDate.getFullYear()
+    const month = String(entryDate.getMonth() + 1).padStart(2, '0')
+    const day = String(entryDate.getDate()).padStart(2, '0')
+    const hours = String(entryDate.getHours()).padStart(2, '0')
+    const minutes = String(entryDate.getMinutes()).padStart(2, '0')
+    const datetimeLocal = `${year}-${month}-${day}T${hours}:${minutes}`
+    
+    setEditingEntry(entry)
+    setEntryEditData({
+      timestamp: datetimeLocal,
+      hoursWorked: entry.hoursWorked ? entry.hoursWorked.toString() : ''
+    })
+    setShowEditEntryModal(true)
+  }
+
+  const handleUpdateEntry = async () => {
+    if (!editingEntry) return
+
+    try {
+      const res = await fetch(`/api/employees/time-entries/${editingEntry.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timestamp: entryEditData.timestamp,
+          hoursWorked: entryEditData.hoursWorked ? parseFloat(entryEditData.hoursWorked) : null
+        })
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        setShowEditEntryModal(false)
+        setEditingEntry(null)
+        // Refresh timesheet
+        if (selectedEmployee) {
+          await handleViewTimesheet(selectedEmployee, timesheetDate)
+        }
+      } else {
+        alert(data.error || 'Failed to update entry')
+      }
+    } catch (error) {
+      console.error('Error updating entry:', error)
+      alert('Failed to update entry')
+    }
+  }
+
+  const handleDeleteEntry = async (entryId: number) => {
+    if (!confirm('Are you sure you want to delete this time entry?')) return
+
+    try {
+      const res = await fetch(`/api/employees/time-entries/${entryId}`, {
+        method: 'DELETE'
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        // Refresh timesheet
+        if (selectedEmployee) {
+          await handleViewTimesheet(selectedEmployee, timesheetDate)
+        }
+      } else {
+        alert(data.error || 'Failed to delete entry')
+      }
+    } catch (error) {
+      console.error('Error deleting entry:', error)
+      alert('Failed to delete entry')
     }
   }
 
@@ -565,7 +639,7 @@ export default function EmployeesPage() {
                     </div>
                     <div className="space-y-1 mt-2">
                       {day.entries.map((entry: any) => (
-                        <div key={entry.id} className="text-sm text-[var(--muted-foreground)] flex items-center gap-2">
+                        <div key={entry.id} className="text-sm text-[var(--muted-foreground)] flex items-center gap-2 group hover:bg-[var(--muted)]/30 rounded px-2 py-1 transition-colors">
                           <span className={`w-2 h-2 rounded-full ${entry.entryType === 'clock_in' ? 'bg-green-500' : 'bg-red-500'}`}></span>
                           <span className="capitalize">{entry.entryType.replace('_', ' ')}</span>
                           <span className="ml-auto">
@@ -576,6 +650,22 @@ export default function EmployeesPage() {
                               ({entry.hoursWorked.toFixed(2)}h)
                             </span>
                           )}
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleEditEntry(entry)}
+                              className="p-1 hover:bg-[var(--hover-bg)] rounded transition-colors"
+                              title="Edit entry"
+                            >
+                              <Edit className="w-3 h-3 text-cyan-400" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEntry(entry.id)}
+                              className="p-1 hover:bg-red-500/20 rounded transition-colors"
+                              title="Delete entry"
+                            >
+                              <X className="w-3 h-3 text-red-400" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -589,6 +679,73 @@ export default function EmployeesPage() {
             No timesheet data for this period
           </div>
         )}
+      </Modal>
+
+      {/* Edit Time Entry Modal */}
+      <Modal
+        isOpen={showEditEntryModal}
+        onClose={() => {
+          setShowEditEntryModal(false)
+          setEditingEntry(null)
+          setEntryEditData({ timestamp: '', hoursWorked: '' })
+        }}
+        title="Edit Time Entry"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+              Entry Type
+            </label>
+            <div className="px-3 py-2 bg-[var(--muted)] rounded-lg text-[var(--foreground)] capitalize">
+              {editingEntry?.entryType?.replace('_', ' ')}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+              <Clock className="w-4 h-4 inline mr-1" />
+              Date & Time
+            </label>
+            <input
+              type="datetime-local"
+              value={entryEditData.timestamp}
+              onChange={(e) => setEntryEditData({ ...entryEditData, timestamp: e.target.value })}
+              className="w-full px-4 py-3 bg-[var(--input-bg)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+
+          {editingEntry?.entryType === 'clock_out' && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                Hours Worked
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={entryEditData.hoursWorked}
+                onChange={(e) => setEntryEditData({ ...entryEditData, hoursWorked: e.target.value })}
+                placeholder="0.00"
+                className="w-full px-4 py-3 bg-[var(--input-bg)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
+              />
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                Leave empty to auto-calculate from clock in time
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="ghost" onClick={() => {
+              setShowEditEntryModal(false)
+              setEditingEntry(null)
+              setEntryEditData({ timestamp: '', hoursWorked: '' })
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateEntry}>
+              Update Entry
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Edit Employee Modal */}
