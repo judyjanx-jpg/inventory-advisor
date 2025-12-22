@@ -92,7 +92,6 @@ model Product {
   // Amazon Listing Data (for Listing Tool)
   imageUrl           String?  @map("image_url") // Main product image URL
   images             Json?    // Array of all image URLs [{url, variant, width, height}]
-  bulletPoints       Json?    @map("bullet_points") // Array of bullet points from Amazon
   listingDescription String?  @map("listing_description") @db.Text // Amazon listing description (HTML)
   searchTerms        String?  @map("search_terms") @db.Text // Backend search terms
   listingLastSync    DateTime? @map("listing_last_sync") // When listing data was last synced
