@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  UserCheck,
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -46,7 +47,7 @@ const SidebarContext = createContext<{
 export const useSidebar = () => useContext(SidebarContext)
 
 // Public routes where sidebar should not appear
-const PUBLIC_ROUTES = ['/support', '/portal', '/warranty', '/faq', '/track']
+const PUBLIC_ROUTES = ['/support', '/portal', '/warranty', '/faq', '/track', '/time-clock']
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -60,6 +61,7 @@ const navigation = [
   { name: 'Suppliers', href: '/suppliers', icon: Users },
   { name: 'Profit', href: '/profit', icon: TrendingUp },
   { name: 'Audit', href: '/audit', icon: ClipboardCheck },
+  { name: 'Employees', href: '/employees', icon: UserCheck },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Customer Support', href: '/admin/support', icon: Headphones },
   { name: 'Settings', href: '/settings', icon: Settings },

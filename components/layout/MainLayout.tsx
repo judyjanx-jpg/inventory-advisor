@@ -8,7 +8,7 @@ import FloatingOrb from '@/components/floating-ai/FloatingOrb'
 import { Menu } from 'lucide-react'
 
 // Public routes where admin layout should not be applied
-const PUBLIC_ROUTES = ['/support', '/portal', '/warranty', '/faq', '/track']
+const PUBLIC_ROUTES = ['/support', '/portal', '/warranty', '/faq', '/track', '/time-clock']
 
 function MainContent({ children }: { children: React.ReactNode }) {
   const { collapsed, mobileOpen, setMobileOpen } = useSidebar()

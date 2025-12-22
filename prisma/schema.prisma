@@ -2607,3 +2607,47 @@ model Setting {
   
   @@map("settings")
 }
+
+// ============================================
+// EMPLOYEE MANAGEMENT & TIME TRACKING
+// ============================================
+
+model Employee {
+  id              Int       @id @default(autoincrement())
+  employeeNumber  String    @unique @map("employee_number") // 4-digit number
+  name            String
+  startDate       DateTime  @map("start_date") @db.Date
+  payType         String?   @map("pay_type") // 'hourly' or 'salary' (optional)
+  payRate         Decimal?  @map("pay_rate") @db.Decimal(10, 2) // Hourly rate or salary amount (optional)
+  payPeriod       String?   @default("weekly") @map("pay_period") // 'weekly', 'bi-weekly', 'monthly'
+  isActive        Boolean   @default(true) @map("is_active")
+  
+  // Relations
+  timeEntries     TimeEntry[]
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  @@index([employeeNumber])
+  @@map("employees")
+}
+
+model TimeEntry {
+  id              Int       @id @default(autoincrement())
+  employeeId      Int       @map("employee_id")
+  employee        Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  entryType       String    @map("entry_type") // 'clock_in' or 'clock_out'
+  timestamp       DateTime  @default(now())
+  date            DateTime  @db.Date // Date of the entry (for grouping)
+  
+  // Calculated fields (for clock_out entries)
+  hoursWorked     Decimal?  @map("hours_worked") @db.Decimal(5, 2) // Hours worked that day (decimal)
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  @@index([employeeId, date])
+  @@index([employeeId, timestamp])
+  @@index([date])
+  @@map("time_entries")
+}
