@@ -40,6 +40,13 @@ model Product {
   fnsku String?
   upc   String?
 
+  // Amazon Listing Data (for listing tools and cross-channel conversion)
+  mainImageUrl       String?  @map("main_image_url")     // Primary product image URL
+  additionalImages   Json?    @map("additional_images")  // Array of additional image URLs
+  bulletPoints       Json?    @map("bullet_points")      // Array of bullet points
+  productDescription String?  @map("product_description") @db.Text // Full Amazon description
+  amazonAttributes   Json?    @map("amazon_attributes")  // Raw Amazon attributes for AI tools
+
   // Financials
   cost     Decimal  @db.Decimal(10, 2)
   price    Decimal  @db.Decimal(10, 2)

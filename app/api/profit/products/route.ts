@@ -98,6 +98,7 @@ export async function GET(request: NextRequest) {
       brand: string | null
       supplier_name: string | null
       parent_sku: string | null
+      main_image_url: string | null
       cost: string | null
       units_sold: string
       total_sales: string
@@ -164,6 +165,7 @@ export async function GET(request: NextRequest) {
         MAX(p.brand) as brand,
         MAX(s.name) as supplier_name,
         MAX(p.parent_sku) as parent_sku,
+        MAX(p.main_image_url) as main_image_url,
         -- Landed cost = cost + packaging + tariff + additional costs
         COALESCE(AVG(
           COALESCE(p.cost, 0) +
@@ -379,7 +381,7 @@ export async function GET(request: NextRequest) {
         parentAsin: sale.parent_sku || undefined,
         displayName: sale.display_name || undefined,
         title: sale.title || sale.sku,
-        imageUrl: undefined,
+        imageUrl: sale.main_image_url || (sale.asin ? `https://m.media-amazon.com/images/P/${sale.asin}.jpg` : undefined),
         brand: sale.brand || undefined,
         supplier: sale.supplier_name || undefined,
         channel: 'Amazon',
