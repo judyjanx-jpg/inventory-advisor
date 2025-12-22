@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Clock, Hash, Calendar } from 'lucide-react'
+import { Clock, Hash, Calendar, Edit, X } from 'lucide-react'
 
 export default function TimeClockPage() {
   const [employeeNumber, setEmployeeNumber] = useState('')
@@ -15,6 +15,14 @@ export default function TimeClockPage() {
   const [clocking, setClocking] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [showManualEntry, setShowManualEntry] = useState(false)
+  const [manualEntry, setManualEntry] = useState({
+    date: new Date().toISOString().split('T')[0],
+    clockInTime: '',
+    clockOutTime: '',
+    hours: ''
+  })
+  const [savingManual, setSavingManual] = useState(false)
 
   // Update current time every second
   useEffect(() => {
@@ -105,6 +113,52 @@ export default function TimeClockPage() {
       setTimeout(() => {
         fetchStatus()
       }, 500)
+    }
+  }
+
+  const handleManualEntry = async () => {
+    if (!manualEntry.date || (!manualEntry.clockInTime && !manualEntry.clockOutTime && !manualEntry.hours)) {
+      setMessage({ type: 'error', text: 'Please fill in at least date and time or hours' })
+      return
+    }
+
+    setSavingManual(true)
+    setMessage(null)
+
+    try {
+      const res = await fetch('/api/employees/clock/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeNumber,
+          date: manualEntry.date,
+          clockInTime: manualEntry.clockInTime || null,
+          clockOutTime: manualEntry.clockOutTime || null,
+          hours: manualEntry.hours ? parseFloat(manualEntry.hours) : null
+        })
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        setMessage({ type: 'success', text: 'Manual time entry added successfully' })
+        setShowManualEntry(false)
+        setManualEntry({
+          date: new Date().toISOString().split('T')[0],
+          clockInTime: '',
+          clockOutTime: '',
+          hours: ''
+        })
+        setTimeout(() => {
+          fetchStatus()
+        }, 500)
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to add manual time entry' })
+      }
+    } catch (error) {
+      console.error('Error adding manual time entry:', error)
+      setMessage({ type: 'error', text: 'Failed to add manual time entry' })
+    } finally {
+      setSavingManual(false)
     }
   }
 
@@ -228,8 +282,125 @@ export default function TimeClockPage() {
               : 'Click "Clock In" to start your shift'
             }
           </div>
+
+          {/* Manual Time Entry Button */}
+          {status && (
+            <button
+              onClick={() => setShowManualEntry(true)}
+              className="mt-4 w-full py-2 rounded-lg font-medium text-sm bg-slate-700/50 hover:bg-slate-700 text-slate-300 border border-slate-600 transition-all flex items-center justify-center gap-2"
+            >
+              <Edit className="w-4 h-4" />
+              Add Manual Time
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Manual Time Entry Modal */}
+      {showManualEntry && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white">Add Manual Time Entry</h2>
+              <button
+                onClick={() => {
+                  setShowManualEntry(false)
+                  setManualEntry({
+                    date: new Date().toISOString().split('T')[0],
+                    clockInTime: '',
+                    clockOutTime: '',
+                    hours: ''
+                  })
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={manualEntry.date}
+                  onChange={(e) => setManualEntry({ ...manualEntry, date: e.target.value })}
+                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Clock In Time
+                  </label>
+                  <input
+                    type="time"
+                    value={manualEntry.clockInTime}
+                    onChange={(e) => setManualEntry({ ...manualEntry, clockInTime: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Clock Out Time
+                  </label>
+                  <input
+                    type="time"
+                    value={manualEntry.clockOutTime}
+                    onChange={(e) => setManualEntry({ ...manualEntry, clockOutTime: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Or Enter Hours Directly
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={manualEntry.hours}
+                  onChange={(e) => setManualEntry({ ...manualEntry, hours: e.target.value })}
+                  placeholder="8.5"
+                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Leave blank if using clock in/out times above
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowManualEntry(false)
+                    setManualEntry({
+                      date: new Date().toISOString().split('T')[0],
+                      clockInTime: '',
+                      clockOutTime: '',
+                      hours: ''
+                    })
+                  }}
+                  className="flex-1 py-2 rounded-lg font-medium bg-slate-700 hover:bg-slate-600 text-white transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleManualEntry}
+                  disabled={savingManual}
+                  className="flex-1 py-2 rounded-lg font-medium bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingManual ? 'Saving...' : 'Save Entry'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
