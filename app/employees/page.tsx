@@ -273,21 +273,21 @@ export default function EmployeesPage() {
             <p className="text-[var(--muted-foreground)] mt-1">Manage employee information and timesheets</p>
           </div>
           <div className="flex items-center gap-3">
-          <a
-            href="/time-clock"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/10 transition-colors"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Employee Portal
-          </a>
-          <Button onClick={() => setShowAddModal(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Employee
-          </Button>
+            <a
+              href="/time-clock"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/10 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Employee Portal
+            </a>
+            <Button onClick={() => setShowAddModal(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Employee
+            </Button>
+          </div>
         </div>
-      </div>
 
       <div className="bg-[var(--card-bg)] rounded-lg border border-[var(--border)] overflow-hidden">
         <table className="w-full">
@@ -551,37 +551,38 @@ export default function EmployeesPage() {
             </div>
 
             {/* Daily Breakdown */}
-            {timesheetData.days.length > 0 ? (
+            {timesheetData.days.length > 0 && (
               <div className="max-h-96 overflow-y-auto space-y-3">
                 {timesheetData.days.map((day: any) => (
-                <div key={day.date} className="border border-[var(--border)] rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-[var(--foreground)]">
-                      {new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </div>
-                    <div className="text-lg font-bold text-cyan-400">
-                      {day.totalHours.toFixed(2)} hours
-                    </div>
-                  </div>
-                  <div className="space-y-1 mt-2">
-                    {day.entries.map((entry: any) => (
-                      <div key={entry.id} className="text-sm text-[var(--muted-foreground)] flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${entry.entryType === 'clock_in' ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                        <span className="capitalize">{entry.entryType.replace('_', ' ')}</span>
-                        <span className="ml-auto">
-                          {new Date(entry.timestamp).toLocaleTimeString()}
-                        </span>
-                        {entry.hoursWorked && (
-                          <span className="text-cyan-400 font-medium">
-                            ({entry.hoursWorked.toFixed(2)}h)
-                          </span>
-                        )}
+                  <div key={day.date} className="border border-[var(--border)] rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-medium text-[var(--foreground)]">
+                        {new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                       </div>
-                    ))}
+                      <div className="text-lg font-bold text-cyan-400">
+                        {day.totalHours.toFixed(2)} hours
+                      </div>
+                    </div>
+                    <div className="space-y-1 mt-2">
+                      {day.entries.map((entry: any) => (
+                        <div key={entry.id} className="text-sm text-[var(--muted-foreground)] flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${entry.entryType === 'clock_in' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                          <span className="capitalize">{entry.entryType.replace('_', ' ')}</span>
+                          <span className="ml-auto">
+                            {new Date(entry.timestamp).toLocaleTimeString()}
+                          </span>
+                          {entry.hoursWorked && (
+                            <span className="text-cyan-400 font-medium">
+                              ({entry.hoursWorked.toFixed(2)}h)
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-8 text-[var(--muted-foreground)]">
