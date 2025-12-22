@@ -267,12 +267,12 @@ export default function EmployeesPage() {
   return (
     <MainLayout>
       <div className="max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--foreground)]">Employees</h1>
-          <p className="text-[var(--muted-foreground)] mt-1">Manage employee information and timesheets</p>
-        </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-[var(--foreground)]">Employees</h1>
+            <p className="text-[var(--muted-foreground)] mt-1">Manage employee information and timesheets</p>
+          </div>
+          <div className="flex items-center gap-3">
           <a
             href="/time-clock"
             target="_blank"
