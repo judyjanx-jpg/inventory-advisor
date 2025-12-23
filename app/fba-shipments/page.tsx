@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
-import { Truck, Plus, Package, Clock, CheckCircle, ArrowRight, Trash2, Download, AlertTriangle, Check, X } from 'lucide-react'
+import { Truck, Plus, Package, Clock, CheckCircle, ArrowRight, Trash2, Download, AlertTriangle, Check, X, ClipboardCheck } from 'lucide-react'
+import Link from 'next/link'
 
 interface Shipment {
   id: number
@@ -377,6 +378,12 @@ export default function FbaShipmentsPage() {
             <p className="text-[var(--muted-foreground)] mt-1">Manage shipments to Amazon fulfillment centers</p>
           </div>
           <div className="flex gap-2">
+            <Link href="/fba-shipments/reconcile">
+              <Button variant="outline">
+                <ClipboardCheck className="w-4 h-4 mr-2" />
+                Reconcile
+              </Button>
+            </Link>
             <Button
               variant={showImportSection ? 'default' : 'outline'}
               onClick={() => setShowImportSection(!showImportSection)}

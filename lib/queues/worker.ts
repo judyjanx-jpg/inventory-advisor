@@ -14,6 +14,7 @@ import {
   aggregationQueue,
   adsReportsQueue,
   alertsQueue,
+  fbaShipmentsQueue,
   allQueues,
 } from './index'
 import { prisma } from '@/lib/prisma'
@@ -2025,8 +2026,227 @@ async function processAlertsGeneration(job: any) {
 }
 
 /**
+ * FBA Shipments sync processor
+ * Pulls FBA inbound shipments from Amazon for inventory reconciliation
+ */
+async function processFbaShipmentsSync(job: any) {
+  const startTime = Date.now()
+  console.log(`\n[fba-shipments-sync] Starting job ${job.id}...`)
+
+  try {
+    const credentials = await getAmazonCredentials()
+    if (!credentials) throw new Error('Amazon credentials not configured')
+
+    const client = await createSpApiClient()
+    if (!client) throw new Error('Failed to create SP-API client')
+
+    const daysBack = job.data.daysBack || 90
+    const { startDate } = getPSTDateRange(daysBack)
+
+    let shipmentsCreated = 0
+    let shipmentsUpdated = 0
+    let itemsProcessed = 0
+
+    // Use the Fulfillment Inbound API to get shipments
+    // Try both the v2024 and legacy endpoints
+    console.log(`  Fetching FBA shipments from last ${daysBack} days...`)
+
+    // First try using the Reports API to get shipment data (more reliable)
+    // GET_FBA_FULFILLMENT_INBOUND_NONCOMPLIANCE_DATA or similar
+
+    // For now, use the legacy Fulfillment Inbound API which is more widely available
+    let nextToken: string | null = null
+    const statuses = ['WORKING', 'SHIPPED', 'RECEIVING', 'CHECKED_IN', 'CLOSED', 'IN_TRANSIT', 'DELIVERED']
+
+    for (const status of statuses) {
+      nextToken = null
+      let pageCount = 0
+
+      do {
+        try {
+          const response: any = await callApiWithTimeout(client, {
+            operation: 'getShipments',
+            endpoint: 'fulfillmentInbound',
+            query: {
+              MarketplaceId: credentials.marketplaceId,
+              ShipmentStatusList: [status],
+              LastUpdatedAfter: startDate.toISOString(),
+              QueryType: 'SHIPMENT',
+              ...(nextToken ? { NextToken: nextToken } : {}),
+            },
+          }, 60000)
+
+          const shipments = response?.payload?.ShipmentData || response?.ShipmentData || []
+          nextToken = response?.payload?.NextToken || response?.NextToken || null
+          pageCount++
+
+          console.log(`    ${status}: Page ${pageCount}, ${shipments.length} shipments`)
+
+          for (const shipment of shipments) {
+            const shipmentId = shipment.ShipmentId
+            if (!shipmentId) continue
+
+            // Get shipment items
+            let items: any[] = []
+            try {
+              const itemsResponse: any = await callApiWithTimeout(client, {
+                operation: 'getShipmentItems',
+                endpoint: 'fulfillmentInbound',
+                query: {
+                  MarketplaceId: credentials.marketplaceId,
+                  ShipmentId: shipmentId,
+                },
+              }, 30000)
+              items = itemsResponse?.payload?.ItemData || itemsResponse?.ItemData || []
+            } catch (itemErr: any) {
+              console.log(`      ⚠️ Could not fetch items for ${shipmentId}: ${itemErr.message}`)
+            }
+
+            // Calculate totals
+            let totalUnits = 0
+            let unitsReceived = 0
+            for (const item of items) {
+              totalUnits += item.QuantityShipped || 0
+              unitsReceived += item.QuantityReceived || 0
+            }
+
+            // Map Amazon status to our status
+            const statusMapping: Record<string, string> = {
+              'WORKING': 'working',
+              'READY_TO_SHIP': 'ready',
+              'SHIPPED': 'shipped',
+              'RECEIVING': 'receiving',
+              'CHECKED_IN': 'checked_in',
+              'CLOSED': 'closed',
+              'CANCELLED': 'cancelled',
+              'DELETED': 'cancelled',
+              'IN_TRANSIT': 'in_transit',
+              'DELIVERED': 'delivered',
+            }
+
+            const mappedStatus = statusMapping[shipment.ShipmentStatus] || shipment.ShipmentStatus?.toLowerCase() || 'unknown'
+
+            // Upsert the shipment
+            const existingShipment = await prisma.fbaShipment.findUnique({
+              where: { shipmentId },
+            })
+
+            const shipmentData = {
+              status: mappedStatus,
+              destinationFc: shipment.DestinationFulfillmentCenterId || null,
+              destinationName: shipment.ShipmentName || null,
+              channel: `amazon_${credentials.marketplaceId === 'ATVPDKIKX0DER' ? 'us' : 'other'}`,
+              totalUnits,
+              unitsShipped: totalUnits,
+              unitsReceived,
+              unitsDiscrepancy: unitsReceived > 0 ? totalUnits - unitsReceived : 0,
+            }
+
+            if (existingShipment) {
+              // Update existing - preserve reconciliation status if already reconciled
+              await prisma.fbaShipment.update({
+                where: { shipmentId },
+                data: shipmentData,
+              })
+              shipmentsUpdated++
+            } else {
+              // Create new shipment
+              await prisma.fbaShipment.create({
+                data: {
+                  shipmentId,
+                  ...shipmentData,
+                  reconciliationStatus: 'pending',
+                },
+              })
+              shipmentsCreated++
+            }
+
+            // Upsert shipment items
+            for (const item of items) {
+              const sku = item.SellerSKU
+              if (!sku) continue
+
+              // Check if product exists
+              const product = await prisma.product.findUnique({
+                where: { sku },
+              })
+
+              if (!product) continue // Skip items without matching products
+
+              const existingItem = await prisma.fbaShipmentItem.findFirst({
+                where: {
+                  shipment: { shipmentId },
+                  masterSku: sku,
+                },
+              })
+
+              const itemData = {
+                masterSku: sku,
+                channelSku: item.FulfillmentNetworkSKU || null,
+                quantityShipped: item.QuantityShipped || 0,
+                quantityReceived: item.QuantityReceived || 0,
+                quantityDiscrepancy: (item.QuantityShipped || 0) - (item.QuantityReceived || 0),
+              }
+
+              if (existingItem) {
+                await prisma.fbaShipmentItem.update({
+                  where: { id: existingItem.id },
+                  data: itemData,
+                })
+              } else {
+                const fbaShipment = await prisma.fbaShipment.findUnique({
+                  where: { shipmentId },
+                })
+                if (fbaShipment) {
+                  await prisma.fbaShipmentItem.create({
+                    data: {
+                      shipmentId: fbaShipment.id,
+                      ...itemData,
+                    },
+                  })
+                }
+              }
+              itemsProcessed++
+            }
+
+            // Small delay between shipments
+            await sleep(100)
+          }
+
+          if (nextToken) await sleep(500)
+        } catch (pageError: any) {
+          // Handle rate limiting
+          if (pageError.message?.includes('429') || pageError.message?.includes('QuotaExceeded')) {
+            console.log(`    ⚠️ Rate limited on ${status}, waiting 5s...`)
+            await sleep(5000)
+            continue
+          }
+          // Log but continue with other statuses
+          console.log(`    ⚠️ Error fetching ${status}: ${pageError.message?.substring(0, 100)}`)
+          break
+        }
+      } while (nextToken)
+    }
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1)
+    console.log(`[fba-shipments-sync] Completed in ${duration}s - ${shipmentsCreated} created, ${shipmentsUpdated} updated, ${itemsProcessed} items`)
+
+    await logSyncResult('fba-shipments', 'success', {
+      shipmentsCreated,
+      shipmentsUpdated,
+      itemsProcessed
+    }, null)
+    return { shipmentsCreated, shipmentsUpdated, itemsProcessed }
+  } catch (error: any) {
+    console.error(`[fba-shipments-sync] Failed:`, error.message)
+    await logSyncResult('fba-shipments', 'failed', null, error.message)
+    throw error
+  }
+}
+
+/**
  * Start processing jobs
- * 
+ *
  * IMPORTANT: Process handlers must be registered WITH the exact job name
  * that matches what's used in the scheduler and manual triggers.
  */
@@ -2045,6 +2265,7 @@ reportsQueue.process('daily-reports', processReportsSync)
 aggregationQueue.process('daily-aggregation', processAggregation)
 adsReportsQueue.process('ads-reports-sync', processAdsReportsSync)
 alertsQueue.process('alerts-generation', processAlertsGeneration)
+fbaShipmentsQueue.process('fba-shipments-sync', processFbaShipmentsSync)
 
   console.log('  ✓ Registered handler for orders-sync queue')
   console.log('  ✓ Registered handler for orders-report-sync queue')
@@ -2055,6 +2276,7 @@ alertsQueue.process('alerts-generation', processAlertsGeneration)
   console.log('  ✓ Registered handler for aggregation queue')
   console.log('  ✓ Registered handler for ads-reports-sync queue')
   console.log('  ✓ Registered handler for alerts-generation queue')
+  console.log('  ✓ Registered handler for fba-shipments-sync queue')
 
   // Global event handlers
   allQueues.forEach(queue => {

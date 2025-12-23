@@ -69,6 +69,13 @@ export const alertsQueue = new Queue('alerts-generation', REDIS_URL, {
   defaultJobOptions,
 })
 
+export const fbaShipmentsQueue = new Queue('fba-shipments-sync', REDIS_URL, {
+  defaultJobOptions: {
+    ...defaultJobOptions,
+    timeout: 300000, // 5 minute timeout for shipment sync
+  },
+})
+
 // All queues for easy iteration
 export const allQueues = [
   ordersQueue,
@@ -80,6 +87,7 @@ export const allQueues = [
   aggregationQueue,
   adsReportsQueue,
   alertsQueue,
+  fbaShipmentsQueue,
 ]
 
 // Queue name to queue map
@@ -93,6 +101,7 @@ export const queueMap: Record<string, Queue.Queue> = {
   aggregation: aggregationQueue,
   'ads-reports': adsReportsQueue,
   alerts: alertsQueue,
+  'fba-shipments': fbaShipmentsQueue,
 }
 
 // Graceful shutdown
