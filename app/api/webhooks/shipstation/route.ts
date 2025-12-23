@@ -49,17 +49,32 @@ export async function POST(request: NextRequest) {
 
     // ShipStation sends a URL to fetch the actual data
     if (payload.resource_url) {
+      // Validate that the resource URL points to a trusted ShipStation endpoint
+      let resourceUrl: URL
+      try {
+        resourceUrl = new URL(payload.resource_url)
+      } catch {
+        console.warn('[ShipStation Webhook] Rejected - invalid resource_url format')
+        return NextResponse.json({ received: true })
+      }
+
+      const allowedHosts = ['ssapi.shipstation.com']
+      if (resourceUrl.protocol !== 'https:' || !allowedHosts.includes(resourceUrl.hostname)) {
+        console.warn('[ShipStation Webhook] Rejected - untrusted resource_url host:', resourceUrl.hostname)
+        return NextResponse.json({ received: true })
+      }
+
       // Fetch shipment details from ShipStation
       const apiKey = process.env.SHIPSTATION_API_KEY
       const apiSecret = process.env.SHIPSTATION_API_SECRET
-      
+
       if (!apiKey || !apiSecret) {
         console.error('[ShipStation Webhook] Missing API credentials')
         return NextResponse.json({ error: 'Configuration error' }, { status: 500 })
       }
 
       const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
-      const response = await fetch(payload.resource_url, {
+      const response = await fetch(resourceUrl.toString(), {
         headers: {
           'Authorization': `Basic ${auth}`,
         }
