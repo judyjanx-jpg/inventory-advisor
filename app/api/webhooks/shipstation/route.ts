@@ -50,19 +50,22 @@ export async function POST(request: NextRequest) {
     // ShipStation sends a URL to fetch the actual data
     if (payload.resource_url) {
       // Validate that the resource URL points to a trusted ShipStation endpoint
-      let resourceUrl: URL
+      let parsedUrl: URL
       try {
-        resourceUrl = new URL(payload.resource_url)
+        parsedUrl = new URL(payload.resource_url)
       } catch {
         console.warn('[ShipStation Webhook] Rejected - invalid resource_url format')
         return NextResponse.json({ received: true })
       }
 
-      const allowedHosts = ['ssapi.shipstation.com']
-      if (resourceUrl.protocol !== 'https:' || !allowedHosts.includes(resourceUrl.hostname)) {
-        console.warn('[ShipStation Webhook] Rejected - untrusted resource_url host:', resourceUrl.hostname)
+      const allowedHost = 'ssapi.shipstation.com'
+      if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== allowedHost) {
+        console.warn('[ShipStation Webhook] Rejected - untrusted resource_url host:', parsedUrl.hostname)
         return NextResponse.json({ received: true })
       }
+
+      // Construct a fresh URL from validated components to break taint tracking
+      const safeUrl = `https://${allowedHost}${parsedUrl.pathname}${parsedUrl.search}`
 
       // Fetch shipment details from ShipStation
       const apiKey = process.env.SHIPSTATION_API_KEY
@@ -74,7 +77,7 @@ export async function POST(request: NextRequest) {
       }
 
       const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
-      const response = await fetch(resourceUrl.toString(), {
+      const response = await fetch(safeUrl, {
         headers: {
           'Authorization': `Basic ${auth}`,
         }

@@ -177,14 +177,24 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
     }
   }
 
-  // Sanitize URLs to prevent javascript:/data: XSS vectors
+  // Sanitize URLs to prevent javascript:/data: and other XSS vectors
   const sanitizeUrl = (url: string): string | null => {
+    if (!url) return null
     const trimmed = url.trim()
     if (!trimmed) return null
 
+    // Reject URLs containing control characters
+    if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+      return null
+    }
+
     // Allow relative URLs (starting with /, ./, ../) and fragment-only URLs (#...)
+    // and restrict them to a conservative character set
     if (/^(\/|\.{1,2}\/|#)/.test(trimmed)) {
-      return trimmed
+      if (/^[a-zA-Z0-9\-._~!$&'()*+,;=:@\/?#%]*$/.test(trimmed)) {
+        return trimmed
+      }
+      return null
     }
 
     // For absolute URLs, use the URL parser and only allow http/https
@@ -192,7 +202,11 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
       const parsed = new URL(trimmed)
       const protocol = parsed.protocol.toLowerCase()
       if (protocol === 'http:' || protocol === 'https:') {
-        return parsed.href
+        const href = parsed.href
+        // Basic normalization check to avoid parser quirks
+        if (/^https?:\/\//i.test(href)) {
+          return href
+        }
       }
     } catch {
       // If the URL constructor throws, treat as unsafe
