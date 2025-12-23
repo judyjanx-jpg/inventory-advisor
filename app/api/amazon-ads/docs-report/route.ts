@@ -109,6 +109,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'reportId required' }, { status: 400 })
     }
 
+    // Validate reportId to prevent SSRF/path manipulation
+    if (typeof reportId !== 'string' || !/^[A-Za-z0-9_.-]{1,128}$/.test(reportId)) {
+      return NextResponse.json({ error: 'Invalid reportId format' }, { status: 400 })
+    }
+
     const credentials = await getAdsCredentials()
     if (!credentials?.profileId || !credentials.accessToken) {
       return NextResponse.json({ error: 'Not connected' }, { status: 400 })
