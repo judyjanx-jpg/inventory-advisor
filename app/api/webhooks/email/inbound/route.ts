@@ -25,15 +25,24 @@ function generateTicketNumber(): string {
 }
 
 // Extract email address from "Name <email@domain.com>" format
+// Uses indexOf instead of regex to avoid ReDoS risk
 function extractEmail(emailStr: string): string {
-  const match = emailStr.match(/<([^>]+)>/)
-  return match ? match[1] : emailStr.trim()
+  const start = emailStr.indexOf('<')
+  const end = emailStr.indexOf('>', start)
+  if (start !== -1 && end !== -1 && end > start) {
+    return emailStr.slice(start + 1, end)
+  }
+  return emailStr.trim()
 }
 
 // Extract name from "Name <email@domain.com>" format
+// Uses indexOf instead of regex to avoid ReDoS risk
 function extractName(emailStr: string): string | null {
-  const match = emailStr.match(/^([^<]+)</)
-  return match ? match[1].trim() : null
+  const start = emailStr.indexOf('<')
+  if (start > 0) {
+    return emailStr.slice(0, start).trim() || null
+  }
+  return null
 }
 
 // Parse SendGrid Inbound Parse format (multipart/form-data)
