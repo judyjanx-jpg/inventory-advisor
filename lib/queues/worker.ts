@@ -1460,9 +1460,14 @@ async function processAdsReportsSync(job: any) {
                 productsUpdated++
               }
               console.log(`    Processed ${productsUpdated} product records`)
-            } else {
+            } else if (report.reportType === 'SP_CAMPAIGNS' || report.reportType === 'SB_CAMPAIGNS' || report.reportType === 'SD_CAMPAIGNS') {
               // Campaign-level report - store in AdCampaign AND aggregate totals to advertising_daily
               // This captures the FULL ad spend (not just product-attributed spend)
+              
+              // Determine campaign type from report type
+              const campaignType = report.reportType === 'SB_CAMPAIGNS' ? 'SB' : 
+                                   report.reportType === 'SD_CAMPAIGNS' ? 'SD' : 'SP'
+              
               let totalSpend = 0
               let totalImpressions = 0
               let totalClicks = 0
@@ -1487,7 +1492,7 @@ async function processAdsReportsSync(job: any) {
                   update: {
                     campaignName: campaign.campaignName || 'Unknown',
                     campaignStatus: campaign.campaignStatus || 'UNKNOWN',
-                    campaignType: 'SP',
+                    campaignType,
                     budgetAmount: parseFloat(campaign.campaignBudgetAmount) || 0,
                     budgetType: campaign.campaignBudgetType || 'DAILY',
                     impressions: campaign.impressions || 0,
@@ -1503,7 +1508,7 @@ async function processAdsReportsSync(job: any) {
                     campaignId,
                     campaignName: campaign.campaignName || 'Unknown',
                     campaignStatus: campaign.campaignStatus || 'UNKNOWN',
-                    campaignType: 'SP',
+                    campaignType,
                     budgetAmount: parseFloat(campaign.campaignBudgetAmount) || 0,
                     budgetType: campaign.campaignBudgetType || 'DAILY',
                     impressions: campaign.impressions || 0,
@@ -1530,7 +1535,7 @@ async function processAdsReportsSync(job: any) {
                   where: {
                     date_campaignType: {
                       date: new Date(startDateStr),
-                      campaignType: 'SP',
+                      campaignType,
                     },
                   },
                   update: {
@@ -1548,7 +1553,7 @@ async function processAdsReportsSync(job: any) {
                   },
                   create: {
                     date: new Date(startDateStr),
-                    campaignType: 'SP',
+                    campaignType,
                     impressions: totalImpressions,
                     clicks: totalClicks,
                     spend: totalSpend,
@@ -1561,7 +1566,7 @@ async function processAdsReportsSync(job: any) {
                     cpc,
                   },
                 })
-                console.log(`    Updated advertising_daily for ${startDateStr}: $${totalSpend.toFixed(2)} total spend`)
+                console.log(`    Updated advertising_daily for ${startDateStr} (${campaignType}): $${totalSpend.toFixed(2)} total spend`)
               }
             }
           }
@@ -1818,6 +1823,148 @@ async function processAdsReportsSync(job: any) {
             }
           } catch (e: any) {
             console.log(`    Failed to request product report for ${dateStr}: ${e.message}`)
+          }
+
+          // ===== SPONSORED BRANDS (SB) =====
+          const sbCampaignReportConfig = {
+            name: `Worker_SB_Campaign_${dateStr}_${Date.now()}`,
+            startDate: dateStr,
+            endDate: dateStr,
+            configuration: {
+              adProduct: 'SPONSORED_BRANDS',
+              groupBy: ['campaign'],
+              columns: [
+                'campaignName',
+                'campaignId',
+                'campaignStatus',
+                'campaignBudgetAmount',
+                'campaignBudgetType',
+                'impressions',
+                'clicks',
+                'cost',
+                'purchases14d',
+                'sales14d',
+                'unitsSoldClicks14d',
+              ],
+              reportTypeId: 'sbCampaigns',
+              timeUnit: 'SUMMARY',
+              format: 'GZIP_JSON',
+            },
+          }
+
+          // Request SB campaign report
+          try {
+            const sbResponse = await fetch(`${ADS_API_BASE}/reporting/reports`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(sbCampaignReportConfig),
+            })
+
+            const sbResponseText = await sbResponse.text()
+            let sbReportId: string | null = null
+
+            if (sbResponse.status === 425) {
+              const match = sbResponseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
+              if (match) sbReportId = match[1]
+            } else if (sbResponse.ok) {
+              const data = JSON.parse(sbResponseText)
+              sbReportId = data.reportId
+            } else if (sbResponse.status !== 400) {
+              // 400 usually means no SB campaigns exist, so don't log as error
+              console.log(`    SB campaign report for ${dateStr} failed: ${sbResponse.status}`)
+            }
+
+            if (sbReportId) {
+              const existing = await prisma.adsPendingReport.findUnique({
+                where: { reportId: sbReportId },
+              })
+              if (!existing) {
+                await prisma.adsPendingReport.create({
+                  data: {
+                    reportId: sbReportId,
+                    profileId,
+                    reportType: 'SB_CAMPAIGNS',
+                    status: 'PENDING',
+                    dateRange: `${dateStr} to ${dateStr}`,
+                  },
+                })
+                newReportRequested = true
+                console.log(`    SB campaign report for ${dateStr} requested: ${sbReportId.substring(0, 8)}...`)
+              }
+            }
+          } catch (e: any) {
+            console.log(`    Failed to request SB report for ${dateStr}: ${e.message}`)
+          }
+
+          // ===== SPONSORED DISPLAY (SD) =====
+          const sdCampaignReportConfig = {
+            name: `Worker_SD_Campaign_${dateStr}_${Date.now()}`,
+            startDate: dateStr,
+            endDate: dateStr,
+            configuration: {
+              adProduct: 'SPONSORED_DISPLAY',
+              groupBy: ['campaign'],
+              columns: [
+                'campaignName',
+                'campaignId',
+                'campaignStatus',
+                'campaignBudgetAmount',
+                'campaignBudgetType',
+                'impressions',
+                'clicks',
+                'cost',
+                'purchases14d',
+                'sales14d',
+                'unitsSoldClicks14d',
+              ],
+              reportTypeId: 'sdCampaigns',
+              timeUnit: 'SUMMARY',
+              format: 'GZIP_JSON',
+            },
+          }
+
+          // Request SD campaign report
+          try {
+            const sdResponse = await fetch(`${ADS_API_BASE}/reporting/reports`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(sdCampaignReportConfig),
+            })
+
+            const sdResponseText = await sdResponse.text()
+            let sdReportId: string | null = null
+
+            if (sdResponse.status === 425) {
+              const match = sdResponseText.match(/duplicate of\s*:\s*([a-f0-9-]+)/i)
+              if (match) sdReportId = match[1]
+            } else if (sdResponse.ok) {
+              const data = JSON.parse(sdResponseText)
+              sdReportId = data.reportId
+            } else if (sdResponse.status !== 400) {
+              // 400 usually means no SD campaigns exist, so don't log as error
+              console.log(`    SD campaign report for ${dateStr} failed: ${sdResponse.status}`)
+            }
+
+            if (sdReportId) {
+              const existing = await prisma.adsPendingReport.findUnique({
+                where: { reportId: sdReportId },
+              })
+              if (!existing) {
+                await prisma.adsPendingReport.create({
+                  data: {
+                    reportId: sdReportId,
+                    profileId,
+                    reportType: 'SD_CAMPAIGNS',
+                    status: 'PENDING',
+                    dateRange: `${dateStr} to ${dateStr}`,
+                  },
+                })
+                newReportRequested = true
+                console.log(`    SD campaign report for ${dateStr} requested: ${sdReportId.substring(0, 8)}...`)
+              }
+            }
+          } catch (e: any) {
+            console.log(`    Failed to request SD report for ${dateStr}: ${e.message}`)
           }
 
           // Small delay between date requests
