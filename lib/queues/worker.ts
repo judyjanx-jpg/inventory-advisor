@@ -2239,14 +2239,42 @@ async function processFbaShipmentsSync(job: any) {
               const itemsResponse: any = await callApiWithTimeout(client, {
                 operation: 'getShipmentItems',
                 endpoint: 'fulfillmentInbound',
+                path: {
+                  shipmentId: shipmentId,
+                },
                 query: {
                   MarketplaceId: credentials.marketplaceId,
-                  ShipmentId: shipmentId,
                 },
               }, 30000)
               items = itemsResponse?.payload?.ItemData || itemsResponse?.ItemData || []
             } catch (itemErr: any) {
-              console.log(`      ⚠️ Could not fetch items for ${shipmentId}: ${itemErr.message}`)
+              // If ShipmentId in path doesn't work, try with date range as fallback
+              if (itemErr.message?.includes('ShipmentId') || itemErr.message?.includes('LastUpdatedAfter')) {
+                try {
+                  // Try with date range instead (last 90 days)
+                  const endDate = new Date()
+                  const startDate = new Date()
+                  startDate.setDate(startDate.getDate() - 90)
+                  
+                  const itemsResponse: any = await callApiWithTimeout(client, {
+                    operation: 'getShipmentItems',
+                    endpoint: 'fulfillmentInbound',
+                    query: {
+                      MarketplaceId: credentials.marketplaceId,
+                      LastUpdatedAfter: startDate.toISOString(),
+                      LastUpdatedBefore: endDate.toISOString(),
+                    },
+                  }, 30000)
+                  
+                  // Filter items to only this shipment
+                  const allItems = itemsResponse?.payload?.ItemData || itemsResponse?.ItemData || []
+                  items = allItems.filter((item: any) => item.ShipmentId === shipmentId)
+                } catch (fallbackErr: any) {
+                  console.log(`      ⚠️ Could not fetch items for ${shipmentId}: ${itemErr.message} (fallback also failed: ${fallbackErr.message})`)
+                }
+              } else {
+                console.log(`      ⚠️ Could not fetch items for ${shipmentId}: ${itemErr.message}`)
+              }
             }
 
             // Calculate totals

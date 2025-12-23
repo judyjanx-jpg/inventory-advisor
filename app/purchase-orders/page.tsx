@@ -792,11 +792,12 @@ export default function PurchaseOrdersPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
+                className="px-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
+                style={{ colorScheme: 'dark' }}
               >
-                <option value="all">All Statuses</option>
+                <option value="all" style={{ backgroundColor: 'var(--card)', color: 'var(--foreground)' }}>All Statuses</option>
                 {Object.entries(STATUS_CONFIG).map(([status, config]) => (
-                  <option key={status} value={status}>{config.label}</option>
+                  <option key={status} value={status} style={{ backgroundColor: 'var(--card)', color: 'var(--foreground)' }}>{config.label}</option>
                 ))}
               </select>
             </div>

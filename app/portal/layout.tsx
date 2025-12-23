@@ -11,7 +11,8 @@ import {
   Shield,
   Menu,
   X,
-  Home
+  Home,
+  FileText
 } from 'lucide-react'
 
 const navItems = [
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/portal/replacement', label: 'Track Replacement', icon: RefreshCw },
   { href: '/portal/faq', label: 'FAQs', icon: HelpCircle },
   { href: '/portal/warranty', label: 'Warranty Claim', icon: Shield },
+  { href: '/portal/privacy', label: 'Privacy Policy', icon: FileText },
 ]
 
 export default function PortalLayout({
@@ -118,6 +120,7 @@ export default function PortalLayout({
             <div className="flex items-center gap-4">
               <Link href="/portal/faq" className="hover:text-slate-700 dark:hover:text-slate-300">FAQs</Link>
               <Link href="/portal/warranty" className="hover:text-slate-700 dark:hover:text-slate-300">Warranty</Link>
+              <Link href="/portal/privacy" className="hover:text-slate-700 dark:hover:text-slate-300">Privacy Policy</Link>
               <Link href="/portal/support" className="hover:text-slate-700 dark:hover:text-slate-300">Contact</Link>
             </div>
           </div>

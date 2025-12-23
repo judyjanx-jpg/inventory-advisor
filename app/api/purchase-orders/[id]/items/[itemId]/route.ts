@@ -8,12 +8,16 @@ export async function PUT(
 ) {
   try {
     const body = await request.json()
-    const { quantityOrdered, unitCost, lineTotal } = body
+    const { quantityOrdered, unitCost, lineTotal, quantityReceived, quantityBackordered } = body
 
     const updateData: any = {}
 
     if (quantityOrdered !== undefined) updateData.quantityOrdered = quantityOrdered
     if (unitCost !== undefined) updateData.unitCost = unitCost
+    if (quantityReceived !== undefined) updateData.quantityReceived = quantityReceived
+    // Note: quantityBackordered field needs to be added to schema first
+    // if (quantityBackordered !== undefined) updateData.quantityBackordered = quantityBackordered
+    
     if (lineTotal !== undefined) {
       updateData.lineTotal = lineTotal
     } else if (quantityOrdered !== undefined || unitCost !== undefined) {

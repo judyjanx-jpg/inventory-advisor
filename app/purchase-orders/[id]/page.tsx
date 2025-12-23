@@ -128,6 +128,9 @@ export default function PurchaseOrderDetailPage() {
   
   const [receiveItems, setReceiveItems] = useState<Record<number, { received: number; damaged: number; backorder: number }>>({})
   const [savingReceive, setSavingReceive] = useState(false)
+  const [editingReceived, setEditingReceived] = useState<number | null>(null)
+  const [receivedValue, setReceivedValue] = useState<number>(0)
+  const [showReceivedOptions, setShowReceivedOptions] = useState<{ itemId: number; difference: number } | null>(null)
 
   useEffect(() => {
     fetchPO()
@@ -414,6 +417,131 @@ export default function PurchaseOrderDetailPage() {
     }
   }
 
+  const handleReceivedChange = (itemId: number, newReceived: number) => {
+    if (!po) return
+    
+    const item = po.items.find(i => i.id === itemId)
+    if (!item) return
+    
+    // Validate: can't receive more than ordered
+    if (newReceived > item.quantityOrdered) {
+      alert(`Cannot receive more than ordered (${item.quantityOrdered})`)
+      setEditingReceived(null)
+      return
+    }
+    
+    // Calculate difference: what's left after accounting for received, damaged, and backordered
+    const totalAccounted = newReceived + item.quantityDamaged + (item.quantityBackordered || 0)
+    const difference = item.quantityOrdered - totalAccounted
+    
+    // If there's a shortfall, show options
+    if (difference > 0) {
+      setShowReceivedOptions({ itemId, difference })
+      setReceivedValue(newReceived)
+    } else {
+      // No shortfall, directly update
+      handleReceivedUpdate(itemId, newReceived, 0, 0)
+    }
+  }
+
+  const handleReceivedUpdate = async (itemId: number, received: number, removeFromPO: number = 0, addToBackorder: number = 0) => {
+    if (!po) return
+    
+    setSavingReceive(true)
+    try {
+      const item = po.items.find(i => i.id === itemId)
+      if (!item) return
+      
+      // Calculate the actual received amount (difference from current)
+      const receivedDiff = received - item.quantityReceived
+      
+      // Update quantities
+      const updateData: any = {
+        quantityReceived: received
+      }
+      
+      // If removing from PO, reduce quantityOrdered to match received
+      if (removeFromPO > 0) {
+        updateData.quantityOrdered = received
+        // Recalculate line total based on new ordered quantity
+        updateData.lineTotal = received * Number(item.unitCost)
+      }
+      
+      // If adding to backorder, create a backorder record and reduce quantityOrdered to match received
+      if (addToBackorder > 0) {
+        // Create a backorder record for the shortfall
+        try {
+          const backorderRes = await fetch('/api/backorders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              masterSku: item.masterSku,
+              quantity: addToBackorder,
+              poId: po.id,
+              poNumber: po.poNumber,
+              supplierId: po.supplier.id,
+              unitCost: Number(item.unitCost)
+            }),
+          })
+          if (!backorderRes.ok) {
+            console.error('Failed to create backorder')
+          }
+        } catch (error) {
+          console.error('Error creating backorder:', error)
+        }
+        
+        // Also reduce quantityOrdered to match received
+        updateData.quantityOrdered = received
+        // Recalculate line total based on new ordered quantity
+        updateData.lineTotal = received * Number(item.unitCost)
+      }
+      
+      // Update the item
+      const res = await fetch(`/api/purchase-orders/${poId}/items/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      })
+      
+      if (res.ok) {
+        // If there's an increase in received quantity, update inventory via receive API
+        // (This handles inventory updates and linked products)
+        if (receivedDiff > 0) {
+          try {
+            await fetch(`/api/purchase-orders/${poId}/receive`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                items: {
+                  [itemId]: {
+                    received: receivedDiff,
+                    damaged: 0,
+                    backorder: 0
+                  }
+                }
+              }),
+            })
+          } catch (error) {
+            console.error('Error updating inventory:', error)
+            // Continue even if inventory update fails
+          }
+        }
+        
+        await fetchPO()
+        setShowReceivedOptions(null)
+        setEditingReceived(null)
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        alert(errorData.error || 'Failed to update received quantity')
+      }
+    } catch (error) {
+      console.error('Error updating received quantity:', error)
+      alert('Failed to update received quantity')
+    } finally {
+      setSavingReceive(false)
+    }
+  }
+
   const sortedAndFilteredItems = po?.items
     ? [...po.items]
         .filter(item => {
@@ -634,6 +762,10 @@ export default function PurchaseOrderDetailPage() {
                   <Upload className="w-4 h-4 mr-2" />
                   Import
                 </Button>
+                <Button variant="primary" size="sm" onClick={() => setShowReceive(true)}>
+                  <PackageCheck className="w-4 h-4 mr-2" />
+                  Receive Items
+                </Button>
                 {po && <ExportDropdown po={po} />}
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--muted-foreground)]" />
@@ -676,7 +808,7 @@ export default function PurchaseOrderDetailPage() {
               <table className="w-full">
                 <thead>
                   <tr className="text-sm text-[var(--muted-foreground)] border-b border-[var(--border)]/50">
-                    <th className="text-left py-3 font-medium w-12">
+                    <th className="text-left py-4 px-2 font-medium w-12">
                       <input
                         type="checkbox"
                         checked={selectedItems.size === sortedAndFilteredItems.length && sortedAndFilteredItems.length > 0}
@@ -690,21 +822,24 @@ export default function PurchaseOrderDetailPage() {
                         className="rounded border-[var(--border)] bg-[var(--card)] text-cyan-500 focus:ring-cyan-500"
                       />
                     </th>
-                    <th className="text-left py-3 font-medium">SKU</th>
-                    <th className="text-left py-3 font-medium">Product</th>
-                    <th className="text-right py-3 font-medium">Ordered</th>
-                    <th className="text-right py-3 font-medium">Received</th>
-                    <th className="text-right py-3 font-medium">Damaged</th>
-                    <th className="text-right py-3 font-medium">Backorder</th>
-                    <th className="text-right py-3 font-medium">Unit Cost</th>
-                    <th className="text-right py-3 font-medium">Line Total</th>
-                    <th className="text-center py-3 font-medium w-16">Delete</th>
+                    <th className="text-left py-4 px-4 font-medium min-w-[120px]">SKU</th>
+                    <th className="text-left py-4 px-4 font-medium min-w-[300px]">Product</th>
+                    <th className="text-right py-4 px-4 font-medium min-w-[80px]">Ordered</th>
+                    <th className="text-right py-4 px-4 font-medium min-w-[120px]">
+                      Received
+                      <span className="text-xs text-[var(--muted-foreground)] ml-1 font-normal block">(click to edit)</span>
+                    </th>
+                    <th className="text-right py-4 px-4 font-medium min-w-[90px]">Damaged</th>
+                    <th className="text-right py-4 px-4 font-medium min-w-[100px]">Backorder</th>
+                    <th className="text-right py-4 px-4 font-medium min-w-[100px]">Unit Cost</th>
+                    <th className="text-right py-4 px-4 font-medium min-w-[110px]">Line Total</th>
+                    <th className="text-center py-4 px-2 font-medium w-16">Delete</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedAndFilteredItems.map((item) => (
-                    <tr key={item.id} className="text-sm border-b border-[var(--border)]/30 hover:bg-[var(--card)]/30">
-                      <td className="py-3">
+                    <tr key={item.id} className="text-sm border-b border-[var(--border)]/30 hover:bg-[var(--card)]/30 group">
+                      <td className="py-4 px-2">
                         <input
                           type="checkbox"
                           checked={selectedItems.has(item.id)}
@@ -712,9 +847,9 @@ export default function PurchaseOrderDetailPage() {
                           className="rounded border-[var(--border)] bg-[var(--card)] text-cyan-500 focus:ring-cyan-500"
                         />
                       </td>
-                      <td className="py-3 font-mono text-[var(--foreground)]">{item.masterSku}</td>
-                      <td className="py-3 text-[var(--foreground)]">{item.product?.title || 'Unknown'}</td>
-                      <td className="py-3 text-right">
+                      <td className="py-4 px-4 font-mono text-[var(--foreground)]">{item.masterSku}</td>
+                      <td className="py-4 px-4 text-[var(--foreground)]">{item.product?.title || 'Unknown'}</td>
+                      <td className="py-4 px-4 text-right">
                         <EditableField
                           value={item.quantityOrdered}
                           onChange={(value) => handleItemUpdate(item.id, 'quantityOrdered', value)}
@@ -723,26 +858,63 @@ export default function PurchaseOrderDetailPage() {
                           min={0}
                         />
                       </td>
-                      <td className="py-3 text-right">
-                        <span className={item.quantityReceived === item.quantityOrdered ? 'text-emerald-400' : 'text-amber-400'}>
-                          {item.quantityReceived}
-                        </span>
+                      <td className="py-4 px-4 text-right">
+                        {editingReceived === item.id ? (
+                          <div className="flex items-center gap-2 justify-end">
+                            <input
+                              type="number"
+                              min={0}
+                              max={item.quantityOrdered}
+                              value={receivedValue}
+                              onChange={(e) => setReceivedValue(parseInt(e.target.value) || 0)}
+                              onBlur={() => {
+                                handleReceivedChange(item.id, receivedValue)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleReceivedChange(item.id, receivedValue)
+                                } else if (e.key === 'Escape') {
+                                  setEditingReceived(null)
+                                  setReceivedValue(0)
+                                }
+                              }}
+                              autoFocus
+                              className="w-20 px-2 py-1 bg-[var(--card)] border-2 border-cyan-500 rounded text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 justify-end">
+                            <span
+                              className={`cursor-pointer hover:underline hover:bg-[var(--muted)]/30 px-2 py-1 rounded transition-colors ${
+                                item.quantityReceived === item.quantityOrdered ? 'text-emerald-400' : 'text-amber-400'
+                              }`}
+                              onClick={() => {
+                                setEditingReceived(item.id)
+                                setReceivedValue(item.quantityReceived)
+                              }}
+                              title="Click to edit received quantity"
+                            >
+                              {item.quantityReceived}
+                            </span>
+                            <Edit className="w-3 h-3 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        )}
                       </td>
-                      <td className="py-3 text-right">
+                      <td className="py-4 px-4 text-right">
                         {item.quantityDamaged > 0 ? (
                           <span className="text-red-400">{item.quantityDamaged}</span>
                         ) : (
                           <span className="text-[var(--muted-foreground)]">-</span>
                         )}
                       </td>
-                      <td className="py-3 text-right">
+                      <td className="py-4 px-4 text-right">
                         {(item.quantityBackordered || 0) > 0 ? (
                           <span className="text-amber-400">{item.quantityBackordered}</span>
                         ) : (
                           <span className="text-[var(--muted-foreground)]">-</span>
                         )}
                       </td>
-                      <td className="py-3 text-right">
+                      <td className="py-4 px-4 text-right">
                         <EditableField
                           value={Number(item.unitCost)}
                           onChange={(value) => handleItemUpdate(item.id, 'unitCost', value)}
@@ -754,8 +926,8 @@ export default function PurchaseOrderDetailPage() {
                           step={0.01}
                         />
                       </td>
-                      <td className="py-3 text-right text-[var(--foreground)] font-medium">{formatCurrency(item.lineTotal)}</td>
-                      <td className="py-3">
+                      <td className="py-4 px-4 text-right text-[var(--foreground)] font-medium">{formatCurrency(item.lineTotal)}</td>
+                      <td className="py-4 px-2">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -983,29 +1155,38 @@ export default function PurchaseOrderDetailPage() {
       {/* Receive Items Modal */}
       <Modal
         isOpen={showReceive}
-        onClose={() => setShowReceive(false)}
+        onClose={() => {
+          setShowReceive(false)
+          setReceiveItems({})
+        }}
         title="Receive Items"
         size="lg"
       >
-        <div className="space-y-4">
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
           {po.items.map((item) => {
-            const remaining = item.quantityOrdered - item.quantityReceived - item.quantityDamaged
+            const remaining = item.quantityOrdered - item.quantityReceived - item.quantityDamaged - (item.quantityBackordered || 0)
             const current = receiveItems[item.id] || { received: 0, damaged: 0, backorder: 0 }
             
             return (
-              <div key={item.id} className="p-4 bg-[var(--card)]/50 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="font-medium text-[var(--foreground)]">{item.masterSku}</p>
-                    <p className="text-sm text-[var(--muted-foreground)]">{item.product?.title}</p>
-                  </div>
-                  <div className="text-sm text-[var(--muted-foreground)]">
-                    Ordered: {item.quantityOrdered} | Received: {item.quantityReceived} | Remaining: {remaining}
+              <div key={item.id} className="p-4 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]/50 hover:border-[var(--border)] transition-colors">
+                <div className="mb-4">
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono font-medium text-[var(--foreground)] text-sm mb-1">{item.masterSku}</p>
+                      <p className="text-sm text-[var(--muted-foreground)] line-clamp-2">{item.product?.title || 'Unknown Product'}</p>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <div className="text-xs text-[var(--muted-foreground)] space-y-1">
+                        <div>Ordered: <span className="text-[var(--foreground)] font-medium">{item.quantityOrdered}</span></div>
+                        <div>Received: <span className="text-emerald-400 font-medium">{item.quantityReceived}</span></div>
+                        <div>Remaining: <span className="text-amber-400 font-medium">{remaining}</span></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">Received</label>
+                    <label className="block text-xs font-medium text-[var(--foreground)] mb-2">Received</label>
                     <input
                       type="number"
                       min="0"
@@ -1015,11 +1196,12 @@ export default function PurchaseOrderDetailPage() {
                         ...receiveItems,
                         [item.id]: { ...current, received: parseInt(e.target.value) || 0 }
                       })}
-                      className="w-full px-2 py-1 bg-[var(--muted)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm"
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      placeholder="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">Damaged</label>
+                    <label className="block text-xs font-medium text-[var(--foreground)] mb-2">Damaged</label>
                     <input
                       type="number"
                       min="0"
@@ -1029,11 +1211,12 @@ export default function PurchaseOrderDetailPage() {
                         ...receiveItems,
                         [item.id]: { ...current, damaged: parseInt(e.target.value) || 0 }
                       })}
-                      className="w-full px-2 py-1 bg-[var(--muted)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm"
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      placeholder="0"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[var(--muted-foreground)] mb-1">Backorder</label>
+                    <label className="block text-xs font-medium text-[var(--foreground)] mb-2">Backorder</label>
                     <input
                       type="number"
                       min="0"
@@ -1043,7 +1226,8 @@ export default function PurchaseOrderDetailPage() {
                         ...receiveItems,
                         [item.id]: { ...current, backorder: parseInt(e.target.value) || 0 }
                       })}
-                      className="w-full px-2 py-1 bg-[var(--muted)] border border-[var(--border)] rounded text-[var(--foreground)] text-sm"
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                      placeholder="0"
                     />
                   </div>
                 </div>
@@ -1052,7 +1236,12 @@ export default function PurchaseOrderDetailPage() {
           })}
         </div>
         <ModalFooter>
-          <Button variant="ghost" onClick={() => setShowReceive(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => {
+            setShowReceive(false)
+            setReceiveItems({})
+          }}>
+            Cancel
+          </Button>
           <Button variant="success" onClick={handleReceive} disabled={savingReceive}>
             {savingReceive ? 'Receiving...' : 'Receive Items'}
           </Button>
@@ -1103,6 +1292,76 @@ export default function PurchaseOrderDetailPage() {
           <Button variant="danger" onClick={deletePO}>Delete</Button>
         </ModalFooter>
       </Modal>
+
+      {/* Received Quantity Options Modal */}
+      {showReceivedOptions && po && (() => {
+        const item = po.items.find(i => i.id === showReceivedOptions.itemId)
+        if (!item) return null
+        
+        const difference = showReceivedOptions.difference
+        
+        return (
+          <Modal
+            isOpen={!!showReceivedOptions}
+            onClose={() => {
+              setShowReceivedOptions(null)
+              setEditingReceived(null)
+            }}
+            title={`Handle Shortfall for ${item.masterSku}`}
+          >
+            <div className="space-y-4">
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-sm text-[var(--foreground)] mb-2">
+                  <strong>Ordered:</strong> {item.quantityOrdered} | <strong>Received:</strong> {receivedValue}
+                </p>
+                <p className="text-sm text-amber-400 font-medium">
+                  Shortfall: {difference} units
+                </p>
+              </div>
+              
+              <p className="text-sm text-[var(--muted-foreground)]">
+                How would you like to handle the {difference} unit{difference !== 1 ? 's' : ''} that weren't received?
+              </p>
+              
+              <div className="space-y-3">
+                <Button
+                  variant="primary"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    // Remove from PO: reduce quantityOrdered to match received
+                    handleReceivedUpdate(showReceivedOptions.itemId, receivedValue, difference, 0)
+                  }}
+                  disabled={savingReceive}
+                >
+                  <Minus className="w-4 h-4 mr-2" />
+                  Remove {difference} from PO (change PO amount to {receivedValue})
+                </Button>
+                
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    // Add to backorder: add difference to backorder and reduce quantityOrdered to match received
+                    handleReceivedUpdate(showReceivedOptions.itemId, receivedValue, difference, difference)
+                  }}
+                  disabled={savingReceive}
+                >
+                  <PackageCheck className="w-4 h-4 mr-2" />
+                  Add {difference} to Backorder (change PO amount to {receivedValue})
+                </Button>
+              </div>
+            </div>
+            <ModalFooter>
+              <Button variant="ghost" onClick={() => {
+                setShowReceivedOptions(null)
+                setEditingReceived(null)
+              }}>
+                Cancel
+              </Button>
+            </ModalFooter>
+          </Modal>
+        )
+      })()}
     </MainLayout>
   )
 }

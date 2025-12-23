@@ -774,6 +774,7 @@ model PurchaseOrderItem {
 
   quantityReceived Int @default(0) @map("quantity_received")
   quantityDamaged  Int @default(0) @map("quantity_damaged")
+  quantityBackordered Int @default(0) @map("quantity_backordered")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
