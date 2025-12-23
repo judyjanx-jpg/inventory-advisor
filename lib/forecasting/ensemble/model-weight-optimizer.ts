@@ -498,7 +498,7 @@ async function saveModelWeights(
       },
     })
   } catch (error) {
-    console.error(`Error saving model weights for ${masterSku}:`, error)
+    console.error('Error saving model weights for %s:', masterSku, error)
   }
 }
 
