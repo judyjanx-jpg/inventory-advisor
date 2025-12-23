@@ -64,8 +64,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true })
       }
 
-      // Construct a fresh URL from validated components to break taint tracking
-      const safeUrl = `https://${allowedHost}${parsedUrl.pathname}${parsedUrl.search}`
+      // Validate pathname and search contain only safe URL characters
+      const safePathPattern = /^[a-zA-Z0-9\-._~!$&'()*+,;=:@\/%]*$/
+      if (!safePathPattern.test(parsedUrl.pathname) || !safePathPattern.test(parsedUrl.search)) {
+        console.warn('[ShipStation Webhook] Rejected - invalid characters in URL path')
+        return NextResponse.json({ received: true })
+      }
+
+      // Construct validated URL - use encodeURI to ensure proper encoding
+      const safePath = encodeURI(decodeURI(parsedUrl.pathname))
+      const safeSearch = parsedUrl.search ? encodeURI(decodeURI(parsedUrl.search)) : ''
+      const safeUrl = `https://${allowedHost}${safePath}${safeSearch}`
 
       // Fetch shipment details from ShipStation
       const apiKey = process.env.SHIPSTATION_API_KEY
