@@ -11,6 +11,7 @@ export default function LoginPage() {
 
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -23,7 +24,7 @@ export default function LoginPage() {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, rememberMe }),
       })
 
       const data = await response.json()
@@ -87,6 +88,23 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {/* Remember Me Toggle */}
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-6 bg-slate-700 rounded-full peer-checked:bg-cyan-500 transition-colors"></div>
+                <div className="absolute left-1 top-1 w-4 h-4 bg-slate-400 rounded-full peer-checked:translate-x-4 peer-checked:bg-white transition-all"></div>
+              </div>
+              <span className="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">
+                Stay logged in for 30 days
+              </span>
+            </label>
 
             {error && (
               <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">

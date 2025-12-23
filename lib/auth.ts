@@ -1,7 +1,8 @@
 import { cookies } from 'next/headers'
 
 const SESSION_COOKIE_NAME = 'app_session'
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7 // 7 days
+const SESSION_MAX_AGE_DEFAULT = 60 * 60 * 24 * 1 // 1 day (default for new devices)
+const SESSION_MAX_AGE_REMEMBER = 60 * 60 * 24 * 30 // 30 days (when "remember me" is checked)
 
 /**
  * Simple app-wide password protection
@@ -36,16 +37,18 @@ export function verifyPassword(password: string): boolean {
 
 /**
  * Set the session cookie after successful login
+ * @param rememberMe - If true, session lasts 30 days; otherwise 1 day
  */
-export async function setSessionCookie(): Promise<string> {
+export async function setSessionCookie(rememberMe: boolean = false): Promise<string> {
   const cookieStore = await cookies()
   const token = generateSessionToken()
+  const maxAge = rememberMe ? SESSION_MAX_AGE_REMEMBER : SESSION_MAX_AGE_DEFAULT
 
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: SESSION_MAX_AGE,
+    maxAge,
     path: '/',
   })
 

@@ -4,7 +4,7 @@ import { verifyPassword, setSessionCookie } from '@/lib/auth'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { password } = body
+    const { password, rememberMe } = body
 
     if (!password) {
       return NextResponse.json(
@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Set session cookie
-    await setSessionCookie()
+    // Set session cookie (30 days if rememberMe, otherwise 1 day)
+    await setSessionCookie(!!rememberMe)
 
     return NextResponse.json({ success: true })
   } catch (error) {
