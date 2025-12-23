@@ -122,6 +122,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'reportId required in body' }, { status: 400 })
     }
 
+    // Validate reportId to prevent SSRF/path manipulation
+    if (typeof reportId !== 'string' || !/^[A-Za-z0-9_.-]{1,128}$/.test(reportId)) {
+      return NextResponse.json({ error: 'Invalid reportId format' }, { status: 400 })
+    }
+
     const credentials = await getAdsCredentials()
     if (!credentials?.profileId || !credentials.accessToken) {
       return NextResponse.json({ error: 'Not connected' }, { status: 400 })
@@ -174,7 +179,32 @@ export async function POST(request: NextRequest) {
 
     console.log('[SP-Report] Downloading from:', status.url)
 
-    const downloadResponse = await fetch(status.url)
+    // Validate download URL to prevent SSRF
+    let downloadUrl: URL
+    try {
+      downloadUrl = new URL(status.url)
+    } catch {
+      return NextResponse.json({
+        reportId,
+        status: 'COMPLETED',
+        error: 'Invalid download URL format',
+      })
+    }
+
+    const isAmazonDomain =
+      downloadUrl.hostname.endsWith('.amazon.com') ||
+      downloadUrl.hostname.endsWith('.amazonaws.com') ||
+      downloadUrl.hostname.endsWith('.cloudfront.net')
+
+    if (downloadUrl.protocol !== 'https:' || !isAmazonDomain) {
+      return NextResponse.json({
+        reportId,
+        status: 'COMPLETED',
+        error: 'Untrusted download URL host',
+      })
+    }
+
+    const downloadResponse = await fetch(downloadUrl.toString())
     if (!downloadResponse.ok) {
       return NextResponse.json({
         reportId,

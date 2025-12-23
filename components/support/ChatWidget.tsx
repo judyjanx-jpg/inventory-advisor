@@ -177,6 +177,45 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
     }
   }
 
+  // Sanitize URLs to prevent javascript:/data: and other XSS vectors
+  const sanitizeUrl = (url: string): string | null => {
+    if (!url) return null
+    const trimmed = url.trim()
+    if (!trimmed) return null
+
+    // Reject URLs containing control characters
+    if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+      return null
+    }
+
+    // Allow relative URLs (starting with /, ./, ../) and fragment-only URLs (#...)
+    // and restrict them to a conservative character set
+    if (/^(\/|\.{1,2}\/|#)/.test(trimmed)) {
+      if (/^[a-zA-Z0-9\-._~!$&'()*+,;=:@\/?#%]*$/.test(trimmed)) {
+        return trimmed
+      }
+      return null
+    }
+
+    // For absolute URLs, use the URL parser and only allow http/https
+    try {
+      const parsed = new URL(trimmed)
+      const protocol = parsed.protocol.toLowerCase()
+      if (protocol === 'http:' || protocol === 'https:') {
+        const href = parsed.href
+        // Basic normalization check to avoid parser quirks
+        if (/^https?:\/\//i.test(href)) {
+          return href
+        }
+      }
+    } catch {
+      // If the URL constructor throws, treat as unsafe
+    }
+
+    // Block all other schemes (javascript:, data:, etc.)
+    return null
+  }
+
   // Parse markdown links [text](url) into clickable links
   const renderMessageContent = (content: string) => {
     const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
@@ -189,22 +228,30 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
       if (match.index > lastIndex) {
         parts.push(content.slice(lastIndex, match.index))
       }
-      
-      // Add the link
+
+      // Add the link (with URL sanitization)
       const [, linkText, linkUrl] = match
-      parts.push(
-        <a
-          key={match.index}
-          href={linkUrl}
-          target={linkUrl.startsWith('http') ? '_blank' : '_self'}
-          rel={linkUrl.startsWith('http') ? 'noopener noreferrer' : undefined}
-          className="underline font-medium hover:opacity-80"
-          style={{ color: 'inherit' }}
-        >
-          {linkText}
-        </a>
-      )
-      
+      const safeUrl = sanitizeUrl(linkUrl)
+
+      if (safeUrl) {
+        const isExternal = /^https?:\/\//i.test(safeUrl)
+        parts.push(
+          <a
+            key={match.index}
+            href={safeUrl}
+            target={isExternal ? '_blank' : '_self'}
+            rel={isExternal ? 'noopener noreferrer' : undefined}
+            className="underline font-medium hover:opacity-80"
+            style={{ color: 'inherit' }}
+          >
+            {linkText}
+          </a>
+        )
+      } else {
+        // Unsafe URL - render as plain text
+        parts.push(match[0])
+      }
+
       lastIndex = match.index + match[0].length
     }
 

@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
             // Duplicate SKU
             skipped.push(productData.sku)
           } else {
-            console.error(`Error creating product ${productData.sku}:`, error)
+            console.error('Error creating product %s:', productData.sku, error)
             skipped.push(productData.sku)
           }
         }

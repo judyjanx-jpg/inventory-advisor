@@ -37,6 +37,9 @@ const DEFAULT_PARAMS: ArimaParams = {
   seasonalPeriod: 7,
 }
 
+// Maximum forecast horizon to prevent resource exhaustion
+const MAX_ARIMA_DAYS_AHEAD = 365
+
 /**
  * ARIMA forecasting
  */
@@ -45,10 +48,12 @@ export function arimaForecast(
   daysAhead: number,
   params: Partial<ArimaParams> = {}
 ): ModelPrediction {
+  // Clamp daysAhead to prevent resource exhaustion
+  const safeDaysAhead = Math.max(1, Math.min(daysAhead, MAX_ARIMA_DAYS_AHEAD))
   const config = { ...DEFAULT_PARAMS, ...params }
 
   if (salesData.length < Math.max(config.p, config.q, config.seasonalPeriod) * 2 + 30) {
-    return fallbackForecast(salesData, daysAhead)
+    return fallbackForecast(salesData, safeDaysAhead)
   }
 
   const values = salesData.map((d) => d.units)
@@ -64,7 +69,7 @@ export function arimaForecast(
     differenced,
     coefficients,
     originalLast,
-    daysAhead,
+    safeDaysAhead,
     config
   )
 
@@ -81,7 +86,7 @@ export function arimaForecast(
   )
 
   // Widen bounds for further horizons
-  const boundMultiplier = 1.96 * Math.sqrt(1 + daysAhead / 14)
+  const boundMultiplier = 1.96 * Math.sqrt(1 + safeDaysAhead / 14)
   const upperBound = avgForecast + boundMultiplier * residualStdDev
   const lowerBound = Math.max(0, avgForecast - boundMultiplier * residualStdDev)
 
@@ -541,6 +546,8 @@ export function arimaDaily(
   daysAhead: number,
   params: Partial<ArimaParams> = {}
 ): Array<{ date: Date; forecast: number; confidence: number }> {
+  // Clamp daysAhead to prevent resource exhaustion
+  const safeDaysAhead = Math.max(1, Math.min(daysAhead, MAX_ARIMA_DAYS_AHEAD))
   const config = { ...DEFAULT_PARAMS, ...params }
   const minData = Math.max(config.p, config.q, config.seasonalPeriod) * 2 + 30
 
@@ -549,7 +556,7 @@ export function arimaDaily(
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    return Array.from({ length: daysAhead }, (_, i) => {
+    return Array.from({ length: safeDaysAhead }, (_, i) => {
       const date = new Date(today)
       date.setDate(date.getDate() + i + 1)
       return {
@@ -567,7 +574,7 @@ export function arimaDaily(
     differenced,
     coefficients,
     originalLast,
-    daysAhead,
+    safeDaysAhead,
     config
   )
 

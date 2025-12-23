@@ -49,17 +49,44 @@ export async function POST(request: NextRequest) {
 
     // ShipStation sends a URL to fetch the actual data
     if (payload.resource_url) {
+      // Validate that the resource URL points to a trusted ShipStation endpoint
+      let parsedUrl: URL
+      try {
+        parsedUrl = new URL(payload.resource_url)
+      } catch {
+        console.warn('[ShipStation Webhook] Rejected - invalid resource_url format')
+        return NextResponse.json({ received: true })
+      }
+
+      const allowedHost = 'ssapi.shipstation.com'
+      if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== allowedHost) {
+        console.warn('[ShipStation Webhook] Rejected - untrusted resource_url host:', parsedUrl.hostname)
+        return NextResponse.json({ received: true })
+      }
+
+      // Validate pathname and search contain only safe URL characters
+      const safePathPattern = /^[a-zA-Z0-9\-._~!$&'()*+,;=:@\/%]*$/
+      if (!safePathPattern.test(parsedUrl.pathname) || !safePathPattern.test(parsedUrl.search)) {
+        console.warn('[ShipStation Webhook] Rejected - invalid characters in URL path')
+        return NextResponse.json({ received: true })
+      }
+
+      // Construct validated URL - use encodeURI to ensure proper encoding
+      const safePath = encodeURI(decodeURI(parsedUrl.pathname))
+      const safeSearch = parsedUrl.search ? encodeURI(decodeURI(parsedUrl.search)) : ''
+      const safeUrl = `https://${allowedHost}${safePath}${safeSearch}`
+
       // Fetch shipment details from ShipStation
       const apiKey = process.env.SHIPSTATION_API_KEY
       const apiSecret = process.env.SHIPSTATION_API_SECRET
-      
+
       if (!apiKey || !apiSecret) {
         console.error('[ShipStation Webhook] Missing API credentials')
         return NextResponse.json({ error: 'Configuration error' }, { status: 500 })
       }
 
       const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
-      const response = await fetch(payload.resource_url, {
+      const response = await fetch(safeUrl, {
         headers: {
           'Authorization': `Basic ${auth}`,
         }

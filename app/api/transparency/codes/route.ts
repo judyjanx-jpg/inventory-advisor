@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
         results[sku] = { codes: codes.slice(0, quantity) }
       } catch (error: any) {
-        console.error(`Error getting codes for ${sku}:`, error)
+        console.error('Error getting codes for %s:', sku, error)
         results[sku] = { 
           codes: [], 
           error: error.message || 'Failed to get codes' 
@@ -141,7 +141,7 @@ export async function GET(request: Request) {
         console.log(`[API] Stored ${codes.length} new codes in database`)
       }
     } catch (error: any) {
-      console.error(`[API] Error requesting Transparency codes for ${sku}:`, error)
+      console.error('[API] Error requesting Transparency codes for %s:', sku, error)
       return NextResponse.json(
         { error: error.message || 'Failed to request Transparency codes from Amazon' },
         { status: 500 }
