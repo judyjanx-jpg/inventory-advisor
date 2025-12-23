@@ -177,6 +177,25 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
     }
   }
 
+  // Sanitize URLs to prevent javascript:/data: XSS vectors
+  const sanitizeUrl = (url: string): string | null => {
+    const trimmed = url.trim()
+    if (!trimmed) return null
+
+    // Allow relative URLs (starting with /, ./, ../, or #)
+    if (/^([/#]|\.{1,2}\/)/.test(trimmed)) {
+      return trimmed
+    }
+
+    // Allow only http and https schemes for absolute URLs
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed
+    }
+
+    // Block all other schemes (javascript:, data:, etc.)
+    return null
+  }
+
   // Parse markdown links [text](url) into clickable links
   const renderMessageContent = (content: string) => {
     const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
@@ -189,22 +208,30 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
       if (match.index > lastIndex) {
         parts.push(content.slice(lastIndex, match.index))
       }
-      
-      // Add the link
+
+      // Add the link (with URL sanitization)
       const [, linkText, linkUrl] = match
-      parts.push(
-        <a
-          key={match.index}
-          href={linkUrl}
-          target={linkUrl.startsWith('http') ? '_blank' : '_self'}
-          rel={linkUrl.startsWith('http') ? 'noopener noreferrer' : undefined}
-          className="underline font-medium hover:opacity-80"
-          style={{ color: 'inherit' }}
-        >
-          {linkText}
-        </a>
-      )
-      
+      const safeUrl = sanitizeUrl(linkUrl)
+
+      if (safeUrl) {
+        const isExternal = /^https?:\/\//i.test(safeUrl)
+        parts.push(
+          <a
+            key={match.index}
+            href={safeUrl}
+            target={isExternal ? '_blank' : '_self'}
+            rel={isExternal ? 'noopener noreferrer' : undefined}
+            className="underline font-medium hover:opacity-80"
+            style={{ color: 'inherit' }}
+          >
+            {linkText}
+          </a>
+        )
+      } else {
+        // Unsafe URL - render as plain text
+        parts.push(match[0])
+      }
+
       lastIndex = match.index + match[0].length
     }
 
