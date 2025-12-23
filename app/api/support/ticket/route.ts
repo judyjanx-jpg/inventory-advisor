@@ -22,9 +22,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
+    // Validate email format (using indexOf to avoid ReDoS)
+    const emailStr = String(email)
+    const atIndex = emailStr.indexOf('@')
+    const hasValidAt = atIndex > 0 && atIndex === emailStr.lastIndexOf('@')
+    const dotIndex = emailStr.indexOf('.', atIndex)
+    const hasValidDot = dotIndex > atIndex + 1 && dotIndex < emailStr.length - 1
+    const hasNoSpaces = !emailStr.includes(' ')
+
+    if (!hasValidAt || !hasValidDot || !hasNoSpaces) {
       return NextResponse.json(
         { error: 'Please provide a valid email address' },
         { status: 400 }
