@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
         results[sku] = { codes: codes.slice(0, quantity) }
       } catch (error: any) {
-        console.error(`Error getting codes for ${sku}:`, error)
+        console.error('Error getting codes for %s:', sku, error)
         results[sku] = { 
           codes: [], 
           error: error.message || 'Failed to get codes' 
