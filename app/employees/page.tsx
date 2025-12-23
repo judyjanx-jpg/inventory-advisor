@@ -581,9 +581,9 @@ export default function EmployeesPage() {
       >
         {timesheetLoading ? (
           <div className="text-center py-8 text-[var(--muted-foreground)]">Loading...</div>
-        ) : timesheetData ? (
+        ) : (
           <div className="space-y-4">
-            {/* Period Navigation */}
+            {/* Period Navigation - Always visible */}
             <div className="flex items-center justify-between">
               <button
                 onClick={handlePreviousPeriod}
@@ -595,7 +595,7 @@ export default function EmployeesPage() {
               
               <div className="flex-1 text-center">
                 <div className="text-lg font-semibold text-[var(--foreground)]">
-                  {timesheetData.periodLabel || 'Period Total'}
+                  {timesheetData?.periodLabel || 'Period Total'}
                 </div>
                 {timesheetDate.toDateString() !== new Date().toDateString() && (
                   <button
@@ -616,67 +616,71 @@ export default function EmployeesPage() {
               </button>
             </div>
 
-            {/* Period Total */}
-            <div className="bg-[var(--muted)] rounded-lg p-4">
-              <div className="text-sm text-[var(--muted-foreground)]">Period Total</div>
-              <div className="text-2xl font-bold text-[var(--foreground)] mt-1">
-                {timesheetData.periodTotal?.toFixed(2) || timesheetData.days.reduce((sum: number, day: any) => sum + day.totalHours, 0).toFixed(2)} hours
-              </div>
-            </div>
+            {timesheetData ? (
+              <>
+                {/* Period Total */}
+                <div className="bg-[var(--muted)] rounded-lg p-4">
+                  <div className="text-sm text-[var(--muted-foreground)]">Period Total</div>
+                  <div className="text-2xl font-bold text-[var(--foreground)] mt-1">
+                    {timesheetData.periodTotal?.toFixed(2) || timesheetData.days.reduce((sum: number, day: any) => sum + day.totalHours, 0).toFixed(2)} hours
+                  </div>
+                </div>
 
-            {/* Daily Breakdown */}
-            {timesheetData.days.length > 0 && (
-              <div className="max-h-96 overflow-y-auto space-y-3">
-                {timesheetData.days.map((day: any) => (
-                  <div key={day.date} className="border border-[var(--border)] rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-medium text-[var(--foreground)]">
-                        {new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                      </div>
-                      <div className="text-lg font-bold text-cyan-400">
-                        {day.totalHours.toFixed(2)} hours
-                      </div>
-                    </div>
-                    <div className="space-y-1 mt-2">
-                      {day.entries.map((entry: any) => (
-                        <div key={entry.id} className="text-sm text-[var(--muted-foreground)] flex items-center gap-2 group hover:bg-[var(--muted)]/30 rounded px-2 py-1 transition-colors">
-                          <span className={`w-2 h-2 rounded-full ${entry.entryType === 'clock_in' ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                          <span className="capitalize">{entry.entryType.replace('_', ' ')}</span>
-                          <span className="ml-auto">
-                            {new Date(entry.timestamp).toLocaleTimeString()}
-                          </span>
-                          {entry.hoursWorked && (
-                            <span className="text-cyan-400 font-medium">
-                              ({entry.hoursWorked.toFixed(2)}h)
-                            </span>
-                          )}
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => handleEditEntry(entry)}
-                              className="p-1 hover:bg-[var(--hover-bg)] rounded transition-colors"
-                              title="Edit entry"
-                            >
-                              <Edit className="w-3 h-3 text-cyan-400" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteEntry(entry.id)}
-                              className="p-1 hover:bg-red-500/20 rounded transition-colors"
-                              title="Delete entry"
-                            >
-                              <X className="w-3 h-3 text-red-400" />
-                            </button>
+                {/* Daily Breakdown */}
+                {timesheetData.days.length > 0 && (
+                  <div className="max-h-96 overflow-y-auto space-y-3">
+                    {timesheetData.days.map((day: any) => (
+                      <div key={day.date} className="border border-[var(--border)] rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-medium text-[var(--foreground)]">
+                            {new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                          </div>
+                          <div className="text-lg font-bold text-cyan-400">
+                            {day.totalHours.toFixed(2)} hours
                           </div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="space-y-1 mt-2">
+                          {day.entries.map((entry: any) => (
+                            <div key={entry.id} className="text-sm text-[var(--muted-foreground)] flex items-center gap-2 group hover:bg-[var(--muted)]/30 rounded px-2 py-1 transition-colors">
+                              <span className={`w-2 h-2 rounded-full ${entry.entryType === 'clock_in' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                              <span className="capitalize">{entry.entryType.replace('_', ' ')}</span>
+                              <span className="ml-auto">
+                                {new Date(entry.timestamp).toLocaleTimeString()}
+                              </span>
+                              {entry.hoursWorked && (
+                                <span className="text-cyan-400 font-medium">
+                                  ({entry.hoursWorked.toFixed(2)}h)
+                                </span>
+                              )}
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => handleEditEntry(entry)}
+                                  className="p-1 hover:bg-[var(--hover-bg)] rounded transition-colors"
+                                  title="Edit entry"
+                                >
+                                  <Edit className="w-3 h-3 text-cyan-400" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteEntry(entry.id)}
+                                  className="p-1 hover:bg-red-500/20 rounded transition-colors"
+                                  title="Delete entry"
+                                >
+                                  <X className="w-3 h-3 text-red-400" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+              </>
+            ) : (
+              <div className="text-center py-8 text-[var(--muted-foreground)]">
+                No timesheet data for this period
               </div>
             )}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-[var(--muted-foreground)]">
-            No timesheet data for this period
           </div>
         )}
       </Modal>

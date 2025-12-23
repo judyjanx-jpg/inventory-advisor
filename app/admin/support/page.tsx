@@ -66,7 +66,9 @@ export default function SupportDashboardPage() {
     avgResponseTime: '-',
   })
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'tickets' | 'claims'>('tickets')
+  const [activeTab, setActiveTab] = useState<'tickets' | 'claims' | 'chat'>('tickets')
+  const [chatSessions, setChatSessions] = useState<any[]>([])
+  const [syncingAmazon, setSyncingAmazon] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
@@ -77,10 +79,11 @@ export default function SupportDashboardPage() {
     setLoading(true)
     try {
       // Fetch tickets and claims in parallel
-      const [ticketsRes, claimsRes, metricsRes] = await Promise.all([
+      const [ticketsRes, claimsRes, metricsRes, chatRes] = await Promise.all([
         fetch('/api/tickets?status=OPEN,PENDING&limit=10'),
         fetch('/api/warranty-claims?status=PENDING_RETURN,RETURN_SHIPPED,PROCESSING&limit=10'),
         fetch('/api/support/metrics'),
+        fetch('/api/support/chat/history?limit=20'),
       ])
 
       let ticketsList: TicketSummary[] = []
@@ -104,6 +107,11 @@ export default function SupportDashboardPage() {
         const metricsData = await metricsRes.json()
         resolvedToday = metricsData.resolvedToday || 0
         avgResponseTime = metricsData.avgResponseTime || '< 4h'
+      }
+
+      if (chatRes.ok) {
+        const chatData = await chatRes.json()
+        setChatSessions(chatData.sessions || [])
       }
 
       // Calculate stats using fetched data directly
@@ -173,6 +181,33 @@ export default function SupportDashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              onClick={async () => {
+                setSyncingAmazon(true)
+                try {
+                  const res = await fetch('/api/amazon/sync/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ daysBack: 30, createTickets: true }),
+                  })
+                  const data = await res.json()
+                  if (data.success) {
+                    alert(`Synced ${data.messagesSynced} messages, created ${data.ticketsCreated} tickets`)
+                    fetchDashboardData()
+                  } else {
+                    alert('Failed to sync: ' + (data.error || 'Unknown error'))
+                  }
+                } catch (error: any) {
+                  alert('Error: ' + error.message)
+                } finally {
+                  setSyncingAmazon(false)
+                }
+              }}
+              disabled={syncingAmazon}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncingAmazon ? 'animate-spin' : ''}`} />
+              {syncingAmazon ? 'Syncing...' : 'Sync Amazon Messages'}
+            </Button>
             <Link
               href="/support"
               target="_blank"
@@ -272,6 +307,17 @@ export default function SupportDashboardPage() {
               <Shield className="w-4 h-4 inline mr-2" />
               Warranty Claims
             </button>
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'chat'
+                  ? 'bg-[var(--card-bg)] text-[var(--foreground)] shadow-sm'
+                  : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 inline mr-2" />
+              Chat History
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -353,7 +399,7 @@ export default function SupportDashboardPage() {
               )}
             </CardContent>
           </Card>
-        ) : (
+        ) : activeTab === 'claims' ? (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -404,6 +450,74 @@ export default function SupportDashboardPage() {
                       </div>
                       <ChevronRight className="w-5 h-5 text-[var(--muted-foreground)]" />
                     </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5" />
+                Chat History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {chatSessions.length === 0 ? (
+                <div className="text-center py-12">
+                  <MessageSquare className="w-12 h-12 text-[var(--muted-foreground)] mx-auto mb-4 opacity-50" />
+                  <p className="text-[var(--muted-foreground)]">No chat sessions found</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {chatSessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className="p-4 bg-[var(--muted)]/50 rounded-lg border border-[var(--border)]"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-[var(--foreground)]">
+                              Session: {session.sessionToken.substring(0, 8)}...
+                            </span>
+                            {session.escalatedToTicketId && (
+                              <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-500/20 text-purple-400">
+                                Escalated
+                              </span>
+                            )}
+                          </div>
+                          {session.customerEmail && (
+                            <p className="text-sm text-[var(--muted-foreground)]">{session.customerEmail}</p>
+                          )}
+                          <p className="text-xs text-[var(--muted-foreground)]">
+                            {new Date(session.createdAt).toLocaleString()} • {session.messages.length} messages
+                          </p>
+                        </div>
+                      </div>
+                      <div className="bg-[var(--card-bg)] rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                        {session.messages.slice(-5).map((msg: any) => (
+                          <div
+                            key={msg.id}
+                            className={`text-sm ${
+                              msg.role === 'user' ? 'text-right' : 'text-left'
+                            }`}
+                          >
+                            <div
+                              className={`inline-block px-3 py-1.5 rounded-lg max-w-[80%] ${
+                                msg.role === 'user'
+                                  ? 'bg-purple-500/20 text-purple-300'
+                                  : 'bg-[var(--muted)] text-[var(--foreground)]'
+                              }`}
+                            >
+                              {msg.content.substring(0, 200)}
+                              {msg.content.length > 200 && '...'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}

@@ -196,7 +196,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}))
-    const { orderId, daysBack = 7, createTickets = true } = body
+    const { orderId, daysBack = 7, createTickets } = body
+    
+    // Always create tickets for buyer messages by default
+    const shouldCreateTickets = createTickets !== false
 
     const client = await createSpApiClient()
     const marketplace = credentials.marketplaceId || MARKETPLACES.US
@@ -235,8 +238,8 @@ export async function POST(request: NextRequest) {
 
         syncedCount++
 
-        // Create ticket if message requires response
-        if (createTickets && msg.senderType === 'BUYER' && !amazonMessage.supportTicketId) {
+        // Create ticket for all buyer messages
+        if (shouldCreateTickets && msg.senderType === 'BUYER' && !amazonMessage.supportTicketId) {
           const ticketId = await createTicketFromMessage(msg, marketplace)
           if (ticketId) {
             await prisma.amazonMessage.update({
@@ -290,7 +293,7 @@ export async function POST(request: NextRequest) {
 
           syncedCount++
 
-          if (createTickets && msg.senderType === 'BUYER' && !amazonMessage.supportTicketId) {
+          if (shouldCreateTickets && msg.senderType === 'BUYER' && !amazonMessage.supportTicketId) {
             const ticketId = await createTicketFromMessage(msg, marketplace)
             if (ticketId) {
               await prisma.amazonMessage.update({

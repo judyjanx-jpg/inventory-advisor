@@ -155,6 +155,14 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [linkedProducts, setLinkedProducts] = useState<Product[]>([])
   const [savingLink, setSavingLink] = useState(false)
+  const [showWarehouseQtyModal, setShowWarehouseQtyModal] = useState(false)
+  const [warehouseQtyConflict, setWarehouseQtyConflict] = useState<{
+    product1: Product
+    product2: Product
+    qty1: number
+    qty2: number
+    groupId: string
+  } | null>(null)
   
   // Suppliers
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -370,11 +378,39 @@ export default function ProductsPage() {
   const linkProduct = async (productToLink: Product) => {
     if (!selectedProduct) return
     
+    // Check warehouse quantities before linking
+    const inv1 = Array.isArray(selectedProduct.inventoryLevels) 
+      ? selectedProduct.inventoryLevels[0] 
+      : selectedProduct.inventoryLevels
+    const inv2 = Array.isArray(productToLink.inventoryLevels) 
+      ? productToLink.inventoryLevels[0] 
+      : productToLink.inventoryLevels
+    const warehouseQty1 = inv1?.warehouseAvailable || 0
+    const warehouseQty2 = inv2?.warehouseAvailable || 0
+    
+    // If warehouse quantities differ, ask user which one is correct
+    if (warehouseQty1 !== warehouseQty2) {
+      const groupId = selectedProduct.physicalProductGroupId || `group-${selectedProduct.sku}-${Date.now()}`
+      setWarehouseQtyConflict({
+        product1: selectedProduct,
+        product2: productToLink,
+        qty1: warehouseQty1,
+        qty2: warehouseQty2,
+        groupId,
+      })
+      setShowWarehouseQtyModal(true)
+      return
+    }
+    
+    // If quantities match, proceed with linking
+    await performLink(productToLink, selectedProduct.physicalProductGroupId || `group-${selectedProduct.sku}-${Date.now()}`)
+  }
+  
+  const performLink = async (productToLink: Product, groupId: string) => {
+    if (!selectedProduct) return
+    
     setSavingLink(true)
     try {
-      // Generate a group ID (use the selected product's existing group ID or create new)
-      const groupId = selectedProduct.physicalProductGroupId || `group-${selectedProduct.sku}-${Date.now()}`
-      
       // Link both products to the same group
       const res1 = await fetch('/api/products', {
         method: 'PUT',
@@ -385,6 +421,13 @@ export default function ProductsPage() {
         }),
       })
       
+      let errorMessage = ''
+      if (!res1.ok) {
+        const errorData = await res1.json().catch(() => ({}))
+        errorMessage = errorData.error || `Failed to update ${selectedProduct.sku}: ${res1.status} ${res1.statusText}`
+        console.error('Error updating first product:', errorData)
+      }
+      
       const res2 = await fetch('/api/products', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -393,6 +436,13 @@ export default function ProductsPage() {
           physicalProductGroupId: groupId,
         }),
       })
+      
+      if (!res2.ok) {
+        const errorData = await res2.json().catch(() => ({}))
+        errorMessage = errorMessage ? `${errorMessage}\n` : ''
+        errorMessage += errorData.error || `Failed to update ${productToLink.sku}: ${res2.status} ${res2.statusText}`
+        console.error('Error updating second product:', errorData)
+      }
       
       if (res1.ok && res2.ok) {
         await fetchProducts()
@@ -410,11 +460,62 @@ export default function ProductsPage() {
         setLinkSearchTerm('')
         setLinkSearchResults([])
       } else {
-        alert('Failed to link products')
+        alert(`Failed to link products:\n${errorMessage || 'Unknown error'}`)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error linking products:', error)
-      alert('Failed to link products')
+      alert(`Failed to link products: ${error.message || 'Unknown error'}`)
+    } finally {
+      setSavingLink(false)
+    }
+  }
+  
+  const handleWarehouseQtyChoice = async (correctQty: number) => {
+    if (!warehouseQtyConflict) return
+    
+    setSavingLink(true)
+    try {
+      // Update both products' warehouse quantities to the chosen value
+      const updatePromises = [
+        fetch('/api/inventory/adjust', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sku: warehouseQtyConflict.product1.sku,
+            newQty: correctQty,
+            reason: 'Linked products - warehouse quantity sync',
+          }),
+        }),
+        fetch('/api/inventory/adjust', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sku: warehouseQtyConflict.product2.sku,
+            newQty: correctQty,
+            reason: 'Linked products - warehouse quantity sync',
+          }),
+        }),
+      ]
+      
+      const results = await Promise.all(updatePromises)
+      const errors = results.filter(r => !r.ok)
+      
+      if (errors.length > 0) {
+        const errorMessages = await Promise.all(errors.map(r => r.json().catch(() => ({ error: 'Unknown error' }))))
+        throw new Error(errorMessages.map((e: any) => e.error).join(', '))
+      }
+      
+      // Refresh products to get updated inventory
+      await fetchProducts()
+      
+      // Now proceed with linking
+      await performLink(warehouseQtyConflict.product2, warehouseQtyConflict.groupId)
+      
+      setShowWarehouseQtyModal(false)
+      setWarehouseQtyConflict(null)
+    } catch (error: any) {
+      console.error('Error syncing warehouse quantities:', error)
+      alert(`Failed to sync warehouse quantities: ${error.message || 'Unknown error'}`)
     } finally {
       setSavingLink(false)
     }
@@ -607,7 +708,22 @@ export default function ProductsPage() {
                 </span>
               )}
               {product.status === 'active' && (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Active</span>
+                <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                  <span>Active</span>
+                  {product.physicalProductGroupId && (() => {
+                    const linked = allSkuProducts.filter((p: Product) => 
+                      p.physicalProductGroupId === product.physicalProductGroupId && p.sku !== product.sku
+                    )
+                    if (linked.length > 0) {
+                      return (
+                        <span className="text-[10px] text-emerald-300/70 font-normal">
+                          ({linked.map((p: Product) => p.sku).join(', ')})
+                        </span>
+                      )
+                    }
+                    return null
+                  })()}
+                </span>
               )}
             </div>
             {/* ASIN and Title below in gray */}
@@ -808,7 +924,10 @@ export default function ProductsPage() {
                   placeholder="Search by SKU, ASIN, name, or title..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-lg placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  style={{ 
+                    color: 'var(--foreground)',
+                  }}
                 />
               </div>
 
@@ -979,6 +1098,75 @@ export default function ProductsPage() {
         suppliers={suppliers}
         products={[...products, ...hiddenProducts]}
       />
+
+      {/* Warehouse Quantity Conflict Modal */}
+      {showWarehouseQtyModal && warehouseQtyConflict && (
+        <Modal
+          isOpen={showWarehouseQtyModal}
+          onClose={() => {
+            setShowWarehouseQtyModal(false)
+            setWarehouseQtyConflict(null)
+          }}
+          title="Warehouse Quantity Mismatch"
+        >
+          <div className="space-y-4">
+            <p className="text-[var(--foreground)]">
+              The warehouse quantities for these linked products are different. Linked products should share the same warehouse inventory.
+            </p>
+            <div className="bg-[var(--card)]/50 border border-[var(--border)] rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-[var(--foreground)]">{warehouseQtyConflict.product1.sku}</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">{warehouseQtyConflict.product1.title}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-[var(--muted-foreground)]">Warehouse Qty</p>
+                  <p className="text-lg font-bold text-[var(--foreground)]">{warehouseQtyConflict.qty1}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-[var(--foreground)]">{warehouseQtyConflict.product2.sku}</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">{warehouseQtyConflict.product2.title}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-[var(--muted-foreground)]">Warehouse Qty</p>
+                  <p className="text-lg font-bold text-[var(--foreground)]">{warehouseQtyConflict.qty2}</p>
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Which warehouse quantity is correct? Both products will be updated to match.
+            </p>
+            <ModalFooter>
+              <Button
+                onClick={() => handleWarehouseQtyChoice(warehouseQtyConflict.qty1)}
+                disabled={savingLink}
+                className="flex-1"
+              >
+                Use {warehouseQtyConflict.product1.sku} ({warehouseQtyConflict.qty1})
+              </Button>
+              <Button
+                onClick={() => handleWarehouseQtyChoice(warehouseQtyConflict.qty2)}
+                disabled={savingLink}
+                className="flex-1"
+              >
+                Use {warehouseQtyConflict.product2.sku} ({warehouseQtyConflict.qty2})
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowWarehouseQtyModal(false)
+                  setWarehouseQtyConflict(null)
+                }}
+                disabled={savingLink}
+              >
+                Cancel
+              </Button>
+            </ModalFooter>
+          </div>
+        </Modal>
+      )}
     </MainLayout>
   )
 }

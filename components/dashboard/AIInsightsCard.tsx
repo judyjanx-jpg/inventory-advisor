@@ -1,276 +1,188 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
-import { Brain, X, MessageSquare, CheckCircle, Clock } from 'lucide-react'
-import { Loader2 } from 'lucide-react'
+import { Sparkles, Loader2, ExternalLink } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface Insight {
-  id: number
-  observationType: string
-  title: string
-  description: string | null
-  data: any
-  status: string
-  priority: string
-  conversations: Array<{
-    id: number
-    role: string
-    content: string
-    quickResponse: string | null
-    createdAt: string
-  }>
-  createdAt: string
+  id: string
+  type: 'critical' | 'warning' | 'opportunity' | 'info'
+  message: string
+  urgency?: number
+  sku?: string
+  poNumber?: string
+  shipmentId?: string
+  metadata?: Record<string, any>
 }
 
-interface AIInsightsCardProps {
-  limit?: number
+interface InsightsResponse {
+  success: boolean
+  insights: Insight[]
+  total: number
 }
 
-export default function AIInsightsCard({ limit = 3 }: AIInsightsCardProps) {
+const PRIORITY_EMOJIS = {
+  critical: '🔴',
+  warning: '🟡',
+  opportunity: '🟢',
+  info: '💡',
+}
+
+export default function AIInsightsCard() {
   const [insights, setInsights] = useState<Insight[]>([])
-  const [newCount, setNewCount] = useState(0)
+  const [totalInsights, setTotalInsights] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [respondingTo, setRespondingTo] = useState<number | null>(null)
-  const [responseText, setResponseText] = useState('')
-  const [expandedInsight, setExpandedInsight] = useState<number | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     fetchInsights()
+    // Refresh every 15 minutes if dashboard is open
+    const interval = setInterval(fetchInsights, 15 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
   const fetchInsights = async () => {
     try {
-      const res = await fetch('/api/ai/insights?status=all')
-      const data = await res.json()
+      const res = await fetch('/api/dashboard/insights')
+      if (!res.ok) {
+        console.error('Insights API error:', res.status, res.statusText)
+        setInsights([])
+        setTotalInsights(0)
+        setLoading(false)
+        return
+      }
+      
+      const data: InsightsResponse = await res.json()
+      console.log('🔍 Insights API response:', data) // Temporary debug logging
+      
       if (data.success) {
-        setInsights(data.insights.slice(0, limit))
-        setNewCount(data.newCount)
+        console.log(`✅ Setting insights: ${data.insights?.length || 0} items`)
+        console.log('📦 Full insights array:', JSON.stringify(data.insights, null, 2))
+        console.log('🔍 First insight:', data.insights?.[0])
+        setInsights(data.insights || [])
+        setTotalInsights(data.total || 0)
+      } else {
+        console.error('❌ Insights API returned success: false', data)
+        setInsights([])
+        setTotalInsights(0)
       }
     } catch (error) {
       console.error('Error fetching insights:', error)
+      setInsights([])
+      setTotalInsights(0)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleRespond = async (insightId: number) => {
-    if (!responseText.trim()) return
-
-    setRespondingTo(insightId)
-    try {
-      const res = await fetch(`/api/ai/insights/${insightId}/respond`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: responseText })
-      })
-
-      const data = await res.json()
-      if (data.success) {
-        setResponseText('')
-        fetchInsights() // Refresh to get new conversation
-      }
-    } catch (error) {
-      console.error('Error responding to insight:', error)
-    } finally {
-      setRespondingTo(null)
-    }
-  }
-
-  const handleDismiss = async (insightId: number) => {
-    try {
-      const res = await fetch(`/api/ai/insights/${insightId}/dismiss`, {
-        method: 'POST'
-      })
-
-      if (res.ok) {
-        fetchInsights()
-      }
-    } catch (error) {
-      console.error('Error dismissing insight:', error)
-    }
-  }
-
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'out_of_stock':
-        return '📦'
-      case 'sales_spike':
-        return '📈'
-      case 'late_shipment':
-        return '🚚'
-      default:
-        return '💡'
+  const handleInsightClick = (insight: Insight) => {
+    if (insight.sku) {
+      router.push(`/inventory?sku=${insight.sku}`)
+    } else if (insight.poNumber) {
+      router.push(`/purchase-orders`)
+    } else if (insight.shipmentId) {
+      router.push(`/fba-shipments`)
     }
   }
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="w-5 h-5 text-purple-400" />
+      <div className="h-full flex flex-col bg-[var(--card)]">
+        <div className="px-6 py-4 border-b border-[var(--border)] flex-shrink-0">
+          <h3 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-purple-400" />
             AI Insights
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-[var(--muted-foreground)]" />
-          </div>
-        </CardContent>
-      </Card>
+          </h3>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-[var(--muted-foreground)]" />
+        </div>
+      </div>
     )
   }
 
+  console.log('🎨 Rendering component. Loading:', loading, 'Insights count:', insights.length)
+  console.log('📋 Insights data:', insights)
+
   if (insights.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="w-5 h-5 text-purple-400" />
+      <div className="h-full flex flex-col bg-[var(--card)]">
+        <div className="px-6 py-4 border-b border-[var(--border)] flex-shrink-0">
+          <h3 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-purple-400" />
             AI Insights
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-[var(--muted-foreground)]">
-            <p>No insights yet. I'm watching your data and will notify you when I notice something interesting!</p>
+          </h3>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-[var(--muted-foreground)]">
+            <p className="flex items-center justify-center gap-2">
+              <span className="text-lg">✓</span>
+              <span>All clear — nothing needs attention</span>
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Brain className="w-5 h-5 text-purple-400" />
-            AI Insights
-            {newCount > 0 && (
-              <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full text-xs font-medium">
-                {newCount} new
-              </span>
-            )}
-          </div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {insights.map((insight) => (
-          <div
-            key={insight.id}
-            className={`p-4 rounded-xl border transition-all ${
-              insight.status === 'new'
-                ? 'bg-purple-500/10 border-purple-500/30'
-                : 'bg-[var(--muted)]/30 border-[var(--border)]'
-            }`}
-          >
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-start gap-3 flex-1">
-                <span className="text-2xl">{getIcon(insight.observationType)}</span>
-                <div className="flex-1">
-                  <h4 className="font-medium text-[var(--foreground)] mb-1">
-                    {insight.title}
-                  </h4>
-                  {insight.description && (
-                    <p className="text-sm text-[var(--muted-foreground)]">
-                      {insight.description}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={() => handleDismiss(insight.id)}
-                className="p-1.5 hover:bg-[var(--hover-bg)] rounded-lg transition-colors"
-                title="Dismiss"
+    <div className="h-full flex flex-col bg-[var(--card)]">
+      <div className="px-6 py-4 border-b border-[var(--border)] flex-shrink-0">
+        <h3 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-purple-400" />
+          AI Insights
+        </h3>
+      </div>
+      <div className="flex-1 px-6 py-4 overflow-y-auto min-h-0">
+        <div className="space-y-2">
+          {insights.map((insight, index) => {
+            console.log(`🎯 Rendering insight ${index}:`, insight)
+            const emoji = PRIORITY_EMOJIS[insight.type]
+            const isClickable = !!(insight.sku || insight.poNumber || insight.shipmentId)
+
+            return (
+              <div
+                key={insight.id || `insight-${index}`}
+                onClick={() => isClickable && handleInsightClick(insight)}
+                className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${isClickable ? 'cursor-pointer hover:bg-[var(--muted)]/50' : ''}`}
+                style={{ 
+                  minHeight: '48px',
+                  backgroundColor: insight.type === 'critical' ? 'rgba(239, 68, 68, 0.1)' : 
+                                  insight.type === 'warning' ? 'rgba(234, 179, 8, 0.1)' :
+                                  insight.type === 'opportunity' ? 'rgba(34, 197, 94, 0.1)' :
+                                  'rgba(59, 130, 246, 0.1)',
+                  borderLeftWidth: '4px',
+                  borderLeftColor: insight.type === 'critical' ? '#ef4444' :
+                                  insight.type === 'warning' ? '#eab308' :
+                                  insight.type === 'opportunity' ? '#22c55e' :
+                                  '#3b82f6'
+                }}
               >
-                <X className="w-4 h-4 text-[var(--muted-foreground)]" />
-              </button>
-            </div>
-
-            {/* Conversation */}
-            {insight.conversations.length > 0 && (
-              <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
-                {insight.conversations.map((conv, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-2 rounded-lg text-sm ${
-                      conv.role === 'user'
-                        ? 'bg-indigo-500/20 text-indigo-300 ml-4'
-                        : 'bg-[var(--muted)]/50 text-[var(--foreground)] mr-4'
-                    }`}
-                  >
-                    {conv.content}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Response Input */}
-            {expandedInsight === insight.id && (
-              <div className="mt-3 space-y-2">
-                <textarea
-                  value={responseText}
-                  onChange={(e) => setResponseText(e.target.value)}
-                  placeholder="Type your response..."
-                  rows={2}
-                  className="w-full px-3 py-2 bg-[var(--input)] border border-[var(--border)] rounded-lg text-sm text-[var(--foreground)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleRespond(insight.id)}
-                    disabled={!responseText.trim() || respondingTo === insight.id}
-                    className="px-3 py-1.5 bg-[var(--primary)] text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {respondingTo === insight.id ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <MessageSquare className="w-4 h-4" />
-                        Send
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setExpandedInsight(null)
-                      setResponseText('')
-                    }}
-                    className="px-3 py-1.5 bg-[var(--muted)] text-[var(--foreground)] rounded-lg text-sm font-medium hover:bg-[var(--hover-bg)] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            {expandedInsight !== insight.id && (
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  onClick={() => setExpandedInsight(insight.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg transition-colors"
+                <span className="flex-shrink-0 mt-0.5 text-lg">{emoji}</span>
+                <span
+                  className="flex-1 text-sm leading-relaxed text-[var(--foreground)]"
+                  title={insight.message}
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  Respond
-                </button>
+                  {insight.message}
+                </span>
+                {isClickable && (
+                  <ExternalLink className="w-4 h-4 text-[var(--muted-foreground)] flex-shrink-0 mt-1" />
+                )}
               </div>
-            )}
-          </div>
-        ))}
-
-        {insights.length >= limit && (
-          <div className="text-center pt-2">
-            <button className="text-sm text-[var(--primary)] hover:underline">
-              View all insights →
-            </button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+            )
+          })}
+        </div>
+      </div>
+      {totalInsights > insights.length && (
+        <div className="px-6 py-3 border-t border-[var(--border)] bg-[var(--muted)]/30 flex-shrink-0">
+          <button
+            onClick={() => router.push('/dashboard?tab=insights')}
+            className="text-sm text-[var(--primary)] hover:underline w-full text-left"
+          >
+            See all ({totalInsights - insights.length} more) →
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
-

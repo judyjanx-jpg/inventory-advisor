@@ -469,6 +469,19 @@ export async function PUT(request: NextRequest) {
 
     // Only run single product update if there are fields to update
     if (Object.keys(updateData).length > 0) {
+      // Check if product exists
+      const existingProduct = await prisma.product.findUnique({
+        where: { sku },
+        select: { sku: true }
+      })
+      
+      if (!existingProduct) {
+        return NextResponse.json(
+          { error: `Product with SKU "${sku}" not found` },
+          { status: 404 }
+        )
+      }
+      
       const product = await prisma.product.update({
         where: { sku },
         data: updateData,
@@ -481,10 +494,19 @@ export async function PUT(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: 'No changes to apply' })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating product:', error)
+    
+    // Provide more specific error messages
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        { error: `Product with SKU "${sku}" not found` },
+        { status: 404 }
+      )
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to update product' },
+      { error: error.message || 'Failed to update product', details: error.code },
       { status: 500 }
     )
   }

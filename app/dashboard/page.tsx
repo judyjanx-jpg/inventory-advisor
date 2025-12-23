@@ -242,7 +242,7 @@ export default function DashboardPage() {
       case 'tasks':
         return <TasksCard tasks={data?.tasks} onRefresh={fetchDashboardData} />
       case 'profit':
-        return <ProfitCard initialData={data?.profit} />
+        return <ProfitCard initialData={data?.profit} yesterdayProfit={data?.yesterdayProfit} />
       case 'schedule':
         return <ScheduleCard />
       case 'goals':

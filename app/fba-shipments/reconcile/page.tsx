@@ -229,11 +229,11 @@ export default function FbaReconcilePage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">Pending</span>
+        return <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Pending</span>
       case 'accepted':
-        return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">Accepted</span>
+        return <span className="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Accepted</span>
       case 'deducted':
-        return <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Deducted</span>
+        return <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-400 border border-green-500/30">Deducted</span>
       default:
         return <span className="px-2 py-1 text-xs rounded-full bg-[var(--muted)] text-[var(--foreground)]">{status}</span>
     }
@@ -241,16 +241,16 @@ export default function FbaReconcilePage() {
 
   const getShipmentStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      'working': 'bg-[var(--muted)] text-[var(--foreground)]',
-      'shipped': 'bg-blue-100 text-blue-800',
-      'in_transit': 'bg-purple-100 text-purple-800',
-      'receiving': 'bg-yellow-100 text-yellow-800',
-      'checked_in': 'bg-teal-100 text-teal-800',
-      'closed': 'bg-green-100 text-green-800',
-      'delivered': 'bg-green-100 text-green-800',
+      'working': 'bg-[var(--muted)] text-[var(--foreground)] border border-[var(--border)]',
+      'shipped': 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+      'in_transit': 'bg-purple-500/20 text-purple-400 border border-purple-500/30',
+      'receiving': 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+      'checked_in': 'bg-teal-500/20 text-teal-400 border border-teal-500/30',
+      'closed': 'bg-green-500/20 text-green-400 border border-green-500/30',
+      'delivered': 'bg-green-500/20 text-green-400 border border-green-500/30',
     }
     return (
-      <span className={`px-2 py-1 text-xs rounded-full ${colors[status] || 'bg-[var(--muted)] text-[var(--foreground)]'}`}>
+      <span className={`px-2 py-1 text-xs rounded-full ${colors[status] || 'bg-[var(--muted)] text-[var(--foreground)] border border-[var(--border)]'}`}>
         {status.replace('_', ' ')}
       </span>
     )
@@ -406,7 +406,7 @@ export default function FbaReconcilePage() {
                   >
                     {/* Shipment Header */}
                     <div
-                      className="bg-gray-50 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-100"
+                      className="bg-[var(--card)] px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[var(--muted)]/30 border-b border-[var(--border)]"
                       onClick={() => toggleExpand(shipment.id)}
                     >
                       <div className="flex items-center gap-4">
@@ -417,7 +417,7 @@ export default function FbaReconcilePage() {
                         )}
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-medium">{shipment.shipmentId}</span>
+                            <span className="font-mono font-medium text-[var(--foreground)]">{shipment.shipmentId}</span>
                             {getStatusBadge(shipment.reconciliationStatus)}
                             {getShipmentStatusBadge(shipment.status)}
                           </div>
@@ -431,7 +431,7 @@ export default function FbaReconcilePage() {
 
                       <div className="flex items-center gap-4">
                         <div className="text-right">
-                          <div className="text-sm font-medium">{shipment.totalUnits} units</div>
+                          <div className="text-sm font-medium text-[var(--foreground)]">{shipment.totalUnits} units</div>
                           <div className="text-xs text-[var(--muted-foreground)]">{shipment.items.length} SKUs</div>
                         </div>
 
@@ -490,23 +490,23 @@ export default function FbaReconcilePage() {
                     {/* Expanded Items */}
                     {expandedShipments.has(shipment.id) && (
                       <div className="border-t">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
+                        <table className="min-w-full divide-y divide-[var(--border)]">
+                          <thead className="bg-[var(--muted)]/50">
                             <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase">SKU</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase">Product</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase">Shipped</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase">Received</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase">Discrepancy</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-[var(--foreground)] uppercase">SKU</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-[var(--foreground)] uppercase">Product</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--foreground)] uppercase">Shipped</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--foreground)] uppercase">Received</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--foreground)] uppercase">Discrepancy</th>
                             </tr>
                           </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
+                          <tbody className="bg-[var(--card)] divide-y divide-[var(--border)]">
                             {shipment.items.map((item) => (
                               <tr key={item.id}>
-                                <td className="px-4 py-2 text-sm font-mono">{item.masterSku}</td>
-                                <td className="px-4 py-2 text-sm text-[var(--muted-foreground)] max-w-xs truncate">{item.productName}</td>
-                                <td className="px-4 py-2 text-sm text-right">{item.quantityShipped}</td>
-                                <td className="px-4 py-2 text-sm text-right">{item.quantityReceived}</td>
+                                <td className="px-4 py-2 text-sm font-mono text-[var(--foreground)]">{item.masterSku}</td>
+                                <td className="px-4 py-2 text-sm text-[var(--foreground)] max-w-xs truncate">{item.productName}</td>
+                                <td className="px-4 py-2 text-sm text-right text-[var(--foreground)]">{item.quantityShipped}</td>
+                                <td className="px-4 py-2 text-sm text-right text-[var(--foreground)]">{item.quantityReceived}</td>
                                 <td className="px-4 py-2 text-sm text-right">
                                   {item.quantityDiscrepancy !== 0 && (
                                     <span className={item.quantityDiscrepancy > 0 ? 'text-red-600' : 'text-green-600'}>

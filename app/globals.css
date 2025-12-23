@@ -176,6 +176,42 @@ body {
   transition-duration: 150ms;
 }
 
+/* Ensure input text is always visible - override any conflicting styles */
+input,
+textarea,
+select {
+  color: var(--foreground) !important;
+}
+
+/* Force dark text on white/light backgrounds */
+input[class*="bg-white"],
+input[class*="bg-slate-50"],
+input[class*="bg-gray-50"],
+input[class*="bg-gray-100"],
+textarea[class*="bg-white"],
+textarea[class*="bg-slate-50"],
+textarea[class*="bg-gray-50"],
+textarea[class*="bg-gray-100"],
+select[class*="bg-white"],
+select[class*="bg-slate-50"],
+select[class*="bg-gray-50"],
+select[class*="bg-gray-100"] {
+  color: #0f172a !important;
+}
+
+/* Fix for inputs using CSS variables that might resolve to white */
+input[class*="bg-[var(--card)]"],
+input[class*="bg-[var(--secondary)]"],
+input[class*="bg-[var(--input)]"],
+textarea[class*="bg-[var(--card)]"],
+textarea[class*="bg-[var(--secondary)]"],
+textarea[class*="bg-[var(--input)]"],
+select[class*="bg-[var(--card)]"],
+select[class*="bg-[var(--secondary)]"],
+select[class*="bg-[var(--input)]"] {
+  color: var(--foreground) !important;
+}
+
 /* Focus ring styles */
 .focus-ring:focus {
   outline: none;

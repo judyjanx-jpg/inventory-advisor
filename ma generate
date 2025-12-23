@@ -1,0 +1,81 @@
+[33m79d4a06[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/claude/fix-issue-oFvzE[m[33m, [m[1;31morigin/HEAD[m[33m)[m Update package-lock.json
+[33m8edd1bf[m Fix unclosed ternary operator in employees page timesheet modal
+[33m384c188[m Fix JSX syntax error in employees page - correct indentation
+[33m92a78ee[m Update local changes after merge
+[33m53afc6d[m Merge branch claude/expand-amazon-product-data-PKAxF
+[33md54ed66[m Add migration for physicalProductGroupId (already applied via db push)
+[33m0d27613[m[33m ([m[1;31morigin/claude/fix-dark-mode-visibility-PcgkA[m[33m)[m Fix dark mode visibility for number inputs in ProductSettingsModal
+[33mdf0bbcd[m Fix checkbox alignment in Forecasting Purchasing and FBA tabs
+[33m7ddc599[m[33m ([m[1;31morigin/claude/fix-light-theme-colors-SgfOd[m[33m)[m Fix light theme colors in warehouses, FBA shipments, and audit pages
+[33m803b008[m Fix light theme colors in advisor, audit, and floating-ai components
+[33m33f982e[m Fix light theme colors in forecasting, inventory, profit, and sync components
+[33m0f86431[m Fix light theme colors in shipments and purchase-orders components
+[33m33a9c2f[m Fix light theme colors in ColumnSelector, GroupBySelector, ShipmentSummaryBar
+[33m6c7b2d8[m Fix light theme colors in profit components
+[33m27d9260[m Fix light theme colors across pages and components
+[33m99e066d[m Fix light theme colors for better visibility
+[33mf0829c7[m Update Transparency logo to official Amazon design
+[33m3d5f6a8[m Fix worker to use getValidAccessToken for auto-refresh when checking reports
+[33m53b1530[m Fix ad spend sync to use TOTAL campaign spend, not just product-attributed
+[33m734b8bd[m Change ads sync to run every 15 minutes instead of 30
+[33m6311e2b[m Add fallback to query ad_product_spend directly if advertising_daily has no data
+[33mc87ecf9[m Fix jsonb_array_elements error when additional_costs is NULL
+[33m8db8d19[m Apply new cost fields to profit calculations
+[33m80ba746[m Add all missing attributes to bulk export/upload feature
+[33m8e22f4d[m Fix: Include cost/fee fields in GET /api/products response - bulk update now visible in UI
+[33m3333e86[m Add debugging logs to trace save issue
+[33ma50b18d[m Fix: Keep modal open after applying scope, properly bulk update only the changed field
+[33mf0487e8[m Enhanced product settings: simplified icons, added Status tab, apply-to scope for costs, 20% default referral
+[33m430ad9d[m Change tariff from fixed cost to percentage of cost
+[33m33e98d1[m Enhance product settings with costs, profit calculator & alternate SKUs
+[33m4f75016[m Add wide tabbed product settings modal with listing details
+[33m6e4f4ec[m Add product linking feature, fix label layout, audit input, batch printing, and auto-print PDF
+[33mfc3a30a[m Fix FNSKU+TP label layout, audit quantity input, add batch printing and auto-print PDF
+[33m000b2e0[m Fix FNSKU+TP label layout and audit tool quantity input parsing
+[33m8bbb7bd[m Add Amazon listing data to products: images, bullet points, description for future Listing Tool
+[33m5aea8f4[m[33m ([m[1;31morigin/claude/expand-amazon-product-data-PKAxF[m[33m)[m Fix FK constraint error in product sync inventory upsert
+[33m5a353c8[m Trigger redeploy v1.2.0
+[33m12ebbec[m Expand Amazon product data to store listing details for future listing tools
+[33m4261950[m Warranty page: smaller title text, show Amazon product images
+[33m3d5a8df[m Chat widget: make markdown links clickable
+[33m5ac669e[m AI chat: shorter responses with clickable links
+[33mab38cd2[m Add back button to Knowledge Base page
+[33m7ea7aba[m Enhance AI chat to include full knowledge article content for better answers
+[33m21bb259[m Fix Track Order text visibility on public support page
+[33mde1ca16[m Fix Railway routing: rename app/app to app/admin to prevent /support route confusion
+[33m8c5f888[m Fix Excel file upload for new FBA shipments - properly parse xlsx/xls binary files
+[33mdcc68e3[m Fix label printing: use direct PDF generation (10-20x faster), fix barcode scanning, center QR codes
+[33m8fb2fc1[m Merge remote-tracking branch 'origin/claude/mobile-friendly-audit-tool-SNQDO' # Please enter a commit message to explain why this merge is necessary, # especially if it merges an updated upstream into a topic branch. # # Lines starting with '#' will be ignored, and an empty message aborts # the commit.
+[33m2d70764[m[33m ([m[1;31morigin/claude/mobile-friendly-audit-tool-SNQDO[m[33m)[m Fix mobile layout - sidebar as drawer, full-width content
+[33ma564b14[m Trigger redeploy
+[33ma144efe[m Enhance mobile experience for audit tool
+[33mdfcb8a1[m Show custom displayName for parent SKUs in audit custom order (not Amazon SKU or title)
+[33m1501c80[m Show internal parent SKU title in custom order modal when grouping by parent
+[33md5e3224[m Change Cancel to Close Audit - saves to log if entries exist, deletes if empty
+[33m5e5c676[m Add mobile-friendly audit tool with Excel export and end early option
+[33m5a349c9[m[33m ([m[1;31morigin/claude/debug-prep-label-errors-reSoT[m[33m)[m Improve placement selection error handling and logging
+[33m41c40f2[m Fix placement selection validation and add retry button
+[33m4b91490[m Add bulk select and apply for prep/label settings
+[33m5a39a8a[m Fix prep/label owner auto-save and default to NONE
+[33m11a9db3[m Fix prepOwner/labelOwner not being sent to Amazon FBA API
+[33mbcc73c1[m Update package-lock.json to sync with Next.js 14.2.35 - Regenerate lock file to match updated package.json versions
+[33m4315019[m Security: Update Next.js to 14.2.35 to fix CVE-2025-55184 and CVE-2025-67779 - Upgrade next from 14.0.4 to 14.2.35 - Upgrade eslint-config-next to match Next.js version - Fixes HIGH severity security vulnerabilities
+[33m7540fe4[m Fix prep/label owners dropdown not working - Add prepOwner and labelOwner to ShipmentItem interface - Include prepOwner and labelOwner when fetching shipment data - Create handleItemPrepChange handler to update product settings - Pass handler and prep/label owner data to BoxCreation component
+[33m76d79d0[m Fix build error by removing orphaned code blocks - Remove duplicate/orphaned code after component closing brace that was causing 'Expression expected' errors - File now properly ends at component closing brace
+[33ma5f4c8e[m Add mark as printed functionality and fix syntax errors - Add manual 'Mark as Printed' button for items not yet printed - Auto-mark as printed when Print button is clicked - Fix orphaned code causing build errors
+[33m8d7ad79[m Fix transparency icon rendering - convert SVG to data URL image for html2canvas compatibility
+[33mccdde17[m Restore original HTML-based label generation with proper styling - fix QR code size, transparency icon, and rotated SKU text positioning
+[33m1a0a8a5[m[33m ([m[1;31morigin/claude/fix-shipment-import-error-DyXYP[m[33m)[m Fix Prisma query error: remove prepOwner/labelOwner from product select
+[33m9e85807[m Optimize PDF label generation for faster performance
+[33m0cc9ea5[m Fix Prisma model reference: use 'product' instead of 'childProduct'
+[33m207a19f[m Add Deduct buttons for each shipment and Deduct All feature
+[33md914ea3[m Fix FBA API calls to use raw API paths instead of operation names
+[33m1d5c208[m Fix API operation: use listPlacementOptions instead of listInboundPlanShipments
+[33m53dce43[m Add Load Shipments feature to import by Workflow ID
+[33ma9c2b52[m Add Inbound Plan ID field for faster shipment lookup
+[33m788dada[m Improve shipment search with status filtering and better error messages
+[33m4445fe4[m Support importing shipments by shipmentConfirmationId from Send to Amazon UI
+[33md7831df[m Update shipment import to use correct FBA inbound shipment ID format
+[33m1ac0c27[m Fix shipment import error by updating placeholder and improving error messages
+[33maefafaa[m Merge remote-tracking branch 'origin/claude/fix-forecasting-po-deduction-EIapO'
+[33mbc01dd5[m[33m ([m[1;31morigin/claude/fix-forecasting-po-deduction-EIapO[m[33m)[m Re

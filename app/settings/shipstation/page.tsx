@@ -30,7 +30,7 @@ export default function ShipStationSettingsPage() {
       const res = await fetch('/api/settings/shipstation')
       const data = await res.json()
 
-      setIsConnected(data.isConnected || false)
+      setIsConnected(data.connected || data.isConnected || false)
     } catch (error) {
       console.error('Error fetching settings:', error)
     } finally {
@@ -260,6 +260,7 @@ export default function ShipStationSettingsPage() {
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="Enter your ShipStation API Key"
                   className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  style={{ color: 'var(--foreground)' }}
                 />
               </div>
 
@@ -274,6 +275,7 @@ export default function ShipStationSettingsPage() {
                   onChange={(e) => setApiSecret(e.target.value)}
                   placeholder="Enter your ShipStation API Secret"
                   className="w-full px-4 py-3 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  style={{ color: 'var(--foreground)' }}
                 />
               </div>
             </div>

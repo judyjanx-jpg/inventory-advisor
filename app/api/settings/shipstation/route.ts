@@ -89,7 +89,9 @@ export async function POST(request: NextRequest) {
     let carriers: any[] = []
 
     try {
+      // Use /carriers endpoint to test connection (this is a valid ShipStation endpoint)
       const testRes = await fetch('https://ssapi.shipstation.com/carriers', {
+        method: 'GET',
         headers: {
           'Authorization': `Basic ${authString}`,
           'Content-Type': 'application/json',
@@ -98,13 +100,15 @@ export async function POST(request: NextRequest) {
 
       if (testRes.ok) {
         verified = true
-        carriers = await testRes.json()
+        const carriersData = await testRes.json()
+        // Handle both array and object responses
+        carriers = Array.isArray(carriersData) ? carriersData : (carriersData.carriers || [])
       } else {
         const errorText = await testRes.text()
         verifyError = `ShipStation returned ${testRes.status}: ${errorText}`
       }
     } catch (fetchError: any) {
-      verifyError = fetchError.message
+      verifyError = fetchError.message || 'Network error connecting to ShipStation'
     }
 
     // Save credentials to database
@@ -142,6 +146,8 @@ export async function POST(request: NextRequest) {
     if (verified) {
       return NextResponse.json({
         success: true,
+        connected: true,
+        isConnected: true,
         message: 'ShipStation connected successfully!',
         carriers: carriers.map((c: any) => ({
           name: c.name,
@@ -155,6 +161,8 @@ export async function POST(request: NextRequest) {
     } else {
       return NextResponse.json({
         success: false,
+        connected: false,
+        isConnected: false,
         warning: true,
         message: `Credentials saved but verification failed: ${verifyError}`,
       })

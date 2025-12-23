@@ -198,6 +198,16 @@ function SupportFooter() {
                   Contact Us
                 </Link>
               </li>
+              <li>
+                <Link href="/support/messages" className="text-gray-600 hover:text-gray-900 transition-colors">
+                  Messages & Chat History
+                </Link>
+              </li>
+              <li>
+                <Link href="/support/privacy" className="text-gray-600 hover:text-gray-900 transition-colors">
+                  Privacy Policy
+                </Link>
+              </li>
             </ul>
           </div>
 

@@ -30,7 +30,9 @@ export async function POST() {
 
     const authString = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
 
-    const res = await fetch('https://ssapi.shipstation.com/accounts', {
+    // Use /carriers endpoint to test connection (valid endpoint)
+    const res = await fetch('https://ssapi.shipstation.com/carriers', {
+      method: 'GET',
       headers: {
         'Authorization': `Basic ${authString}`,
         'Content-Type': 'application/json',
@@ -38,7 +40,7 @@ export async function POST() {
     })
 
     if (res.ok) {
-      const data = await res.json()
+      const carriers = await res.json()
 
       // Update connection status
       await prisma.apiConnection.update({
@@ -52,7 +54,8 @@ export async function POST() {
 
       return NextResponse.json({
         success: true,
-        accountName: data.name || 'ShipStation Account',
+        accountName: 'ShipStation Account',
+        carriers: Array.isArray(carriers) ? carriers.length : 0,
         message: 'Connection verified successfully',
       })
     } else {
