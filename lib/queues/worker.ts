@@ -1420,7 +1420,8 @@ async function processAdsReportsSync(job: any) {
                 const asin = item.advertisedAsin
                 if (!asin) continue
 
-                const spend = parseFloat(item.spend) || 0
+                // Handle both 'spend' and 'cost' field names (Amazon API may use either)
+                const spend = parseFloat(item.spend) || parseFloat(item.cost) || 0
                 const sales = parseFloat(item.sales14d) || 0
 
                 await prisma.adProductSpend.upsert({
