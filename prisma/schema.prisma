@@ -1450,6 +1450,87 @@ model SalesHistory {
 }
 
 // ============================================
+// 10b. MANUAL SPIKES & GROWTH WATCHLIST
+// ============================================
+
+// User-created spike flags (influencer campaigns, TikTok virals, etc.)
+model ManualSpike {
+  id        Int    @id @default(autoincrement())
+  masterSku String @map("master_sku")
+
+  spikeType      String @map("spike_type") // 'influencer', 'tiktok', 'deal', 'seasonal', 'marketing', 'other'
+  liftMultiplier Decimal @map("lift_multiplier") @db.Decimal(5, 2) // e.g., 2 for +100%
+  startDate      DateTime @map("start_date")
+  endDate        DateTime @map("end_date")
+  notes          String? @db.Text
+
+  status String @default("scheduled") // 'scheduled', 'active', 'completed'
+
+  // Post-spike tracking (filled after spike ends)
+  actualLift  Decimal? @map("actual_lift") @db.Decimal(5, 2)
+  variance    Decimal? @db.Decimal(5, 2) // difference between predicted and actual
+  resultNotes String?  @map("result_notes") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([masterSku, status])
+  @@index([startDate, endDate])
+  @@map("manual_spikes")
+}
+
+// Push readiness snapshots (daily snapshot of which SKUs are push-ready)
+model PushReadinessSnapshot {
+  id        Int      @id @default(autoincrement())
+  masterSku String   @map("master_sku")
+  date      DateTime @db.Date
+
+  currentVelocity      Decimal @map("current_velocity") @db.Decimal(10, 2)
+  maxSustainablePush   Decimal @map("max_sustainable_push") @db.Decimal(5, 2) // e.g., 3 means 3x
+  daysOfBuffer         Int     @map("days_of_buffer")
+  status               String  // 'ready', 'limited', 'not_ready'
+  limitingFactor       String? @map("limiting_factor")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([masterSku, date])
+  @@index([date])
+  @@map("push_readiness_snapshots")
+}
+
+// Growth watchlist - Items the user wants to grow
+model GrowthWatchlist {
+  id        Int    @id @default(autoincrement())
+  masterSku String @unique @map("master_sku")
+
+  targetLift Decimal @map("target_lift") @db.Decimal(5, 2) // e.g., 1.5 for 50% growth
+  priority   String  @default("normal") // 'high', 'normal', 'low'
+  notes      String? @db.Text
+
+  addedAt   DateTime @default(now()) @map("added_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("growth_watchlist")
+}
+
+// Log of push readiness checks performed
+model PushReadinessCheck {
+  id        Int      @id @default(autoincrement())
+  masterSku String   @map("master_sku")
+
+  pushMultiplier Decimal  @map("push_multiplier") @db.Decimal(5, 2)
+  durationDays   Int      @map("duration_days")
+  checkResult    Boolean  @map("check_result") // was push ready?
+  daysOfBuffer   Int      @map("days_of_buffer")
+  message        String?  @db.Text
+
+  checkedAt DateTime @default(now()) @map("checked_at")
+
+  @@index([masterSku])
+  @@map("push_readiness_checks")
+}
+
+// ============================================
 // 11. ALERTS & NOTIFICATIONS
 // ============================================
 model AlertConfig {

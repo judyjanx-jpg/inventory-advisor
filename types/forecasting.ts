@@ -123,11 +123,82 @@ export const DEFAULT_SETTINGS: ForecastSettings = {
   warehouseTargetDays: 135,
 }
 
-export const ALL_TABS = ['trends', 'purchasing', 'fba', 'stockouts', 'ai-engine', 'alerts', 'seasonality', 'suppliers', 'safety-stock', 'kpis'] as const
+// Legacy tabs (kept for backwards compatibility)
+export const ALL_TABS_LEGACY = ['trends', 'purchasing', 'fba', 'stockouts', 'ai-engine', 'alerts', 'seasonality', 'suppliers', 'safety-stock', 'kpis'] as const
+
+// New simplified tabs per spec
+export const ALL_TABS = ['purchasing', 'fba', 'push-readiness', 'deep-dive'] as const
 
 export type TabId = typeof ALL_TABS[number]
+export type TabIdLegacy = typeof ALL_TABS_LEGACY[number]
 
 export const LINE_COLORS = [
   '#06B6D4', '#8B5CF6', '#F59E0B', '#10B981', '#EC4899',
   '#3B82F6', '#EF4444', '#84CC16', '#F97316', '#6366F1',
 ]
+
+// Push Readiness types
+export interface PushReadinessResult {
+  sku: string
+  currentVelocity: number
+  maxSustainablePush: number // e.g., 3 means 3x current velocity
+  daysOfBuffer: number
+  status: 'ready' | 'limited' | 'not_ready'
+  limitingFactor?: string // e.g., "warehouse stock", "lead time", "supplier capacity"
+}
+
+export interface PushCheckRequest {
+  sku: string
+  pushMultiplier: number // e.g., 2 for +100%, 3 for +200%
+  durationDays: number
+}
+
+export interface PushCheckResult {
+  ready: boolean
+  daysOfBuffer: number
+  message: string
+  recommendation?: string
+}
+
+// Manual Spike types
+export interface ManualSpike {
+  id: number
+  masterSku: string
+  spikeType: 'influencer' | 'tiktok' | 'deal' | 'seasonal' | 'marketing' | 'other'
+  liftMultiplier: number // e.g., 2 for +100%
+  startDate: string
+  endDate: string
+  notes?: string
+  status: 'scheduled' | 'active' | 'completed'
+  createdAt: string
+}
+
+export interface ManualSpikeResult {
+  id: number
+  manualSpikeId: number
+  predictedLift: number
+  actualLift: number
+  variance: number
+  notes?: string
+}
+
+// Growth Watchlist types
+export interface GrowthWatchlistItem {
+  id: number
+  masterSku: string
+  targetLift: number // e.g., 1.5 for 50% growth target
+  notes?: string
+  addedAt: string
+  pushReadiness: PushReadinessResult
+}
+
+// Deep Dive section types
+export type DeepDiveSection =
+  | 'factors'
+  | 'seasonality'
+  | 'manual-spikes'
+  | 'anomalies'
+  | 'lead-times'
+  | 'stockouts'
+  | 'model-performance'
+  | 'calculation'

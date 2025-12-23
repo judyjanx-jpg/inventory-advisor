@@ -3,23 +3,17 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import {
-  Truck, RefreshCw, BarChart3, ShoppingCart,
-  AlertCircle, Calendar, Settings, GripVertical,
-  Bell, Shield, Target, Cpu
+  ShoppingCart, Truck, Rocket, Microscope,
+  RefreshCw, Settings, Brain
 } from 'lucide-react'
 import {
-  ModelBreakdown,
-  AlertCenter,
-  SeasonalityManager,
-  SupplierScorecard,
-  SafetyStockView,
-  KPIDashboard,
   TabButton,
   SettingsPanel,
-  TrendsTab,
   PurchasingTab,
   FbaTab,
-  StockoutsTab,
+  PushReadinessTab,
+  DeepDiveTab,
+  DashboardHeader,
 } from '@/components/forecasting'
 import {
   ForecastItem,
@@ -30,15 +24,9 @@ import {
   ALL_TABS,
   TabId,
 } from '@/types/forecasting'
-import { Brain } from 'lucide-react'
 
-// Tab configuration for rendering the tab bar
+// Tab configuration for the new 4-tab structure
 const TAB_CONFIG: Record<TabId, { icon: React.ReactNode; label: string; color: string }> = {
-  trends: {
-    icon: <BarChart3 className="w-5 h-5" />,
-    label: "Trends",
-    color: "bg-indigo-600"
-  },
   purchasing: {
     icon: <ShoppingCart className="w-5 h-5" />,
     label: "Purchasing",
@@ -46,65 +34,22 @@ const TAB_CONFIG: Record<TabId, { icon: React.ReactNode; label: string; color: s
   },
   fba: {
     icon: <Truck className="w-5 h-5" />,
-    label: "FBA",
+    label: "FBA Replenishment",
     color: "bg-purple-600"
   },
-  stockouts: {
-    icon: <AlertCircle className="w-5 h-5" />,
-    label: "Stockouts",
-    color: "bg-red-600"
+  'push-readiness': {
+    icon: <Rocket className="w-5 h-5" />,
+    label: "Push Readiness",
+    color: "bg-green-600"
   },
-  'ai-engine': {
-    icon: <Cpu className="w-5 h-5" />,
-    label: "AI Engine",
-    color: "bg-emerald-600"
-  },
-  alerts: {
-    icon: <Bell className="w-5 h-5" />,
-    label: "Alerts",
-    color: "bg-orange-600"
-  },
-  seasonality: {
-    icon: <Calendar className="w-5 h-5" />,
-    label: "Seasonality",
-    color: "bg-blue-600"
-  },
-  suppliers: {
-    icon: <Truck className="w-5 h-5" />,
-    label: "Suppliers",
-    color: "bg-amber-600"
-  },
-  'safety-stock': {
-    icon: <Shield className="w-5 h-5" />,
-    label: "Safety Stock",
-    color: "bg-pink-600"
-  },
-  kpis: {
-    icon: <Target className="w-5 h-5" />,
-    label: "KPIs",
-    color: "bg-teal-600"
+  'deep-dive': {
+    icon: <Microscope className="w-5 h-5" />,
+    label: "Deep Dive",
+    color: "bg-indigo-600"
   }
 }
 
 export default function ForecastingPage() {
-  // Tab order (persisted to localStorage, but always includes all tabs)
-  const [tabOrder, setTabOrder] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('forecastingTabOrder')
-      if (saved) {
-        try {
-          const savedOrder = JSON.parse(saved)
-          // Ensure all tabs are present - add any missing tabs at the end
-          const missingTabs = ALL_TABS.filter(tab => !savedOrder.includes(tab))
-          // Remove any tabs that no longer exist
-          const validTabs = savedOrder.filter((tab: string) => ALL_TABS.includes(tab as TabId))
-          return [...validTabs, ...missingTabs]
-        } catch {}
-      }
-    }
-    return [...ALL_TABS]
-  })
-
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('forecastingActiveTab')
@@ -112,7 +57,7 @@ export default function ForecastingPage() {
         return saved as TabId
       }
     }
-    return 'trends'
+    return 'purchasing'
   })
 
   // Core data state
@@ -123,9 +68,6 @@ export default function ForecastingPage() {
   const [settings, setSettings] = useState<ForecastSettings>(DEFAULT_SETTINGS)
   const [showSettings, setShowSettings] = useState(false)
 
-  // Drag and drop state
-  const [draggedTab, setDraggedTab] = useState<string | null>(null)
-
   // Filters (used by purchasing tab)
   const [selectedSupplier, setSelectedSupplier] = useState<number | 'all'>('all')
   const [filter, setFilter] = useState<'all' | 'critical' | 'high' | 'medium'>('all')
@@ -134,45 +76,12 @@ export default function ForecastingPage() {
   // Selection for batch actions (Purchasing tab)
   const [purchaseSelectedSkus, setPurchaseSelectedSkus] = useState<Set<string>>(new Set())
 
-  // Trend view state (multi-select for Trends tab)
-  const [trendSelectedSkus, setTrendSelectedSkus] = useState<string[]>([])
-
-  // Persist tab order to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('forecastingTabOrder', JSON.stringify(tabOrder))
-    }
-  }, [tabOrder])
-
   // Persist active tab to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('forecastingActiveTab', activeTab)
     }
   }, [activeTab])
-
-  // Drag and drop handlers
-  const handleDragStart = (tabId: string) => {
-    setDraggedTab(tabId)
-  }
-
-  const handleDragOver = (e: React.DragEvent, tabId: string) => {
-    e.preventDefault()
-    if (!draggedTab || draggedTab === tabId) return
-
-    const newOrder = [...tabOrder]
-    const draggedIndex = newOrder.indexOf(draggedTab)
-    const targetIndex = newOrder.indexOf(tabId)
-
-    newOrder.splice(draggedIndex, 1)
-    newOrder.splice(targetIndex, 0, draggedTab)
-
-    setTabOrder(newOrder)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedTab(null)
-  }
 
   // Fetch data on mount
   useEffect(() => {
@@ -228,9 +137,9 @@ export default function ForecastingPage() {
       )
     }
 
-    const urgencyOrder = { critical: 0, high: 1, medium: 2, low: 3, ok: 4 }
+    const urgencyOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, ok: 4 }
     filtered.sort((a, b) => {
-      if (sortBy === 'urgency') return urgencyOrder[a.urgency] - urgencyOrder[b.urgency]
+      if (sortBy === 'urgency') return (urgencyOrder[a.urgency] || 4) - (urgencyOrder[b.urgency] || 4)
       if (sortBy === 'daysOfSupply') return a.totalDaysOfSupply - b.totalDaysOfSupply
       return (b.recommendedOrderQty * b.cost) - (a.recommendedOrderQty * a.cost)
     })
@@ -292,12 +201,6 @@ export default function ForecastingPage() {
     }
   }
 
-  // Handler: navigate to trends tab with SKU selected
-  const viewSkuTrend = (sku: string) => {
-    setTrendSelectedSkus([sku])
-    setActiveTab('trends')
-  }
-
   // Handler: hide product from forecasting
   const hideProduct = async (sku: string) => {
     try {
@@ -312,6 +215,34 @@ export default function ForecastingPage() {
       }
     } catch (error) {
       console.error('Failed to hide product:', error)
+    }
+  }
+
+  // Handler: flag a spike from push readiness
+  const handleFlagSpike = async (sku: string, multiplier: number, durationDays: number) => {
+    const startDate = new Date()
+    const endDate = new Date()
+    endDate.setDate(endDate.getDate() + durationDays)
+
+    try {
+      const response = await fetch('/api/forecasting/manual-spikes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          masterSku: sku,
+          spikeType: 'marketing',
+          liftMultiplier: multiplier,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          notes: `Flagged from Push Readiness check - ${multiplier}x for ${durationDays} days`,
+        }),
+      })
+
+      if (response.ok) {
+        alert('Spike flagged successfully!')
+      }
+    } catch (error) {
+      console.error('Failed to flag spike:', error)
     }
   }
 
@@ -342,8 +273,8 @@ export default function ForecastingPage() {
     switch (tabId) {
       case 'purchasing':
         return items.filter(i => i.urgency === 'critical' || i.urgency === 'high').length
-      case 'stockouts':
-        return stockouts.filter(s => !s.resolved).length
+      case 'fba':
+        return items.filter(i => i.fbaDaysOfSupply < 14 && i.warehouseAvailable > 0).length
       default:
         return undefined
     }
@@ -367,7 +298,7 @@ export default function ForecastingPage() {
           <div>
             <h1 className="text-2xl font-bold text-[var(--foreground)] flex items-center gap-2">
               <Brain className="w-7 h-7 text-cyan-500" />
-              Smart Inventory Forecasting
+              Inventory Forecasting
             </h1>
             <p className="text-gray-400 mt-1">AI-powered predictions based on your sales history</p>
           </div>
@@ -389,53 +320,35 @@ export default function ForecastingPage() {
           </div>
         </div>
 
+        {/* Dashboard Header with 3 Key Metrics */}
+        <DashboardHeader items={items} fbaTargetDays={settings.fbaTargetDays} />
+
         {/* Settings Panel */}
         {showSettings && (
           <SettingsPanel settings={settings} setSettings={setSettings} onClose={() => setShowSettings(false)} />
         )}
 
         {/* Tabs */}
-        <div className="flex gap-2 border-b border-[var(--border)] pb-4 overflow-x-auto">
-          {tabOrder.map((tabId) => {
-            const config = TAB_CONFIG[tabId as TabId]
+        <div className="flex gap-2 border-b border-[var(--border)] pb-4">
+          {ALL_TABS.map((tabId) => {
+            const config = TAB_CONFIG[tabId]
             if (!config) return null
 
             return (
-              <div
+              <TabButton
                 key={tabId}
-                draggable
-                onDragStart={() => handleDragStart(tabId)}
-                onDragOver={(e) => handleDragOver(e, tabId)}
-                onDragEnd={handleDragEnd}
-                className={`flex items-center group cursor-grab active:cursor-grabbing transition-opacity ${draggedTab === tabId ? 'opacity-50' : ''}`}
-              >
-                <GripVertical className="w-4 h-4 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity mr-1" />
-                <TabButton
-                  active={activeTab === tabId}
-                  onClick={() => setActiveTab(tabId as TabId)}
-                  icon={config.icon}
-                  label={config.label}
-                  count={getTabBadgeCount(tabId as TabId)}
-                  color={config.color}
-                />
-              </div>
+                active={activeTab === tabId}
+                onClick={() => setActiveTab(tabId)}
+                icon={config.icon}
+                label={config.label}
+                count={getTabBadgeCount(tabId)}
+                color={config.color}
+              />
             )
           })}
-          <div className="ml-auto flex items-center gap-1 text-xs text-slate-600">
-            <GripVertical className="w-3 h-3" />
-            <span>Drag to reorder</span>
-          </div>
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'trends' && (
-          <TrendsTab
-            items={items}
-            selectedSkus={trendSelectedSkus}
-            setSelectedSkus={setTrendSelectedSkus}
-          />
-        )}
-
         {activeTab === 'purchasing' && (
           <PurchasingTab
             items={filteredItems}
@@ -455,7 +368,7 @@ export default function ForecastingPage() {
             getUrgencyColor={getUrgencyColor}
             formatCurrency={formatCurrency}
             formatPercent={formatPercent}
-            viewSkuTrend={viewSkuTrend}
+            viewSkuTrend={() => {}}
             onHideProduct={hideProduct}
           />
         )}
@@ -470,32 +383,20 @@ export default function ForecastingPage() {
           />
         )}
 
-        {activeTab === 'stockouts' && (
-          <StockoutsTab stockouts={stockouts} onRefresh={fetchData} />
+        {activeTab === 'push-readiness' && (
+          <PushReadinessTab
+            items={items}
+            settings={settings}
+            onFlagSpike={handleFlagSpike}
+          />
         )}
 
-        {activeTab === 'ai-engine' && (
-          <ModelBreakdown />
-        )}
-
-        {activeTab === 'alerts' && (
-          <AlertCenter />
-        )}
-
-        {activeTab === 'seasonality' && (
-          <SeasonalityManager />
-        )}
-
-        {activeTab === 'suppliers' && (
-          <SupplierScorecard />
-        )}
-
-        {activeTab === 'safety-stock' && (
-          <SafetyStockView />
-        )}
-
-        {activeTab === 'kpis' && (
-          <KPIDashboard />
+        {activeTab === 'deep-dive' && (
+          <DeepDiveTab
+            items={items}
+            settings={settings}
+            onRefresh={fetchData}
+          />
         )}
       </div>
     </MainLayout>

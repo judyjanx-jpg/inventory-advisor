@@ -6,7 +6,12 @@ export { default as SafetyStockView } from './SafetyStockView'
 export { default as KPIDashboard } from './KPIDashboard'
 export { default as TabButton } from './TabButton'
 export { default as SettingsPanel } from './SettingsPanel'
+export { default as DashboardHeader } from './DashboardHeader'
+
+// Tab components
 export { default as TrendsTab } from './tabs/TrendsTab'
 export { default as PurchasingTab } from './tabs/PurchasingTab'
 export { default as FbaTab } from './tabs/FbaTab'
 export { default as StockoutsTab } from './tabs/StockoutsTab'
+export { default as PushReadinessTab } from './tabs/PushReadinessTab'
+export { default as DeepDiveTab } from './tabs/DeepDiveTab'
