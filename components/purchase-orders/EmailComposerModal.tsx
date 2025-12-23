@@ -134,8 +134,12 @@ export default function EmailComposerModal({ isOpen, onClose, po, onSend }: Emai
     if (onSend) {
       onSend(emailData)
     } else {
-      // Fallback: open email client
-      const mailtoLink = `mailto:${to}${cc ? `?cc=${cc}` : ''}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(resolveTemplate(body))}`
+      // Fallback: open email client (encode all user-controlled values)
+      const params = new URLSearchParams()
+      if (cc) params.set('cc', cc)
+      params.set('subject', subject)
+      params.set('body', resolveTemplate(body))
+      const mailtoLink = `mailto:${encodeURIComponent(to)}?${params.toString()}`
       window.location.href = mailtoLink
     }
 
