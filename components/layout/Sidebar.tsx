@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, createContext, useContext } from 'react'
+import { useState, useEffect, useRef, createContext, useContext, ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -47,6 +47,41 @@ const SidebarContext = createContext<{
 
 export const useSidebar = () => useContext(SidebarContext)
 
+// Provider component that wraps the entire layout
+export function SidebarProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname()
+  
+  // Collapsed state with localStorage persistence
+  const [collapsed, setCollapsedState] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebar-collapsed')
+      return saved === 'true'
+    }
+    return false
+  })
+
+  // Mobile sidebar open state
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  const setCollapsed = (value: boolean) => {
+    setCollapsedState(value)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebar-collapsed', String(value))
+    }
+  }
+
+  // Close mobile sidebar when route changes
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
+
+  return (
+    <SidebarContext.Provider value={{ collapsed, setCollapsed, mobileOpen, setMobileOpen }}>
+      {children}
+    </SidebarContext.Provider>
+  )
+}
+
 // Public routes where sidebar should not appear
 const PUBLIC_ROUTES = ['/support', '/portal', '/warranty', '/faq', '/track', '/time-clock']
 
@@ -72,6 +107,7 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, toggleTheme } = useTheme()
+  const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebar()
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -89,30 +125,6 @@ export default function Sidebar() {
       setLoggingOut(false)
     }
   }
-  
-  // Collapsed state with localStorage persistence
-  const [collapsed, setCollapsedState] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sidebar-collapsed')
-      return saved === 'true'
-    }
-    return false
-  })
-
-  // Mobile sidebar open state
-  const [mobileOpen, setMobileOpen] = useState(false)
-
-  const setCollapsed = (value: boolean) => {
-    setCollapsedState(value)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sidebar-collapsed', String(value))
-    }
-  }
-
-  // Close mobile sidebar when route changes
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [pathname])
 
   // Don't render sidebar on public routes
   const isPublicRoute = PUBLIC_ROUTES.some(route => pathname?.startsWith(route))
@@ -231,7 +243,7 @@ export default function Sidebar() {
   }
 
   return (
-    <SidebarContext.Provider value={{ collapsed, setCollapsed, mobileOpen, setMobileOpen }}>
+    <>
       {/* Mobile Overlay Backdrop */}
       {mobileOpen && (
         <div
@@ -462,6 +474,6 @@ export default function Sidebar() {
         )}
       </div>
       </div>
-    </SidebarContext.Provider>
+    </>
   )
 }

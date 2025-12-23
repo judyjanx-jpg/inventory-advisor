@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import Sidebar, { useSidebar } from './Sidebar'
+import Sidebar, { useSidebar, SidebarProvider } from './Sidebar'
 import { useSyncContext } from '@/components/sync/SyncProvider'
 import FloatingOrb from '@/components/floating-ai/FloatingOrb'
 import { Menu } from 'lucide-react'
@@ -60,12 +60,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div className="flex min-h-screen bg-[var(--background)]">
-      <Sidebar />
-      <MainContent>
-        {children}
-      </MainContent>
-      <FloatingOrb />
-    </div>
+    <SidebarProvider>
+      <div className="flex min-h-screen bg-[var(--background)]">
+        <Sidebar />
+        <MainContent>
+          {children}
+        </MainContent>
+        <FloatingOrb />
+      </div>
+    </SidebarProvider>
   )
 }

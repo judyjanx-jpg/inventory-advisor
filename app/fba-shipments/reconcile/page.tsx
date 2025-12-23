@@ -235,13 +235,13 @@ export default function FbaReconcilePage() {
       case 'deducted':
         return <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Deducted</span>
       default:
-        return <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">{status}</span>
+        return <span className="px-2 py-1 text-xs rounded-full bg-[var(--muted)] text-[var(--foreground)]">{status}</span>
     }
   }
 
   const getShipmentStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      'working': 'bg-gray-100 text-gray-800',
+      'working': 'bg-[var(--muted)] text-[var(--foreground)]',
       'shipped': 'bg-blue-100 text-blue-800',
       'in_transit': 'bg-purple-100 text-purple-800',
       'receiving': 'bg-yellow-100 text-yellow-800',
@@ -250,7 +250,7 @@ export default function FbaReconcilePage() {
       'delivered': 'bg-green-100 text-green-800',
     }
     return (
-      <span className={`px-2 py-1 text-xs rounded-full ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+      <span className={`px-2 py-1 text-xs rounded-full ${colors[status] || 'bg-[var(--muted)] text-[var(--foreground)]'}`}>
         {status.replace('_', ' ')}
       </span>
     )
@@ -262,8 +262,8 @@ export default function FbaReconcilePage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">FBA Shipment Reconciliation</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-2xl font-bold text-[var(--foreground)]">FBA Shipment Reconciliation</h1>
+            <p className="text-[var(--muted-foreground)] mt-1">
               Review and reconcile FBA shipments - either deduct from warehouse or accept as-is
             </p>
           </div>
@@ -308,7 +308,7 @@ export default function FbaReconcilePage() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Pending</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">Pending</p>
                     <p className="text-2xl font-bold text-yellow-600">{data.summary.pending}</p>
                   </div>
                   <Clock className="w-8 h-8 text-yellow-500" />
@@ -323,7 +323,7 @@ export default function FbaReconcilePage() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Accepted</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">Accepted</p>
                     <p className="text-2xl font-bold text-blue-600">{data.summary.accepted}</p>
                   </div>
                   <Check className="w-8 h-8 text-blue-500" />
@@ -338,7 +338,7 @@ export default function FbaReconcilePage() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Deducted</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">Deducted</p>
                     <p className="text-2xl font-bold text-green-600">{data.summary.deducted}</p>
                   </div>
                   <Warehouse className="w-8 h-8 text-green-500" />
@@ -353,12 +353,12 @@ export default function FbaReconcilePage() {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
-                <Warehouse className="w-5 h-5 text-gray-500" />
-                <label className="text-sm font-medium text-gray-700">Deduct from warehouse:</label>
+                <Warehouse className="w-5 h-5 text-[var(--muted-foreground)]" />
+                <label className="text-sm font-medium text-[var(--foreground)]">Deduct from warehouse:</label>
                 <select
                   value={selectedWarehouse || ''}
                   onChange={(e) => setSelectedWarehouse(e.target.value ? parseInt(e.target.value) : null)}
-                  className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                  className="rounded-md border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
                 >
                   {data.warehouses.map((wh) => (
                     <option key={wh.id} value={wh.id}>
@@ -377,7 +377,7 @@ export default function FbaReconcilePage() {
             <CardTitle className="flex items-center gap-2">
               <Package className="w-5 h-5" />
               FBA Shipments
-              <span className="text-sm font-normal text-gray-500">
+              <span className="text-sm font-normal text-[var(--muted-foreground)]">
                 ({statusFilter === 'all' ? 'All' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)})
               </span>
             </CardTitle>
@@ -388,12 +388,12 @@ export default function FbaReconcilePage() {
           <CardContent>
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
-                <span className="ml-2 text-gray-500">Loading shipments...</span>
+                <RefreshCw className="w-6 h-6 animate-spin text-[var(--muted-foreground)]" />
+                <span className="ml-2 text-[var(--muted-foreground)]">Loading shipments...</span>
               </div>
             ) : !data?.shipments || data.shipments.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <Package className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+              <div className="text-center py-12 text-[var(--muted-foreground)]">
+                <Package className="w-12 h-12 mx-auto text-[var(--muted-foreground)] opacity-50 mb-4" />
                 <p>No {statusFilter === 'all' ? '' : statusFilter} shipments found</p>
                 <p className="text-sm mt-2">Click "Sync from Amazon" to pull FBA shipments</p>
               </div>
@@ -411,9 +411,9 @@ export default function FbaReconcilePage() {
                     >
                       <div className="flex items-center gap-4">
                         {expandedShipments.has(shipment.id) ? (
-                          <ChevronUp className="w-5 h-5 text-gray-400" />
+                          <ChevronUp className="w-5 h-5 text-[var(--muted-foreground)]" />
                         ) : (
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                          <ChevronDown className="w-5 h-5 text-[var(--muted-foreground)]" />
                         )}
                         <div>
                           <div className="flex items-center gap-2">
@@ -421,7 +421,7 @@ export default function FbaReconcilePage() {
                             {getStatusBadge(shipment.reconciliationStatus)}
                             {getShipmentStatusBadge(shipment.status)}
                           </div>
-                          <div className="text-sm text-gray-500 mt-1">
+                          <div className="text-sm text-[var(--muted-foreground)] mt-1">
                             {shipment.destinationFc && <span>FC: {shipment.destinationFc}</span>}
                             {shipment.destinationName && <span className="ml-2">• {shipment.destinationName}</span>}
                             <span className="ml-2">• {new Date(shipment.createdDate).toLocaleDateString()}</span>
@@ -432,7 +432,7 @@ export default function FbaReconcilePage() {
                       <div className="flex items-center gap-4">
                         <div className="text-right">
                           <div className="text-sm font-medium">{shipment.totalUnits} units</div>
-                          <div className="text-xs text-gray-500">{shipment.items.length} SKUs</div>
+                          <div className="text-xs text-[var(--muted-foreground)]">{shipment.items.length} SKUs</div>
                         </div>
 
                         {shipment.reconciliationStatus === 'pending' ? (
@@ -493,18 +493,18 @@ export default function FbaReconcilePage() {
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50">
                             <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Shipped</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Received</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Discrepancy</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase">SKU</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase">Product</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase">Shipped</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase">Received</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase">Discrepancy</th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {shipment.items.map((item) => (
                               <tr key={item.id}>
                                 <td className="px-4 py-2 text-sm font-mono">{item.masterSku}</td>
-                                <td className="px-4 py-2 text-sm text-gray-600 max-w-xs truncate">{item.productName}</td>
+                                <td className="px-4 py-2 text-sm text-[var(--muted-foreground)] max-w-xs truncate">{item.productName}</td>
                                 <td className="px-4 py-2 text-sm text-right">{item.quantityShipped}</td>
                                 <td className="px-4 py-2 text-sm text-right">{item.quantityReceived}</td>
                                 <td className="px-4 py-2 text-sm text-right">
@@ -521,7 +521,7 @@ export default function FbaReconcilePage() {
 
                         {/* Reconciliation Details */}
                         {shipment.reconciledAt && (
-                          <div className="px-4 py-3 bg-gray-50 border-t text-sm text-gray-600">
+                          <div className="px-4 py-3 bg-[var(--muted)] border-t border-[var(--border)] text-sm text-[var(--muted-foreground)]">
                             <span>Reconciled on {new Date(shipment.reconciledAt).toLocaleString()}</span>
                             {shipment.reconciledBy && <span className="ml-2">by {shipment.reconciledBy}</span>}
                             {shipment.reconciliationNotes && (
