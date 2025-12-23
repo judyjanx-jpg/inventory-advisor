@@ -398,7 +398,26 @@ export async function getReportStatusV3(reportId: string, profileId: string): Pr
 
 // Download report (returns gzipped JSON)
 export async function downloadReport(location: string): Promise<any[]> {
-  const response = await fetch(location)
+  // Validate that the report URL points to an expected Amazon domain over HTTPS.
+  // This prevents misuse of this helper as a generic URL fetcher (SSRF risk).
+  let url: URL
+  try {
+    url = new URL(location)
+  } catch {
+    throw new Error('Failed to download report: invalid report URL')
+  }
+
+  // Only allow HTTPS and Amazon-owned domains
+  const isAmazonDomain =
+    url.hostname.endsWith('.amazon.com') ||
+    url.hostname.endsWith('.amazonaws.com') ||
+    url.hostname.endsWith('.cloudfront.net')
+
+  if (url.protocol !== 'https:' || !isAmazonDomain) {
+    throw new Error('Failed to download report: untrusted report URL host')
+  }
+
+  const response = await fetch(url.toString())
 
   if (!response.ok) {
     throw new Error(`Failed to download report: ${response.status}`)
