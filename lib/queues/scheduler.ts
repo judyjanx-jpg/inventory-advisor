@@ -20,6 +20,7 @@ import {
   aggregationQueue,
   adsReportsQueue,
   alertsQueue,
+  fbaShipmentsQueue,
   queueMap,
 } from './index'
 
@@ -98,6 +99,14 @@ const schedules: ScheduleConfig[] = [
     description: 'Generate inventory alerts from forecast data',
     enabled: true,
   },
+  {
+    queue: fbaShipmentsQueue,
+    name: 'fba-shipments-sync',
+    cron: '0 */6 * * *',    // Every 6 hours
+    description: 'Sync FBA inbound shipments from Amazon for reconciliation',
+    enabled: true,
+    data: { daysBack: 90 }, // Look back 90 days for shipments
+  },
 ]
 
 /**
@@ -163,6 +172,7 @@ export async function triggerSync(syncType: string, data?: any) {
     aggregation: 'daily-aggregation',
     'ads-reports': 'ads-reports-sync',
     alerts: 'alerts-generation',
+    'fba-shipments': 'fba-shipments-sync',
   }
 
   const jobName = jobNameMap[syncType] || `${syncType}-sync`

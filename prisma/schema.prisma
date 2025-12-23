@@ -1027,6 +1027,14 @@ model FbaShipment {
   unitsDiscrepancy    Int     @default(0) @map("units_discrepancy")
   reimbursementStatus String? @map("reimbursement_status")
 
+  // Inventory Reconciliation
+  reconciliationStatus       String    @default("pending") @map("reconciliation_status") // pending, accepted, deducted
+  reconciledAt               DateTime? @map("reconciled_at")
+  reconciledBy               String?   @map("reconciled_by")
+  deductedFromWarehouseId    Int?      @map("deducted_from_warehouse_id")
+  inventoryDeducted          Boolean   @default(false) @map("inventory_deducted")
+  reconciliationNotes        String?   @map("reconciliation_notes") @db.Text
+
   // Relations
   items FbaShipmentItem[]
   boxes FbaShipmentBox[]
