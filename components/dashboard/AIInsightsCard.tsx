@@ -53,12 +53,8 @@ export default function AIInsightsCard() {
       }
       
       const data: InsightsResponse = await res.json()
-      console.log('🔍 Insights API response:', data) // Temporary debug logging
-      
+
       if (data.success) {
-        console.log(`✅ Setting insights: ${data.insights?.length || 0} items`)
-        console.log('📦 Full insights array:', JSON.stringify(data.insights, null, 2))
-        console.log('🔍 First insight:', data.insights?.[0])
         setInsights(data.insights || [])
         setTotalInsights(data.total || 0)
       } else {
@@ -101,9 +97,6 @@ export default function AIInsightsCard() {
     )
   }
 
-  console.log('🎨 Rendering component. Loading:', loading, 'Insights count:', insights.length)
-  console.log('📋 Insights data:', insights)
-
   if (insights.length === 0) {
     return (
       <div className="h-full flex flex-col bg-[var(--card)]">
@@ -133,10 +126,9 @@ export default function AIInsightsCard() {
           AI Insights
         </h3>
       </div>
-      <div className="flex-1 px-6 py-4 overflow-y-auto min-h-0">
+      <div className="flex-1 px-6 py-4 overflow-y-auto">
         <div className="space-y-2">
           {insights.map((insight, index) => {
-            console.log(`🎯 Rendering insight ${index}:`, insight)
             const emoji = PRIORITY_EMOJIS[insight.type]
             const isClickable = !!(insight.sku || insight.poNumber || insight.shipmentId)
 
