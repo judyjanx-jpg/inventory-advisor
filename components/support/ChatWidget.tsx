@@ -182,14 +182,20 @@ export default function ChatWidget({ orderContext }: ChatWidgetProps) {
     const trimmed = url.trim()
     if (!trimmed) return null
 
-    // Allow relative URLs (starting with /, ./, ../, or #)
-    if (/^([/#]|\.{1,2}\/)/.test(trimmed)) {
+    // Allow relative URLs (starting with /, ./, ../) and fragment-only URLs (#...)
+    if (/^(\/|\.{1,2}\/|#)/.test(trimmed)) {
       return trimmed
     }
 
-    // Allow only http and https schemes for absolute URLs
-    if (/^https?:\/\//i.test(trimmed)) {
-      return trimmed
+    // For absolute URLs, use the URL parser and only allow http/https
+    try {
+      const parsed = new URL(trimmed)
+      const protocol = parsed.protocol.toLowerCase()
+      if (protocol === 'http:' || protocol === 'https:') {
+        return parsed.href
+      }
+    } catch {
+      // If the URL constructor throws, treat as unsafe
     }
 
     // Block all other schemes (javascript:, data:, etc.)
