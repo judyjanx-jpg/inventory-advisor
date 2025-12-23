@@ -30,13 +30,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate email if provided
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (customerEmail && !emailRegex.test(customerEmail)) {
-      return NextResponse.json(
-        { error: 'Please provide a valid email address' },
-        { status: 400 }
-      )
+    // Validate email if provided (using indexOf to avoid ReDoS)
+    if (customerEmail) {
+      const email = String(customerEmail)
+      const atIndex = email.indexOf('@')
+      const hasValidAt = atIndex > 0 && atIndex === email.lastIndexOf('@')
+      const dotIndex = email.indexOf('.', atIndex)
+      const hasValidDot = dotIndex > atIndex + 1 && dotIndex < email.length - 1
+      const hasNoSpaces = !email.includes(' ')
+
+      if (!hasValidAt || !hasValidDot || !hasNoSpaces) {
+        return NextResponse.json(
+          { error: 'Please provide a valid email address' },
+          { status: 400 }
+        )
+      }
     }
 
     // Verify order exists
