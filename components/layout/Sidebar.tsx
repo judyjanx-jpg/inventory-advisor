@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, createContext, useContext } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -28,6 +28,7 @@ import {
   ChevronRight,
   X,
   UserCheck,
+  LogOut,
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -69,10 +70,25 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { theme, toggleTheme } = useTheme()
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      router.push('/login')
+      router.refresh()
+    } catch (error) {
+      console.error('Logout error:', error)
+      setLoggingOut(false)
+    }
+  }
   
   // Collapsed state with localStorage persistence
   const [collapsed, setCollapsedState] = useState(() => {
@@ -403,7 +419,14 @@ export default function Sidebar() {
                 <Moon className="w-4 h-4" />
               )}
             </button>
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="p-2 rounded-lg hover:bg-red-500/10 text-[var(--muted-foreground)] hover:text-red-400 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         ) : (
           <div className="flex items-center gap-3">
@@ -426,7 +449,15 @@ export default function Sidebar() {
                 <Moon className="w-4 h-4" />
               )}
             </button>
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+            {/* Logout Button */}
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="p-2 rounded-lg hover:bg-red-500/10 text-[var(--muted-foreground)] hover:text-red-400 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         )}
       </div>
