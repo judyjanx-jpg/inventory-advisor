@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react'
 import {
   TrendingUp, TrendingDown, ChevronDown, ChevronUp,
-  Filter, Download, Plus, Package, EyeOff
+  Filter, Download, Plus, Package, EyeOff, Search, X
 } from 'lucide-react'
 import {
   ForecastItem, Supplier, ForecastSettings, PurchasingSortColumn
@@ -14,6 +14,7 @@ interface PurchasingTabProps {
   selectedSkus: Set<string>
   toggleSelection: (sku: string) => void
   selectAll: () => void
+  clearSelection?: () => void
   createPurchaseOrder: () => void
   suppliers: Supplier[]
   selectedSupplier: number | 'all'
@@ -29,24 +30,36 @@ interface PurchasingTabProps {
   formatPercent: (value: number) => string
   viewSkuTrend: (sku: string) => void
   onHideProduct: (sku: string) => void
+  onBulkHideProducts?: (skus: string[]) => void
 }
 
 export default function PurchasingTab({
-  items, selectedSkus, toggleSelection, selectAll, createPurchaseOrder,
+  items, selectedSkus, toggleSelection, selectAll, clearSelection, createPurchaseOrder,
   suppliers, selectedSupplier, setSelectedSupplier, filter, setFilter,
   sortBy, setSortBy, settings, applyRounding, getUrgencyColor,
-  formatCurrency, formatPercent, viewSkuTrend, onHideProduct,
+  formatCurrency, formatPercent, viewSkuTrend, onHideProduct, onBulkHideProducts,
 }: PurchasingTabProps) {
   const [expandedSku, setExpandedSku] = useState<string | null>(null)
   const [sortColumn, setSortColumn] = useState<PurchasingSortColumn>('orderByDate')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [skuSearch, setSkuSearch] = useState('')
 
   const totalValue = items.reduce((sum: number, i: ForecastItem) =>
     sum + (applyRounding(i.recommendedOrderQty) * i.cost), 0)
 
+  // Filter items by SKU search
+  const filteredItems = useMemo(() => {
+    if (!skuSearch.trim()) return items
+    const searchLower = skuSearch.toLowerCase().trim()
+    return items.filter(item => 
+      item.sku.toLowerCase().includes(searchLower) ||
+      (item.displayName || item.title || '').toLowerCase().includes(searchLower)
+    )
+  }, [items, skuSearch])
+
   // Sort items based on current sort column and direction
   const sortedItems = useMemo(() => {
-    const sorted = [...items].sort((a: ForecastItem, b: ForecastItem) => {
+    const sorted = [...filteredItems].sort((a: ForecastItem, b: ForecastItem) => {
       let comparison = 0
 
       switch (sortColumn) {
@@ -76,7 +89,20 @@ export default function PurchasingTab({
       return sortDirection === 'asc' ? comparison : -comparison
     })
     return sorted
-  }, [items, sortColumn, sortDirection])
+  }, [filteredItems, sortColumn, sortDirection])
+
+  // Handle bulk hide
+  const handleBulkHide = () => {
+    if (selectedSkus.size === 0) return
+    const skusToHide = Array.from(selectedSkus)
+    if (onBulkHideProducts) {
+      onBulkHideProducts(skusToHide)
+    } else {
+      // Fallback: hide one by one
+      skusToHide.forEach(sku => onHideProduct(sku))
+    }
+    clearSelection?.()
+  }
 
   const handleSort = (column: PurchasingSortColumn) => {
     if (sortColumn === column) {
@@ -105,6 +131,26 @@ export default function PurchasingTab({
     <div className="space-y-3">
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
+        {/* SKU Search */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={skuSearch}
+            onChange={(e) => setSkuSearch(e.target.value)}
+            placeholder="Search SKU..."
+            className="bg-[var(--card)] border border-[var(--border)] rounded pl-8 pr-8 py-1.5 text-sm text-[var(--foreground)] w-48 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
+          />
+          {skuSearch && (
+            <button
+              onClick={() => setSkuSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-[var(--secondary)] rounded"
+            >
+              <X className="w-3.5 h-3.5 text-gray-400" />
+            </button>
+          )}
+        </div>
+
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-gray-400" />
           <select
@@ -128,11 +174,21 @@ export default function PurchasingTab({
 
         <div className="flex-1" />
 
+        {/* Bulk Actions when items selected */}
         {selectedSkus.size > 0 && (
-          <button onClick={createPurchaseOrder} className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 rounded text-sm">
-            <Plus className="w-4 h-4" />
-            Create PO ({selectedSkus.size})
-          </button>
+          <>
+            <button 
+              onClick={handleBulkHide} 
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-sm border border-red-600/30"
+            >
+              <EyeOff className="w-4 h-4" />
+              Hide ({selectedSkus.size})
+            </button>
+            <button onClick={createPurchaseOrder} className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 rounded text-sm">
+              <Plus className="w-4 h-4" />
+              Create PO ({selectedSkus.size})
+            </button>
+          </>
         )}
 
         <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--card)] hover:bg-[var(--secondary)] rounded border border-[var(--border)] text-sm">
@@ -363,7 +419,12 @@ export default function PurchasingTab({
           {/* Summary Footer */}
           <div className="px-3 py-2 bg-[var(--background)] border-t border-[var(--border)] flex items-center justify-between text-xs">
             <span className="text-gray-400">
-              {sortedItems.length} items{selectedSkus.size > 0 && <span className="text-cyan-400 ml-2">({selectedSkus.size} selected)</span>}
+              {skuSearch ? (
+                <>{sortedItems.length} of {items.length} items</>
+              ) : (
+                <>{sortedItems.length} items</>
+              )}
+              {selectedSkus.size > 0 && <span className="text-cyan-400 ml-2">({selectedSkus.size} selected)</span>}
             </span>
             <span className="text-gray-400">
               Total: <span className="text-[var(--foreground)] font-medium">{formatCurrency(sortedItems.reduce((sum: number, i: ForecastItem) => sum + (applyRounding(i.recommendedOrderQty) * i.cost), 0))}</span>

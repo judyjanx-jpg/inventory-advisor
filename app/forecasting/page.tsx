@@ -218,6 +218,33 @@ export default function ForecastingPage() {
     }
   }
 
+  // Handler: bulk hide multiple products
+  const bulkHideProducts = async (skus: string[]) => {
+    if (skus.length === 0) return
+    
+    try {
+      // Hide all products in parallel
+      await Promise.all(skus.map(sku => 
+        fetch('/api/products/hide', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sku, hidden: true })
+        })
+      ))
+      
+      // Remove from local state
+      setItems(prev => prev.filter(i => !skus.includes(i.sku)))
+      setPurchaseSelectedSkus(new Set())
+    } catch (error) {
+      console.error('Failed to bulk hide products:', error)
+    }
+  }
+
+  // Handler: clear purchase selection
+  const clearPurchaseSelection = () => {
+    setPurchaseSelectedSkus(new Set())
+  }
+
   // Handler: flag a spike from push readiness
   const handleFlagSpike = async (sku: string, multiplier: number, durationDays: number) => {
     const startDate = new Date()
@@ -355,6 +382,7 @@ export default function ForecastingPage() {
             selectedSkus={purchaseSelectedSkus}
             toggleSelection={togglePurchaseSelection}
             selectAll={selectAllPurchase}
+            clearSelection={clearPurchaseSelection}
             createPurchaseOrder={createPurchaseOrder}
             suppliers={suppliers}
             selectedSupplier={selectedSupplier}
@@ -370,6 +398,7 @@ export default function ForecastingPage() {
             formatPercent={formatPercent}
             viewSkuTrend={() => {}}
             onHideProduct={hideProduct}
+            onBulkHideProducts={bulkHideProducts}
           />
         )}
 
