@@ -1145,8 +1145,12 @@ export default function PurchaseOrderDetailPage() {
         onSend={async (emailData) => {
           // TODO: Send email via API
           console.log('Send email:', emailData)
-          // For now, open mailto link
-          const mailtoLink = `mailto:${emailData.to}${emailData.cc ? `?cc=${emailData.cc}` : ''}&subject=${encodeURIComponent(emailData.subject)}&body=${encodeURIComponent(emailData.body)}`
+          // For now, open mailto link (encode all user-controlled values)
+          const params = new URLSearchParams()
+          if (emailData.cc) params.set('cc', emailData.cc)
+          params.set('subject', emailData.subject)
+          params.set('body', emailData.body)
+          const mailtoLink = `mailto:${encodeURIComponent(emailData.to)}?${params.toString()}`
           window.location.href = mailtoLink
         }}
       />
