@@ -1566,11 +1566,10 @@ async function processAdsReportsSync(job: any) {
             }
           }
 
-          // After processing PRODUCT reports, aggregate data into advertising_daily
-          // (Campaign reports now directly update advertising_daily above)
-          if (report.reportType === 'SP_PRODUCTS') {
-            await aggregateAdsToDaily(startDateStr, endDateStr)
-          }
+          // NOTE: We no longer aggregate SP_PRODUCTS to advertising_daily here
+          // because SP_CAMPAIGNS reports already write the TOTAL campaign spend
+          // to advertising_daily (which includes non-product-attributed spend).
+          // Product-level spend is stored in ad_product_spend for per-SKU profit calcs.
 
           // Mark report as completed
           await prisma.adsPendingReport.update({
