@@ -591,17 +591,77 @@ export async function POST(
       const placementAlreadyConfirmed = shipment.amazonWorkflowStep === 'placement_confirmed' ||
                                          shipment.amazonWorkflowStep === 'transport_confirmed'
 
-      if (!placementAlreadyConfirmed) {
+      // Also check the actual placement option status from Amazon
+      let placementOptionStatus: string | null = null
+      try {
+        const { placementOptions } = await listPlacementOptions(inboundPlanId)
+        const selectedPlacement = placementOptions.find((p: any) => p.placementOptionId === placementOptionId)
+        placementOptionStatus = selectedPlacement?.status || null
+        
+        if (selectedPlacement && (selectedPlacement.status === 'CONFIRMED' || selectedPlacement.status === 'ACCEPTED')) {
+          console.log(`[${id}] Placement option ${placementOptionId} is already ${selectedPlacement.status} in Amazon`)
+          // Update database if not already set
+          if (!placementAlreadyConfirmed) {
+            await prisma.shipment.update({
+              where: { id },
+              data: {
+                amazonPlacementOptionId: placementOptionId,
+                amazonWorkflowStep: 'placement_confirmed',
+              },
+            })
+          }
+        }
+      } catch (listError: any) {
+        console.warn(`[${id}] Could not check placement option status:`, listError.message)
+      }
+
+      const isPlacementConfirmed = placementAlreadyConfirmed || 
+                                   placementOptionStatus === 'CONFIRMED' || 
+                                   placementOptionStatus === 'ACCEPTED'
+
+      if (!isPlacementConfirmed) {
         // Confirm the selected placement option
         console.log(`[${id}] Confirming placement option: ${placementOptionId}`)
-        const confirmResult = await confirmPlacementOption(inboundPlanId, placementOptionId)
-        const confirmStatus = await waitForOperation(await createSpApiClient(), confirmResult.operationId)
+        try {
+          const confirmResult = await confirmPlacementOption(inboundPlanId, placementOptionId)
+          const confirmStatus = await waitForOperation(await createSpApiClient(), confirmResult.operationId)
 
-        if (confirmStatus.operationStatus === 'FAILED') {
-          return NextResponse.json({
-            error: 'Failed to confirm placement option',
-            details: confirmStatus.operationProblems,
-          }, { status: 500 })
+          if (confirmStatus.operationStatus === 'FAILED') {
+            // Check if the error is because it's already confirmed
+            const errorMsg = confirmStatus.operationProblems?.map((p: any) => p.message).join(' ') || ''
+            if (errorMsg.includes('already confirmed') || errorMsg.includes('already confirmed')) {
+              console.log(`[${id}] Placement already confirmed (detected from error), updating database`)
+              await prisma.shipment.update({
+                where: { id },
+                data: {
+                  amazonPlacementOptionId: placementOptionId,
+                  amazonWorkflowStep: 'placement_confirmed',
+                },
+              })
+              // Continue with the workflow
+            } else {
+              return NextResponse.json({
+                error: 'Failed to confirm placement option',
+                details: confirmStatus.operationProblems,
+              }, { status: 500 })
+            }
+          }
+        } catch (confirmError: any) {
+          // Handle the case where confirmation fails because it's already confirmed
+          if (confirmError.message?.includes('already confirmed') || 
+              confirmError.message?.includes('Operation ConfirmPlacementOption cannot be processed')) {
+            console.log(`[${id}] Placement option already confirmed (caught from error), updating database`)
+            await prisma.shipment.update({
+              where: { id },
+              data: {
+                amazonPlacementOptionId: placementOptionId,
+                amazonWorkflowStep: 'placement_confirmed',
+              },
+            })
+            // Continue with the workflow
+          } else {
+            throw confirmError
+          }
         }
       } else {
         console.log(`[${id}] Placement already confirmed, skipping confirmation step`)
@@ -1325,25 +1385,53 @@ export async function POST(
         // Confirm placement (skip if already confirmed)
         let lastOperationId: string | null = null
 
-        if (!placementAlreadyConfirmed) {
-          const confirmResult = await confirmPlacementOption(
-            inboundPlanId,
-            optimalPlacement.placementOptionId
-          )
+        // Double-check placement option status from Amazon
+        const selectedPlacement = placementOptions.find(
+          (p: any) => p.placementOptionId === optimalPlacement.placementOptionId
+        )
+        const isPlacementConfirmed = placementAlreadyConfirmed || 
+                                     selectedPlacement?.status === 'CONFIRMED' || 
+                                     selectedPlacement?.status === 'ACCEPTED'
 
-          const confirmStatus = await waitForOperation(
-            await createSpApiClient(),
-            confirmResult.operationId
-          )
+        if (!isPlacementConfirmed) {
+          try {
+            const confirmResult = await confirmPlacementOption(
+              inboundPlanId,
+              optimalPlacement.placementOptionId
+            )
 
-          if (confirmStatus.operationStatus === 'FAILED') {
-            return NextResponse.json({
-              error: 'Failed to confirm placement option',
-              details: confirmStatus.operationProblems,
-            }, { status: 500 })
+            const confirmStatus = await waitForOperation(
+              await createSpApiClient(),
+              confirmResult.operationId
+            )
+
+            if (confirmStatus.operationStatus === 'FAILED') {
+              // Check if the error is because it's already confirmed
+              const errorMsg = confirmStatus.operationProblems?.map((p: any) => p.message).join(' ') || ''
+              if (errorMsg.includes('already confirmed') || errorMsg.includes('Operation ConfirmPlacementOption cannot be processed')) {
+                console.log(`[${id}] Placement already confirmed (detected from error), updating database`)
+                placementAlreadyConfirmed = true
+                // Continue with the workflow
+              } else {
+                return NextResponse.json({
+                  error: 'Failed to confirm placement option',
+                  details: confirmStatus.operationProblems,
+                }, { status: 500 })
+              }
+            } else {
+              lastOperationId = confirmResult.operationId
+            }
+          } catch (confirmError: any) {
+            // Handle the case where confirmation fails because it's already confirmed
+            if (confirmError.message?.includes('already confirmed') || 
+                confirmError.message?.includes('Operation ConfirmPlacementOption cannot be processed')) {
+              console.log(`[${id}] Placement option already confirmed (caught from error), updating database`)
+              placementAlreadyConfirmed = true
+              // Continue with the workflow
+            } else {
+              throw confirmError
+            }
           }
-
-          lastOperationId = confirmResult.operationId
         } else {
           console.log(`[${id}] Placement already confirmed, skipping confirmation step`)
         }
