@@ -17,6 +17,7 @@ import {
   Filter,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Globe,
   Building2
 } from 'lucide-react'
@@ -65,6 +66,9 @@ const CHANNEL_FLAGS: Record<string, string> = {
   amazon_au: '🇦🇺',
 }
 
+type SortColumn = 'sku' | 'fba' | 'inbound' | 'warehouse' | 'velocity' | 'days'
+type SortDirection = 'asc' | 'desc'
+
 export default function InventoryPage() {
   const [inventory, setInventory] = useState<ProductInventory[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,6 +77,8 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [expandedSku, setExpandedSku] = useState<string | null>(null)
+  const [sortColumn, setSortColumn] = useState<SortColumn>('sku')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const fetchingRef = useRef(false) // Prevent concurrent fetches
 
   useEffect(() => {
@@ -260,12 +266,46 @@ export default function InventoryPage() {
     }
   }
 
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      // Default direction: asc for SKU, desc for numbers (high to low)
+      setSortDirection(column === 'sku' ? 'asc' : 'desc')
+    }
+  }
+
   const filteredInventory = inventory
     .filter(item => statusFilter === 'all' || item.status === statusFilter)
     .filter(item => 
       item.masterSku.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.title.toLowerCase().includes(searchTerm.toLowerCase())
     )
+    .sort((a, b) => {
+      let comparison = 0
+      switch (sortColumn) {
+        case 'sku':
+          comparison = a.masterSku.localeCompare(b.masterSku)
+          break
+        case 'fba':
+          comparison = a.fbaAvailable - b.fbaAvailable
+          break
+        case 'inbound':
+          comparison = a.fbaInbound - b.fbaInbound
+          break
+        case 'warehouse':
+          comparison = a.warehouseAvailable - b.warehouseAvailable
+          break
+        case 'velocity':
+          comparison = a.velocity30d - b.velocity30d
+          break
+        case 'days':
+          comparison = a.daysOfStock - b.daysOfStock
+          break
+      }
+      return sortDirection === 'asc' ? comparison : -comparison
+    })
 
   const stats = {
     totalProducts: inventory.length,
@@ -389,15 +429,99 @@ export default function InventoryPage() {
             <CardTitle>Inventory Levels</CardTitle>
             <CardDescription>{filteredInventory.length} products</CardDescription>
           </CardHeader>
-          {/* Mobile Header Row */}
+          {/* Mobile Header Row - Sortable */}
           <div className="lg:hidden px-3 py-2 border-b border-[var(--border)] bg-[var(--secondary)]/30 flex items-center gap-1 text-[9px] text-[var(--muted-foreground)] uppercase tracking-wide">
             <span className="w-3"></span>
-            <span className="flex-1 min-w-0">SKU</span>
-            <span className="w-8 text-right">FBA</span>
-            <span className="w-8 text-right">In</span>
-            <span className="w-8 text-right">WH</span>
-            <span className="w-10 text-right">Vel</span>
-            <span className="w-6 text-right">Days</span>
+            <button 
+              onClick={() => handleSort('sku')} 
+              className={`flex-1 min-w-0 text-left flex items-center gap-0.5 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'sku' ? 'text-cyan-400' : ''}`}
+            >
+              SKU
+              {sortColumn === 'sku' && (sortDirection === 'asc' ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />)}
+            </button>
+            <button 
+              onClick={() => handleSort('fba')} 
+              className={`w-8 text-right flex items-center justify-end gap-0.5 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'fba' ? 'text-cyan-400' : ''}`}
+            >
+              {sortColumn === 'fba' && (sortDirection === 'asc' ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />)}
+              FBA
+            </button>
+            <button 
+              onClick={() => handleSort('inbound')} 
+              className={`w-8 text-right flex items-center justify-end gap-0.5 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'inbound' ? 'text-cyan-400' : ''}`}
+            >
+              {sortColumn === 'inbound' && (sortDirection === 'asc' ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />)}
+              In
+            </button>
+            <button 
+              onClick={() => handleSort('warehouse')} 
+              className={`w-8 text-right flex items-center justify-end gap-0.5 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'warehouse' ? 'text-cyan-400' : ''}`}
+            >
+              {sortColumn === 'warehouse' && (sortDirection === 'asc' ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />)}
+              WH
+            </button>
+            <button 
+              onClick={() => handleSort('velocity')} 
+              className={`w-10 text-right flex items-center justify-end gap-0.5 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'velocity' ? 'text-cyan-400' : ''}`}
+            >
+              {sortColumn === 'velocity' && (sortDirection === 'asc' ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />)}
+              Vel
+            </button>
+            <button 
+              onClick={() => handleSort('days')} 
+              className={`w-6 text-right flex items-center justify-end gap-0.5 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'days' ? 'text-cyan-400' : ''}`}
+            >
+              {sortColumn === 'days' && (sortDirection === 'asc' ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />)}
+              Days
+            </button>
+          </div>
+          {/* Desktop Header Row - Sortable */}
+          <div className="hidden lg:flex items-center px-6 py-3 border-b border-[var(--border)] bg-[var(--secondary)]/30 text-xs text-[var(--muted-foreground)] uppercase tracking-wide">
+            <span className="w-8"></span>
+            <button 
+              onClick={() => handleSort('sku')} 
+              className={`flex-1 min-w-0 text-left flex items-center gap-1 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'sku' ? 'text-cyan-400' : ''}`}
+            >
+              SKU
+              {sortColumn === 'sku' && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+            </button>
+            <div className="flex items-center gap-6 text-right">
+              <button 
+                onClick={() => handleSort('fba')} 
+                className={`w-20 flex items-center justify-end gap-1 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'fba' ? 'text-cyan-400' : ''}`}
+              >
+                FBA
+                {sortColumn === 'fba' && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </button>
+              <button 
+                onClick={() => handleSort('inbound')} 
+                className={`w-20 flex items-center justify-end gap-1 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'inbound' ? 'text-cyan-400' : ''}`}
+              >
+                Inbound
+                {sortColumn === 'inbound' && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </button>
+              <button 
+                onClick={() => handleSort('warehouse')} 
+                className={`w-20 flex items-center justify-end gap-1 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'warehouse' ? 'text-cyan-400' : ''}`}
+              >
+                Warehouse
+                {sortColumn === 'warehouse' && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </button>
+              <button 
+                onClick={() => handleSort('velocity')} 
+                className={`w-20 pl-6 border-l border-[var(--border)] flex items-center justify-end gap-1 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'velocity' ? 'text-cyan-400' : ''}`}
+              >
+                Velocity
+                {sortColumn === 'velocity' && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </button>
+              <button 
+                onClick={() => handleSort('days')} 
+                className={`w-20 flex items-center justify-end gap-1 hover:text-[var(--foreground)] transition-colors ${sortColumn === 'days' ? 'text-cyan-400' : ''}`}
+              >
+                Days
+                {sortColumn === 'days' && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </button>
+            </div>
           </div>
           <CardContent className="p-0">
             {filteredInventory.length === 0 ? (
