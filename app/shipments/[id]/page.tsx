@@ -503,6 +503,12 @@ export default function ShipmentDetailPage() {
 
   // Step 3: Confirm transport selections and get labels
   const confirmTransportSelections = async () => {
+    // Validate we have shipment splits to confirm
+    if (shipmentSplits.length === 0) {
+      alert('No shipments available to confirm. Please go back and try again.')
+      return
+    }
+
     // Validate all shipments have a transport selected
     const missingSelections = shipmentSplits.filter(s => !selectedTransports[s.amazonShipmentId])
     if (missingSelections.length > 0) {
@@ -515,10 +521,19 @@ export default function ShipmentDetailPage() {
     setSubmissionStep('confirming')
 
     try {
-      const transportSelections = shipmentSplits.map(s => ({
-        amazonShipmentId: s.amazonShipmentId,
-        transportationOptionId: selectedTransports[s.amazonShipmentId],
-      }))
+      const transportSelections = shipmentSplits
+        .filter(s => selectedTransports[s.amazonShipmentId]) // Only include valid selections
+        .map(s => ({
+          amazonShipmentId: s.amazonShipmentId,
+          transportationOptionId: selectedTransports[s.amazonShipmentId],
+        }))
+
+      // Additional safety check - should never happen due to validation above, but just in case
+      if (transportSelections.length === 0) {
+        alert('No valid transportation selections found. Please select options for all shipments.')
+        setSubmittingToAmazon(false)
+        return
+      }
 
       const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon?step=confirm_transport_interactive`, {
         method: 'POST',
@@ -1177,7 +1192,17 @@ export default function ShipmentDetailPage() {
                   </div>
 
                   <div className="space-y-4 mb-6">
-                    {shipmentSplits.map((split) => (
+                    {shipmentSplits.length === 0 ? (
+                      <div className="border border-amber-500/50 bg-amber-500/10 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-amber-400">
+                          <AlertTriangle className="w-5 h-5" />
+                          <span className="font-medium">No shipments available</span>
+                        </div>
+                        <p className="text-slate-400 text-sm mt-2">
+                          Unable to load shipment details from Amazon. Please close this dialog and try again, or contact support if the issue persists.
+                        </p>
+                      </div>
+                    ) : shipmentSplits.map((split) => (
                       <div key={split.amazonShipmentId} className="border border-slate-700 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div>
@@ -1306,7 +1331,7 @@ export default function ShipmentDetailPage() {
                     </Button>
                     <Button 
                       onClick={confirmTransportSelections} 
-                      disabled={submittingToAmazon || !shipmentSplits.every(s => selectedTransports[s.amazonShipmentId])}
+                      disabled={submittingToAmazon || shipmentSplits.length === 0 || !shipmentSplits.every(s => selectedTransports[s.amazonShipmentId])}
                       className="bg-cyan-500 hover:bg-cyan-600"
                     >
                       {submittingToAmazon ? 'Confirming...' : 'Confirm Shipping & Generate Labels'}
