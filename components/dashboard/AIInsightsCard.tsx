@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Sparkles, Loader2, ChevronRight, AlertCircle, AlertTriangle, TrendingUp, Lightbulb } from 'lucide-react'
+import { Zap, Loader2, ChevronRight, ChevronDown, AlertCircle, AlertTriangle, TrendingUp, Lightbulb } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Insight {
@@ -45,17 +45,19 @@ const TYPE_CONFIG = {
   },
   info: {
     icon: Lightbulb,
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/30',
-    glow: 'shadow-blue-500/20',
+    color: 'text-cyan-400',
+    bg: 'bg-cyan-500/10',
+    border: 'border-cyan-500/30',
+    glow: 'shadow-cyan-500/20',
   },
 }
 
 export default function AIInsightsCard() {
   const [insights, setInsights] = useState<Insight[]>([])
+  const [allInsights, setAllInsights] = useState<Insight[]>([])
   const [totalInsights, setTotalInsights] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [showAll, setShowAll] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -66,9 +68,11 @@ export default function AIInsightsCard() {
 
   const fetchInsights = async () => {
     try {
+      // Fetch limited insights for initial view
       const res = await fetch('/api/dashboard/insights')
       if (!res.ok) {
         setInsights([])
+        setAllInsights([])
         setTotalInsights(0)
         setLoading(false)
         return
@@ -91,6 +95,27 @@ export default function AIInsightsCard() {
     }
   }
 
+  const fetchAllInsights = async () => {
+    try {
+      const res = await fetch('/api/dashboard/insights?limit=50')
+      if (res.ok) {
+        const data: InsightsResponse = await res.json()
+        if (data.success) {
+          setAllInsights(data.insights || [])
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching all insights:', error)
+    }
+  }
+
+  const handleViewAll = () => {
+    if (!showAll && allInsights.length === 0) {
+      fetchAllInsights()
+    }
+    setShowAll(!showAll)
+  }
+
   const handleInsightClick = (insight: Insight) => {
     if (insight.sku) {
       router.push(`/inventory?sku=${insight.sku}`)
@@ -101,9 +126,11 @@ export default function AIInsightsCard() {
     }
   }
 
+  const displayInsights = showAll && allInsights.length > 0 ? allInsights : insights
+
   // Count by type
-  const criticalCount = insights.filter(i => i.type === 'critical').length
-  const warningCount = insights.filter(i => i.type === 'warning').length
+  const criticalCount = displayInsights.filter(i => i.type === 'critical').length
+  const warningCount = displayInsights.filter(i => i.type === 'warning').length
 
   if (loading) {
     return (
@@ -111,14 +138,14 @@ export default function AIInsightsCard() {
         <div className="px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="relative">
-              <Sparkles className="w-5 h-5 text-violet-400" />
-              <div className="absolute inset-0 blur-md bg-violet-400/40" />
+              <Zap className="w-5 h-5 text-cyan-400" />
+              <div className="absolute inset-0 blur-md bg-cyan-400/30" />
             </div>
             <span className="font-semibold text-[var(--foreground)]">AI Insights</span>
           </div>
         </div>
         <div className="px-5 py-8 flex items-center justify-center">
-          <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
+          <Loader2 className="w-5 h-5 animate-spin text-cyan-400" />
         </div>
       </div>
     )
@@ -130,8 +157,8 @@ export default function AIInsightsCard() {
         <div className="px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="relative">
-              <Sparkles className="w-5 h-5 text-violet-400" />
-              <div className="absolute inset-0 blur-md bg-violet-400/40" />
+              <Zap className="w-5 h-5 text-cyan-400" />
+              <div className="absolute inset-0 blur-md bg-cyan-400/30" />
             </div>
             <span className="font-semibold text-[var(--foreground)]">AI Insights</span>
           </div>
@@ -154,8 +181,8 @@ export default function AIInsightsCard() {
       <div className="px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="relative">
-            <Sparkles className="w-5 h-5 text-violet-400" />
-            <div className="absolute inset-0 blur-md bg-violet-400/40" />
+            <Zap className="w-5 h-5 text-cyan-400" />
+            <div className="absolute inset-0 blur-md bg-cyan-400/30" />
           </div>
           <span className="font-semibold text-[var(--foreground)]">AI Insights</span>
         </div>
@@ -176,9 +203,9 @@ export default function AIInsightsCard() {
       </div>
 
       {/* Insights list */}
-      <div className="px-3 pb-3">
+      <div className={`px-3 pb-3 ${showAll ? 'max-h-[400px] overflow-y-auto' : ''}`}>
         <div className="space-y-1.5">
-          {insights.map((insight, index) => {
+          {displayInsights.map((insight, index) => {
             const config = TYPE_CONFIG[insight.type]
             const Icon = config.icon
             const isClickable = !!(insight.sku || insight.poNumber || insight.shipmentId)
@@ -193,7 +220,6 @@ export default function AIInsightsCard() {
                   ${isClickable ? 'cursor-pointer hover:shadow-lg hover:scale-[1.01]' : ''}
                   ${isClickable ? config.glow : ''}
                 `}
-                style={{ animationDelay: `${index * 50}ms` }}
               >
                 <div className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center ${config.bg}`}>
                   <Icon className={`w-4 h-4 ${config.color}`} />
@@ -216,11 +242,15 @@ export default function AIInsightsCard() {
       {totalInsights > insights.length && (
         <div className="px-5 py-3 border-t border-[var(--border)]">
           <button
-            onClick={() => router.push('/dashboard?tab=insights')}
-            className="flex items-center gap-1.5 text-sm text-violet-400 hover:text-violet-300 transition-colors group"
+            onClick={handleViewAll}
+            className="flex items-center gap-1.5 text-sm text-cyan-400 hover:text-cyan-300 transition-colors group"
           >
-            <span>View all {totalInsights} insights</span>
-            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            <span>{showAll ? 'Show less' : `View all ${totalInsights} insights`}</span>
+            {showAll ? (
+              <ChevronDown className="w-4 h-4 rotate-180 transition-transform" />
+            ) : (
+              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+            )}
           </button>
         </div>
       )}

@@ -26,8 +26,11 @@ interface Insight {
 /**
  * Generate AI insights based on inventory, sales, POs, and shipments
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url)
+    const limit = Math.min(parseInt(searchParams.get('limit') || '5', 10), 100)
+    
     const insights: Insight[] = []
     const now = new Date()
     const today = startOfDay(now)
@@ -731,8 +734,8 @@ export async function GET() {
       })
     }
 
-    // Limit to top 5 for dashboard card
-    const limitedInsights = insights.slice(0, 5)
+    // Limit insights based on query parameter
+    const limitedInsights = insights.slice(0, limit)
 
     // Log for debugging
     console.log(`Generated ${insights.length} total insights, returning ${limitedInsights.length}`)
