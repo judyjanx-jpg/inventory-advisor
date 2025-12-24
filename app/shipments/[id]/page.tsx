@@ -21,7 +21,8 @@ import {
   ChevronUp,
   FileText,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Download
 } from 'lucide-react'
 
 interface ShipmentItem {
@@ -1305,15 +1306,85 @@ export default function ShipmentDetailPage() {
                           </p>
                         )}
                         {ship.labelUrl && (
-                          <a
-                            href={ship.labelUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 mt-2 px-3 py-1.5 bg-cyan-500/20 text-cyan-400 rounded text-sm hover:bg-cyan-500/30"
-                          >
-                            <Printer className="w-4 h-4" />
-                            Download Labels
-                          </a>
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              onClick={async () => {
+                                // Fetch the label PDF and open it for printing with 4x6 settings
+                                try {
+                                  const response = await fetch(ship.labelUrl!)
+                                  const blob = await response.blob()
+                                  const url = URL.createObjectURL(blob)
+                                  
+                                  // Open PDF in iframe with print styles for 4x6
+                                  const printWindow = window.open('', '_blank')
+                                  if (printWindow) {
+                                    printWindow.document.write(`
+                                      <!DOCTYPE html>
+                                      <html>
+                                        <head>
+                                          <title>Amazon Shipping Label - 4x6</title>
+                                          <style>
+                                            @page {
+                                              size: 4in 6in;
+                                              margin: 0;
+                                            }
+                                            body {
+                                              margin: 0;
+                                              padding: 0;
+                                            }
+                                            iframe {
+                                              width: 100%;
+                                              height: 100vh;
+                                              border: none;
+                                            }
+                                            @media print {
+                                              iframe {
+                                                width: 4in;
+                                                height: 6in;
+                                              }
+                                            }
+                                          </style>
+                                        </head>
+                                        <body>
+                                          <iframe src="${url}"></iframe>
+                                          <script>
+                                            window.onload = function() {
+                                              setTimeout(function() {
+                                                window.print();
+                                                // Clean up after print
+                                                setTimeout(function() {
+                                                  window.close();
+                                                  URL.revokeObjectURL('${url}');
+                                                }, 1000);
+                                              }, 500);
+                                            };
+                                          </script>
+                                        </body>
+                                      </html>
+                                    `)
+                                    printWindow.document.close()
+                                  }
+                                } catch (error) {
+                                  console.error('Error printing labels:', error)
+                                  alert('Failed to load labels for printing. Please try downloading instead.')
+                                }
+                              }}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 text-cyan-400 rounded text-sm hover:bg-cyan-500/30 cursor-pointer"
+                            >
+                              <Printer className="w-4 h-4" />
+                              Print 4x6 Labels
+                            </button>
+                            <a
+                              href={ship.labelUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-700/50 text-slate-300 rounded text-sm hover:bg-slate-700/70"
+                            >
+                              <Download className="w-4 h-4" />
+                              Download
+                            </a>
+                          </div>
                         )}
                       </div>
                     ))}

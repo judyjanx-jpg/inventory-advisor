@@ -56,14 +56,16 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid shipment ID' }, { status: 400 })
     }
 
-    // Parse request body for item settings (prep/label overrides)
-    let itemSettings: Record<string, { prepOwner: string; labelOwner: string }> = {}
+    // Parse request body once (can only be read once)
+    let requestBody: any = {}
     try {
-      const body = await request.json()
-      itemSettings = body.itemSettings || {}
+      requestBody = await request.json()
     } catch {
       // No body or invalid JSON - use defaults
     }
+
+    // Extract item settings (prep/label overrides)
+    const itemSettings: Record<string, { prepOwner: string; labelOwner: string }> = requestBody.itemSettings || {}
 
     const url = new URL(request.url)
     const step = url.searchParams.get('step') || 'all'
@@ -229,13 +231,9 @@ export async function POST(
 
     let result: any = { shipmentId: id }
 
-    // Get request body for interactive steps
-    let body: any = {}
-    try {
-      body = await request.json()
-    } catch {
-      // No body is fine for some steps
-    }
+    // Use the already-parsed request body for interactive steps
+    // (requestBody was parsed once at the beginning of the function)
+    const body = requestBody
 
     // Build items list for Amazon (reused by multiple steps)
     const buildInboundItems = () => shipment.items.map((item: { masterSku: string; adjustedQty: number; product?: { prepOwner?: string; labelOwner?: string } }) => ({
@@ -510,7 +508,7 @@ export async function POST(
     // Confirms user's placement choice, returns transport options with costs
     // ========================================
     if (step === 'select_placement') {
-      const { placementOptionId } = body
+      const { placementOptionId } = body || {}
 
       if (!placementOptionId) {
         return NextResponse.json({
@@ -765,14 +763,14 @@ export async function POST(
         // Get updated shipment details (to get confirmation ID)
         const shipmentDetail = await getShipment(inboundPlanId, amazonShipmentId)
 
-        // Get shipping labels
+        // Get shipping labels (use THERMAL for 4x6 thermal printers)
         let labelUrl: string | null = null
         try {
           const labelResult = await getLabels(
             inboundPlanId,
             amazonShipmentId,
             'PACKAGE_LABEL',
-            'PLAIN_PAPER'
+            'THERMAL' // Use THERMAL for 4x6 thermal label printers
           )
           labelUrl = labelResult.downloadUrl
           console.log(`[${id}] Labels retrieved for ${amazonShipmentId}`)
