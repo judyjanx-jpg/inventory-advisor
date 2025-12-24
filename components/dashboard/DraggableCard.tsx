@@ -150,7 +150,7 @@ export default function DraggableCard({
       <div
         ref={cardRef}
         style={cardStyle}
-        className="group relative rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden"
+        className="group relative rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden flex flex-col"
       >
         {/* Drag Handle - Top Center */}
         <div 
@@ -194,10 +194,10 @@ export default function DraggableCard({
         </div>
 
         {/* Card Content - Children rendered inside, fills height */}
-        <div 
-          className={`h-full ${isCollapsed ? 'pointer-events-none overflow-hidden' : 'overflow-auto'}`}
+        <div
+          className={`flex-1 flex flex-col min-h-0 ${isCollapsed ? 'pointer-events-none overflow-hidden' : 'overflow-auto'}`}
         >
-          <div className="h-full [&>*]:border-0 [&>*]:rounded-none [&>*]:bg-transparent [&>*]:h-full">
+          <div className="flex-1 flex flex-col [&>*]:border-0 [&>*]:rounded-none [&>*]:bg-transparent [&>*]:flex-1">
             {children}
           </div>
         </div>

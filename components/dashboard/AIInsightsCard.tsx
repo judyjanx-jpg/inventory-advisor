@@ -83,7 +83,7 @@ export default function AIInsightsCard() {
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col bg-[var(--card)]">
+      <div className="flex-1 flex flex-col bg-[var(--card)]">
         <div className="px-6 py-4 border-b border-[var(--border)] flex-shrink-0">
           <h3 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-purple-400" />
@@ -99,7 +99,7 @@ export default function AIInsightsCard() {
 
   if (insights.length === 0) {
     return (
-      <div className="h-full flex flex-col bg-[var(--card)]">
+      <div className="flex-1 flex flex-col bg-[var(--card)]">
         <div className="px-6 py-4 border-b border-[var(--border)] flex-shrink-0">
           <h3 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-purple-400" />
@@ -119,14 +119,14 @@ export default function AIInsightsCard() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-[var(--card)]">
+    <div className="flex-1 flex flex-col bg-[var(--card)]">
       <div className="px-6 py-4 border-b border-[var(--border)] flex-shrink-0">
         <h3 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-purple-400" />
           AI Insights
         </h3>
       </div>
-      <div className="flex-1 px-6 py-4 overflow-y-auto">
+      <div className="flex-1 px-6 py-4 overflow-y-auto min-h-0">
         <div className="space-y-2">
           {insights.map((insight, index) => {
             const emoji = PRIORITY_EMOJIS[insight.type]
