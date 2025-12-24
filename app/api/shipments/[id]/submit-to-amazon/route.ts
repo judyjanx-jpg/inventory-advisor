@@ -56,14 +56,16 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid shipment ID' }, { status: 400 })
     }
 
-    // Parse request body for item settings (prep/label overrides)
-    let itemSettings: Record<string, { prepOwner: string; labelOwner: string }> = {}
+    // Parse request body ONCE at the beginning (stream can only be read once)
+    let requestBody: any = {}
     try {
-      const body = await request.json()
-      itemSettings = body.itemSettings || {}
+      requestBody = await request.json()
     } catch {
       // No body or invalid JSON - use defaults
     }
+
+    // Extract item settings for prep/label overrides
+    const itemSettings: Record<string, { prepOwner: string; labelOwner: string }> = requestBody.itemSettings || {}
 
     const url = new URL(request.url)
     const step = url.searchParams.get('step') || 'all'
@@ -229,13 +231,8 @@ export async function POST(
 
     let result: any = { shipmentId: id }
 
-    // Get request body for interactive steps
-    let body: any = {}
-    try {
-      body = await request.json()
-    } catch {
-      // No body is fine for some steps
-    }
+    // Use the already-parsed request body for interactive steps
+    const body = requestBody
 
     // Build items list for Amazon (reused by multiple steps)
     const buildInboundItems = () => shipment.items.map((item: { masterSku: string; adjustedQty: number; product?: { prepOwner?: string; labelOwner?: string } }) => ({
