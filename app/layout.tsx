@@ -11,6 +11,9 @@ const fontClassName = 'font-sans'
 export const metadata: Metadata = {
   title: 'Inventory Advisor',
   description: 'AI-Powered Inventory Management System',
+  icons: {
+    icon: '/logo.png',
+  },
 }
 
 export default function RootLayout({

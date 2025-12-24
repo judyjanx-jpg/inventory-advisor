@@ -317,7 +317,7 @@ export default function DashboardPage() {
           )}
         </GreetingHeader>
 
-        {cardsLoaded ? (
+        {cardsLoaded && cards.length > 0 ? (
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
@@ -383,6 +383,12 @@ export default function DashboardPage() {
               )}
             </DragOverlay>
           </DndContext>
+        ) : cardsLoaded && cards.length === 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
+              No cards configured
+            </div>
+          </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <div className="space-y-6 min-h-[200px]">
