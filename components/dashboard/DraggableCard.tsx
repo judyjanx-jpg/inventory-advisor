@@ -193,9 +193,9 @@ export default function DraggableCard({
           )}
         </div>
 
-        {/* Card Content - Children rendered inside, fills height */}
+        {/* Card Content - Children rendered inside */}
         <div
-          className={`h-full ${isCollapsed ? 'pointer-events-none overflow-hidden' : 'overflow-auto'}`}
+          className={`${currentHeight ? 'h-full' : ''} ${isCollapsed ? 'pointer-events-none overflow-hidden' : 'overflow-auto'}`}
         >
           <div className="[&>*]:border-0 [&>*]:rounded-none [&>*]:bg-transparent">
             {children}
