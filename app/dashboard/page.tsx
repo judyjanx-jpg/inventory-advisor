@@ -76,6 +76,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [cards, setCards] = useState<CardConfig[]>([])
   const [loading, setLoading] = useState(true)
+  const [cardsLoaded, setCardsLoaded] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [showHiddenMenu, setShowHiddenMenu] = useState(false)
 
@@ -131,6 +132,8 @@ export default function DashboardPage() {
       if (result.success) setCards(result.cards)
     } catch (error) {
       console.error('Error fetching card config:', error)
+    } finally {
+      setCardsLoaded(true)
     }
   }
 
@@ -314,71 +317,84 @@ export default function DashboardPage() {
           )}
         </GreetingHeader>
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
-        >
+        {cardsLoaded ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              {/* Left Column */}
+              <SortableContext items={leftCards.map(c => c.cardType)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-6 min-h-[200px]">
+                  {leftCards.map(card => (
+                    <DraggableCard
+                      key={card.cardType}
+                      id={card.cardType}
+                      height={card.height}
+                      isCollapsed={card.isCollapsed}
+                      onHeightChange={(h) => handleHeightChange(card.cardType, h)}
+                      onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
+                      onHide={() => handleHideCard(card.cardType)}
+                    >
+                      {renderCard(card.cardType)}
+                    </DraggableCard>
+                  ))}
+                  {leftCards.length === 0 && (
+                    <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
+                      Drop cards here
+                    </div>
+                  )}
+                </div>
+              </SortableContext>
+
+              {/* Right Column */}
+              <SortableContext items={rightCards.map(c => c.cardType)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-6 min-h-[200px]">
+                  {rightCards.map(card => (
+                    <DraggableCard
+                      key={card.cardType}
+                      id={card.cardType}
+                      height={card.height}
+                      isCollapsed={card.isCollapsed}
+                      onHeightChange={(h) => handleHeightChange(card.cardType, h)}
+                      onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
+                      onHide={() => handleHideCard(card.cardType)}
+                    >
+                      {renderCard(card.cardType)}
+                    </DraggableCard>
+                  ))}
+                  {rightCards.length === 0 && (
+                    <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
+                      Drop cards here
+                    </div>
+                  )}
+                </div>
+              </SortableContext>
+            </div>
+
+            <DragOverlay>
+              {activeId && (
+                <div className="opacity-80 shadow-2xl rounded-xl">
+                  {renderCard(activeId)}
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+        ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            {/* Left Column */}
-            <SortableContext items={leftCards.map(c => c.cardType)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-6 min-h-[200px]">
-                {leftCards.map(card => (
-                  <DraggableCard
-                    key={card.cardType}
-                    id={card.cardType}
-                    height={card.height}
-                    isCollapsed={card.isCollapsed}
-                    onHeightChange={(h) => handleHeightChange(card.cardType, h)}
-                    onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
-                    onHide={() => handleHideCard(card.cardType)}
-                  >
-                    {renderCard(card.cardType)}
-                  </DraggableCard>
-                ))}
-                {leftCards.length === 0 && (
-                  <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
-                    Drop cards here
-                  </div>
-                )}
-              </div>
-            </SortableContext>
-
-            {/* Right Column */}
-            <SortableContext items={rightCards.map(c => c.cardType)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-6 min-h-[200px]">
-                {rightCards.map(card => (
-                  <DraggableCard
-                    key={card.cardType}
-                    id={card.cardType}
-                    height={card.height}
-                    isCollapsed={card.isCollapsed}
-                    onHeightChange={(h) => handleHeightChange(card.cardType, h)}
-                    onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
-                    onHide={() => handleHideCard(card.cardType)}
-                  >
-                    {renderCard(card.cardType)}
-                  </DraggableCard>
-                ))}
-                {rightCards.length === 0 && (
-                  <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
-                    Drop cards here
-                  </div>
-                )}
-              </div>
-            </SortableContext>
+            <div className="space-y-6 min-h-[200px]">
+              <div className="h-48 rounded-xl bg-[var(--card)] border border-[var(--border)] animate-pulse" />
+              <div className="h-48 rounded-xl bg-[var(--card)] border border-[var(--border)] animate-pulse" />
+            </div>
+            <div className="space-y-6 min-h-[200px]">
+              <div className="h-48 rounded-xl bg-[var(--card)] border border-[var(--border)] animate-pulse" />
+              <div className="h-48 rounded-xl bg-[var(--card)] border border-[var(--border)] animate-pulse" />
+            </div>
           </div>
-
-          <DragOverlay>
-            {activeId && (
-              <div className="opacity-80 shadow-2xl rounded-xl">
-                {renderCard(activeId)}
-              </div>
-            )}
-          </DragOverlay>
-        </DndContext>
+        )}
 
         {/* AI Cards - Full Width */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
