@@ -712,19 +712,31 @@ export async function POST(
 
         // Generate transportation options for this shipment
         console.log(`[${id}] Generating transport options for ${amazonShipmentId}...`)
-        const genTransportResult = await generateTransportationOptions(
-          inboundPlanId,
-          amazonShipmentId,
-          placementOptionId
-        )
-        await waitForOperation(await createSpApiClient(), genTransportResult.operationId)
+        let transportationOptions: any[] = []
+        
+        try {
+          const genTransportResult = await generateTransportationOptions(
+            inboundPlanId,
+            amazonShipmentId,
+            placementOptionId
+          )
+          await waitForOperation(await createSpApiClient(), genTransportResult.operationId)
 
-        // List transportation options
-        const { transportationOptions } = await listTransportationOptions(
-          inboundPlanId,
-          amazonShipmentId,
-          placementOptionId
-        )
+          // List transportation options
+          const listResult = await listTransportationOptions(
+            inboundPlanId,
+            amazonShipmentId,
+            placementOptionId
+          )
+          transportationOptions = listResult.transportationOptions || []
+          console.log(`[${id}] Found ${transportationOptions.length} transportation options for ${amazonShipmentId}`)
+        } catch (transportError: any) {
+          console.error(`[${id}] Error generating/listing transportation options for ${amazonShipmentId}:`, transportError)
+          // Continue with empty options - user can select later or use own carrier
+          transportationOptions = []
+          // Don't fail the entire step if transportation options can't be generated
+          // The user can still proceed and select transportation options manually later
+        }
 
         shipmentDetails.push({
           amazonShipmentId,
