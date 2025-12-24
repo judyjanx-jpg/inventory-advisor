@@ -465,12 +465,76 @@ export async function POST(
       }
 
       // Step 3: Generate placement options (but don't confirm yet)
-      console.log(`[${id}] Generating placement options...`)
-      const genPlacementResult = await generatePlacementOptions(inboundPlanId)
-      await waitForOperation(await createSpApiClient(), genPlacementResult.operationId)
-
-      // List placement options
-      const { placementOptions } = await listPlacementOptions(inboundPlanId)
+      // First check if placement options already exist
+      let placementOptions: any[] = []
+      try {
+        const existingOptions = await listPlacementOptions(inboundPlanId)
+        placementOptions = existingOptions.placementOptions || []
+        
+        if (placementOptions.length > 0) {
+          console.log(`[${id}] Found ${placementOptions.length} existing placement options, skipping generation`)
+        } else {
+          // No existing options, generate new ones
+          console.log(`[${id}] No existing placement options found, generating new ones...`)
+          const genPlacementResult = await generatePlacementOptions(inboundPlanId)
+          await waitForOperation(await createSpApiClient(), genPlacementResult.operationId)
+          
+          // List the newly generated options
+          const newOptions = await listPlacementOptions(inboundPlanId)
+          placementOptions = newOptions.placementOptions || []
+        }
+      } catch (genError: any) {
+        // Handle the case where placement options are already confirmed
+        if (genError.message?.includes('placement option is already confirmed') || 
+            genError.message?.includes('already confirmed') ||
+            genError.message?.includes('Operation GeneratePlacementOptions cannot be processed')) {
+          console.log(`[${id}] Placement option already confirmed, listing existing options...`)
+          try {
+            const existingOptions = await listPlacementOptions(inboundPlanId)
+            placementOptions = existingOptions.placementOptions || []
+            
+            // Find the confirmed placement option
+            const confirmedPlacement = placementOptions.find(
+              (p: any) => p.status === 'ACCEPTED' || p.status === 'CONFIRMED'
+            )
+            
+            if (confirmedPlacement && shipment.amazonPlacementOptionId !== confirmedPlacement.placementOptionId) {
+              // Update database with the confirmed placement option
+              await prisma.shipment.update({
+                where: { id },
+                data: {
+                  amazonPlacementOptionId: confirmedPlacement.placementOptionId,
+                  amazonWorkflowStep: 'placement_confirmed',
+                },
+              })
+              
+              // Return to transport selection since placement is already confirmed
+              return NextResponse.json({
+                success: true,
+                step: 'get_placement_options',
+                skipToTransport: true,
+                inboundPlanId,
+                placementOptionId: confirmedPlacement.placementOptionId,
+                message: 'Placement already confirmed. Proceeding to transport selection.',
+                duration: Date.now() - startTime,
+              })
+            }
+          } catch (listError: any) {
+            console.error(`[${id}] Error listing placement options:`, listError)
+            return NextResponse.json({
+              error: 'Failed to retrieve placement options',
+              details: listError.message,
+            }, { status: 500 })
+          }
+        } else {
+          // Some other error occurred
+          console.error(`[${id}] Error generating placement options:`, genError)
+          return NextResponse.json({
+            error: 'Failed to generate placement options',
+            details: genError.message,
+          }, { status: 500 })
+        }
+      }
 
       if (!placementOptions.length) {
         return NextResponse.json({ error: 'No placement options available' }, { status: 500 })
@@ -1194,28 +1258,47 @@ export async function POST(
         // Generate placement options (may already be done from previous attempt)
         let placementAlreadyConfirmed = false
 
+        // First check if placement options already exist
         try {
-          console.log(`[${id}] Generating placement options...`)
-          const genPlacementResult = await generatePlacementOptions(inboundPlanId)
+          const existingOptions = await listPlacementOptions(inboundPlanId)
+          if (existingOptions.placementOptions && existingOptions.placementOptions.length > 0) {
+            console.log(`[${id}] Found ${existingOptions.placementOptions.length} existing placement options, skipping generation`)
+            // Check if any are already confirmed
+            const confirmed = existingOptions.placementOptions.find(
+              (p: any) => p.status === 'ACCEPTED' || p.status === 'CONFIRMED'
+            )
+            if (confirmed) {
+              placementAlreadyConfirmed = true
+            }
+          } else {
+            // No existing options, generate new ones
+            console.log(`[${id}] Generating placement options...`)
+            const genPlacementResult = await generatePlacementOptions(inboundPlanId)
 
-          const genPlacementStatus = await waitForOperation(
-            await createSpApiClient(),
-            genPlacementResult.operationId
-          )
+            const genPlacementStatus = await waitForOperation(
+              await createSpApiClient(),
+              genPlacementResult.operationId
+            )
 
-          if (genPlacementStatus.operationStatus === 'FAILED') {
-            return NextResponse.json({
-              error: 'Failed to generate placement options',
-              details: genPlacementStatus.operationProblems,
-            }, { status: 500 })
+            if (genPlacementStatus.operationStatus === 'FAILED') {
+              return NextResponse.json({
+                error: 'Failed to generate placement options',
+                details: genPlacementStatus.operationProblems,
+              }, { status: 500 })
+            }
           }
         } catch (genError: any) {
           // Check if placement is already confirmed from a previous attempt
-          if (genError.message?.includes('placement option is already confirmed')) {
-            console.log(`[${id}] Placement already confirmed from previous attempt, skipping generation`)
+          if (genError.message?.includes('placement option is already confirmed') || 
+              genError.message?.includes('already confirmed') ||
+              genError.message?.includes('Operation GeneratePlacementOptions cannot be processed')) {
+            console.log(`[${id}] Placement option already confirmed, skipping generation`)
             placementAlreadyConfirmed = true
           } else {
-            throw genError
+            // If it's a listPlacementOptions error, that's okay - we'll try to generate
+            if (!genError.message?.includes('listPlacementOptions')) {
+              throw genError
+            }
           }
         }
 
