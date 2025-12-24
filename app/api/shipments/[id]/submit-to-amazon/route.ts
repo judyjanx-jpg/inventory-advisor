@@ -852,13 +852,23 @@ export async function POST(
       }
 
       // Step 2: Confirm all transportation options at once
-      console.log(`[${id}] Confirming ${transportSelections.length} transportation selections...`)
+      // Map to the format expected by confirmTransportationOptions
+      const mappedSelections = transportSelections.map(s => ({
+        shipmentId: s.amazonShipmentId,
+        transportationOptionId: s.transportationOptionId,
+      }))
+
+      // Validate we have selections before confirming
+      if (mappedSelections.length === 0) {
+        return NextResponse.json({
+          error: 'No transportation selections to confirm',
+        }, { status: 400 })
+      }
+
+      console.log(`[${id}] Confirming ${mappedSelections.length} transportation selections...`)
       const confirmTransportResult = await confirmTransportationOptions(
         inboundPlanId,
-        transportSelections.map(s => ({
-          shipmentId: s.amazonShipmentId,
-          transportationOptionId: s.transportationOptionId,
-        }))
+        mappedSelections
       )
 
       const transportStatus = await waitForOperation(
@@ -1629,9 +1639,17 @@ export async function POST(
 
       // Confirm all transportation options at once
       if (transportSelections.length > 0) {
+        // Validate we have valid selections
+        const validSelections = transportSelections.filter(s => s.shipmentId && s.transportationOptionId)
+        if (validSelections.length === 0) {
+          return NextResponse.json({
+            error: 'No valid transportation selections to confirm',
+          }, { status: 400 })
+        }
+
         const confirmTransportResult = await confirmTransportationOptions(
           inboundPlanId,
-          transportSelections
+          validSelections
         )
 
         const transportStatus = await waitForOperation(

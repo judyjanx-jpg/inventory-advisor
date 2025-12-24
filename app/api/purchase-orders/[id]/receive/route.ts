@@ -7,7 +7,7 @@ export async function POST(
 ) {
   try {
     const body = await request.json()
-    const { items } = body // { [itemId]: { received: number, damaged: number, backorder: number } }
+    const { items, receivedDate } = body // { [itemId]: { received: number, damaged: number, backorder: number } }, receivedDate: string (YYYY-MM-DD)
 
     if (!items || typeof items !== 'object') {
       return NextResponse.json(
@@ -184,11 +184,13 @@ export async function POST(
       }
 
       if (newStatus !== updatedPO.status) {
+        // Use provided receivedDate or default to now
+        const arrivalDate = receivedDate ? new Date(receivedDate) : new Date()
         await prisma.purchaseOrder.update({
           where: { id: poId },
           data: {
             status: newStatus,
-            actualArrivalDate: new Date(),
+            actualArrivalDate: arrivalDate,
           },
         })
 

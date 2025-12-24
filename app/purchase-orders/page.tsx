@@ -130,6 +130,7 @@ export default function PurchaseOrdersPage() {
 
   // Receive form
   const [receiveItems, setReceiveItems] = useState<Record<number, { received: number; damaged: number; backorder: number }>>({})
+  const [receiveDate, setReceiveDate] = useState<string>('')
   const [savingReceive, setSavingReceive] = useState(false)
   
   // Delete options
@@ -140,6 +141,11 @@ export default function PurchaseOrdersPage() {
   const [openSkuDropdown, setOpenSkuDropdown] = useState<number | null>(null)
   const [itemsFileInputRef, setItemsFileInputRef] = useState<HTMLInputElement | null>(null)
 
+  /**
+   * Fetches all initial data when component mounts
+   * Called: Automatically on component mount
+   * Updates: Sets purchaseOrders, suppliers, products, backorders, and loading state
+   */
   useEffect(() => {
     fetchData()
   }, [])
@@ -147,7 +153,11 @@ export default function PurchaseOrdersPage() {
   // Track which field was last changed to prevent circular updates
   const lastChangedField = useRef<'days' | 'date' | null>(null)
 
-  // Update expected date when lead time changes
+  /**
+   * Calculates expected arrival date based on order date and lead time (days)
+   * Called: Automatically when orderDate or expectedDays changes in create form
+   * Updates: Sets createForm.expectedDate to orderDate + expectedDays
+   */
   useEffect(() => {
     // Calculate expected date if:
     // 1. User changed lead time (days), OR
@@ -168,7 +178,11 @@ export default function PurchaseOrdersPage() {
     }
   }, [createForm.orderDate, createForm.expectedDays, createForm.expectedDate])
 
-  // Update lead time when expected date changes
+  /**
+   * Calculates lead time (days) based on order date and expected arrival date
+   * Called: Automatically when expectedDate changes in create form (only if user changed the date field)
+   * Updates: Sets createForm.expectedDays to the difference between expectedDate and orderDate
+   */
   useEffect(() => {
     if (lastChangedField.current === 'date' && createForm.orderDate && createForm.expectedDate) {
       const orderDate = new Date(createForm.orderDate)
@@ -184,7 +198,11 @@ export default function PurchaseOrdersPage() {
     }
   }, [createForm.orderDate, createForm.expectedDate])
 
-  // Update lead time when supplier changes
+  /**
+   * Automatically sets lead time days when a supplier is selected
+   * Called: Automatically when supplierId changes in create form
+   * Updates: Sets createForm.expectedDays from supplier's leadTimeDays if available
+   */
   useEffect(() => {
     if (createForm.supplierId) {
       const supplier = suppliers.find(s => s.id === parseInt(createForm.supplierId))
@@ -197,6 +215,11 @@ export default function PurchaseOrdersPage() {
     }
   }, [createForm.supplierId, suppliers])
 
+  /**
+   * Fetches all purchase orders, suppliers, products, and backorders from the API
+   * Called: On component mount and after successful create/update/delete operations
+   * Updates: Sets purchaseOrders, suppliers, products, backorders state, and sets loading to false
+   */
   const fetchData = async () => {
     try {
       const [posRes, suppliersRes, productsRes, backordersRes] = await Promise.all([
@@ -222,6 +245,11 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  /**
+   * Generates a unique purchase order number in format PO-YYYY-XXX
+   * Called: Before creating a new purchase order
+   * Updates: Returns a new PO number string (does not update state)
+   */
   const generatePONumber = () => {
     const date = new Date()
     const year = date.getFullYear()
@@ -229,6 +257,11 @@ export default function PurchaseOrdersPage() {
     return `PO-${year}-${random}`
   }
 
+  /**
+   * Creates a new purchase order with supplier, items, dates, and costs
+   * Called: When user clicks "Create Purchase Order" button in the create modal
+   * Updates: Creates new PO in database via API, refreshes data, resets create form, closes modal
+   */
   const createPurchaseOrder = async () => {
     if (!createForm.supplierId || createForm.items.length === 0) return
     
@@ -303,6 +336,11 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  /**
+   * Updates the status of a purchase order and automatically sets related dates
+   * Called: When user changes PO status via StatusButton component
+   * Updates: Updates PO status in database, sets confirmedDate/shippedDate/arrivalDate based on status, refreshes data
+   */
   const updatePOStatus = async (po: PurchaseOrder, newStatus: string) => {
     try {
       const today = new Date().toISOString().split('T')[0]
@@ -328,6 +366,11 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  /**
+   * Opens the edit costs modal and pre-fills form with current PO costs
+   * Called: When user clicks to edit costs for a purchase order
+   * Updates: Sets selectedPO, pre-fills costsForm with current shipping/tax/other costs, shows edit costs modal
+   */
   const openEditCostsModal = (po: PurchaseOrder) => {
     setSelectedPO(po)
     setCostsForm({
@@ -338,6 +381,11 @@ export default function PurchaseOrdersPage() {
     setShowEditCosts(true)
   }
 
+  /**
+   * Saves updated shipping, tax, and other costs for a purchase order
+   * Called: When user clicks "Save Costs" button in edit costs modal
+   * Updates: Updates PO costs in database, recalculates total, refreshes data, closes modal
+   */
   const saveCosts = async () => {
     if (!selectedPO) return
     
@@ -370,6 +418,11 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  /**
+   * Opens the edit dates modal and pre-fills form with current PO dates
+   * Called: When user clicks to edit dates for a purchase order
+   * Updates: Sets selectedPO, pre-fills datesForm with current order date and expected arrival date, shows edit dates modal
+   */
   const openEditDatesModal = (po: PurchaseOrder) => {
     setSelectedPO(po)
     setDatesForm({
@@ -379,6 +432,11 @@ export default function PurchaseOrdersPage() {
     setShowEditDates(true)
   }
 
+  /**
+   * Saves updated order date and expected arrival date for a purchase order
+   * Called: When user clicks "Save Dates" button in edit dates modal
+   * Updates: Updates PO dates in database, refreshes data, closes modal
+   */
   const saveDates = async () => {
     if (!selectedPO) return
     
@@ -406,6 +464,11 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  /**
+   * Generates an Excel file (.xlsx) with SKU and Quantity columns for the purchase order
+   * Called: When sending email to supplier or downloading PO
+   * Updates: Creates and downloads Excel file, returns filename (does not update database)
+   */
   const generatePOExcel = async (po: PurchaseOrder) => {
     const XLSX = await import('xlsx')
     
@@ -431,11 +494,21 @@ export default function PurchaseOrdersPage() {
     return fileName
   }
 
+  /**
+   * Opens the send email modal for a purchase order
+   * Called: When user clicks to send email to supplier
+   * Updates: Sets selectedPO and shows send email modal
+   */
   const openSendEmailModal = async (po: PurchaseOrder) => {
     setSelectedPO(po)
     setShowSendEmail(true)
   }
 
+  /**
+   * Generates Excel file and opens email client with pre-filled message to supplier
+   * Called: When user clicks "Open Email Client" button in send email modal
+   * Updates: Downloads Excel file, opens mailto link, optionally updates PO status to "sent", closes modal
+   */
   const sendEmailToSupplier = async (markAsSent: boolean) => {
     if (!selectedPO) return
     
@@ -478,6 +551,11 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  /**
+   * Deletes a purchase order with optional inventory deduction
+   * Called: When user confirms deletion in delete confirmation modal
+   * Updates: Deletes PO from database, optionally deducts received inventory, refreshes data, closes modal
+   */
   const deletePO = async () => {
     if (!selectedPO) return
     
@@ -506,6 +584,11 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  /**
+   * Opens the receive items modal and pre-fills with remaining quantities to receive
+   * Called: When user clicks to receive items for a purchase order
+   * Updates: Sets selectedPO, initializes receiveItems with remaining quantities, sets receive date to today, shows receive modal
+   */
   const openReceiveModal = (po: PurchaseOrder) => {
     setSelectedPO(po)
     const initialReceive: Record<number, { received: number; damaged: number; backorder: number }> = {}
@@ -518,34 +601,93 @@ export default function PurchaseOrdersPage() {
       }
     })
     setReceiveItems(initialReceive)
+    // Set default receive date to today
+    const today = new Date().toISOString().split('T')[0]
+    setReceiveDate(today)
     setShowReceive(true)
   }
 
+  /**
+   * Automatically fills receive form with all remaining quantities (receives everything)
+   * Called: When user clicks "Auto-Receive All" button in receive modal
+   * Updates: Sets receiveItems to receive all remaining quantities with 0 damaged and 0 backorder
+   */
+  const autoReceiveAll = () => {
+    if (!selectedPO) return
+    
+    const autoReceive: Record<number, { received: number; damaged: number; backorder: number }> = {}
+    selectedPO.items.forEach(item => {
+      const remaining = item.quantityOrdered - item.quantityReceived - (item.quantityBackordered || 0)
+      if (remaining > 0) {
+        autoReceive[item.id] = { 
+          received: remaining, // Receive full remaining quantity
+          damaged: 0,
+          backorder: 0
+        }
+      }
+    })
+    setReceiveItems(autoReceive)
+  }
+
+  /**
+   * Saves received items, updates inventory, and creates backorders if needed
+   * Called: When user clicks "Confirm Received" button in receive modal
+   * Updates: Updates PO item quantities, adds received items to inventory, creates backorders for unfulfilled quantities, refreshes data, closes modal
+   */
   const saveReceive = async () => {
     if (!selectedPO) return
+    
+    // Validate that at least one item has a quantity
+    const hasQuantities = Object.values(receiveItems).some(item => 
+      item.received > 0 || item.damaged > 0 || item.backorder > 0
+    )
+    
+    if (!hasQuantities) {
+      alert('Please enter at least one quantity to receive')
+      return
+    }
     
     setSavingReceive(true)
     try {
       const res = await fetch(`/api/purchase-orders/${selectedPO.id}/receive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: receiveItems }),
+        body: JSON.stringify({ 
+          items: receiveItems,
+          receivedDate: receiveDate || new Date().toISOString().split('T')[0]
+        }),
       })
       
+      const data = await res.json()
+      
       if (res.ok) {
-        fetchData()
+        // Refresh the data
+        await fetchData()
         setShowReceive(false)
+        setReceiveItems({})
+        setReceiveDate('')
+        // Show success message
+        if (data.backordersCreated > 0) {
+          alert(`Items received successfully! ${data.backordersCreated} backorder(s) created.`)
+        } else {
+          alert('Items received successfully!')
+        }
       } else {
-        const data = await res.json()
         alert(data.error || 'Failed to receive items')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error receiving items:', error)
+      alert(`Error receiving items: ${error.message || 'Unknown error'}`)
     } finally {
       setSavingReceive(false)
     }
   }
 
+  /**
+   * Adds a new empty item row to the create PO form
+   * Called: When user clicks "Add Item" button in create PO modal
+   * Updates: Adds new item object to createForm.items array with default values
+   */
   const addItemToForm = () => {
     setCreateForm({
       ...createForm,
@@ -553,6 +695,11 @@ export default function PurchaseOrdersPage() {
     })
   }
 
+  /**
+   * Updates a field value for a specific item in the create PO form
+   * Called: When user types/changes SKU, quantity, or unit cost in create PO modal
+   * Updates: Updates the specified item field, auto-fills unit cost if SKU matches a product
+   */
   const updateFormItem = (index: number, field: string, value: any) => {
     const newItems = [...createForm.items]
     newItems[index] = { ...newItems[index], [field]: value }
@@ -567,6 +714,11 @@ export default function PurchaseOrdersPage() {
     setCreateForm({ ...createForm, items: newItems })
   }
 
+  /**
+   * Removes an item from the create PO form and reindexes search terms
+   * Called: When user clicks delete button on an item in create PO modal
+   * Updates: Removes item from createForm.items array and reindexes skuSearchTerms
+   */
   const removeFormItem = (index: number) => {
     const newItems = createForm.items.filter((_, i) => i !== index)
     setCreateForm({ ...createForm, items: newItems })
@@ -586,7 +738,11 @@ export default function PurchaseOrdersPage() {
     setSkuSearchTerms(reindexed)
   }
 
-  // Handle items file upload
+  /**
+   * Handles file upload for bulk adding items to create PO form from Excel/CSV
+   * Called: When user selects a file using the upload button in create PO modal
+   * Updates: Parses file, extracts SKU/quantity/cost data, adds new items to createForm.items array
+   */
   const handleItemsFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -669,6 +825,11 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  /**
+   * Filters purchase orders based on search term and status filter
+   * Called: Automatically whenever purchaseOrders, searchTerm, or statusFilter changes
+   * Updates: Returns filtered array of purchase orders (does not update state directly)
+   */
   const filteredPOs = purchaseOrders
     .filter(po => statusFilter === 'all' || po.status === statusFilter)
     .filter(po => 
@@ -676,12 +837,22 @@ export default function PurchaseOrdersPage() {
       po.supplier.name.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
+  /**
+   * Calculates the percentage of items received for a purchase order
+   * Called: When displaying PO cards in the list to show progress
+   * Updates: Returns percentage 0-100 (does not update state)
+   */
   const getReceiveProgress = (po: PurchaseOrder) => {
     const totalOrdered = po.items.reduce((sum, item) => sum + item.quantityOrdered, 0)
     const totalReceived = po.items.reduce((sum, item) => sum + item.quantityReceived, 0)
     return totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0
   }
 
+  /**
+   * Determines if PO arrived on time, early, or late based on expected vs actual dates
+   * Called: When displaying PO details to show arrival status
+   * Updates: Returns status object with text and color (does not update state)
+   */
   const getArrivalStatus = (po: PurchaseOrder) => {
     if (!po.actualArrivalDate || !po.expectedArrivalDate) return null
     
@@ -694,6 +865,11 @@ export default function PurchaseOrdersPage() {
     return { text: `${diffDays} days late`, color: 'text-red-400' }
   }
 
+  /**
+   * Calculates number of days until expected arrival date
+   * Called: When displaying PO cards to show countdown
+   * Updates: Returns number of days (positive = future, negative = past) or null (does not update state)
+   */
   const getDaysUntilExpected = (po: PurchaseOrder) => {
     if (!po.expectedArrivalDate) return null
     const expected = new Date(po.expectedArrivalDate)
@@ -715,7 +891,7 @@ export default function PurchaseOrdersPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Header */}
+        {/* Header Section: Displays page title, description, and "Create Purchase Order" button */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-[var(--foreground)]">Purchase Orders</h1>
@@ -727,7 +903,7 @@ export default function PurchaseOrdersPage() {
           </Button>
         </div>
 
-        {/* Status Summary Cards */}
+        {/* Status Summary Cards Section: Displays clickable cards showing count of POs in each status (draft, sent, confirmed, shipped, received) */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {Object.entries(STATUS_CONFIG).slice(0, 5).map(([status, config]) => {
             const count = purchaseOrders.filter(po => po.status === status).length
@@ -757,7 +933,7 @@ export default function PurchaseOrdersPage() {
           })}
         </div>
 
-        {/* Backorders Alert */}
+        {/* Backorders Alert Section: Displays warning banner if there are items in backorder with link to view backorders */}
         {backorders.length > 0 && (
           <Card className="border-amber-500/30 bg-amber-500/5">
             <CardContent className="py-4">
@@ -775,7 +951,7 @@ export default function PurchaseOrdersPage() {
           </Card>
         )}
 
-        {/* Search and Filters */}
+        {/* Search and Filters Section: Displays search input for PO number/supplier and status filter dropdown */}
         <Card>
           <CardContent className="py-4">
             <div className="flex gap-4">
@@ -804,7 +980,7 @@ export default function PurchaseOrdersPage() {
           </CardContent>
         </Card>
 
-        {/* Purchase Orders List */}
+        {/* Purchase Orders List Section: Displays all filtered purchase orders as cards with PO number, status, supplier, progress timeline, totals, and actions */}
         <Card>
           <CardHeader>
             <CardTitle>Purchase Orders</CardTitle>
@@ -898,7 +1074,7 @@ export default function PurchaseOrdersPage() {
         </Card>
       </div>
 
-      {/* Create PO Modal */}
+      {/* Create PO Modal Section: Form for creating a new purchase order with supplier selection, dates, items list, and notes */}
       <Modal
         isOpen={showCreatePO}
         onClose={() => setShowCreatePO(false)}
@@ -906,7 +1082,7 @@ export default function PurchaseOrdersPage() {
         size="xl"
       >
         <div className="space-y-6">
-          {/* Supplier Selection */}
+          {/* Supplier Selection Section: Dropdown to select supplier and order date input */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
@@ -938,7 +1114,7 @@ export default function PurchaseOrdersPage() {
             </div>
           </div>
 
-          {/* Expected Arrival */}
+          {/* Expected Arrival Section: Lead time (days) input and expected arrival date input with auto-calculation */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
@@ -970,7 +1146,7 @@ export default function PurchaseOrdersPage() {
             </div>
           </div>
 
-          {/* Items */}
+          {/* Items Section: List of items with SKU search, quantity, unit cost, line total, and file upload option */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="block text-sm font-medium text-[var(--foreground)]">
@@ -1122,7 +1298,7 @@ export default function PurchaseOrdersPage() {
             )}
           </div>
 
-          {/* Notes */}
+          {/* Notes Section: Textarea for adding optional notes to the purchase order */}
           <div>
             <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
               Notes
@@ -1151,7 +1327,7 @@ export default function PurchaseOrdersPage() {
         </ModalFooter>
       </Modal>
 
-      {/* Receive Items Modal */}
+      {/* Receive Items Modal Section: Form for receiving items with quantities for good, damaged, and backorder items, plus received date */}
       <Modal
         isOpen={showReceive}
         onClose={() => setShowReceive(false)}
@@ -1162,12 +1338,37 @@ export default function PurchaseOrdersPage() {
         {selectedPO && (
           <div className="space-y-4">
             <div className="bg-[var(--secondary)]/50 rounded-lg p-4 mb-4">
-              <p className="text-sm text-[var(--muted-foreground)]">Supplier: <span className="text-[var(--foreground)]">{selectedPO.supplier.name}</span></p>
-              {selectedPO.expectedArrivalDate && (
-                <p className="text-sm text-[var(--muted-foreground)] mt-1">
-                  Expected: <span className="text-[var(--foreground)]">{formatDate(new Date(selectedPO.expectedArrivalDate))}</span>
-                </p>
-              )}
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-sm text-[var(--muted-foreground)]">Supplier: <span className="text-[var(--foreground)]">{selectedPO.supplier.name}</span></p>
+                  {selectedPO.expectedArrivalDate && (
+                    <p className="text-sm text-[var(--muted-foreground)] mt-1">
+                      Expected: <span className="text-[var(--foreground)]">{formatDate(new Date(selectedPO.expectedArrivalDate))}</span>
+                    </p>
+                  )}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={autoReceiveAll}
+                  className="flex items-center gap-2"
+                >
+                  <PackageCheck className="w-4 h-4" />
+                  Auto-Receive All
+                </Button>
+              </div>
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
+                  Received Date <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={receiveDate}
+                  onChange={(e) => setReceiveDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
             </div>
             
             <div className="space-y-3">
@@ -1270,7 +1471,7 @@ export default function PurchaseOrdersPage() {
         </ModalFooter>
       </Modal>
 
-      {/* Edit Dates Modal */}
+      {/* Edit Dates Modal Section: Form to edit order date and expected arrival date for an existing purchase order */}
       <Modal
         isOpen={showEditDates}
         onClose={() => { setShowEditDates(false); setSelectedPO(null); }}
@@ -1336,7 +1537,7 @@ export default function PurchaseOrdersPage() {
         </ModalFooter>
       </Modal>
 
-      {/* Edit Costs Modal */}
+      {/* Edit Costs Modal Section: Form to edit shipping cost, tax, and other costs for an existing purchase order with total calculation */}
       <Modal
         isOpen={showEditCosts}
         onClose={() => { setShowEditCosts(false); setSelectedPO(null); }}
@@ -1434,7 +1635,7 @@ export default function PurchaseOrdersPage() {
         </ModalFooter>
       </Modal>
 
-      {/* Send Email Modal */}
+      {/* Send Email Modal Section: Interface to generate Excel file and open email client with pre-filled message to supplier */}
       <Modal
         isOpen={showSendEmail}
         onClose={() => { setShowSendEmail(false); setSelectedPO(null); }}
@@ -1492,7 +1693,7 @@ export default function PurchaseOrdersPage() {
         </ModalFooter>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal Section: Confirmation dialog with option to deduct inventory when deleting a received/partial PO */}
       <Modal
         isOpen={showDeleteConfirm}
         onClose={() => { setShowDeleteConfirm(false); setDeductOnDelete(true); }}

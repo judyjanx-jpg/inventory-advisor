@@ -540,10 +540,22 @@ export async function confirmTransportationOptions(
 ): Promise<{ operationId: string }> {
   const client = await createSpApiClient()
 
+  // Validate that we have at least one selection
+  if (!transportationSelections || transportationSelections.length === 0) {
+    throw new Error('At least one transportation selection is required')
+  }
+
+  // Amazon API expects shipmentTransportationConfigurations
+  // Map our format to Amazon's expected format
+  const shipmentTransportationConfigurations = transportationSelections.map(selection => ({
+    shipmentId: selection.shipmentId,
+    transportationOptionId: selection.transportationOptionId,
+  }))
+
   const response = await callFbaInboundApi(client, 'confirmTransportationOptions', {
     path: { inboundPlanId },
     body: {
-      transportationSelections,
+      shipmentTransportationConfigurations,
     },
   })
 
