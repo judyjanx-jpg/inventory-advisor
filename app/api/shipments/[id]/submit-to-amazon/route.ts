@@ -672,6 +672,15 @@ export async function POST(
       const selectedPlacement = placementOptions.find((p: any) => p.placementOptionId === placementOptionId)
       const shipmentIds = selectedPlacement?.shipmentIds || []
 
+      if (!shipmentIds || shipmentIds.length === 0) {
+        console.error(`[${id}] No shipment IDs found for placement option ${placementOptionId}`)
+        return NextResponse.json({
+          error: 'No shipments found for the selected placement option. The placement may not have been fully confirmed yet.',
+        }, { status: 400 })
+      }
+
+      console.log(`[${id}] Processing ${shipmentIds.length} shipment IDs for placement option ${placementOptionId}`)
+
       // Save shipment splits
       const shipmentDetails: Array<{
         amazonShipmentId: string
@@ -680,8 +689,14 @@ export async function POST(
       }> = []
 
       for (const amazonShipmentId of shipmentIds) {
-        // Get shipment details (destination FC)
-        const splitDetail = await getShipment(inboundPlanId, amazonShipmentId)
+        try {
+          // Get shipment details (destination FC)
+          const splitDetail = await getShipment(inboundPlanId, amazonShipmentId)
+          
+          if (!splitDetail) {
+            console.error(`[${id}] Failed to get shipment details for ${amazonShipmentId}`)
+            continue // Skip this shipment and continue with others
+          }
 
         // Save to database (use amazonShipmentId as unique key since it's @unique in schema)
         await prisma.amazonShipmentSplit.upsert({
@@ -711,44 +726,137 @@ export async function POST(
         })
 
         // Generate transportation options for this shipment
-        console.log(`[${id}] Generating transport options for ${amazonShipmentId}...`)
+        console.log(`[${id}] Processing transportation options for ${amazonShipmentId}...`)
         let transportationOptions: any[] = []
         
         try {
-          const genTransportResult = await generateTransportationOptions(
+          // First, try to list existing options (they might already be generated)
+          console.log(`[${id}] Checking for existing transportation options for ${amazonShipmentId}...`)
+          const existingListResult = await listTransportationOptions(
             inboundPlanId,
             amazonShipmentId,
             placementOptionId
           )
-          await waitForOperation(await createSpApiClient(), genTransportResult.operationId)
+          
+          if (existingListResult.transportationOptions && existingListResult.transportationOptions.length > 0) {
+            transportationOptions = existingListResult.transportationOptions
+            console.log(`[${id}] ✓ Found ${transportationOptions.length} existing transportation options for ${amazonShipmentId}`)
+            // Log option details for debugging
+            transportationOptions.forEach((opt, idx) => {
+              console.log(`[${id}]   Option ${idx + 1}: ${opt.transportationOptionId}, Mode: ${opt.shippingMode}, Solution: ${opt.shippingSolution}, Carrier: ${opt.carrier?.name || 'N/A'}`)
+            })
+          } else {
+            // No existing options, generate new ones
+            // According to Amazon workflow, we should generate delivery windows first, then transportation options
+            console.log(`[${id}] No existing options found. Generating delivery windows first for ${amazonShipmentId}...`)
+            
+            try {
+              const genWindowResult = await generateDeliveryWindowOptions(
+                inboundPlanId,
+                amazonShipmentId
+              )
+              await waitForOperation(await createSpApiClient(), genWindowResult.operationId)
+              console.log(`[${id}] Delivery windows generated for ${amazonShipmentId}`)
+            } catch (windowError: any) {
+              console.warn(`[${id}] Warning: Could not generate delivery windows for ${amazonShipmentId}:`, windowError.message)
+              // Continue anyway - delivery windows might not be required for transportation options
+            }
+            
+            console.log(`[${id}] Generating new transportation options for ${amazonShipmentId}...`)
+            const genTransportResult = await generateTransportationOptions(
+              inboundPlanId,
+              amazonShipmentId,
+              placementOptionId
+            )
+            
+            console.log(`[${id}] Waiting for transportation options generation to complete for ${amazonShipmentId}...`)
+            const operationStatus = await waitForOperation(await createSpApiClient(), genTransportResult.operationId)
+            
+            if (operationStatus.operationStatus === 'FAILED') {
+              console.error(`[${id}] Transportation options generation failed for ${amazonShipmentId}:`, operationStatus.operationProblems)
+              throw new Error(`Transportation options generation failed: ${JSON.stringify(operationStatus.operationProblems)}`)
+            }
 
-          // List transportation options
-          const listResult = await listTransportationOptions(
-            inboundPlanId,
-            amazonShipmentId,
-            placementOptionId
-          )
-          transportationOptions = listResult.transportationOptions || []
-          console.log(`[${id}] Found ${transportationOptions.length} transportation options for ${amazonShipmentId}`)
+            // Wait a moment for options to be available (Amazon may need a brief delay)
+            console.log(`[${id}] Waiting 3 seconds for transportation options to become available for ${amazonShipmentId}...`)
+            await new Promise(resolve => setTimeout(resolve, 3000))
+
+            // List transportation options after generation (try multiple times with retries)
+            let listAttempts = 0
+            const maxListAttempts = 3
+            while (listAttempts < maxListAttempts && transportationOptions.length === 0) {
+              listAttempts++
+              console.log(`[${id}] Listing transportation options (attempt ${listAttempts}/${maxListAttempts}) for ${amazonShipmentId}...`)
+              const listResult = await listTransportationOptions(
+                inboundPlanId,
+                amazonShipmentId,
+                placementOptionId
+              )
+              transportationOptions = listResult.transportationOptions || []
+              
+              if (transportationOptions.length === 0 && listAttempts < maxListAttempts) {
+                console.log(`[${id}] No options yet, waiting 2 more seconds before retry...`)
+                await new Promise(resolve => setTimeout(resolve, 2000))
+              }
+            }
+            
+            console.log(`[${id}] Found ${transportationOptions.length} transportation options for ${amazonShipmentId} after generation`)
+            
+            // Log option details for debugging
+            if (transportationOptions.length > 0) {
+              transportationOptions.forEach((opt, idx) => {
+                console.log(`[${id}]   Option ${idx + 1}: ${opt.transportationOptionId}, Mode: ${opt.shippingMode}, Solution: ${opt.shippingSolution}, Carrier: ${opt.carrier?.name || 'N/A'}`)
+              })
+            } else {
+              console.warn(`[${id}] ⚠️ No transportation options returned after generation for ${amazonShipmentId} after ${maxListAttempts} attempts`)
+            }
+          }
         } catch (transportError: any) {
-          console.error(`[${id}] Error generating/listing transportation options for ${amazonShipmentId}:`, transportError)
-          // Continue with empty options - user can select later or use own carrier
-          transportationOptions = []
-          // Don't fail the entire step if transportation options can't be generated
-          // The user can still proceed and select transportation options manually later
+          console.error(`[${id}] ❌ Error with transportation options for ${amazonShipmentId}:`, transportError.message)
+          console.error(`[${id}] Full error details:`, {
+            message: transportError.message,
+            code: transportError.code,
+            details: transportError.details,
+            stack: transportError.stack?.substring(0, 500),
+          })
+          
+          // Try one more time to list options (they might exist even if generation failed)
+          try {
+            console.log(`[${id}] Attempting to list options as fallback for ${amazonShipmentId}...`)
+            const fallbackListResult = await listTransportationOptions(
+              inboundPlanId,
+              amazonShipmentId,
+              placementOptionId
+            )
+            if (fallbackListResult.transportationOptions && fallbackListResult.transportationOptions.length > 0) {
+              transportationOptions = fallbackListResult.transportationOptions
+              console.log(`[${id}] ✓ Successfully retrieved ${transportationOptions.length} options on fallback for ${amazonShipmentId}`)
+            } else {
+              console.warn(`[${id}] ⚠️ No transportation options available for ${amazonShipmentId} - user will need to use own carrier`)
+              transportationOptions = []
+            }
+          } catch (fallbackError: any) {
+            console.error(`[${id}] ❌ Fallback list also failed for ${amazonShipmentId}:`, fallbackError.message)
+            transportationOptions = []
+          }
         }
 
-        shipmentDetails.push({
-          amazonShipmentId,
-          destinationFc: splitDetail.destination?.warehouseId || null,
-          transportationOptions: transportationOptions.map((opt: any) => ({
-            transportationOptionId: opt.transportationOptionId,
-            shippingMode: opt.shippingMode,
-            shippingSolution: opt.shippingSolution,
-            carrier: opt.carrier,
-            quote: opt.quote,
-          })),
-        })
+          shipmentDetails.push({
+            amazonShipmentId,
+            destinationFc: splitDetail.destination?.warehouseId || null,
+            transportationOptions: transportationOptions.map((opt: any) => ({
+              transportationOptionId: opt.transportationOptionId,
+              shippingMode: opt.shippingMode,
+              shippingSolution: opt.shippingSolution,
+              carrier: opt.carrier,
+              quote: opt.quote,
+            })),
+          })
+        } catch (shipmentError: any) {
+          console.error(`[${id}] Error processing shipment ${amazonShipmentId}:`, shipmentError)
+          // Continue with other shipments even if one fails
+          // Log error but don't fail the entire operation
+        }
       }
 
       // Update shipment
@@ -764,6 +872,13 @@ export async function POST(
       })
 
       console.log(`[${id}] Placement confirmed, ${shipmentDetails.length} shipment splits created`)
+
+      if (shipmentDetails.length === 0) {
+        console.error(`[${id}] No shipment details were created despite having ${shipmentIds.length} shipment IDs`)
+        return NextResponse.json({
+          error: 'Failed to retrieve shipment details. Please try again.',
+        }, { status: 500 })
+      }
 
       return NextResponse.json({
         success: true,
