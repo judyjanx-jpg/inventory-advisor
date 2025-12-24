@@ -389,6 +389,16 @@ export default function InventoryPage() {
             <CardTitle>Inventory Levels</CardTitle>
             <CardDescription>{filteredInventory.length} products</CardDescription>
           </CardHeader>
+          {/* Mobile Header Row */}
+          <div className="lg:hidden px-3 py-2 border-b border-[var(--border)] bg-[var(--secondary)]/30 flex items-center gap-1 text-[9px] text-[var(--muted-foreground)] uppercase tracking-wide">
+            <span className="w-3"></span>
+            <span className="flex-1 min-w-0">SKU</span>
+            <span className="w-8 text-right">FBA</span>
+            <span className="w-8 text-right">In</span>
+            <span className="w-8 text-right">WH</span>
+            <span className="w-10 text-right">Vel</span>
+            <span className="w-6 text-right">Days</span>
+          </div>
           <CardContent className="p-0">
             {filteredInventory.length === 0 ? (
               <div className="text-center py-12">
@@ -409,50 +419,25 @@ export default function InventoryPage() {
                       className="px-3 sm:px-6 py-3 sm:py-4 hover:bg-[var(--secondary)]/30 cursor-pointer"
                       onClick={() => setExpandedSku(expandedSku === item.masterSku ? null : item.masterSku)}
                     >
-                      {/* Mobile Layout */}
-                      <div className="lg:hidden">
-                        {/* SKU and Status */}
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            {expandedSku === item.masterSku ? (
-                              <ChevronDown className="w-4 h-4 text-[var(--muted-foreground)]" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-[var(--muted-foreground)]" />
-                            )}
-                            <p className="font-semibold text-[var(--foreground)] font-mono text-sm">{item.masterSku}</p>
-                          </div>
-                          {getStatusBadge(item.status)}
-                        </div>
-                        
-                        {/* Stats Grid - 2x3 on mobile */}
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div className="bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
-                            <p className="text-[10px] text-[var(--muted-foreground)]">FBA</p>
-                            <p className="text-sm font-semibold text-[var(--foreground)]">{item.fbaAvailable}</p>
-                          </div>
-                          <div className="bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
-                            <p className="text-[10px] text-[var(--muted-foreground)]">Inbound</p>
-                            <p className="text-sm font-semibold text-cyan-400">{item.fbaInbound}</p>
-                          </div>
-                          <div className="bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
-                            <p className="text-[10px] text-[var(--muted-foreground)]">Warehouse</p>
-                            <p className="text-sm font-semibold text-blue-400">{item.warehouseAvailable}</p>
-                          </div>
-                          <div className="col-span-2 bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
-                            <p className="text-[10px] text-[var(--muted-foreground)]">Velocity</p>
-                            <p className="text-sm font-semibold text-emerald-400">{Number(item.velocity30d || 0).toFixed(1)}/day</p>
-                          </div>
-                          <div className="bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
-                            <p className="text-[10px] text-[var(--muted-foreground)]">Days</p>
-                            <p className={`text-sm font-semibold ${
-                              item.daysOfStock < 14 ? 'text-red-400' :
-                              item.daysOfStock < 30 ? 'text-amber-400' :
-                              'text-[var(--foreground)]'
-                            }`}>
-                              {item.daysOfStock > 365 ? '365+' : item.daysOfStock}
-                            </p>
-                          </div>
-                        </div>
+                      {/* Mobile Layout - Single row */}
+                      <div className="lg:hidden flex items-center gap-1">
+                        {expandedSku === item.masterSku ? (
+                          <ChevronDown className="w-3 h-3 flex-shrink-0 text-[var(--muted-foreground)]" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3 flex-shrink-0 text-[var(--muted-foreground)]" />
+                        )}
+                        <span className="font-mono text-xs font-medium text-[var(--foreground)] truncate min-w-0 flex-1">{item.masterSku}</span>
+                        <span className="text-[10px] text-[var(--foreground)] w-8 text-right">{item.fbaAvailable}</span>
+                        <span className="text-[10px] text-cyan-400 w-8 text-right">{item.fbaInbound}</span>
+                        <span className="text-[10px] text-blue-400 w-8 text-right">{item.warehouseAvailable}</span>
+                        <span className="text-[10px] text-emerald-400 w-10 text-right">{Number(item.velocity30d || 0).toFixed(1)}</span>
+                        <span className={`text-[10px] w-6 text-right font-medium ${
+                          item.daysOfStock < 14 ? 'text-red-400' :
+                          item.daysOfStock < 30 ? 'text-amber-400' :
+                          'text-[var(--foreground)]'
+                        }`}>
+                          {item.daysOfStock > 365 ? '365+' : item.daysOfStock}
+                        </span>
                       </div>
 
                       {/* Desktop Layout */}
