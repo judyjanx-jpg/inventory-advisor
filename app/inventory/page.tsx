@@ -364,13 +364,13 @@ export default function InventoryPage() {
                   placeholder="Search by SKU or title..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--muted)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2.5 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
+                className="px-4 py-2.5 bg-[var(--muted)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               >
                 <option value="all">All Status</option>
                 <option value="healthy">Healthy</option>
