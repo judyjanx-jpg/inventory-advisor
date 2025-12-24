@@ -55,7 +55,10 @@ interface TransportOption {
   shippingMode: string
   shippingSolution: string
   carrier?: { name: string }
-  quote?: { cost: { amount: number; code: string } }
+  quote?: { 
+    price?: { amount: number; code: string }
+    cost?: { amount: number; code: string }
+  }
 }
 
 interface ShipmentSplit {
@@ -439,19 +442,8 @@ export default function ShipmentDetailPage() {
 
         setShipmentSplits(transportData.shipments)
 
-        // Auto-select transport options
-        const autoSelected: Record<string, string> = {}
-        for (const split of transportData.shipments) {
-          const partnered = split.transportationOptions.find(
-            (t: TransportOption) => t.shippingSolution === 'AMAZON_PARTNERED_CARRIER' && t.shippingMode === 'GROUND_SMALL_PARCEL'
-          )
-          if (partnered) {
-            autoSelected[split.amazonShipmentId] = partnered.transportationOptionId
-          } else if (split.transportationOptions.length > 0) {
-            autoSelected[split.amazonShipmentId] = split.transportationOptions[0].transportationOptionId
-          }
-        }
-        setSelectedTransports(autoSelected)
+        // Don't auto-select - user must choose their preferred transportation option
+        setSelectedTransports({})
       } else {
         console.log('Placement options received:', data.placementOptions?.length, 'options')
         console.log('Recommended option ID:', data.recommendedOptionId)
@@ -497,20 +489,9 @@ export default function ShipmentDetailPage() {
 
       setShipmentSplits(data.shipments)
 
-      // Auto-select the first transport option for each shipment (usually cheapest SPD)
-      const autoSelected: Record<string, string> = {}
-      for (const split of data.shipments) {
-        // Prefer AMAZON_PARTNERED_CARRIER with SPD mode
-        const partnered = split.transportationOptions.find(
-          (t: TransportOption) => t.shippingSolution === 'AMAZON_PARTNERED_CARRIER' && t.shippingMode === 'GROUND_SMALL_PARCEL'
-        )
-        if (partnered) {
-          autoSelected[split.amazonShipmentId] = partnered.transportationOptionId
-        } else if (split.transportationOptions.length > 0) {
-          autoSelected[split.amazonShipmentId] = split.transportationOptions[0].transportationOptionId
-        }
-      }
-      setSelectedTransports(autoSelected)
+      // Don't auto-select - let user choose from all available options
+      // User must explicitly select their preferred transportation option
+      setSelectedTransports({})
     } catch (error: any) {
       console.error('Error confirming placement:', error)
       setSubmissionError(error.message || 'Failed to confirm placement')
@@ -523,9 +504,10 @@ export default function ShipmentDetailPage() {
   // Step 3: Confirm transport selections and get labels
   const confirmTransportSelections = async () => {
     // Validate all shipments have a transport selected
-    const allSelected = shipmentSplits.every(s => selectedTransports[s.amazonShipmentId])
-    if (!allSelected) {
-      alert('Please select a shipping option for all shipments')
+    const missingSelections = shipmentSplits.filter(s => !selectedTransports[s.amazonShipmentId])
+    if (missingSelections.length > 0) {
+      const missingFCs = missingSelections.map(s => s.destinationFc || s.amazonShipmentId).join(', ')
+      alert(`Please select a transportation option for all shipments.\n\nMissing selections for: ${missingFCs}`)
       return
     }
 
@@ -575,8 +557,9 @@ export default function ShipmentDetailPage() {
     for (const split of shipmentSplits) {
       const selectedId = selectedTransports[split.amazonShipmentId]
       const option = split.transportationOptions.find(t => t.transportationOptionId === selectedId)
-      if (option?.quote?.cost?.amount) {
-        total += option.quote.cost.amount
+      const amount = option?.quote?.price?.amount || option?.quote?.cost?.amount || 0
+      if (amount) {
+        total += amount
       }
     }
     return total
@@ -1187,6 +1170,12 @@ export default function ShipmentDetailPage() {
                     <p className="text-slate-400 text-sm ml-8">Choose shipping method for each fulfillment center</p>
                   </div>
 
+                  <div className="mb-4 p-4 bg-slate-800/50 border border-slate-700 rounded-lg">
+                    <p className="text-slate-300 text-sm">
+                      <strong className="text-white">Select a transportation option for each shipment:</strong> Review all available options below and choose the best option for each destination. Costs are displayed for each option.
+                    </p>
+                  </div>
+
                   <div className="space-y-4 mb-6">
                     {shipmentSplits.map((split) => (
                       <div key={split.amazonShipmentId} className="border border-slate-700 rounded-lg p-4">
@@ -1194,6 +1183,11 @@ export default function ShipmentDetailPage() {
                           <div>
                             <span className="font-medium text-white">Ship to: {split.destinationFc || 'Unknown FC'}</span>
                             <span className="text-slate-500 text-sm ml-2">({split.amazonShipmentId})</span>
+                            {!selectedTransports[split.amazonShipmentId] && (
+                              <span className="ml-2 px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-semibold rounded">
+                                Selection Required
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1231,22 +1225,46 @@ export default function ShipmentDetailPage() {
                                         </span>
                                       )}
                                     </div>
-                                    <span className="text-slate-400 text-sm">
-                                      {option.shippingMode === 'GROUND_SMALL_PARCEL' ? 'Small Parcel Delivery (SPD)' : 
-                                       option.shippingMode === 'LTL' ? 'Less Than Truckload (LTL)' :
-                                       option.shippingMode || 'Standard Shipping'}
-                                    </span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      {option.shippingMode === 'GROUND_SMALL_PARCEL' && (
+                                        <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs font-semibold rounded">
+                                          SPD
+                                        </span>
+                                      )}
+                                      {option.shippingMode === 'FREIGHT_LTL' && (
+                                        <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs font-semibold rounded">
+                                          LTL
+                                        </span>
+                                      )}
+                                      {option.shippingMode === 'FREIGHT_FTL' && (
+                                        <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs font-semibold rounded">
+                                          FTL
+                                        </span>
+                                      )}
+                                      {option.shippingSolution === 'USE_YOUR_OWN_CARRIER' && (
+                                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-semibold rounded">
+                                          Own Carrier
+                                        </span>
+                                      )}
+                                      <span className="text-slate-400 text-sm">
+                                        {option.shippingMode === 'GROUND_SMALL_PARCEL' ? 'Small Parcel Delivery' : 
+                                         option.shippingMode === 'FREIGHT_LTL' ? 'Less Than Truckload' :
+                                         option.shippingMode === 'FREIGHT_FTL' ? 'Full Truckload' :
+                                         option.shippingMode || 'Standard Shipping'}
+                                        {option.shippingSolution === 'AMAZON_PARTNERED_CARRIER' ? ' • Amazon Partnered' : ''}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  {option.quote?.cost?.amount ? (
+                                  {(option.quote?.price?.amount || option.quote?.cost?.amount) ? (
                                     <div>
                                       <span className="font-bold text-lg text-cyan-400">
-                                        ${option.quote.cost.amount.toFixed(2)}
+                                        ${((option.quote?.price?.amount || option.quote?.cost?.amount || 0)).toFixed(2)}
                                       </span>
-                                      {option.quote.cost.code && (
+                                      {(option.quote?.price?.code || option.quote?.cost?.code) && (
                                         <div className="text-xs text-slate-500 mt-0.5">
-                                          {option.quote.cost.code}
+                                          {option.quote?.price?.code || option.quote?.cost?.code}
                                         </div>
                                       )}
                                     </div>
@@ -1288,7 +1306,7 @@ export default function ShipmentDetailPage() {
                     </Button>
                     <Button 
                       onClick={confirmTransportSelections} 
-                      disabled={submittingToAmazon || calculateTotalShippingCost() === 0}
+                      disabled={submittingToAmazon || !shipmentSplits.every(s => selectedTransports[s.amazonShipmentId])}
                       className="bg-cyan-500 hover:bg-cyan-600"
                     >
                       {submittingToAmazon ? 'Confirming...' : 'Confirm Shipping & Generate Labels'}

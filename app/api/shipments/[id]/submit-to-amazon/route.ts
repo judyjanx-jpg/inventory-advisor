@@ -1569,13 +1569,39 @@ export async function POST(
           placementOptionId
         )
 
-        // Find SPD partnered carrier option
-        const spdOption = findCheapestSpdOption(transportationOptions, split.amazonShipmentId)
-
-        if (!spdOption) {
-          console.warn(`[${id}] No SPD option available for ${split.amazonShipmentId}, checking for alternatives...`)
-          // Could fall back to non-partnered or LTL here
+        if (!transportationOptions || transportationOptions.length === 0) {
+          console.warn(`[${id}] No transportation options available for ${split.amazonShipmentId}`)
           continue
+        }
+
+        // Find SPD partnered carrier option first (preferred)
+        let selectedTransport = findCheapestSpdOption(transportationOptions, split.amazonShipmentId)
+
+        // If no SPD option, fall back to cheapest available option
+        if (!selectedTransport) {
+          console.warn(`[${id}] No SPD option available for ${split.amazonShipmentId}, using cheapest alternative...`)
+          
+          // Filter options for this shipment
+          const shipmentOptions = transportationOptions.filter(
+            opt => opt.shipmentId === split.amazonShipmentId
+          )
+
+          if (shipmentOptions.length === 0) {
+            console.warn(`[${id}] No transportation options found for shipment ${split.amazonShipmentId}`)
+            continue
+          }
+
+          // Sort by price (cheapest first) and use the first one
+          selectedTransport = shipmentOptions.sort((a, b) => {
+            const priceA = a.quote?.price?.amount || Infinity
+            const priceB = b.quote?.price?.amount || Infinity
+            return priceA - priceB
+          })[0]
+
+          if (!selectedTransport) {
+            console.warn(`[${id}] Could not select any transportation option for ${split.amazonShipmentId}`)
+            continue
+          }
         }
 
         // Generate delivery window options
@@ -1621,20 +1647,20 @@ export async function POST(
         await prisma.amazonShipmentSplit.update({
           where: { id: split.id },
           data: {
-            transportationOptionId: spdOption.transportationOptionId,
+            transportationOptionId: selectedTransport.transportationOptionId,
             deliveryWindowOptionId: deliveryWindow.deliveryWindowOptionId,
             deliveryWindowStart: new Date(deliveryWindow.startDate),
             deliveryWindowEnd: new Date(deliveryWindow.endDate),
-            carrier: spdOption.carrier?.name || 'Amazon Partnered Carrier',
+            carrier: selectedTransport.carrier?.name || selectedTransport.shippingSolution || 'Carrier',
           },
         })
 
         transportSelections.push({
           shipmentId: split.amazonShipmentId,
-          transportationOptionId: spdOption.transportationOptionId,
+          transportationOptionId: selectedTransport.transportationOptionId,
         })
 
-        console.log(`[${id}] Transport ${spdOption.transportationOptionId} and window ${deliveryWindow.deliveryWindowOptionId} selected for ${split.amazonShipmentId}`)
+        console.log(`[${id}] Transport ${selectedTransport.transportationOptionId} (${selectedTransport.shippingMode || 'N/A'}, ${selectedTransport.shippingSolution || 'N/A'}) and window ${deliveryWindow.deliveryWindowOptionId} selected for ${split.amazonShipmentId}`)
       }
 
       // Confirm all transportation options at once
@@ -1676,10 +1702,10 @@ export async function POST(
         console.log(`[${id}] Transportation confirmed for ${transportSelections.length} shipments`)
       } else if (unconfirmedSplits.length > 0) {
         // We had unconfirmed splits but no transport selections were made
-        console.warn(`[${id}] No SPD options were available for any shipment`)
+        console.warn(`[${id}] No transportation options were available for any shipment`)
         return NextResponse.json({
-          error: 'No transportation options available. SPD partnered carrier may not be available for this shipment.',
-          hint: 'Try using your own carrier instead.',
+          error: 'No transportation options available for any shipment.',
+          hint: 'Please use the interactive workflow (step=get_placement_options) to manually select transportation options, or use your own carrier.',
         }, { status: 400 })
       }
       } // end else block for unconfirmedSplits > 0
