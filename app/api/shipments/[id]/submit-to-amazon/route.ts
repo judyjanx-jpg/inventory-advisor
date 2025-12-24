@@ -559,15 +559,13 @@ export async function POST(
         // Get shipment details (destination FC)
         const splitDetail = await getShipment(inboundPlanId, amazonShipmentId)
 
-        // Save to database
+        // Save to database (use amazonShipmentId as unique key since it's @unique in schema)
         await prisma.amazonShipmentSplit.upsert({
           where: {
-            shipmentId_amazonShipmentId: {
-              shipmentId: id,
-              amazonShipmentId: amazonShipmentId,
-            },
+            amazonShipmentId: amazonShipmentId,
           },
           update: {
+            shipmentId: id, // Update shipmentId in case it changed
             destinationFc: splitDetail.destination?.warehouseId || null,
             destinationAddress: splitDetail.destination?.address
               ? JSON.stringify(splitDetail.destination.address)
@@ -716,10 +714,7 @@ export async function POST(
         // Update the split record
         await prisma.amazonShipmentSplit.update({
           where: {
-            shipmentId_amazonShipmentId: {
-              shipmentId: id,
-              amazonShipmentId: amazonShipmentId,
-            },
+            amazonShipmentId: amazonShipmentId,
           },
           data: {
             transportationOptionId: transportationOptionId,
@@ -781,20 +776,14 @@ export async function POST(
         // Get the split record for carrier info
         const split = await prisma.amazonShipmentSplit.findUnique({
           where: {
-            shipmentId_amazonShipmentId: {
-              shipmentId: id,
-              amazonShipmentId: amazonShipmentId,
-            },
+            amazonShipmentId: amazonShipmentId,
           },
         })
 
         // Update split with final info
         await prisma.amazonShipmentSplit.update({
           where: {
-            shipmentId_amazonShipmentId: {
-              shipmentId: id,
-              amazonShipmentId: amazonShipmentId,
-            },
+            amazonShipmentId: amazonShipmentId,
           },
           data: {
             status: 'transport_confirmed',

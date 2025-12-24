@@ -1220,19 +1220,40 @@ export default function ShipmentDetailPage() {
                                     }))}
                                   />
                                   <div>
-                                    <span className="text-white">
-                                      {option.carrier?.name || option.shippingSolution}
-                                    </span>
-                                    <span className="text-slate-500 text-sm ml-2">
-                                      ({option.shippingMode === 'GROUND_SMALL_PARCEL' ? 'SPD' : option.shippingMode})
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-white font-medium">
+                                        {option.carrier?.name || option.shippingSolution}
+                                      </span>
+                                      {(option.carrier?.name?.toUpperCase().includes('UPS') || 
+                                        option.shippingSolution?.includes('UPS')) && (
+                                        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-semibold rounded">
+                                          UPS
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-slate-400 text-sm">
+                                      {option.shippingMode === 'GROUND_SMALL_PARCEL' ? 'Small Parcel Delivery (SPD)' : 
+                                       option.shippingMode === 'LTL' ? 'Less Than Truckload (LTL)' :
+                                       option.shippingMode || 'Standard Shipping'}
                                     </span>
                                   </div>
                                 </div>
-                                <span className="font-bold text-white">
-                                  {option.quote?.cost?.amount
-                                    ? `$${option.quote.cost.amount.toFixed(2)}`
-                                    : 'Quote TBD'}
-                                </span>
+                                <div className="text-right">
+                                  {option.quote?.cost?.amount ? (
+                                    <div>
+                                      <span className="font-bold text-lg text-cyan-400">
+                                        ${option.quote.cost.amount.toFixed(2)}
+                                      </span>
+                                      {option.quote.cost.code && (
+                                        <div className="text-xs text-slate-500 mt-0.5">
+                                          {option.quote.cost.code}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="font-medium text-amber-400">Quote TBD</span>
+                                  )}
+                                </div>
                               </label>
                             ))}
                           </div>
@@ -1245,13 +1266,19 @@ export default function ShipmentDetailPage() {
                     ))}
                   </div>
 
-                  {/* Total Cost Summary */}
-                  <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
+                  {/* Total Cost Summary - Prominent Display */}
+                  <div className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-2 border-cyan-500/30 rounded-lg p-4 mb-6">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-300">Estimated Total Shipping</span>
-                      <span className="text-xl font-bold text-white">
-                        ${calculateTotalShippingCost().toFixed(2)}
-                      </span>
+                      <div>
+                        <span className="text-slate-300 text-sm">Total Shipping Cost</span>
+                        <p className="text-xs text-slate-400 mt-1">Review costs before confirming</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-3xl font-bold text-cyan-400">
+                          ${calculateTotalShippingCost().toFixed(2)}
+                        </span>
+                        <p className="text-xs text-slate-400 mt-1">USD</p>
+                      </div>
                     </div>
                   </div>
 
@@ -1259,8 +1286,12 @@ export default function ShipmentDetailPage() {
                     <Button variant="outline" onClick={closeSubmissionModal}>
                       Cancel
                     </Button>
-                    <Button onClick={confirmTransportSelections} disabled={submittingToAmazon}>
-                      {submittingToAmazon ? 'Confirming...' : 'Confirm & Get Labels'}
+                    <Button 
+                      onClick={confirmTransportSelections} 
+                      disabled={submittingToAmazon || calculateTotalShippingCost() === 0}
+                      className="bg-cyan-500 hover:bg-cyan-600"
+                    >
+                      {submittingToAmazon ? 'Confirming...' : 'Confirm Shipping & Generate Labels'}
                     </Button>
                   </div>
                 </div>
