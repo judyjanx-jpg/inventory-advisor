@@ -303,20 +303,21 @@ export default function InventoryPage() {
     <MainLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-[var(--foreground)]">Inventory</h1>
-                <p className="text-[var(--muted-foreground)] mt-1">Multi-channel inventory tracking and forecasting</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-[var(--foreground)]">Inventory</h1>
+                <p className="text-sm sm:text-base text-[var(--muted-foreground)] mt-1">Multi-channel inventory tracking and forecasting</p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-2 sm:gap-3">
                 <WarehouseInventoryUpload onUploadComplete={fetchInventory} />
-                <Button variant="outline" onClick={recalculateVelocity} loading={recalculatingVelocity}>
-                  <TrendingUp className={`w-4 h-4 mr-2 ${recalculatingVelocity ? 'animate-spin' : ''}`} />
-                  Recalculate Velocity
+                <Button variant="outline" onClick={recalculateVelocity} loading={recalculatingVelocity} className="text-xs sm:text-sm">
+                  <TrendingUp className={`w-4 h-4 sm:mr-2 ${recalculatingVelocity ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Recalculate Velocity</span>
                 </Button>
-                <Button onClick={syncInventory} loading={syncing}>
-                  <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                  Sync Amazon
+                <Button onClick={syncInventory} loading={syncing} className="text-xs sm:text-sm">
+                  <RefreshCw className={`w-4 h-4 sm:mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Sync Amazon</span>
+                  <span className="sm:hidden">Sync</span>
                 </Button>
               </div>
         </div>
@@ -355,22 +356,22 @@ export default function InventoryPage() {
 
         {/* Search and Filters */}
         <Card>
-          <CardContent className="py-4">
-            <div className="flex gap-4">
+          <CardContent className="py-3 sm:py-4">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--muted-foreground)]" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 sm:w-5 h-4 sm:h-5 text-[var(--muted-foreground)]" />
                 <input
                   type="text"
                   placeholder="Search by SKU or title..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--muted)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
+                  className="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-2.5 text-sm sm:text-base bg-[var(--muted)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2.5 bg-[var(--muted)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
+                className="px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-[var(--muted)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-cyan-500"
               >
                 <option value="all">All Status</option>
                 <option value="healthy">Healthy</option>
@@ -405,94 +406,143 @@ export default function InventoryPage() {
                   <div key={item.masterSku}>
                     {/* Main Row */}
                     <div 
-                      className="flex items-center px-6 py-4 hover:bg-[var(--secondary)]/30 cursor-pointer"
+                      className="px-3 sm:px-6 py-3 sm:py-4 hover:bg-[var(--secondary)]/30 cursor-pointer"
                       onClick={() => setExpandedSku(expandedSku === item.masterSku ? null : item.masterSku)}
                     >
-                      <div className="mr-3">
-                        {expandedSku === item.masterSku ? (
-                          <ChevronDown className="w-5 h-5 text-[var(--muted-foreground)]" />
-                        ) : (
-                          <ChevronRight className="w-5 h-5 text-[var(--muted-foreground)]" />
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3">
-                          <p className="font-semibold text-[var(--foreground)] font-mono">{item.masterSku}</p>
+                      {/* Mobile Layout */}
+                      <div className="lg:hidden">
+                        {/* SKU and Status */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {expandedSku === item.masterSku ? (
+                              <ChevronDown className="w-4 h-4 text-[var(--muted-foreground)]" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-[var(--muted-foreground)]" />
+                            )}
+                            <p className="font-semibold text-[var(--foreground)] font-mono text-sm">{item.masterSku}</p>
+                          </div>
                           {getStatusBadge(item.status)}
                         </div>
-                        <p className="text-sm text-[var(--muted-foreground)] mt-0.5 truncate">
-                          {item.asin && <span className="font-mono">{item.asin}</span>}
-                          {item.asin && item.title && <span className="mx-2">•</span>}
-                          <span className="truncate block" title={item.title}>
-                            {item.title && item.title.length > 80 ? `${item.title.substring(0, 80)}...` : item.title}
-                          </span>
-                        </p>
+                        
+                        {/* Stats Grid - 2x3 on mobile */}
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
+                            <p className="text-[10px] text-[var(--muted-foreground)]">FBA</p>
+                            <p className="text-sm font-semibold text-[var(--foreground)]">{item.fbaAvailable}</p>
+                          </div>
+                          <div className="bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
+                            <p className="text-[10px] text-[var(--muted-foreground)]">Inbound</p>
+                            <p className="text-sm font-semibold text-cyan-400">{item.fbaInbound}</p>
+                          </div>
+                          <div className="bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
+                            <p className="text-[10px] text-[var(--muted-foreground)]">Warehouse</p>
+                            <p className="text-sm font-semibold text-blue-400">{item.warehouseAvailable}</p>
+                          </div>
+                          <div className="col-span-2 bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
+                            <p className="text-[10px] text-[var(--muted-foreground)]">Velocity</p>
+                            <p className="text-sm font-semibold text-emerald-400">{Number(item.velocity30d || 0).toFixed(1)}/day</p>
+                          </div>
+                          <div className="bg-[var(--secondary)]/30 rounded-lg py-2 px-1">
+                            <p className="text-[10px] text-[var(--muted-foreground)]">Days</p>
+                            <p className={`text-sm font-semibold ${
+                              item.daysOfStock < 14 ? 'text-red-400' :
+                              item.daysOfStock < 30 ? 'text-amber-400' :
+                              'text-[var(--foreground)]'
+                            }`}>
+                              {item.daysOfStock > 365 ? '365+' : item.daysOfStock}
+                            </p>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-6 text-right">
-                        <div>
-                          <p className="text-xs text-[var(--muted-foreground)]">FBA Available</p>
-                          <p className="text-lg font-semibold text-[var(--foreground)]">{item.fbaAvailable}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-[var(--muted-foreground)]">FBA Inbound</p>
-                          <p className="text-lg font-semibold text-cyan-400">{item.fbaInbound}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-[var(--muted-foreground)]">Warehouse</p>
-                          <p className="text-lg font-semibold text-blue-400">{item.warehouseAvailable}</p>
-                          {item.warehouseInventory && item.warehouseInventory.length > 0 && (
-                            <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                              {item.warehouseInventory.length} location{item.warehouseInventory.length !== 1 ? 's' : ''}
-                            </p>
+                      {/* Desktop Layout */}
+                      <div className="hidden lg:flex items-center">
+                        <div className="mr-3">
+                          {expandedSku === item.masterSku ? (
+                            <ChevronDown className="w-5 h-5 text-[var(--muted-foreground)]" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-[var(--muted-foreground)]" />
                           )}
                         </div>
-                        <div className="border-l border-[var(--border)] pl-6">
-                          <p className="text-xs text-[var(--muted-foreground)]">Velocity</p>
-                          <p className="text-lg font-semibold text-emerald-400">{Number(item.velocity30d || 0).toFixed(1)}/day</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-[var(--muted-foreground)]">Days of Stock</p>
-                          <p className={`text-lg font-semibold ${
-                            item.daysOfStock < 14 ? 'text-red-400' :
-                            item.daysOfStock < 30 ? 'text-amber-400' :
-                            'text-[var(--foreground)]'
-                          }`}>
-                            {item.daysOfStock > 365 ? '365+' : item.daysOfStock}
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3">
+                            <p className="font-semibold text-[var(--foreground)] font-mono">{item.masterSku}</p>
+                            {getStatusBadge(item.status)}
+                          </div>
+                          <p className="text-sm text-[var(--muted-foreground)] mt-0.5 truncate">
+                            {item.asin && <span className="font-mono">{item.asin}</span>}
+                            {item.asin && item.title && <span className="mx-2">•</span>}
+                            <span className="truncate block" title={item.title}>
+                              {item.title && item.title.length > 80 ? `${item.title.substring(0, 80)}...` : item.title}
+                            </span>
                           </p>
+                        </div>
+
+                        <div className="flex items-center gap-6 text-right">
+                          <div>
+                            <p className="text-xs text-[var(--muted-foreground)]">FBA Available</p>
+                            <p className="text-lg font-semibold text-[var(--foreground)]">{item.fbaAvailable}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-[var(--muted-foreground)]">FBA Inbound</p>
+                            <p className="text-lg font-semibold text-cyan-400">{item.fbaInbound}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-[var(--muted-foreground)]">Warehouse</p>
+                            <p className="text-lg font-semibold text-blue-400">{item.warehouseAvailable}</p>
+                            {item.warehouseInventory && item.warehouseInventory.length > 0 && (
+                              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                                {item.warehouseInventory.length} location{item.warehouseInventory.length !== 1 ? 's' : ''}
+                              </p>
+                            )}
+                          </div>
+                          <div className="border-l border-[var(--border)] pl-6">
+                            <p className="text-xs text-[var(--muted-foreground)]">Velocity</p>
+                            <p className="text-lg font-semibold text-emerald-400">{Number(item.velocity30d || 0).toFixed(1)}/day</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-[var(--muted-foreground)]">Days of Stock</p>
+                            <p className={`text-lg font-semibold ${
+                              item.daysOfStock < 14 ? 'text-red-400' :
+                              item.daysOfStock < 30 ? 'text-amber-400' :
+                              'text-[var(--foreground)]'
+                            }`}>
+                              {item.daysOfStock > 365 ? '365+' : item.daysOfStock}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Expanded Channel Breakdown */}
                     {expandedSku === item.masterSku && (
-                      <div className="px-6 py-4 bg-[var(--card)]/30 border-t border-[var(--border)]/50">
-                        <div className="ml-8 space-y-6">
+                      <div className="px-3 sm:px-6 py-3 sm:py-4 bg-[var(--card)]/30 border-t border-[var(--border)]/50">
+                        <div className="sm:ml-8 space-y-4 sm:space-y-6">
                           {item.channelInventory && item.channelInventory.length > 0 && (
                             <div>
-                              <h4 className="text-sm font-semibold text-[var(--foreground)] flex items-center gap-2 mb-4">
+                              <h4 className="text-xs sm:text-sm font-semibold text-[var(--foreground)] flex items-center gap-2 mb-3 sm:mb-4">
                                 <Globe className="w-4 h-4" />
                                 Channel Breakdown
                               </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                                 {item.channelInventory.map((channel, idx) => (
                                   <div 
                                     key={idx}
-                                    className="flex items-center justify-between p-3 bg-[var(--secondary)]/50 rounded-lg border border-[var(--border)]/50"
+                                    className="flex items-center justify-between p-2 sm:p-3 bg-[var(--secondary)]/50 rounded-lg border border-[var(--border)]/50"
                                   >
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-xl">{CHANNEL_FLAGS[channel.channel] || '🔗'}</span>
+                                    <div className="flex items-center gap-2 sm:gap-3">
+                                      <span className="text-lg sm:text-xl">{CHANNEL_FLAGS[channel.channel] || '🔗'}</span>
                                       <div>
-                                        <p className="text-sm font-medium text-[var(--foreground)]">
-                                          {channel.channel.replace('amazon_', 'Amazon ').toUpperCase()}
+                                        <p className="text-xs sm:text-sm font-medium text-[var(--foreground)]">
+                                          {channel.channel.replace('amazon_', '').toUpperCase()}
                                         </p>
-                                        <p className="text-xs text-[var(--muted-foreground)] font-mono">{channel.channelSku}</p>
+                                        <p className="text-[10px] sm:text-xs text-[var(--muted-foreground)] font-mono truncate max-w-[100px] sm:max-w-none">{channel.channelSku}</p>
                                       </div>
                                     </div>
                                     <div className="text-right">
-                                      <p className="font-semibold text-[var(--foreground)]">{channel.fbaAvailable}</p>
-                                      <p className="text-xs text-[var(--muted-foreground)]">{Number(channel.velocity30d || 0).toFixed(1)}/day</p>
+                                      <p className="text-sm sm:text-base font-semibold text-[var(--foreground)]">{channel.fbaAvailable}</p>
+                                      <p className="text-[10px] sm:text-xs text-[var(--muted-foreground)]">{Number(channel.velocity30d || 0).toFixed(1)}/day</p>
                                     </div>
                                   </div>
                                 ))}
@@ -502,27 +552,27 @@ export default function InventoryPage() {
 
                           {item.warehouseInventory && item.warehouseInventory.length > 0 && (
                             <div>
-                              <h4 className="text-sm font-semibold text-[var(--foreground)] flex items-center gap-2 mb-4">
+                              <h4 className="text-xs sm:text-sm font-semibold text-[var(--foreground)] flex items-center gap-2 mb-3 sm:mb-4">
                                 <Warehouse className="w-4 h-4" />
                                 Warehouse Breakdown
                               </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                                 {item.warehouseInventory.map((wh, idx) => (
                                   <div 
                                     key={idx}
-                                    className="flex items-center justify-between p-3 bg-[var(--secondary)]/50 rounded-lg border border-[var(--border)]/50"
+                                    className="flex items-center justify-between p-2 sm:p-3 bg-[var(--secondary)]/50 rounded-lg border border-[var(--border)]/50"
                                   >
-                                    <div className="flex items-center gap-3">
-                                      <Building2 className="w-5 h-5 text-blue-400" />
+                                    <div className="flex items-center gap-2 sm:gap-3">
+                                      <Building2 className="w-4 sm:w-5 h-4 sm:h-5 text-blue-400" />
                                       <div>
-                                        <p className="text-sm font-medium text-[var(--foreground)]">{wh.warehouseName}</p>
-                                        <p className="text-xs text-[var(--muted-foreground)] font-mono">{wh.warehouseCode}</p>
+                                        <p className="text-xs sm:text-sm font-medium text-[var(--foreground)]">{wh.warehouseName}</p>
+                                        <p className="text-[10px] sm:text-xs text-[var(--muted-foreground)] font-mono">{wh.warehouseCode}</p>
                                       </div>
                                     </div>
                                     <div className="text-right">
-                                      <p className="font-semibold text-[var(--foreground)]">{wh.available}</p>
+                                      <p className="text-sm sm:text-base font-semibold text-[var(--foreground)]">{wh.available}</p>
                                       {wh.reserved > 0 && (
-                                        <p className="text-xs text-[var(--muted-foreground)]">Reserved: {wh.reserved}</p>
+                                        <p className="text-[10px] sm:text-xs text-[var(--muted-foreground)]">Reserved: {wh.reserved}</p>
                                       )}
                                     </div>
                                   </div>
@@ -532,28 +582,29 @@ export default function InventoryPage() {
                           )}
 
                           {/* Reorder Recommendation */}
-                          <div className="mt-4 p-4 bg-[var(--secondary)]/30 rounded-lg border border-[var(--border)]/50">
-                            <h5 className="text-sm font-semibold text-[var(--foreground)] mb-2">📊 Reorder Recommendation</h5>
-                            <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-[var(--secondary)]/30 rounded-lg border border-[var(--border)]/50">
+                            <h5 className="text-xs sm:text-sm font-semibold text-[var(--foreground)] mb-2">📊 Reorder Recommendation</h5>
+                            <div className="grid grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">
                               <div>
-                                <p className="text-[var(--muted-foreground)]">90-day need</p>
-                                <p className="text-[var(--foreground)] font-medium">{Math.ceil(item.velocity30d * 90)} units</p>
+                                <p className="text-[var(--muted-foreground)] text-[10px] sm:text-sm">90-day need</p>
+                                <p className="text-[var(--foreground)] font-medium">{Math.ceil(item.velocity30d * 90)}</p>
                               </div>
                               <div>
-                                <p className="text-[var(--muted-foreground)]">Current total</p>
-                                <p className="text-[var(--foreground)] font-medium">{item.totalStock} units</p>
+                                <p className="text-[var(--muted-foreground)] text-[10px] sm:text-sm">Current</p>
+                                <p className="text-[var(--foreground)] font-medium">{item.totalStock}</p>
                               </div>
                               <div>
-                                <p className="text-[var(--muted-foreground)]">Suggested PO</p>
+                                <p className="text-[var(--muted-foreground)] text-[10px] sm:text-sm">Suggested</p>
                                 <p className={`font-medium ${Math.ceil(item.velocity30d * 90) - item.totalStock > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                                  {Math.max(0, Math.ceil(item.velocity30d * 90) - item.totalStock)} units
+                                  {Math.max(0, Math.ceil(item.velocity30d * 90) - item.totalStock)}
                                 </p>
                               </div>
                             </div>
                             {Math.ceil(item.velocity30d * 90) - item.totalStock > 0 && (
-                              <Button variant="outline" size="sm" className="mt-3">
-                                <Truck className="w-4 h-4 mr-1" />
-                                Create Purchase Order
+                              <Button variant="outline" size="sm" className="mt-3 text-xs sm:text-sm">
+                                <Truck className="w-3 sm:w-4 h-3 sm:h-4 mr-1" />
+                                <span className="hidden sm:inline">Create Purchase Order</span>
+                                <span className="sm:hidden">Create PO</span>
                               </Button>
                             )}
                           </div>
