@@ -446,8 +446,10 @@ export async function generateTransportationOptions(
   const response = await callFbaInboundApi(client, 'generateTransportationOptions', {
     path: { inboundPlanId },
     body: {
-      shipmentId,
       placementOptionId,
+      shipmentTransportationConfigurations: [
+        { shipmentId },
+      ],
     },
   })
 
