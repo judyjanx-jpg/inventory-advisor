@@ -62,6 +62,7 @@ export async function GET(
 
     return NextResponse.json({
       sku: product.sku,
+      asin: product.asin,
       title: product.title,
       cost: Number(product.cost || 0),
       supplierId: product.supplierId,

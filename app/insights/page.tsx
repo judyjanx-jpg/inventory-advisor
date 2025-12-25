@@ -422,8 +422,22 @@ export default function InsightsPage() {
         break
       case 'open_listing':
         if (insight.sku) {
-          // Open Amazon listing in new tab - use ASIN search since SKU might not be ASIN
-          window.open(`https://www.amazon.com/s?k=${encodeURIComponent(insight.sku)}`, '_blank')
+          // Fetch product to get ASIN, then open Amazon listing
+          try {
+            const res = await fetch(`/api/products/${insight.sku}`)
+            if (res.ok) {
+              const product = await res.json()
+              if (product.asin) {
+                window.open(`https://www.amazon.com/dp/${product.asin}`, '_blank')
+              } else {
+                // Fallback to search if no ASIN
+                window.open(`https://www.amazon.com/s?k=${encodeURIComponent(insight.sku)}`, '_blank')
+              }
+            }
+          } catch (e) {
+            // Fallback to search on error
+            window.open(`https://www.amazon.com/s?k=${encodeURIComponent(insight.sku)}`, '_blank')
+          }
         }
         break
       case 'view_returns':
