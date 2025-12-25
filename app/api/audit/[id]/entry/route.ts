@@ -142,6 +142,22 @@ export async function POST(
       })
     }
 
+    // Clear pending audit items for this SKU (mark as audited)
+    try {
+      await prisma.pendingAuditItem.updateMany({
+        where: {
+          masterSku: sku,
+          auditedAt: null,
+        },
+        data: {
+          auditedAt: new Date(),
+        },
+      })
+    } catch (auditError) {
+      // Don't fail the audit if pending audit tracking fails
+      console.error('Failed to clear pending audit items (non-blocking):', auditError)
+    }
+
     return NextResponse.json({ entry, success: true })
   } catch (error: any) {
     console.error('Error saving audit entry:', error)

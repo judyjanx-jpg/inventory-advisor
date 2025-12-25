@@ -28,7 +28,8 @@ import {
   ArrowRight,
   AlertCircle,
   Upload,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ClipboardCheck
 } from 'lucide-react'
 import StatusButton from '@/components/purchase-orders/StatusButton'
 import ProgressTimeline from '@/components/purchase-orders/ProgressTimeline'
@@ -131,6 +132,7 @@ export default function PurchaseOrdersPage() {
   // Receive form
   const [receiveItems, setReceiveItems] = useState<Record<number, { received: number; damaged: number; backorder: number }>>({})
   const [savingReceive, setSavingReceive] = useState(false)
+  const [selectedReceiveItems, setSelectedReceiveItems] = useState<Set<number>>(new Set())
   
   // Delete options
   const [deductOnDelete, setDeductOnDelete] = useState(true)
@@ -139,6 +141,9 @@ export default function PurchaseOrdersPage() {
   const [skuSearchTerms, setSkuSearchTerms] = useState<Record<number, string>>({})
   const [openSkuDropdown, setOpenSkuDropdown] = useState<number | null>(null)
   const [itemsFileInputRef, setItemsFileInputRef] = useState<HTMLInputElement | null>(null)
+
+  // Pending audit state
+  const [pendingAuditCount, setPendingAuditCount] = useState(0)
 
   useEffect(() => {
     fetchData()
@@ -199,22 +204,25 @@ export default function PurchaseOrdersPage() {
 
   const fetchData = async () => {
     try {
-      const [posRes, suppliersRes, productsRes, backordersRes] = await Promise.all([
+      const [posRes, suppliersRes, productsRes, backordersRes, pendingAuditRes] = await Promise.all([
         fetch('/api/purchase-orders'),
         fetch('/api/suppliers'),
         fetch('/api/products?flat=true'), // Fetch all products including child SKUs
         fetch('/api/backorders'),
+        fetch('/api/audit/pending'),
       ])
       
       const posData = await posRes.json()
       const suppliersData = await suppliersRes.json()
       const productsData = await productsRes.json()
       const backordersData = await backordersRes.json().catch(() => [])
+      const pendingAuditData = await pendingAuditRes.json().catch(() => ({ count: 0 }))
       
       setPurchaseOrders(Array.isArray(posData) ? posData : [])
       setSuppliers(Array.isArray(suppliersData) ? suppliersData : [])
       setProducts(Array.isArray(productsData) ? productsData : [])
       setBackorders(Array.isArray(backordersData) ? backordersData : [])
+      setPendingAuditCount(pendingAuditData.count || 0)
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -509,16 +517,68 @@ export default function PurchaseOrdersPage() {
   const openReceiveModal = (po: PurchaseOrder) => {
     setSelectedPO(po)
     const initialReceive: Record<number, { received: number; damaged: number; backorder: number }> = {}
+    const initialSelected = new Set<number>()
     po.items.forEach(item => {
       const remaining = item.quantityOrdered - item.quantityReceived - (item.quantityBackordered || 0)
       initialReceive[item.id] = { 
-        received: remaining,
+        received: 0, // Start with 0, user will select items to receive
         damaged: 0,
         backorder: 0
       }
+      // Pre-select items that have remaining quantity
+      if (remaining > 0) {
+        initialSelected.add(item.id)
+      }
     })
     setReceiveItems(initialReceive)
+    setSelectedReceiveItems(initialSelected)
     setShowReceive(true)
+  }
+
+  // Toggle selection of an item in receive modal
+  const toggleReceiveItemSelection = (itemId: number) => {
+    const newSelected = new Set(selectedReceiveItems)
+    if (newSelected.has(itemId)) {
+      newSelected.delete(itemId)
+    } else {
+      newSelected.add(itemId)
+    }
+    setSelectedReceiveItems(newSelected)
+  }
+
+  // Select/deselect all items
+  const toggleSelectAllReceive = () => {
+    if (!selectedPO) return
+    const itemsWithRemaining = selectedPO.items.filter(item => {
+      const remaining = item.quantityOrdered - item.quantityReceived - (item.quantityBackordered || 0)
+      return remaining > 0
+    })
+    
+    if (selectedReceiveItems.size === itemsWithRemaining.length) {
+      // All selected, deselect all
+      setSelectedReceiveItems(new Set())
+    } else {
+      // Select all items with remaining quantity
+      setSelectedReceiveItems(new Set(itemsWithRemaining.map(item => item.id)))
+    }
+  }
+
+  // Receive all selected items at full quantity
+  const receiveAllSelected = () => {
+    if (!selectedPO) return
+    const newReceiveItems = { ...receiveItems }
+    selectedReceiveItems.forEach(itemId => {
+      const item = selectedPO.items.find(i => i.id === itemId)
+      if (item) {
+        const remaining = item.quantityOrdered - item.quantityReceived - (item.quantityBackordered || 0)
+        newReceiveItems[itemId] = {
+          received: remaining,
+          damaged: 0,
+          backorder: 0
+        }
+      }
+    })
+    setReceiveItems(newReceiveItems)
   }
 
   const saveReceive = async () => {
@@ -721,10 +781,25 @@ export default function PurchaseOrdersPage() {
             <h1 className="text-3xl font-bold text-[var(--foreground)]">Purchase Orders</h1>
             <p className="text-[var(--muted-foreground)] mt-1">Manage supplier orders and receiving</p>
           </div>
-          <Button onClick={() => setShowCreatePO(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create Purchase Order
-          </Button>
+          <div className="flex items-center gap-3">
+            {pendingAuditCount > 0 && (
+              <Button 
+                variant="outline" 
+                onClick={() => router.push('/audit')}
+                className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+              >
+                <ClipboardCheck className="w-4 h-4 mr-2" />
+                Needs Auditing
+                <span className="ml-2 px-2 py-0.5 text-xs bg-amber-500/20 rounded-full">
+                  {pendingAuditCount}
+                </span>
+              </Button>
+            )}
+            <Button onClick={() => setShowCreatePO(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create Purchase Order
+            </Button>
+          </div>
         </div>
 
         {/* Status Summary Cards */}
@@ -1169,27 +1244,81 @@ export default function PurchaseOrdersPage() {
                 </p>
               )}
             </div>
+
+            {/* Select All & Receive Selected Actions */}
+            {(() => {
+              const itemsWithRemaining = selectedPO.items.filter(item => {
+                const remaining = item.quantityOrdered - item.quantityReceived - (item.quantityBackordered || 0)
+                return remaining > 0
+              })
+              const allSelected = itemsWithRemaining.length > 0 && selectedReceiveItems.size === itemsWithRemaining.length
+              const someSelected = selectedReceiveItems.size > 0
+              
+              return (
+                <div className="flex items-center justify-between p-3 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAllReceive}
+                      className="w-5 h-5 rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500 focus:ring-cyan-500 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-[var(--foreground)]">
+                      {allSelected ? 'Deselect All' : 'Select All'} ({selectedReceiveItems.size}/{itemsWithRemaining.length})
+                    </span>
+                  </label>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={receiveAllSelected}
+                    disabled={!someSelected}
+                    className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+                  >
+                    <PackageCheck className="w-4 h-4 mr-1" />
+                    Receive Selected ({selectedReceiveItems.size})
+                  </Button>
+                </div>
+              )
+            })()}
             
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
               {selectedPO.items.map((item) => {
                 const remaining = item.quantityOrdered - item.quantityReceived - (item.quantityBackordered || 0)
                 if (remaining <= 0) return null
+                const isSelected = selectedReceiveItems.has(item.id)
                 
                 return (
-                  <div key={item.id} className="p-4 bg-[var(--secondary)]/50 rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="font-medium text-[var(--foreground)]">{item.masterSku}</p>
-                        <p className="text-sm text-[var(--muted-foreground)]">{item.product?.title}</p>
-                      </div>
-                      <div className="text-right text-sm">
-                        <p className="text-[var(--muted-foreground)]">Ordered: {item.quantityOrdered}</p>
-                        <p className="text-[var(--muted-foreground)]">Already received: {item.quantityReceived}</p>
-                        <p className="text-cyan-400">Remaining: {remaining}</p>
+                  <div 
+                    key={item.id} 
+                    className={`p-4 rounded-lg transition-all ${
+                      isSelected 
+                        ? 'bg-cyan-500/10 border border-cyan-500/30' 
+                        : 'bg-[var(--secondary)]/50 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3 mb-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleReceiveItemSelection(item.id)}
+                        className="mt-1 w-5 h-5 rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500 focus:ring-cyan-500 cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-[var(--foreground)]">{item.masterSku}</p>
+                            <p className="text-sm text-[var(--muted-foreground)]">{item.product?.title}</p>
+                          </div>
+                          <div className="text-right text-sm">
+                            <p className="text-[var(--muted-foreground)]">Ordered: {item.quantityOrdered}</p>
+                            <p className="text-[var(--muted-foreground)]">Already received: {item.quantityReceived}</p>
+                            <p className="text-cyan-400 font-medium">Remaining: {remaining}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 ml-8">
                       <div className="flex-1">
                         <label className="block text-xs text-[var(--muted-foreground)] mb-1">Good Qty</label>
                         <input
@@ -1248,7 +1377,7 @@ export default function PurchaseOrdersPage() {
                     </div>
                     
                     {(receiveItems[item.id]?.backorder || 0) > 0 && (
-                      <p className="text-xs text-amber-400 mt-2">
+                      <p className="text-xs text-amber-400 mt-2 ml-8">
                         ⚠ {receiveItems[item.id]?.backorder} units will be added to backorder for later receipt
                       </p>
                     )}
@@ -1256,6 +1385,39 @@ export default function PurchaseOrdersPage() {
                 )
               })}
             </div>
+
+            {/* Summary */}
+            {(() => {
+              const totalToReceive = Object.values(receiveItems).reduce((sum, item) => sum + (item.received || 0), 0)
+              const totalDamaged = Object.values(receiveItems).reduce((sum, item) => sum + (item.damaged || 0), 0)
+              const totalBackorder = Object.values(receiveItems).reduce((sum, item) => sum + (item.backorder || 0), 0)
+              
+              if (totalToReceive === 0 && totalDamaged === 0 && totalBackorder === 0) return null
+              
+              return (
+                <div className="p-4 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg">
+                  <p className="text-sm font-medium text-[var(--foreground)] mb-2">Summary</p>
+                  <div className="flex gap-6 text-sm">
+                    <div>
+                      <span className="text-[var(--muted-foreground)]">Good: </span>
+                      <span className="text-emerald-400 font-medium">{totalToReceive}</span>
+                    </div>
+                    {totalDamaged > 0 && (
+                      <div>
+                        <span className="text-[var(--muted-foreground)]">Damaged: </span>
+                        <span className="text-red-400 font-medium">{totalDamaged}</span>
+                      </div>
+                    )}
+                    {totalBackorder > 0 && (
+                      <div>
+                        <span className="text-[var(--muted-foreground)]">Backorder: </span>
+                        <span className="text-amber-400 font-medium">{totalBackorder}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 

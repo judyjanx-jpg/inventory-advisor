@@ -41,6 +41,7 @@ export async function POST(
     const updates = []
     const inventoryUpdates = []
     const backorderCreates = []
+    const pendingAuditItems: { masterSku: string; quantityReceived: number }[] = []
 
     for (const [itemIdStr, quantities] of Object.entries(items)) {
       const itemId = parseInt(itemIdStr)
@@ -137,6 +138,12 @@ export async function POST(
             },
           })
         )
+
+        // Track for pending audit
+        pendingAuditItems.push({
+          masterSku: poItem.masterSku,
+          quantityReceived: received,
+        })
       }
 
       // Create backorder if needed
@@ -160,6 +167,40 @@ export async function POST(
 
     // Execute all updates
     await Promise.all([...updates, ...inventoryUpdates, ...backorderCreates])
+
+    // Add received items to pending audit queue
+    if (pendingAuditItems.length > 0) {
+      try {
+        await prisma.$transaction(
+          pendingAuditItems.map(item =>
+            prisma.pendingAuditItem.upsert({
+              where: {
+                masterSku_sourceType_sourceId: {
+                  masterSku: item.masterSku,
+                  sourceType: 'po_received',
+                  sourceId: poId,
+                },
+              },
+              update: {
+                quantityReceived: {
+                  increment: item.quantityReceived,
+                },
+              },
+              create: {
+                masterSku: item.masterSku,
+                sourceType: 'po_received',
+                sourceId: poId,
+                poNumber: purchaseOrder.poNumber,
+                quantityReceived: item.quantityReceived,
+              },
+            })
+          )
+        )
+      } catch (auditError) {
+        // Don't fail the receive if pending audit tracking fails
+        console.error('Failed to add items to pending audit (non-blocking):', auditError)
+      }
+    }
 
     // Refresh the PO to check status
     const updatedPO = await prisma.purchaseOrder.findUnique({

@@ -2189,6 +2189,29 @@ model AuditThreshold {
   @@map("audit_thresholds")
 }
 
+// Items pending audit (from PO receiving)
+model PendingAuditItem {
+  id        Int    @id @default(autoincrement())
+  masterSku String @map("master_sku")
+
+  // Source of the audit need
+  sourceType String @default("po_received") @map("source_type") // 'po_received', 'manual', etc.
+  sourceId   Int    @default(0) @map("source_id") // PO ID if from PO (0 for manual)
+  poNumber   String? @map("po_number")
+
+  // Quantity received that needs verification
+  quantityReceived Int @map("quantity_received")
+
+  // Tracking
+  createdAt DateTime @default(now()) @map("created_at")
+  auditedAt DateTime? @map("audited_at")
+
+  @@unique([masterSku, sourceType, sourceId])
+  @@index([masterSku])
+  @@index([createdAt])
+  @@map("pending_audit_items")
+}
+
 // ============================================
 // AI INSIGHTS & LEARNING SYSTEM
 // ============================================

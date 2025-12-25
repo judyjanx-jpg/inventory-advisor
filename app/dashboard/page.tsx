@@ -270,6 +270,17 @@ export default function DashboardPage() {
   const leftCards = getColumnCards('left')
   const rightCards = getColumnCards('right')
   const hiddenCards = getHiddenCards()
+  
+  // Create paired rows - pair left and right cards by index
+  // Unpaired cards (when columns have different lengths) will be full width
+  const maxRows = Math.max(leftCards.length, rightCards.length)
+  const cardRows: { left: CardConfig | null; right: CardConfig | null }[] = []
+  for (let i = 0; i < maxRows; i++) {
+    cardRows.push({
+      left: leftCards[i] || null,
+      right: rightCards[i] || null
+    })
+  }
 
   return (
     <MainLayout>
@@ -325,55 +336,51 @@ export default function DashboardPage() {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              {/* Left Column */}
-              <SortableContext items={leftCards.map(c => c.cardType)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-6 min-h-[200px]">
-                  {leftCards.map(card => (
-                    <DraggableCard
-                      key={card.cardType}
-                      id={card.cardType}
-                      height={card.height}
-                      isCollapsed={card.isCollapsed}
-                      onHeightChange={(h) => handleHeightChange(card.cardType, h)}
-                      onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
-                      onHide={() => handleHideCard(card.cardType)}
-                    >
-                      {renderCard(card.cardType)}
-                    </DraggableCard>
-                  ))}
-                  {leftCards.length === 0 && (
-                    <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
-                      Drop cards here
+            <SortableContext items={[...leftCards, ...rightCards].map(c => c.cardType)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-6">
+                {cardRows.map((row, index) => {
+                  const hasLeft = row.left !== null
+                  const hasRight = row.right !== null
+                  const isSingleCard = (hasLeft && !hasRight) || (!hasLeft && hasRight)
+                  
+                  return (
+                    <div key={index} className={`grid gap-6 ${isSingleCard ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
+                      {row.left && (
+                        <DraggableCard
+                          key={row.left.cardType}
+                          id={row.left.cardType}
+                          height={row.left.height}
+                          isCollapsed={row.left.isCollapsed}
+                          onHeightChange={(h) => handleHeightChange(row.left!.cardType, h)}
+                          onCollapsedChange={(c) => handleCollapsedChange(row.left!.cardType, c)}
+                          onHide={() => handleHideCard(row.left!.cardType)}
+                        >
+                          {renderCard(row.left.cardType)}
+                        </DraggableCard>
+                      )}
+                      {row.right && (
+                        <DraggableCard
+                          key={row.right.cardType}
+                          id={row.right.cardType}
+                          height={row.right.height}
+                          isCollapsed={row.right.isCollapsed}
+                          onHeightChange={(h) => handleHeightChange(row.right!.cardType, h)}
+                          onCollapsedChange={(c) => handleCollapsedChange(row.right!.cardType, c)}
+                          onHide={() => handleHideCard(row.right!.cardType)}
+                        >
+                          {renderCard(row.right.cardType)}
+                        </DraggableCard>
+                      )}
                     </div>
-                  )}
-                </div>
-              </SortableContext>
-
-              {/* Right Column */}
-              <SortableContext items={rightCards.map(c => c.cardType)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-6 min-h-[200px]">
-                  {rightCards.map(card => (
-                    <DraggableCard
-                      key={card.cardType}
-                      id={card.cardType}
-                      height={card.height}
-                      isCollapsed={card.isCollapsed}
-                      onHeightChange={(h) => handleHeightChange(card.cardType, h)}
-                      onCollapsedChange={(c) => handleCollapsedChange(card.cardType, c)}
-                      onHide={() => handleHideCard(card.cardType)}
-                    >
-                      {renderCard(card.cardType)}
-                    </DraggableCard>
-                  ))}
-                  {rightCards.length === 0 && (
-                    <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
-                      Drop cards here
-                    </div>
-                  )}
-                </div>
-              </SortableContext>
-            </div>
+                  )
+                })}
+                {cardRows.length === 0 && (
+                  <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
+                    No cards enabled
+                  </div>
+                )}
+              </div>
+            </SortableContext>
 
             <DragOverlay>
               {activeId && (
@@ -384,10 +391,8 @@ export default function DashboardPage() {
             </DragOverlay>
           </DndContext>
         ) : cardsLoaded && cards.length === 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
-              No cards configured
-            </div>
+          <div className="h-32 border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--muted-foreground)]">
+            No cards configured
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">

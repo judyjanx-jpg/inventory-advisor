@@ -131,6 +131,7 @@ export default function PurchaseOrderDetailPage() {
   const [editingReceived, setEditingReceived] = useState<number | null>(null)
   const [receivedValue, setReceivedValue] = useState<number>(0)
   const [showReceivedOptions, setShowReceivedOptions] = useState<{ itemId: number; difference: number } | null>(null)
+  const [selectedReceiveItems, setSelectedReceiveItems] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     fetchPO()
@@ -542,6 +543,67 @@ export default function PurchaseOrderDetailPage() {
     }
   }
 
+  // Toggle selection of an item in receive modal
+  const toggleReceiveItemSelection = (itemId: number) => {
+    const newSelected = new Set(selectedReceiveItems)
+    if (newSelected.has(itemId)) {
+      newSelected.delete(itemId)
+    } else {
+      newSelected.add(itemId)
+    }
+    setSelectedReceiveItems(newSelected)
+  }
+
+  // Select/deselect all items
+  const toggleSelectAllReceive = () => {
+    if (!po) return
+    const itemsWithRemaining = po.items.filter(item => {
+      const remaining = item.quantityOrdered - item.quantityReceived - item.quantityDamaged - (item.quantityBackordered || 0)
+      return remaining > 0
+    })
+    
+    if (selectedReceiveItems.size === itemsWithRemaining.length) {
+      // All selected, deselect all
+      setSelectedReceiveItems(new Set())
+    } else {
+      // Select all items with remaining quantity
+      setSelectedReceiveItems(new Set(itemsWithRemaining.map(item => item.id)))
+    }
+  }
+
+  // Receive all selected items at full quantity
+  const receiveAllSelected = () => {
+    if (!po) return
+    const newReceiveItems = { ...receiveItems }
+    selectedReceiveItems.forEach(itemId => {
+      const item = po.items.find(i => i.id === itemId)
+      if (item) {
+        const remaining = item.quantityOrdered - item.quantityReceived - item.quantityDamaged - (item.quantityBackordered || 0)
+        newReceiveItems[itemId] = {
+          received: remaining,
+          damaged: 0,
+          backorder: 0
+        }
+      }
+    })
+    setReceiveItems(newReceiveItems)
+  }
+
+  // Open receive modal with items pre-selected
+  const openReceiveModal = () => {
+    if (!po) return
+    const initialSelected = new Set<number>()
+    po.items.forEach(item => {
+      const remaining = item.quantityOrdered - item.quantityReceived - item.quantityDamaged - (item.quantityBackordered || 0)
+      if (remaining > 0) {
+        initialSelected.add(item.id)
+      }
+    })
+    setSelectedReceiveItems(initialSelected)
+    setReceiveItems({})
+    setShowReceive(true)
+  }
+
   const sortedAndFilteredItems = po?.items
     ? [...po.items]
         .filter(item => {
@@ -762,7 +824,7 @@ export default function PurchaseOrderDetailPage() {
                   <Upload className="w-4 h-4 mr-2" />
                   Import
                 </Button>
-                <Button variant="primary" size="sm" onClick={() => setShowReceive(true)}>
+                <Button variant="primary" size="sm" onClick={openReceiveModal}>
                   <PackageCheck className="w-4 h-4 mr-2" />
                   Receive Items
                 </Button>
@@ -1162,33 +1224,88 @@ export default function PurchaseOrderDetailPage() {
         onClose={() => {
           setShowReceive(false)
           setReceiveItems({})
+          setSelectedReceiveItems(new Set())
         }}
         title="Receive Items"
         size="lg"
       >
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+        {/* Select All & Receive Selected Actions */}
+        {(() => {
+          const itemsWithRemaining = po.items.filter(item => {
+            const remaining = item.quantityOrdered - item.quantityReceived - item.quantityDamaged - (item.quantityBackordered || 0)
+            return remaining > 0
+          })
+          const allSelected = itemsWithRemaining.length > 0 && selectedReceiveItems.size === itemsWithRemaining.length
+          const someSelected = selectedReceiveItems.size > 0
+          
+          return (
+            <div className="flex items-center justify-between p-3 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg mb-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAllReceive}
+                  className="w-5 h-5 rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500 focus:ring-cyan-500 cursor-pointer"
+                />
+                <span className="text-sm font-medium text-[var(--foreground)]">
+                  {allSelected ? 'Deselect All' : 'Select All'} ({selectedReceiveItems.size}/{itemsWithRemaining.length})
+                </span>
+              </label>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={receiveAllSelected}
+                disabled={!someSelected}
+                className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+              >
+                <PackageCheck className="w-4 h-4 mr-1" />
+                Receive Selected ({selectedReceiveItems.size})
+              </Button>
+            </div>
+          )
+        })()}
+
+        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
           {po.items.map((item) => {
             const remaining = item.quantityOrdered - item.quantityReceived - item.quantityDamaged - (item.quantityBackordered || 0)
             const current = receiveItems[item.id] || { received: 0, damaged: 0, backorder: 0 }
+            const isSelected = selectedReceiveItems.has(item.id)
+            
+            if (remaining <= 0) return null
             
             return (
-              <div key={item.id} className="p-4 bg-[var(--card)]/50 rounded-lg border border-[var(--border)]/50 hover:border-[var(--border)] transition-colors">
+              <div 
+                key={item.id} 
+                className={`p-4 rounded-lg border transition-colors ${
+                  isSelected 
+                    ? 'bg-cyan-500/10 border-cyan-500/30' 
+                    : 'bg-[var(--card)]/50 border-[var(--border)]/50 hover:border-[var(--border)]'
+                }`}
+              >
                 <div className="mb-4">
-                  <div className="flex items-start justify-between gap-4 mb-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-mono font-medium text-[var(--foreground)] text-sm mb-1">{item.masterSku}</p>
-                      <p className="text-sm text-[var(--muted-foreground)] line-clamp-2">{item.product?.title || 'Unknown Product'}</p>
-                    </div>
-                    <div className="flex-shrink-0 text-right">
-                      <div className="text-xs text-[var(--muted-foreground)] space-y-1">
-                        <div>Ordered: <span className="text-[var(--foreground)] font-medium">{item.quantityOrdered}</span></div>
-                        <div>Received: <span className="text-emerald-400 font-medium">{item.quantityReceived}</span></div>
-                        <div>Remaining: <span className="text-amber-400 font-medium">{remaining}</span></div>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleReceiveItemSelection(item.id)}
+                      className="mt-1 w-5 h-5 rounded border-[var(--border)] bg-[var(--muted)] text-cyan-500 focus:ring-cyan-500 cursor-pointer"
+                    />
+                    <div className="flex-1 flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono font-medium text-[var(--foreground)] text-sm mb-1">{item.masterSku}</p>
+                        <p className="text-sm text-[var(--muted-foreground)] line-clamp-2">{item.product?.title || 'Unknown Product'}</p>
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        <div className="text-xs text-[var(--muted-foreground)] space-y-1">
+                          <div>Ordered: <span className="text-[var(--foreground)] font-medium">{item.quantityOrdered}</span></div>
+                          <div>Received: <span className="text-emerald-400 font-medium">{item.quantityReceived}</span></div>
+                          <div>Remaining: <span className="text-cyan-400 font-medium">{remaining}</span></div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-3 ml-8">
                   <div>
                     <label className="block text-xs font-medium text-[var(--foreground)] mb-2">Received</label>
                     <input
@@ -1239,15 +1356,50 @@ export default function PurchaseOrderDetailPage() {
             )
           })}
         </div>
+
+        {/* Summary */}
+        {(() => {
+          const totalToReceive = Object.values(receiveItems).reduce((sum, item) => sum + (item.received || 0), 0)
+          const totalDamaged = Object.values(receiveItems).reduce((sum, item) => sum + (item.damaged || 0), 0)
+          const totalBackorder = Object.values(receiveItems).reduce((sum, item) => sum + (item.backorder || 0), 0)
+          
+          if (totalToReceive === 0 && totalDamaged === 0 && totalBackorder === 0) return null
+          
+          return (
+            <div className="p-4 bg-[var(--card)]/50 border border-[var(--border)] rounded-lg mt-4">
+              <p className="text-sm font-medium text-[var(--foreground)] mb-2">Summary</p>
+              <div className="flex gap-6 text-sm">
+                <div>
+                  <span className="text-[var(--muted-foreground)]">Good: </span>
+                  <span className="text-emerald-400 font-medium">{totalToReceive}</span>
+                </div>
+                {totalDamaged > 0 && (
+                  <div>
+                    <span className="text-[var(--muted-foreground)]">Damaged: </span>
+                    <span className="text-red-400 font-medium">{totalDamaged}</span>
+                  </div>
+                )}
+                {totalBackorder > 0 && (
+                  <div>
+                    <span className="text-[var(--muted-foreground)]">Backorder: </span>
+                    <span className="text-amber-400 font-medium">{totalBackorder}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
         <ModalFooter>
           <Button variant="ghost" onClick={() => {
             setShowReceive(false)
             setReceiveItems({})
+            setSelectedReceiveItems(new Set())
           }}>
             Cancel
           </Button>
           <Button variant="success" onClick={handleReceive} disabled={savingReceive}>
-            {savingReceive ? 'Receiving...' : 'Receive Items'}
+            {savingReceive ? 'Receiving...' : 'Confirm Received'}
           </Button>
         </ModalFooter>
       </Modal>
