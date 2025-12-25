@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Zap, Loader2, ChevronRight, ChevronDown, AlertCircle, AlertTriangle, TrendingUp, Lightbulb } from 'lucide-react'
+import { Zap, Loader2, ChevronRight, AlertCircle, AlertTriangle, TrendingUp, Lightbulb } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Insight {
@@ -54,10 +54,8 @@ const TYPE_CONFIG = {
 
 export default function AIInsightsCard() {
   const [insights, setInsights] = useState<Insight[]>([])
-  const [allInsights, setAllInsights] = useState<Insight[]>([])
   const [totalInsights, setTotalInsights] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [showAll, setShowAll] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -68,11 +66,9 @@ export default function AIInsightsCard() {
 
   const fetchInsights = async () => {
     try {
-      // Fetch limited insights for initial view
       const res = await fetch('/api/dashboard/insights')
       if (!res.ok) {
         setInsights([])
-        setAllInsights([])
         setTotalInsights(0)
         setLoading(false)
         return
@@ -95,42 +91,17 @@ export default function AIInsightsCard() {
     }
   }
 
-  const fetchAllInsights = async () => {
-    try {
-      const res = await fetch('/api/dashboard/insights?limit=50')
-      if (res.ok) {
-        const data: InsightsResponse = await res.json()
-        if (data.success) {
-          setAllInsights(data.insights || [])
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching all insights:', error)
-    }
+  const handleInsightClick = () => {
+    router.push('/insights')
   }
 
-  const handleViewAll = () => {
-    if (!showAll && allInsights.length === 0) {
-      fetchAllInsights()
-    }
-    setShowAll(!showAll)
+  const handleViewAllClick = () => {
+    router.push('/insights')
   }
-
-  const handleInsightClick = (insight: Insight) => {
-    if (insight.sku) {
-      router.push(`/inventory?sku=${insight.sku}`)
-    } else if (insight.poNumber) {
-      router.push(`/purchase-orders`)
-    } else if (insight.shipmentId) {
-      router.push(`/fba-shipments`)
-    }
-  }
-
-  const displayInsights = showAll && allInsights.length > 0 ? allInsights : insights
 
   // Count by type
-  const criticalCount = displayInsights.filter(i => i.type === 'critical').length
-  const warningCount = displayInsights.filter(i => i.type === 'warning').length
+  const criticalCount = insights.filter(i => i.type === 'critical').length
+  const warningCount = insights.filter(i => i.type === 'warning').length
 
   if (loading) {
     return (
@@ -203,22 +174,21 @@ export default function AIInsightsCard() {
       </div>
 
       {/* Insights list */}
-      <div className={`px-3 pb-3 ${showAll ? 'max-h-[400px] overflow-y-auto' : ''}`}>
+      <div className="px-3 pb-3">
         <div className="space-y-1.5">
-          {displayInsights.map((insight, index) => {
+          {insights.map((insight, index) => {
             const config = TYPE_CONFIG[insight.type]
             const Icon = config.icon
-            const isClickable = !!(insight.sku || insight.poNumber || insight.shipmentId)
 
             return (
               <div
                 key={insight.id || `insight-${index}`}
-                onClick={() => isClickable && handleInsightClick(insight)}
+                onClick={handleInsightClick}
                 className={`
-                  group flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all duration-200
+                  group flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer
                   ${config.bg} ${config.border}
-                  ${isClickable ? 'cursor-pointer hover:shadow-lg hover:scale-[1.01]' : ''}
-                  ${isClickable ? config.glow : ''}
+                  hover:shadow-lg hover:scale-[1.01]
+                  ${config.glow}
                 `}
               >
                 <div className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center ${config.bg}`}>
@@ -229,9 +199,7 @@ export default function AIInsightsCard() {
                   {insight.message}
                 </span>
                 
-                {isClickable && (
-                  <ChevronRight className={`w-4 h-4 flex-shrink-0 ${config.color} opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all`} />
-                )}
+                <ChevronRight className={`w-4 h-4 flex-shrink-0 ${config.color} opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all`} />
               </div>
             )
           })}
@@ -239,18 +207,14 @@ export default function AIInsightsCard() {
       </div>
 
       {/* Footer */}
-      {totalInsights > insights.length && (
+      {totalInsights > 0 && (
         <div className="px-5 py-3 border-t border-[var(--border)]">
           <button
-            onClick={handleViewAll}
+            onClick={handleViewAllClick}
             className="flex items-center gap-1.5 text-sm text-cyan-400 hover:text-cyan-300 transition-colors group"
           >
-            <span>{showAll ? 'Show less' : `View all ${totalInsights} insights`}</span>
-            {showAll ? (
-              <ChevronDown className="w-4 h-4 rotate-180 transition-transform" />
-            ) : (
-              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
-            )}
+            <span>View all {totalInsights} insights</span>
+            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
           </button>
         </div>
       )}
