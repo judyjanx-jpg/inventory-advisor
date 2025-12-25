@@ -21,7 +21,8 @@ import {
   ChevronUp,
   FileText,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Download
 } from 'lucide-react'
 
 interface ShipmentItem {
@@ -54,7 +55,10 @@ interface TransportOption {
   shippingMode: string
   shippingSolution: string
   carrier?: { name: string }
-  quote?: { cost: { amount: number; code: string } }
+  quote?: { 
+    price?: { amount: number; code: string }
+    cost?: { amount: number; code: string }
+  }
 }
 
 interface ShipmentSplit {
@@ -438,19 +442,8 @@ export default function ShipmentDetailPage() {
 
         setShipmentSplits(transportData.shipments)
 
-        // Auto-select transport options
-        const autoSelected: Record<string, string> = {}
-        for (const split of transportData.shipments) {
-          const partnered = split.transportationOptions.find(
-            (t: TransportOption) => t.shippingSolution === 'AMAZON_PARTNERED_CARRIER' && t.shippingMode === 'GROUND_SMALL_PARCEL'
-          )
-          if (partnered) {
-            autoSelected[split.amazonShipmentId] = partnered.transportationOptionId
-          } else if (split.transportationOptions.length > 0) {
-            autoSelected[split.amazonShipmentId] = split.transportationOptions[0].transportationOptionId
-          }
-        }
-        setSelectedTransports(autoSelected)
+        // Don't auto-select - user must choose their preferred transportation option
+        setSelectedTransports({})
       } else {
         console.log('Placement options received:', data.placementOptions?.length, 'options')
         console.log('Recommended option ID:', data.recommendedOptionId)
@@ -496,20 +489,9 @@ export default function ShipmentDetailPage() {
 
       setShipmentSplits(data.shipments)
 
-      // Auto-select the first transport option for each shipment (usually cheapest SPD)
-      const autoSelected: Record<string, string> = {}
-      for (const split of data.shipments) {
-        // Prefer AMAZON_PARTNERED_CARRIER with SPD mode
-        const partnered = split.transportationOptions.find(
-          (t: TransportOption) => t.shippingSolution === 'AMAZON_PARTNERED_CARRIER' && t.shippingMode === 'GROUND_SMALL_PARCEL'
-        )
-        if (partnered) {
-          autoSelected[split.amazonShipmentId] = partnered.transportationOptionId
-        } else if (split.transportationOptions.length > 0) {
-          autoSelected[split.amazonShipmentId] = split.transportationOptions[0].transportationOptionId
-        }
-      }
-      setSelectedTransports(autoSelected)
+      // Don't auto-select - let user choose from all available options
+      // User must explicitly select their preferred transportation option
+      setSelectedTransports({})
     } catch (error: any) {
       console.error('Error confirming placement:', error)
       setSubmissionError(error.message || 'Failed to confirm placement')
@@ -521,10 +503,17 @@ export default function ShipmentDetailPage() {
 
   // Step 3: Confirm transport selections and get labels
   const confirmTransportSelections = async () => {
+    // Validate we have shipment splits to confirm
+    if (shipmentSplits.length === 0) {
+      alert('No shipments available to confirm. Please go back and try again.')
+      return
+    }
+
     // Validate all shipments have a transport selected
-    const allSelected = shipmentSplits.every(s => selectedTransports[s.amazonShipmentId])
-    if (!allSelected) {
-      alert('Please select a shipping option for all shipments')
+    const missingSelections = shipmentSplits.filter(s => !selectedTransports[s.amazonShipmentId])
+    if (missingSelections.length > 0) {
+      const missingFCs = missingSelections.map(s => s.destinationFc || s.amazonShipmentId).join(', ')
+      alert(`Please select a transportation option for all shipments.\n\nMissing selections for: ${missingFCs}`)
       return
     }
 
@@ -532,10 +521,19 @@ export default function ShipmentDetailPage() {
     setSubmissionStep('confirming')
 
     try {
-      const transportSelections = shipmentSplits.map(s => ({
-        amazonShipmentId: s.amazonShipmentId,
-        transportationOptionId: selectedTransports[s.amazonShipmentId],
-      }))
+      const transportSelections = shipmentSplits
+        .filter(s => selectedTransports[s.amazonShipmentId]) // Only include valid selections
+        .map(s => ({
+          amazonShipmentId: s.amazonShipmentId,
+          transportationOptionId: selectedTransports[s.amazonShipmentId],
+        }))
+
+      // Additional safety check - should never happen due to validation above, but just in case
+      if (transportSelections.length === 0) {
+        alert('No valid transportation selections found. Please select options for all shipments.')
+        setSubmittingToAmazon(false)
+        return
+      }
 
       const res = await fetch(`/api/shipments/${shipmentId}/submit-to-amazon?step=confirm_transport_interactive`, {
         method: 'POST',
@@ -574,8 +572,9 @@ export default function ShipmentDetailPage() {
     for (const split of shipmentSplits) {
       const selectedId = selectedTransports[split.amazonShipmentId]
       const option = split.transportationOptions.find(t => t.transportationOptionId === selectedId)
-      if (option?.quote?.cost?.amount) {
-        total += option.quote.cost.amount
+      const amount = option?.quote?.price?.amount || option?.quote?.cost?.amount || 0
+      if (amount) {
+        total += amount
       }
     }
     return total
@@ -1186,13 +1185,34 @@ export default function ShipmentDetailPage() {
                     <p className="text-slate-400 text-sm ml-8">Choose shipping method for each fulfillment center</p>
                   </div>
 
+                  <div className="mb-4 p-4 bg-slate-800/50 border border-slate-700 rounded-lg">
+                    <p className="text-slate-300 text-sm">
+                      <strong className="text-white">Select a transportation option for each shipment:</strong> Review all available options below and choose the best option for each destination. Costs are displayed for each option.
+                    </p>
+                  </div>
+
                   <div className="space-y-4 mb-6">
-                    {shipmentSplits.map((split) => (
+                    {shipmentSplits.length === 0 ? (
+                      <div className="border border-amber-500/50 bg-amber-500/10 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-amber-400">
+                          <AlertTriangle className="w-5 h-5" />
+                          <span className="font-medium">No shipments available</span>
+                        </div>
+                        <p className="text-slate-400 text-sm mt-2">
+                          Unable to load shipment details from Amazon. Please close this dialog and try again, or contact support if the issue persists.
+                        </p>
+                      </div>
+                    ) : shipmentSplits.map((split) => (
                       <div key={split.amazonShipmentId} className="border border-slate-700 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div>
                             <span className="font-medium text-white">Ship to: {split.destinationFc || 'Unknown FC'}</span>
                             <span className="text-slate-500 text-sm ml-2">({split.amazonShipmentId})</span>
+                            {!selectedTransports[split.amazonShipmentId] && (
+                              <span className="ml-2 px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-semibold rounded">
+                                Selection Required
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1219,19 +1239,64 @@ export default function ShipmentDetailPage() {
                                     }))}
                                   />
                                   <div>
-                                    <span className="text-white">
-                                      {option.carrier?.name || option.shippingSolution}
-                                    </span>
-                                    <span className="text-slate-500 text-sm ml-2">
-                                      ({option.shippingMode === 'GROUND_SMALL_PARCEL' ? 'SPD' : option.shippingMode})
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-white font-medium">
+                                        {option.carrier?.name || option.shippingSolution}
+                                      </span>
+                                      {(option.carrier?.name?.toUpperCase().includes('UPS') || 
+                                        option.shippingSolution?.includes('UPS')) && (
+                                        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-semibold rounded">
+                                          UPS
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      {option.shippingMode === 'GROUND_SMALL_PARCEL' && (
+                                        <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs font-semibold rounded">
+                                          SPD
+                                        </span>
+                                      )}
+                                      {option.shippingMode === 'FREIGHT_LTL' && (
+                                        <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs font-semibold rounded">
+                                          LTL
+                                        </span>
+                                      )}
+                                      {option.shippingMode === 'FREIGHT_FTL' && (
+                                        <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs font-semibold rounded">
+                                          FTL
+                                        </span>
+                                      )}
+                                      {option.shippingSolution === 'USE_YOUR_OWN_CARRIER' && (
+                                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-semibold rounded">
+                                          Own Carrier
+                                        </span>
+                                      )}
+                                      <span className="text-slate-400 text-sm">
+                                        {option.shippingMode === 'GROUND_SMALL_PARCEL' ? 'Small Parcel Delivery' : 
+                                         option.shippingMode === 'FREIGHT_LTL' ? 'Less Than Truckload' :
+                                         option.shippingMode === 'FREIGHT_FTL' ? 'Full Truckload' :
+                                         option.shippingMode || 'Standard Shipping'}
+                                        {option.shippingSolution === 'AMAZON_PARTNERED_CARRIER' ? ' • Amazon Partnered' : ''}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
-                                <span className="font-bold text-white">
-                                  {option.quote?.cost?.amount
-                                    ? `$${option.quote.cost.amount.toFixed(2)}`
-                                    : 'Quote TBD'}
-                                </span>
+                                <div className="text-right">
+                                  {(option.quote?.price?.amount || option.quote?.cost?.amount) ? (
+                                    <div>
+                                      <span className="font-bold text-lg text-cyan-400">
+                                        ${((option.quote?.price?.amount || option.quote?.cost?.amount || 0)).toFixed(2)}
+                                      </span>
+                                      {(option.quote?.price?.code || option.quote?.cost?.code) && (
+                                        <div className="text-xs text-slate-500 mt-0.5">
+                                          {option.quote?.price?.code || option.quote?.cost?.code}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="font-medium text-amber-400">Quote TBD</span>
+                                  )}
+                                </div>
                               </label>
                             ))}
                           </div>
@@ -1244,13 +1309,19 @@ export default function ShipmentDetailPage() {
                     ))}
                   </div>
 
-                  {/* Total Cost Summary */}
-                  <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
+                  {/* Total Cost Summary - Prominent Display */}
+                  <div className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-2 border-cyan-500/30 rounded-lg p-4 mb-6">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-300">Estimated Total Shipping</span>
-                      <span className="text-xl font-bold text-white">
-                        ${calculateTotalShippingCost().toFixed(2)}
-                      </span>
+                      <div>
+                        <span className="text-slate-300 text-sm">Total Shipping Cost</span>
+                        <p className="text-xs text-slate-400 mt-1">Review costs before confirming</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-3xl font-bold text-cyan-400">
+                          ${calculateTotalShippingCost().toFixed(2)}
+                        </span>
+                        <p className="text-xs text-slate-400 mt-1">USD</p>
+                      </div>
                     </div>
                   </div>
 
@@ -1258,8 +1329,12 @@ export default function ShipmentDetailPage() {
                     <Button variant="outline" onClick={closeSubmissionModal}>
                       Cancel
                     </Button>
-                    <Button onClick={confirmTransportSelections} disabled={submittingToAmazon}>
-                      {submittingToAmazon ? 'Confirming...' : 'Confirm & Get Labels'}
+                    <Button 
+                      onClick={confirmTransportSelections} 
+                      disabled={submittingToAmazon || shipmentSplits.length === 0 || !shipmentSplits.every(s => selectedTransports[s.amazonShipmentId])}
+                      className="bg-cyan-500 hover:bg-cyan-600"
+                    >
+                      {submittingToAmazon ? 'Confirming...' : 'Confirm Shipping & Generate Labels'}
                     </Button>
                   </div>
                 </div>
@@ -1305,15 +1380,85 @@ export default function ShipmentDetailPage() {
                           </p>
                         )}
                         {ship.labelUrl && (
-                          <a
-                            href={ship.labelUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 mt-2 px-3 py-1.5 bg-cyan-500/20 text-cyan-400 rounded text-sm hover:bg-cyan-500/30"
-                          >
-                            <Printer className="w-4 h-4" />
-                            Download Labels
-                          </a>
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              onClick={async () => {
+                                // Fetch the label PDF and open it for printing with 4x6 settings
+                                try {
+                                  const response = await fetch(ship.labelUrl!)
+                                  const blob = await response.blob()
+                                  const url = URL.createObjectURL(blob)
+                                  
+                                  // Open PDF in iframe with print styles for 4x6
+                                  const printWindow = window.open('', '_blank')
+                                  if (printWindow) {
+                                    printWindow.document.write(`
+                                      <!DOCTYPE html>
+                                      <html>
+                                        <head>
+                                          <title>Amazon Shipping Label - 4x6</title>
+                                          <style>
+                                            @page {
+                                              size: 4in 6in;
+                                              margin: 0;
+                                            }
+                                            body {
+                                              margin: 0;
+                                              padding: 0;
+                                            }
+                                            iframe {
+                                              width: 100%;
+                                              height: 100vh;
+                                              border: none;
+                                            }
+                                            @media print {
+                                              iframe {
+                                                width: 4in;
+                                                height: 6in;
+                                              }
+                                            }
+                                          </style>
+                                        </head>
+                                        <body>
+                                          <iframe src="${url}"></iframe>
+                                          <script>
+                                            window.onload = function() {
+                                              setTimeout(function() {
+                                                window.print();
+                                                // Clean up after print
+                                                setTimeout(function() {
+                                                  window.close();
+                                                  URL.revokeObjectURL('${url}');
+                                                }, 1000);
+                                              }, 500);
+                                            };
+                                          </script>
+                                        </body>
+                                      </html>
+                                    `)
+                                    printWindow.document.close()
+                                  }
+                                } catch (error) {
+                                  console.error('Error printing labels:', error)
+                                  alert('Failed to load labels for printing. Please try downloading instead.')
+                                }
+                              }}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 text-cyan-400 rounded text-sm hover:bg-cyan-500/30 cursor-pointer"
+                            >
+                              <Printer className="w-4 h-4" />
+                              Print 4x6 Labels
+                            </button>
+                            <a
+                              href={ship.labelUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-700/50 text-slate-300 rounded text-sm hover:bg-slate-700/70"
+                            >
+                              <Download className="w-4 h-4" />
+                              Download
+                            </a>
+                          </div>
                         )}
                       </div>
                     ))}

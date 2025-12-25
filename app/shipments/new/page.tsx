@@ -175,23 +175,44 @@ export default function NewShipmentPage() {
   // Parse bulk text input like "MJBC116x10, MJBC118x20" or "MJBC116 x 10, MJBC118 x 20"
   const parseBulkText = async (text: string, overwrite: boolean = false) => {
     setBulkError('')
-    const entries = text.split(/[,\n]/).map(s => s.trim()).filter(s => s)
+    // Split by newlines (and commas for backward compatibility)
+    const lines = text.split(/[\n,]/).map(s => s.trim()).filter(s => s)
     const parsed: { sku: string; qty: number }[] = []
     const errors: string[] = []
 
-    for (const entry of entries) {
-      // Match patterns like: MJBC116x10, MJBC116 x 10, MJBC116X10, MJBC116 X 10
-      const match = entry.match(/^([A-Za-z0-9\-_]+)\s*[xX]\s*(\d+)$/)
+    for (const line of lines) {
+      // Remove any "x" or "X" characters (ignore them)
+      const cleanedLine = line.replace(/[xX]/g, ' ')
+      
+      // Match patterns:
+      // - SKU followed by whitespace (tab or spaces) and quantity
+      // - SKU<TAB>QTY
+      // - SKU QTY
+      // - SKU  QTY (multiple spaces)
+      // Examples: "MJ925BCG124	120", "MJ925BCG130 100", "MJ925BCS120 x 250"
+      const match = cleanedLine.match(/^([A-Za-z0-9\-_]+)[\s\t]+(\d+)$/)
       if (match) {
-        parsed.push({ sku: match[1].toUpperCase(), qty: parseInt(match[2]) })
+        const sku = match[1].toUpperCase().trim()
+        const qty = parseInt(match[2].trim())
+        if (sku && !isNaN(qty) && qty > 0) {
+          parsed.push({ sku, qty })
+        } else {
+          errors.push(`Invalid entry: "${line}" (could not parse SKU or quantity)`)
+        }
       } else {
-        errors.push(`Invalid format: "${entry}" (use SKUxQTY format)`)
+        errors.push(`Invalid format: "${line}" (expected: SKU followed by tab/space and quantity)`)
       }
     }
 
-    if (errors.length > 0) {
-      setBulkError(errors.join('\n'))
+    if (errors.length > 0 && parsed.length === 0) {
+      // Only show errors if we didn't parse anything at all
+      setBulkError(errors.slice(0, 10).join('\n') + (errors.length > 10 ? `\n... and ${errors.length - 10} more errors` : ''))
       return
+    }
+    
+    // If we parsed some items but had errors, just warn (don't block)
+    if (errors.length > 0 && parsed.length > 0) {
+      setBulkError(`Warning: ${errors.length} line(s) could not be parsed, but ${parsed.length} item(s) were added.`)
     }
 
     if (parsed.length === 0) {
@@ -509,7 +530,7 @@ export default function NewShipmentPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {/* Bulk Input Panel */}
+            {/* Bulk Input Panel - Supports SKU tab/space quantity format */}
             {showBulkInput && (
               <div className="mb-6 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
                 <h3 className="text-sm font-medium text-slate-300 mb-3">Bulk Add Items</h3>
@@ -517,14 +538,19 @@ export default function NewShipmentPage() {
                 {/* Text Input */}
                 <div className="mb-4">
                   <label className="block text-xs text-slate-400 mb-1">
-                    Enter SKUs with quantities (e.g., MJBC116x10, MJBC118x20)
+                    Paste SKUs with quantities (one per line): SKU followed by tab or space and quantity
                   </label>
                   <textarea
                     value={bulkText}
                     onChange={(e) => setBulkText(e.target.value)}
-                    placeholder="MJBC116x10, MJBC118x20, MJBC120x15..."
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm h-20 font-mono"
+                    placeholder="MJ925BCG124	120
+MJ925BCG130	100
+MJ925BCS120	250"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm h-32 font-mono"
                   />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Format: SKU [tab or space] quantity. "x" characters are ignored. Example: MJ925BCG124 120 or MJ925BCG124	120
+                  </p>
                   <div className="flex gap-2 mt-2">
                     <Button size="sm" onClick={() => parseBulkText(bulkText)} disabled={!bulkText.trim()}>
                       <Plus className="w-4 h-4 mr-1" />

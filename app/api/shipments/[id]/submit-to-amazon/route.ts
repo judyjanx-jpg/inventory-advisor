@@ -56,14 +56,16 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid shipment ID' }, { status: 400 })
     }
 
-    // Parse request body for item settings (prep/label overrides)
-    let itemSettings: Record<string, { prepOwner: string; labelOwner: string }> = {}
+    // Parse request body once (can only be read once)
+    let requestBody: any = {}
     try {
-      const body = await request.json()
-      itemSettings = body.itemSettings || {}
+      requestBody = await request.json()
     } catch {
       // No body or invalid JSON - use defaults
     }
+
+    // Extract item settings (prep/label overrides)
+    const itemSettings: Record<string, { prepOwner: string; labelOwner: string }> = requestBody.itemSettings || {}
 
     const url = new URL(request.url)
     const step = url.searchParams.get('step') || 'all'
@@ -229,13 +231,9 @@ export async function POST(
 
     let result: any = { shipmentId: id }
 
-    // Get request body for interactive steps
-    let body: any = {}
-    try {
-      body = await request.json()
-    } catch {
-      // No body is fine for some steps
-    }
+    // Use the already-parsed request body for interactive steps
+    // (requestBody was parsed once at the beginning of the function)
+    const body = requestBody
 
     // Build items list for Amazon (reused by multiple steps)
     const buildInboundItems = () => shipment.items.map((item: { masterSku: string; adjustedQty: number; product?: { prepOwner?: string; labelOwner?: string } }) => ({
@@ -467,12 +465,76 @@ export async function POST(
       }
 
       // Step 3: Generate placement options (but don't confirm yet)
-      console.log(`[${id}] Generating placement options...`)
-      const genPlacementResult = await generatePlacementOptions(inboundPlanId)
-      await waitForOperation(await createSpApiClient(), genPlacementResult.operationId)
-
-      // List placement options
-      const { placementOptions } = await listPlacementOptions(inboundPlanId)
+      // First check if placement options already exist
+      let placementOptions: any[] = []
+      try {
+        const existingOptions = await listPlacementOptions(inboundPlanId)
+        placementOptions = existingOptions.placementOptions || []
+        
+        if (placementOptions.length > 0) {
+          console.log(`[${id}] Found ${placementOptions.length} existing placement options, skipping generation`)
+        } else {
+          // No existing options, generate new ones
+          console.log(`[${id}] No existing placement options found, generating new ones...`)
+          const genPlacementResult = await generatePlacementOptions(inboundPlanId)
+          await waitForOperation(await createSpApiClient(), genPlacementResult.operationId)
+          
+          // List the newly generated options
+          const newOptions = await listPlacementOptions(inboundPlanId)
+          placementOptions = newOptions.placementOptions || []
+        }
+      } catch (genError: any) {
+        // Handle the case where placement options are already confirmed
+        if (genError.message?.includes('placement option is already confirmed') || 
+            genError.message?.includes('already confirmed') ||
+            genError.message?.includes('Operation GeneratePlacementOptions cannot be processed')) {
+          console.log(`[${id}] Placement option already confirmed, listing existing options...`)
+          try {
+            const existingOptions = await listPlacementOptions(inboundPlanId)
+            placementOptions = existingOptions.placementOptions || []
+            
+            // Find the confirmed placement option
+            const confirmedPlacement = placementOptions.find(
+              (p: any) => p.status === 'ACCEPTED' || p.status === 'CONFIRMED'
+            )
+            
+            if (confirmedPlacement && shipment.amazonPlacementOptionId !== confirmedPlacement.placementOptionId) {
+              // Update database with the confirmed placement option
+              await prisma.shipment.update({
+                where: { id },
+                data: {
+                  amazonPlacementOptionId: confirmedPlacement.placementOptionId,
+                  amazonWorkflowStep: 'placement_confirmed',
+                },
+              })
+              
+              // Return to transport selection since placement is already confirmed
+              return NextResponse.json({
+                success: true,
+                step: 'get_placement_options',
+                skipToTransport: true,
+                inboundPlanId,
+                placementOptionId: confirmedPlacement.placementOptionId,
+                message: 'Placement already confirmed. Proceeding to transport selection.',
+                duration: Date.now() - startTime,
+              })
+            }
+          } catch (listError: any) {
+            console.error(`[${id}] Error listing placement options:`, listError)
+            return NextResponse.json({
+              error: 'Failed to retrieve placement options',
+              details: listError.message,
+            }, { status: 500 })
+          }
+        } else {
+          // Some other error occurred
+          console.error(`[${id}] Error generating placement options:`, genError)
+          return NextResponse.json({
+            error: 'Failed to generate placement options',
+            details: genError.message,
+          }, { status: 500 })
+        }
+      }
 
       if (!placementOptions.length) {
         return NextResponse.json({ error: 'No placement options available' }, { status: 500 })
@@ -510,7 +572,7 @@ export async function POST(
     // Confirms user's placement choice, returns transport options with costs
     // ========================================
     if (step === 'select_placement') {
-      const { placementOptionId } = body
+      const { placementOptionId } = body || {}
 
       if (!placementOptionId) {
         return NextResponse.json({
@@ -529,17 +591,77 @@ export async function POST(
       const placementAlreadyConfirmed = shipment.amazonWorkflowStep === 'placement_confirmed' ||
                                          shipment.amazonWorkflowStep === 'transport_confirmed'
 
-      if (!placementAlreadyConfirmed) {
+      // Also check the actual placement option status from Amazon
+      let placementOptionStatus: string | null = null
+      try {
+        const { placementOptions } = await listPlacementOptions(inboundPlanId)
+        const selectedPlacement = placementOptions.find((p: any) => p.placementOptionId === placementOptionId)
+        placementOptionStatus = selectedPlacement?.status || null
+        
+        if (selectedPlacement && (selectedPlacement.status === 'CONFIRMED' || selectedPlacement.status === 'ACCEPTED')) {
+          console.log(`[${id}] Placement option ${placementOptionId} is already ${selectedPlacement.status} in Amazon`)
+          // Update database if not already set
+          if (!placementAlreadyConfirmed) {
+            await prisma.shipment.update({
+              where: { id },
+              data: {
+                amazonPlacementOptionId: placementOptionId,
+                amazonWorkflowStep: 'placement_confirmed',
+              },
+            })
+          }
+        }
+      } catch (listError: any) {
+        console.warn(`[${id}] Could not check placement option status:`, listError.message)
+      }
+
+      const isPlacementConfirmed = placementAlreadyConfirmed || 
+                                   placementOptionStatus === 'CONFIRMED' || 
+                                   placementOptionStatus === 'ACCEPTED'
+
+      if (!isPlacementConfirmed) {
         // Confirm the selected placement option
         console.log(`[${id}] Confirming placement option: ${placementOptionId}`)
-        const confirmResult = await confirmPlacementOption(inboundPlanId, placementOptionId)
-        const confirmStatus = await waitForOperation(await createSpApiClient(), confirmResult.operationId)
+        try {
+          const confirmResult = await confirmPlacementOption(inboundPlanId, placementOptionId)
+          const confirmStatus = await waitForOperation(await createSpApiClient(), confirmResult.operationId)
 
-        if (confirmStatus.operationStatus === 'FAILED') {
-          return NextResponse.json({
-            error: 'Failed to confirm placement option',
-            details: confirmStatus.operationProblems,
-          }, { status: 500 })
+          if (confirmStatus.operationStatus === 'FAILED') {
+            // Check if the error is because it's already confirmed
+            const errorMsg = confirmStatus.operationProblems?.map((p: any) => p.message).join(' ') || ''
+            if (errorMsg.includes('already confirmed') || errorMsg.includes('already confirmed')) {
+              console.log(`[${id}] Placement already confirmed (detected from error), updating database`)
+              await prisma.shipment.update({
+                where: { id },
+                data: {
+                  amazonPlacementOptionId: placementOptionId,
+                  amazonWorkflowStep: 'placement_confirmed',
+                },
+              })
+              // Continue with the workflow
+            } else {
+              return NextResponse.json({
+                error: 'Failed to confirm placement option',
+                details: confirmStatus.operationProblems,
+              }, { status: 500 })
+            }
+          }
+        } catch (confirmError: any) {
+          // Handle the case where confirmation fails because it's already confirmed
+          if (confirmError.message?.includes('already confirmed') || 
+              confirmError.message?.includes('Operation ConfirmPlacementOption cannot be processed')) {
+            console.log(`[${id}] Placement option already confirmed (caught from error), updating database`)
+            await prisma.shipment.update({
+              where: { id },
+              data: {
+                amazonPlacementOptionId: placementOptionId,
+                amazonWorkflowStep: 'placement_confirmed',
+              },
+            })
+            // Continue with the workflow
+          } else {
+            throw confirmError
+          }
         }
       } else {
         console.log(`[${id}] Placement already confirmed, skipping confirmation step`)
@@ -550,6 +672,15 @@ export async function POST(
       const selectedPlacement = placementOptions.find((p: any) => p.placementOptionId === placementOptionId)
       const shipmentIds = selectedPlacement?.shipmentIds || []
 
+      if (!shipmentIds || shipmentIds.length === 0) {
+        console.error(`[${id}] No shipment IDs found for placement option ${placementOptionId}`)
+        return NextResponse.json({
+          error: 'No shipments found for the selected placement option. The placement may not have been fully confirmed yet.',
+        }, { status: 400 })
+      }
+
+      console.log(`[${id}] Processing ${shipmentIds.length} shipment IDs for placement option ${placementOptionId}`)
+
       // Save shipment splits
       const shipmentDetails: Array<{
         amazonShipmentId: string
@@ -558,18 +689,22 @@ export async function POST(
       }> = []
 
       for (const amazonShipmentId of shipmentIds) {
-        // Get shipment details (destination FC)
-        const splitDetail = await getShipment(inboundPlanId, amazonShipmentId)
+        try {
+          // Get shipment details (destination FC)
+          const splitDetail = await getShipment(inboundPlanId, amazonShipmentId)
+          
+          if (!splitDetail) {
+            console.error(`[${id}] Failed to get shipment details for ${amazonShipmentId}`)
+            continue // Skip this shipment and continue with others
+          }
 
-        // Save to database
+        // Save to database (use amazonShipmentId as unique key since it's @unique in schema)
         await prisma.amazonShipmentSplit.upsert({
           where: {
-            shipmentId_amazonShipmentId: {
-              shipmentId: id,
-              amazonShipmentId: amazonShipmentId,
-            },
+            amazonShipmentId: amazonShipmentId,
           },
           update: {
+            shipmentId: id, // Update shipmentId in case it changed
             destinationFc: splitDetail.destination?.warehouseId || null,
             destinationAddress: splitDetail.destination?.address
               ? JSON.stringify(splitDetail.destination.address)
@@ -591,32 +726,137 @@ export async function POST(
         })
 
         // Generate transportation options for this shipment
-        console.log(`[${id}] Generating transport options for ${amazonShipmentId}...`)
-        const genTransportResult = await generateTransportationOptions(
-          inboundPlanId,
-          amazonShipmentId,
-          placementOptionId
-        )
-        await waitForOperation(await createSpApiClient(), genTransportResult.operationId)
+        console.log(`[${id}] Processing transportation options for ${amazonShipmentId}...`)
+        let transportationOptions: any[] = []
+        
+        try {
+          // First, try to list existing options (they might already be generated)
+          console.log(`[${id}] Checking for existing transportation options for ${amazonShipmentId}...`)
+          const existingListResult = await listTransportationOptions(
+            inboundPlanId,
+            amazonShipmentId,
+            placementOptionId
+          )
+          
+          if (existingListResult.transportationOptions && existingListResult.transportationOptions.length > 0) {
+            transportationOptions = existingListResult.transportationOptions
+            console.log(`[${id}] ✓ Found ${transportationOptions.length} existing transportation options for ${amazonShipmentId}`)
+            // Log option details for debugging
+            transportationOptions.forEach((opt, idx) => {
+              console.log(`[${id}]   Option ${idx + 1}: ${opt.transportationOptionId}, Mode: ${opt.shippingMode}, Solution: ${opt.shippingSolution}, Carrier: ${opt.carrier?.name || 'N/A'}`)
+            })
+          } else {
+            // No existing options, generate new ones
+            // According to Amazon workflow, we should generate delivery windows first, then transportation options
+            console.log(`[${id}] No existing options found. Generating delivery windows first for ${amazonShipmentId}...`)
+            
+            try {
+              const genWindowResult = await generateDeliveryWindowOptions(
+                inboundPlanId,
+                amazonShipmentId
+              )
+              await waitForOperation(await createSpApiClient(), genWindowResult.operationId)
+              console.log(`[${id}] Delivery windows generated for ${amazonShipmentId}`)
+            } catch (windowError: any) {
+              console.warn(`[${id}] Warning: Could not generate delivery windows for ${amazonShipmentId}:`, windowError.message)
+              // Continue anyway - delivery windows might not be required for transportation options
+            }
+            
+            console.log(`[${id}] Generating new transportation options for ${amazonShipmentId}...`)
+            const genTransportResult = await generateTransportationOptions(
+              inboundPlanId,
+              amazonShipmentId,
+              placementOptionId
+            )
+            
+            console.log(`[${id}] Waiting for transportation options generation to complete for ${amazonShipmentId}...`)
+            const operationStatus = await waitForOperation(await createSpApiClient(), genTransportResult.operationId)
+            
+            if (operationStatus.operationStatus === 'FAILED') {
+              console.error(`[${id}] Transportation options generation failed for ${amazonShipmentId}:`, operationStatus.operationProblems)
+              throw new Error(`Transportation options generation failed: ${JSON.stringify(operationStatus.operationProblems)}`)
+            }
 
-        // List transportation options
-        const { transportationOptions } = await listTransportationOptions(
-          inboundPlanId,
-          amazonShipmentId,
-          placementOptionId
-        )
+            // Wait a moment for options to be available (Amazon may need a brief delay)
+            console.log(`[${id}] Waiting 3 seconds for transportation options to become available for ${amazonShipmentId}...`)
+            await new Promise(resolve => setTimeout(resolve, 3000))
 
-        shipmentDetails.push({
-          amazonShipmentId,
-          destinationFc: splitDetail.destination?.warehouseId || null,
-          transportationOptions: transportationOptions.map((opt: any) => ({
-            transportationOptionId: opt.transportationOptionId,
-            shippingMode: opt.shippingMode,
-            shippingSolution: opt.shippingSolution,
-            carrier: opt.carrier,
-            quote: opt.quote,
-          })),
-        })
+            // List transportation options after generation (try multiple times with retries)
+            let listAttempts = 0
+            const maxListAttempts = 3
+            while (listAttempts < maxListAttempts && transportationOptions.length === 0) {
+              listAttempts++
+              console.log(`[${id}] Listing transportation options (attempt ${listAttempts}/${maxListAttempts}) for ${amazonShipmentId}...`)
+              const listResult = await listTransportationOptions(
+                inboundPlanId,
+                amazonShipmentId,
+                placementOptionId
+              )
+              transportationOptions = listResult.transportationOptions || []
+              
+              if (transportationOptions.length === 0 && listAttempts < maxListAttempts) {
+                console.log(`[${id}] No options yet, waiting 2 more seconds before retry...`)
+                await new Promise(resolve => setTimeout(resolve, 2000))
+              }
+            }
+            
+            console.log(`[${id}] Found ${transportationOptions.length} transportation options for ${amazonShipmentId} after generation`)
+            
+            // Log option details for debugging
+            if (transportationOptions.length > 0) {
+              transportationOptions.forEach((opt, idx) => {
+                console.log(`[${id}]   Option ${idx + 1}: ${opt.transportationOptionId}, Mode: ${opt.shippingMode}, Solution: ${opt.shippingSolution}, Carrier: ${opt.carrier?.name || 'N/A'}`)
+              })
+            } else {
+              console.warn(`[${id}] ⚠️ No transportation options returned after generation for ${amazonShipmentId} after ${maxListAttempts} attempts`)
+            }
+          }
+        } catch (transportError: any) {
+          console.error(`[${id}] ❌ Error with transportation options for ${amazonShipmentId}:`, transportError.message)
+          console.error(`[${id}] Full error details:`, {
+            message: transportError.message,
+            code: transportError.code,
+            details: transportError.details,
+            stack: transportError.stack?.substring(0, 500),
+          })
+          
+          // Try one more time to list options (they might exist even if generation failed)
+          try {
+            console.log(`[${id}] Attempting to list options as fallback for ${amazonShipmentId}...`)
+            const fallbackListResult = await listTransportationOptions(
+              inboundPlanId,
+              amazonShipmentId,
+              placementOptionId
+            )
+            if (fallbackListResult.transportationOptions && fallbackListResult.transportationOptions.length > 0) {
+              transportationOptions = fallbackListResult.transportationOptions
+              console.log(`[${id}] ✓ Successfully retrieved ${transportationOptions.length} options on fallback for ${amazonShipmentId}`)
+            } else {
+              console.warn(`[${id}] ⚠️ No transportation options available for ${amazonShipmentId} - user will need to use own carrier`)
+              transportationOptions = []
+            }
+          } catch (fallbackError: any) {
+            console.error(`[${id}] ❌ Fallback list also failed for ${amazonShipmentId}:`, fallbackError.message)
+            transportationOptions = []
+          }
+        }
+
+          shipmentDetails.push({
+            amazonShipmentId,
+            destinationFc: splitDetail.destination?.warehouseId || null,
+            transportationOptions: transportationOptions.map((opt: any) => ({
+              transportationOptionId: opt.transportationOptionId,
+              shippingMode: opt.shippingMode,
+              shippingSolution: opt.shippingSolution,
+              carrier: opt.carrier,
+              quote: opt.quote,
+            })),
+          })
+        } catch (shipmentError: any) {
+          console.error(`[${id}] Error processing shipment ${amazonShipmentId}:`, shipmentError)
+          // Continue with other shipments even if one fails
+          // Log error but don't fail the entire operation
+        }
       }
 
       // Update shipment
@@ -632,6 +872,13 @@ export async function POST(
       })
 
       console.log(`[${id}] Placement confirmed, ${shipmentDetails.length} shipment splits created`)
+
+      if (shipmentDetails.length === 0) {
+        console.error(`[${id}] No shipment details were created despite having ${shipmentIds.length} shipment IDs`)
+        return NextResponse.json({
+          error: 'Failed to retrieve shipment details. Please try again.',
+        }, { status: 500 })
+      }
 
       return NextResponse.json({
         success: true,
@@ -718,10 +965,7 @@ export async function POST(
         // Update the split record
         await prisma.amazonShipmentSplit.update({
           where: {
-            shipmentId_amazonShipmentId: {
-              shipmentId: id,
-              amazonShipmentId: amazonShipmentId,
-            },
+            amazonShipmentId: amazonShipmentId,
           },
           data: {
             transportationOptionId: transportationOptionId,
@@ -735,13 +979,38 @@ export async function POST(
       }
 
       // Step 2: Confirm all transportation options at once
-      console.log(`[${id}] Confirming ${transportSelections.length} transportation selections...`)
+      // Filter out invalid entries and map to the format expected by confirmTransportationOptions
+      const validSelections = transportSelections.filter(
+        s => s.amazonShipmentId && s.transportationOptionId && s.transportationOptionId.trim() !== ''
+      )
+
+      if (validSelections.length === 0) {
+        console.error(`[${id}] No valid transportation selections found. Received:`, JSON.stringify(transportSelections))
+        return NextResponse.json({
+          error: 'No valid transportation selections to confirm. All selections must have both amazonShipmentId and transportationOptionId.',
+        }, { status: 400 })
+      }
+
+      const mappedSelections = validSelections.map(s => ({
+        shipmentId: s.amazonShipmentId,
+        transportationOptionId: s.transportationOptionId,
+      }))
+
+      // Additional validation - should never happen after filtering, but safety check
+      if (mappedSelections.length === 0) {
+        return NextResponse.json({
+          error: 'No transportation selections to confirm after validation',
+        }, { status: 400 })
+      }
+
+      console.log(`[${id}] Validated ${validSelections.length} valid selections out of ${transportSelections.length} total`)
+
+      console.log(`[${id}] Confirming ${mappedSelections.length} transportation selections...`)
+      console.log(`[${id}] Mapped selections:`, JSON.stringify(mappedSelections, null, 2))
+      
       const confirmTransportResult = await confirmTransportationOptions(
         inboundPlanId,
-        transportSelections.map(s => ({
-          shipmentId: s.amazonShipmentId,
-          transportationOptionId: s.transportationOptionId,
-        }))
+        mappedSelections
       )
 
       const transportStatus = await waitForOperation(
@@ -765,14 +1034,14 @@ export async function POST(
         // Get updated shipment details (to get confirmation ID)
         const shipmentDetail = await getShipment(inboundPlanId, amazonShipmentId)
 
-        // Get shipping labels
+        // Get shipping labels (use THERMAL for 4x6 thermal printers)
         let labelUrl: string | null = null
         try {
           const labelResult = await getLabels(
             inboundPlanId,
             amazonShipmentId,
             'PACKAGE_LABEL',
-            'PLAIN_PAPER'
+            'THERMAL' // Use THERMAL for 4x6 thermal label printers
           )
           labelUrl = labelResult.downloadUrl
           console.log(`[${id}] Labels retrieved for ${amazonShipmentId}`)
@@ -783,20 +1052,14 @@ export async function POST(
         // Get the split record for carrier info
         const split = await prisma.amazonShipmentSplit.findUnique({
           where: {
-            shipmentId_amazonShipmentId: {
-              shipmentId: id,
-              amazonShipmentId: amazonShipmentId,
-            },
+            amazonShipmentId: amazonShipmentId,
           },
         })
 
         // Update split with final info
         await prisma.amazonShipmentSplit.update({
           where: {
-            shipmentId_amazonShipmentId: {
-              shipmentId: id,
-              amazonShipmentId: amazonShipmentId,
-            },
+            amazonShipmentId: amazonShipmentId,
           },
           data: {
             status: 'transport_confirmed',
@@ -1207,28 +1470,47 @@ export async function POST(
         // Generate placement options (may already be done from previous attempt)
         let placementAlreadyConfirmed = false
 
+        // First check if placement options already exist
         try {
-          console.log(`[${id}] Generating placement options...`)
-          const genPlacementResult = await generatePlacementOptions(inboundPlanId)
+          const existingOptions = await listPlacementOptions(inboundPlanId)
+          if (existingOptions.placementOptions && existingOptions.placementOptions.length > 0) {
+            console.log(`[${id}] Found ${existingOptions.placementOptions.length} existing placement options, skipping generation`)
+            // Check if any are already confirmed
+            const confirmed = existingOptions.placementOptions.find(
+              (p: any) => p.status === 'ACCEPTED' || p.status === 'CONFIRMED'
+            )
+            if (confirmed) {
+              placementAlreadyConfirmed = true
+            }
+          } else {
+            // No existing options, generate new ones
+            console.log(`[${id}] Generating placement options...`)
+            const genPlacementResult = await generatePlacementOptions(inboundPlanId)
 
-          const genPlacementStatus = await waitForOperation(
-            await createSpApiClient(),
-            genPlacementResult.operationId
-          )
+            const genPlacementStatus = await waitForOperation(
+              await createSpApiClient(),
+              genPlacementResult.operationId
+            )
 
-          if (genPlacementStatus.operationStatus === 'FAILED') {
-            return NextResponse.json({
-              error: 'Failed to generate placement options',
-              details: genPlacementStatus.operationProblems,
-            }, { status: 500 })
+            if (genPlacementStatus.operationStatus === 'FAILED') {
+              return NextResponse.json({
+                error: 'Failed to generate placement options',
+                details: genPlacementStatus.operationProblems,
+              }, { status: 500 })
+            }
           }
         } catch (genError: any) {
           // Check if placement is already confirmed from a previous attempt
-          if (genError.message?.includes('placement option is already confirmed')) {
-            console.log(`[${id}] Placement already confirmed from previous attempt, skipping generation`)
+          if (genError.message?.includes('placement option is already confirmed') || 
+              genError.message?.includes('already confirmed') ||
+              genError.message?.includes('Operation GeneratePlacementOptions cannot be processed')) {
+            console.log(`[${id}] Placement option already confirmed, skipping generation`)
             placementAlreadyConfirmed = true
           } else {
-            throw genError
+            // If it's a listPlacementOptions error, that's okay - we'll try to generate
+            if (!genError.message?.includes('listPlacementOptions')) {
+              throw genError
+            }
           }
         }
 
@@ -1255,25 +1537,53 @@ export async function POST(
         // Confirm placement (skip if already confirmed)
         let lastOperationId: string | null = null
 
-        if (!placementAlreadyConfirmed) {
-          const confirmResult = await confirmPlacementOption(
-            inboundPlanId,
-            optimalPlacement.placementOptionId
-          )
+        // Double-check placement option status from Amazon
+        const selectedPlacement = placementOptions.find(
+          (p: any) => p.placementOptionId === optimalPlacement.placementOptionId
+        )
+        const isPlacementConfirmed = placementAlreadyConfirmed || 
+                                     selectedPlacement?.status === 'CONFIRMED' || 
+                                     selectedPlacement?.status === 'ACCEPTED'
 
-          const confirmStatus = await waitForOperation(
-            await createSpApiClient(),
-            confirmResult.operationId
-          )
+        if (!isPlacementConfirmed) {
+          try {
+            const confirmResult = await confirmPlacementOption(
+              inboundPlanId,
+              optimalPlacement.placementOptionId
+            )
 
-          if (confirmStatus.operationStatus === 'FAILED') {
-            return NextResponse.json({
-              error: 'Failed to confirm placement option',
-              details: confirmStatus.operationProblems,
-            }, { status: 500 })
+            const confirmStatus = await waitForOperation(
+              await createSpApiClient(),
+              confirmResult.operationId
+            )
+
+            if (confirmStatus.operationStatus === 'FAILED') {
+              // Check if the error is because it's already confirmed
+              const errorMsg = confirmStatus.operationProblems?.map((p: any) => p.message).join(' ') || ''
+              if (errorMsg.includes('already confirmed') || errorMsg.includes('Operation ConfirmPlacementOption cannot be processed')) {
+                console.log(`[${id}] Placement already confirmed (detected from error), updating database`)
+                placementAlreadyConfirmed = true
+                // Continue with the workflow
+              } else {
+                return NextResponse.json({
+                  error: 'Failed to confirm placement option',
+                  details: confirmStatus.operationProblems,
+                }, { status: 500 })
+              }
+            } else {
+              lastOperationId = confirmResult.operationId
+            }
+          } catch (confirmError: any) {
+            // Handle the case where confirmation fails because it's already confirmed
+            if (confirmError.message?.includes('already confirmed') || 
+                confirmError.message?.includes('Operation ConfirmPlacementOption cannot be processed')) {
+              console.log(`[${id}] Placement option already confirmed (caught from error), updating database`)
+              placementAlreadyConfirmed = true
+              // Continue with the workflow
+            } else {
+              throw confirmError
+            }
           }
-
-          lastOperationId = confirmResult.operationId
         } else {
           console.log(`[${id}] Placement already confirmed, skipping confirmation step`)
         }
@@ -1401,13 +1711,39 @@ export async function POST(
           placementOptionId
         )
 
-        // Find SPD partnered carrier option
-        const spdOption = findCheapestSpdOption(transportationOptions, split.amazonShipmentId)
-
-        if (!spdOption) {
-          console.warn(`[${id}] No SPD option available for ${split.amazonShipmentId}, checking for alternatives...`)
-          // Could fall back to non-partnered or LTL here
+        if (!transportationOptions || transportationOptions.length === 0) {
+          console.warn(`[${id}] No transportation options available for ${split.amazonShipmentId}`)
           continue
+        }
+
+        // Find SPD partnered carrier option first (preferred)
+        let selectedTransport = findCheapestSpdOption(transportationOptions, split.amazonShipmentId)
+
+        // If no SPD option, fall back to cheapest available option
+        if (!selectedTransport) {
+          console.warn(`[${id}] No SPD option available for ${split.amazonShipmentId}, using cheapest alternative...`)
+          
+          // Filter options for this shipment
+          const shipmentOptions = transportationOptions.filter(
+            opt => opt.shipmentId === split.amazonShipmentId
+          )
+
+          if (shipmentOptions.length === 0) {
+            console.warn(`[${id}] No transportation options found for shipment ${split.amazonShipmentId}`)
+            continue
+          }
+
+          // Sort by price (cheapest first) and use the first one
+          selectedTransport = shipmentOptions.sort((a, b) => {
+            const priceA = a.quote?.price?.amount || Infinity
+            const priceB = b.quote?.price?.amount || Infinity
+            return priceA - priceB
+          })[0]
+
+          if (!selectedTransport) {
+            console.warn(`[${id}] Could not select any transportation option for ${split.amazonShipmentId}`)
+            continue
+          }
         }
 
         // Generate delivery window options
@@ -1453,27 +1789,35 @@ export async function POST(
         await prisma.amazonShipmentSplit.update({
           where: { id: split.id },
           data: {
-            transportationOptionId: spdOption.transportationOptionId,
+            transportationOptionId: selectedTransport.transportationOptionId,
             deliveryWindowOptionId: deliveryWindow.deliveryWindowOptionId,
             deliveryWindowStart: new Date(deliveryWindow.startDate),
             deliveryWindowEnd: new Date(deliveryWindow.endDate),
-            carrier: spdOption.carrier?.name || 'Amazon Partnered Carrier',
+            carrier: selectedTransport.carrier?.name || selectedTransport.shippingSolution || 'Carrier',
           },
         })
 
         transportSelections.push({
           shipmentId: split.amazonShipmentId,
-          transportationOptionId: spdOption.transportationOptionId,
+          transportationOptionId: selectedTransport.transportationOptionId,
         })
 
-        console.log(`[${id}] Transport ${spdOption.transportationOptionId} and window ${deliveryWindow.deliveryWindowOptionId} selected for ${split.amazonShipmentId}`)
+        console.log(`[${id}] Transport ${selectedTransport.transportationOptionId} (${selectedTransport.shippingMode || 'N/A'}, ${selectedTransport.shippingSolution || 'N/A'}) and window ${deliveryWindow.deliveryWindowOptionId} selected for ${split.amazonShipmentId}`)
       }
 
       // Confirm all transportation options at once
       if (transportSelections.length > 0) {
+        // Validate we have valid selections
+        const validSelections = transportSelections.filter(s => s.shipmentId && s.transportationOptionId)
+        if (validSelections.length === 0) {
+          return NextResponse.json({
+            error: 'No valid transportation selections to confirm',
+          }, { status: 400 })
+        }
+
         const confirmTransportResult = await confirmTransportationOptions(
           inboundPlanId,
-          transportSelections
+          validSelections
         )
 
         const transportStatus = await waitForOperation(
@@ -1500,10 +1844,10 @@ export async function POST(
         console.log(`[${id}] Transportation confirmed for ${transportSelections.length} shipments`)
       } else if (unconfirmedSplits.length > 0) {
         // We had unconfirmed splits but no transport selections were made
-        console.warn(`[${id}] No SPD options were available for any shipment`)
+        console.warn(`[${id}] No transportation options were available for any shipment`)
         return NextResponse.json({
-          error: 'No transportation options available. SPD partnered carrier may not be available for this shipment.',
-          hint: 'Try using your own carrier instead.',
+          error: 'No transportation options available for any shipment.',
+          hint: 'Please use the interactive workflow (step=get_placement_options) to manually select transportation options, or use your own carrier.',
         }, { status: 400 })
       }
       } // end else block for unconfirmedSplits > 0

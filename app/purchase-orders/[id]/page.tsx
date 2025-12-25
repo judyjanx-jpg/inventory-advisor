@@ -122,8 +122,10 @@ export default function PurchaseOrderDetailPage() {
   })
   
   const [datesForm, setDatesForm] = useState({
-    orderDate: '',
-    expectedArrivalDate: '',
+    createdDate: '',
+    confirmedDate: '',
+    actualShipDate: '',
+    actualArrivalDate: '',
   })
   
   const [receiveItems, setReceiveItems] = useState<Record<number, { received: number; damaged: number; backorder: number }>>({})
@@ -149,8 +151,10 @@ export default function PurchaseOrderDetailPage() {
           otherCosts: Number(data.otherCosts || 0),
         })
         setDatesForm({
-          orderDate: data.orderDate ? new Date(data.orderDate).toISOString().split('T')[0] : '',
-          expectedArrivalDate: data.expectedArrivalDate ? new Date(data.expectedArrivalDate).toISOString().split('T')[0] : '',
+          createdDate: data.createdDate ? new Date(data.createdDate).toISOString().split('T')[0] : '',
+          confirmedDate: data.confirmedDate ? new Date(data.confirmedDate).toISOString().split('T')[0] : '',
+          actualShipDate: data.actualShipDate ? new Date(data.actualShipDate).toISOString().split('T')[0] : '',
+          actualArrivalDate: data.actualArrivalDate ? new Date(data.actualArrivalDate).toISOString().split('T')[0] : '',
         })
       }
     } catch (error) {
@@ -271,8 +275,10 @@ export default function PurchaseOrderDetailPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderDate: datesForm.orderDate,
-          expectedArrivalDate: datesForm.expectedArrivalDate || null,
+          createdDate: datesForm.createdDate || null,
+          confirmedDate: datesForm.confirmedDate || null,
+          actualShipDate: datesForm.actualShipDate || null,
+          actualArrivalDate: datesForm.actualArrivalDate || null,
         }),
       })
       
@@ -708,10 +714,26 @@ export default function PurchaseOrderDetailPage() {
         {/* PO Info Grid */}
         <Card>
           <CardHeader>
-            <CardTitle>PO Information</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>PO Information</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => {
+                if (po) {
+                  setDatesForm({
+                    createdDate: po.createdDate ? new Date(po.createdDate).toISOString().split('T')[0] : '',
+                    confirmedDate: po.confirmedDate ? new Date(po.confirmedDate).toISOString().split('T')[0] : '',
+                    actualShipDate: po.actualShipDate ? new Date(po.actualShipDate).toISOString().split('T')[0] : '',
+                    actualArrivalDate: po.actualArrivalDate ? new Date(po.actualArrivalDate).toISOString().split('T')[0] : '',
+                  })
+                }
+                setShowEditDates(true)
+              }}>
+                <CalendarDays className="w-4 h-4 mr-2" />
+                Edit Dates
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            {/* Row 1: Supplier | Created Date | Confirmed Date */}
+            {/* Row 1: Supplier */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <div>
                 <p className="text-sm text-[var(--muted-foreground)] mb-2">Supplier</p>
@@ -725,11 +747,15 @@ export default function PurchaseOrderDetailPage() {
                   className="text-[var(--foreground)] font-medium"
                 />
               </div>
+            </div>
+
+            {/* Row 2: Date Trackers - Created, Confirmed, Shipped, Arrived */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
               <div>
                 <p className="text-sm text-[var(--muted-foreground)] mb-2">Created Date</p>
                 <EditableField
-                  value={po.orderDate || po.createdDate}
-                  onChange={(value) => handleFieldUpdate('orderDate', value)}
+                  value={po.createdDate}
+                  onChange={(value) => handleFieldUpdate('createdDate', value)}
                   type="date"
                   className="text-[var(--foreground)] font-medium"
                   formatValue={(val) => formatDate(new Date(val as string))}
@@ -746,10 +772,42 @@ export default function PurchaseOrderDetailPage() {
                   placeholder="Not set"
                 />
               </div>
+              <div>
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Shipped Date</p>
+                <EditableField
+                  value={po.actualShipDate || ''}
+                  onChange={(value) => handleFieldUpdate('actualShipDate', value)}
+                  type="date"
+                  className="text-[var(--foreground)] font-medium"
+                  formatValue={(val) => val ? formatDate(new Date(val as string)) : 'Not set'}
+                  placeholder="Not set"
+                />
+              </div>
+              <div>
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Arrived Date</p>
+                <EditableField
+                  value={po.actualArrivalDate || ''}
+                  onChange={(value) => handleFieldUpdate('actualArrivalDate', value)}
+                  type="date"
+                  className="text-[var(--foreground)] font-medium"
+                  formatValue={(val) => val ? formatDate(new Date(val as string)) : 'Not set'}
+                  placeholder="Not set"
+                />
+              </div>
             </div>
 
-            {/* Row 2: Expected Date | Exp. Lead Time | Ship Date | Actual Lead Time */}
+            {/* Row 3: Order Date | Expected Date | Exp. Lead Time | Actual Lead Time */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div>
+                <p className="text-sm text-[var(--muted-foreground)] mb-2">Order Date</p>
+                <EditableField
+                  value={po.orderDate || po.createdDate}
+                  onChange={(value) => handleFieldUpdate('orderDate', value)}
+                  type="date"
+                  className="text-[var(--foreground)] font-medium"
+                  formatValue={(val) => formatDate(new Date(val as string))}
+                />
+              </div>
               <div>
                 <p className="text-sm text-[var(--muted-foreground)] mb-2">Expected Date</p>
                 <EditableField
@@ -770,17 +828,6 @@ export default function PurchaseOrderDetailPage() {
                   className="text-[var(--foreground)] font-medium"
                   formatValue={(val) => `${val} days`}
                   min={0}
-                />
-              </div>
-              <div>
-                <p className="text-sm text-[var(--muted-foreground)] mb-2">Ship Date</p>
-                <EditableField
-                  value={po.actualShipDate || ''}
-                  onChange={(value) => handleFieldUpdate('actualShipDate', value)}
-                  type="date"
-                  className="text-[var(--foreground)] font-medium"
-                  formatValue={(val) => val ? formatDate(new Date(val as string)) : 'Not set'}
-                  placeholder="Not set"
                 />
               </div>
               <div>
@@ -1171,31 +1218,57 @@ export default function PurchaseOrderDetailPage() {
       <Modal
         isOpen={showEditDates}
         onClose={() => setShowEditDates(false)}
-        title="Edit Dates"
+        title="Edit Date Trackers"
+        size="md"
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Order Date</label>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
+              Created Date <span className="text-red-400">*</span>
+            </label>
             <input
               type="date"
-              value={datesForm.orderDate}
-              onChange={(e) => setDatesForm({ ...datesForm, orderDate: e.target.value })}
+              value={datesForm.createdDate}
+              onChange={(e) => setDatesForm({ ...datesForm, createdDate: e.target.value })}
               className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              required
             />
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">The date the PO was created</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Expected Arrival Date</label>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Confirmed Date</label>
             <input
               type="date"
-              value={datesForm.expectedArrivalDate}
-              onChange={(e) => setDatesForm({ ...datesForm, expectedArrivalDate: e.target.value })}
+              value={datesForm.confirmedDate}
+              onChange={(e) => setDatesForm({ ...datesForm, confirmedDate: e.target.value })}
               className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">The date the supplier confirmed the order</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Shipped Date</label>
+            <input
+              type="date"
+              value={datesForm.actualShipDate}
+              onChange={(e) => setDatesForm({ ...datesForm, actualShipDate: e.target.value })}
+              className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            />
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">The date the order was shipped</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-1">Arrived Date</label>
+            <input
+              type="date"
+              value={datesForm.actualArrivalDate}
+              onChange={(e) => setDatesForm({ ...datesForm, actualArrivalDate: e.target.value })}
+              className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            />
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">The date the order arrived at your warehouse</p>
           </div>
         </div>
         <ModalFooter>
           <Button variant="ghost" onClick={() => setShowEditDates(false)}>Cancel</Button>
-          <Button variant="primary" onClick={saveDates}>Save</Button>
+          <Button variant="primary" onClick={saveDates} disabled={!datesForm.createdDate}>Save Dates</Button>
         </ModalFooter>
       </Modal>
 

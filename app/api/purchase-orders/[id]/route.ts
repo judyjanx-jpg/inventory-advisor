@@ -43,6 +43,7 @@ export async function PUT(
     const body = await request.json()
     const {
       status,
+      createdDate,
       orderDate,
       confirmedDate,
       expectedShipDate,
@@ -95,6 +96,9 @@ export async function PUT(
       }
     }
 
+    if (createdDate !== undefined) {
+      updateData.createdDate = createdDate ? new Date(createdDate) : new Date()
+    }
     if (orderDate !== undefined) {
       updateData.orderDate = new Date(orderDate)
       // Recalculate expected date if lead time should be maintained

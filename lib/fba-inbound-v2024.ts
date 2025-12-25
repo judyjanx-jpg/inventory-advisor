@@ -446,8 +446,10 @@ export async function generateTransportationOptions(
   const response = await callFbaInboundApi(client, 'generateTransportationOptions', {
     path: { inboundPlanId },
     body: {
-      shipmentId,
       placementOptionId,
+      shipmentTransportationConfigurations: [
+        { shipmentId },
+      ],
     },
   })
 
@@ -540,10 +542,40 @@ export async function confirmTransportationOptions(
 ): Promise<{ operationId: string }> {
   const client = await createSpApiClient()
 
+  // Validate that we have at least one selection
+  if (!transportationSelections || transportationSelections.length === 0) {
+    throw new Error('At least one transportation selection is required')
+  }
+
+  // Filter out invalid entries (missing shipmentId or transportationOptionId)
+  const validSelections = transportationSelections.filter(
+    selection => 
+      selection &&
+      selection.shipmentId && 
+      selection.shipmentId.trim() !== '' &&
+      selection.transportationOptionId && 
+      selection.transportationOptionId.trim() !== ''
+  )
+
+  if (validSelections.length === 0) {
+    throw new Error('No valid transportation selections found. All selections must have both shipmentId and transportationOptionId.')
+  }
+
+  if (validSelections.length !== transportationSelections.length) {
+    console.warn(`[confirmTransportationOptions] Filtered out ${transportationSelections.length - validSelections.length} invalid selections`)
+  }
+
+  // Amazon API expects shipmentTransportationConfigurations
+  // Map our format to Amazon's expected format
+  const shipmentTransportationConfigurations = validSelections.map(selection => ({
+    shipmentId: selection.shipmentId.trim(),
+    transportationOptionId: selection.transportationOptionId.trim(),
+  }))
+
   const response = await callFbaInboundApi(client, 'confirmTransportationOptions', {
     path: { inboundPlanId },
     body: {
-      transportationSelections,
+      shipmentTransportationConfigurations,
     },
   })
 
