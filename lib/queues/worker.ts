@@ -2187,7 +2187,7 @@ async function processFbaShipmentsSync(job: any) {
     const client = await createSpApiClient()
     if (!client) throw new Error('Failed to create SP-API client')
 
-    const daysBack = job.data.daysBack || 90
+    const daysBack = job.data.daysBack || 365 // Default to 1 year max
     const { startDate } = getPSTDateRange(daysBack)
 
     let shipmentsCreated = 0
@@ -2203,7 +2203,7 @@ async function processFbaShipmentsSync(job: any) {
 
     // For now, use the legacy Fulfillment Inbound API which is more widely available
     let nextToken: string | null = null
-    const statuses = ['WORKING', 'SHIPPED', 'RECEIVING', 'CHECKED_IN', 'CLOSED', 'IN_TRANSIT', 'DELIVERED']
+    const statuses = ['WORKING', 'SHIPPED', 'RECEIVING', 'CHECKED_IN', 'IN_TRANSIT', 'DELIVERED'] // Removed CLOSED - we filter those out in the UI
 
     for (const status of statuses) {
       nextToken = null
@@ -2301,6 +2301,32 @@ async function processFbaShipmentsSync(job: any) {
 
             const mappedStatus = statusMapping[shipment.ShipmentStatus] || shipment.ShipmentStatus?.toLowerCase() || 'unknown'
 
+            // Parse created date from shipment - Amazon API returns different date fields
+            let createdDate = new Date()
+            // Try various date fields that Amazon might return
+            if (shipment.ShipmentStatus === 'CLOSED' || shipment.ShipmentStatus === 'CANCELLED') {
+              // Skip closed/cancelled shipments - they're filtered out in the UI
+              continue
+            }
+            
+            if (shipment.CreatedDate) {
+              createdDate = new Date(shipment.CreatedDate)
+            } else if (shipment.LastUpdatedDate) {
+              createdDate = new Date(shipment.LastUpdatedDate)
+            } else if (shipment.ShipDate) {
+              createdDate = new Date(shipment.ShipDate)
+            } else {
+              // If no date available, use current date (shouldn't happen, but fallback)
+              createdDate = new Date()
+            }
+
+            // Skip shipments older than 180 days during sync
+            const daysSinceCreation = (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+            if (daysSinceCreation > 180) {
+              console.log(`    Skipping old shipment ${shipmentId} from ${createdDate.toISOString()} (${Math.round(daysSinceCreation)} days old)`)
+              continue
+            }
+
             // Upsert the shipment
             const existingShipment = await prisma.fbaShipment.findUnique({
               where: { shipmentId },
@@ -2311,6 +2337,7 @@ async function processFbaShipmentsSync(job: any) {
               destinationFc: shipment.DestinationFulfillmentCenterId || null,
               destinationName: shipment.ShipmentName || null,
               channel: `amazon_${credentials.marketplaceId === 'ATVPDKIKX0DER' ? 'us' : 'other'}`,
+              createdDate, // Set the actual created date from Amazon
               totalUnits,
               unitsShipped: totalUnits,
               unitsReceived,

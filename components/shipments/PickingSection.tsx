@@ -584,7 +584,11 @@ export default function PickingSection({
   }
 
   const markAllPicked = () => {
-    const updatedItems = items.map(item => ({ ...item, pickStatus: 'picked' }))
+    const updatedItems = items.map(item => ({ 
+      ...item, 
+      pickStatus: 'picked',
+      pickedAt: new Date().toISOString(),
+    }))
     onItemsChange(updatedItems)
     onPickComplete()
   }

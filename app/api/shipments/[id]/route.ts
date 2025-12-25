@@ -129,7 +129,12 @@ export async function PUT(
           // Update pick status
           if (item.pickStatus !== undefined) {
             updateItemData.pickStatus = item.pickStatus
-            updateItemData.pickedAt = item.pickStatus === 'picked' ? new Date() : null
+            // Preserve pickedAt if provided, otherwise set based on pickStatus
+            if (item.pickedAt !== undefined) {
+              updateItemData.pickedAt = item.pickedAt ? new Date(item.pickedAt) : null
+            } else {
+              updateItemData.pickedAt = item.pickStatus === 'picked' ? new Date() : null
+            }
           }
           
           // Update quantities

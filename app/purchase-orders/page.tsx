@@ -1036,7 +1036,7 @@ export default function PurchaseOrdersPage() {
                   placeholder="Search by PO number or supplier..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--secondary)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:border-cyan-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border-slate-700 border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <select

@@ -169,7 +169,7 @@ export default function ProductLabelPrinter({
       case 'fnsku_tp': return { label: 'FNSKU + TP', color: 'text-purple-400', bg: 'bg-purple-900/20' }
       case 'fnsku_only': return { label: 'FNSKU', color: 'text-cyan-400', bg: 'bg-cyan-900/20' }
       case 'tp_only': return { label: 'TP Only', color: 'text-amber-400', bg: 'bg-amber-900/20' }
-      case 'none': return { label: 'Pre-labeled', color: 'text-[var(--muted-foreground)]', bg: 'bg-[var(--secondary)]/20' }
+      case 'none': return { label: 'Pre-labeled', color: 'text-[var(--muted-foreground)]', bg: 'bg-slate-800/50' }
     }
   }
 
@@ -632,7 +632,7 @@ export default function ProductLabelPrinter({
                     value={labelType}
                     onChange={(e) => handleLabelTypeChange(item.masterSku, e.target.value as LabelType)}
                     disabled={savingLabelType === item.masterSku}
-                    className={`px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer appearance-none pr-6 ${display.bg} ${display.color} focus:outline-none focus:ring-1 focus:ring-slate-500`}
+                    className={`px-2 py-1 rounded text-xs font-medium border border-[var(--border)] cursor-pointer appearance-none pr-6 bg-[var(--secondary)] ${display.color} focus:outline-none focus:ring-1 focus:ring-slate-500`}
                     style={{ backgroundImage: 'none' }}
                   >
                     <option value="fnsku_tp" className="bg-[var(--card)] text-purple-400">FNSKU + TP</option>

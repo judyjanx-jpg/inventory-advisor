@@ -204,6 +204,35 @@ export default function ShipmentDetailPage() {
     }
   }
 
+  const saveItems = async (itemsToSave: any[]) => {
+    if (!shipment) return
+    try {
+      // Format items for the API endpoint (it expects id, pickStatus, pickedAt, adjustedQty, requestedQty)
+      const formattedItems = itemsToSave.map(item => ({
+        id: item.id,
+        pickStatus: item.pickStatus,
+        pickedAt: item.pickStatus === 'picked' ? (item.pickedAt || new Date().toISOString()) : null,
+        adjustedQty: item.adjustedQty,
+        requestedQty: item.requestedQty,
+      }))
+      
+      // Save items via the shipment update endpoint
+      const res = await fetch(`/api/shipments/${shipmentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: formattedItems }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        console.error('Error auto-saving items:', data.error)
+        // Don't show alert for auto-save failures, just log
+      }
+    } catch (error) {
+      console.error('Error auto-saving items:', error)
+      // Don't show alert for auto-save failures, just log
+    }
+  }
+
   const saveShipment = async () => {
     if (!shipment) return
     setSaving(true)
@@ -948,7 +977,12 @@ export default function ShipmentDetailPage() {
             shipmentId={String(shipment.id)}
             shipmentInternalId={shipment.internalId || `SHP-${shipment.id}`}
             items={shipment.items}
-            onItemsChange={(items: any) => setShipment({ ...shipment, items })}
+            onItemsChange={async (items: any) => {
+              // Update local state immediately
+              setShipment({ ...shipment, items })
+              // Auto-save to backend
+              await saveItems(items)
+            }}
             onPickComplete={() => {}}
             onInventoryAdjust={handleInventoryAdjust}
           />

@@ -443,10 +443,12 @@ export default function FbaTab({ items, settings, setSettings, getUrgencyColor, 
           <div className="flex-1 min-w-48">
             <div className="flex items-center gap-2">
               <div className="flex-1 bg-[var(--secondary)] rounded-full h-3">
-                <div
-                  className={`h-3 rounded-full transition-all ${capacityUsed > 100 ? 'bg-red-500' : capacityUsed > 80 ? 'bg-orange-500' : 'bg-purple-500'}`}
-                  style={{ width: `${Math.min(100, capacityUsed)}%` }}
-                />
+                {selectedItems.length > 0 && (
+                  <div
+                    className={`h-3 rounded-full transition-all ${capacityUsed > 100 ? 'bg-red-500' : capacityUsed > 80 ? 'bg-orange-500' : 'bg-purple-500'}`}
+                    style={{ width: `${Math.min(100, capacityUsed)}%` }}
+                  />
+                )}
               </div>
               <span className={`text-sm font-medium ${capacityUsed > 100 ? 'text-red-400' : 'text-[var(--foreground)]'}`}>
                 {totalSelectedUnits} / {settings.fbaCapacity}

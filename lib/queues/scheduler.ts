@@ -102,10 +102,10 @@ const schedules: ScheduleConfig[] = [
   {
     queue: fbaShipmentsQueue,
     name: 'fba-shipments-sync',
-    cron: '0 */6 * * *',    // Every 6 hours
+    cron: '0 * * * *',    // Every hour
     description: 'Sync FBA inbound shipments from Amazon for reconciliation',
     enabled: true,
-    data: { daysBack: 90 }, // Look back 90 days for shipments
+    data: { daysBack: 365 }, // Look back 1 year for shipments (filtered to last year in UI)
   },
 ]
 

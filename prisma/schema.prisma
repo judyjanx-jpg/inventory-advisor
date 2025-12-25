@@ -1029,7 +1029,7 @@ model FbaShipment {
   reimbursementStatus String? @map("reimbursement_status")
 
   // Inventory Reconciliation
-  reconciliationStatus       String    @default("pending") @map("reconciliation_status") // pending, accepted, deducted
+  reconciliationStatus       String    @default("pending") @map("reconciliation_status") // pending, accepted, deducted, reconciled
   reconciledAt               DateTime? @map("reconciled_at")
   reconciledBy               String?   @map("reconciled_by")
   deductedFromWarehouseId    Int?      @map("deducted_from_warehouse_id")

@@ -18,8 +18,22 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0')
 
     // Build where clause
-    const where: any = {}
-    if (status !== 'all') {
+    const where: any = {
+      // Always exclude closed shipments
+      status: { not: 'CLOSED' },
+      // Only show shipments from the last 180 days (6 months) - more aggressive filter
+      createdDate: {
+        gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000), // 180 days ago
+      },
+    }
+    
+    if (status === 'all' || status === 'pending') {
+      // Default: Show only pending (not reconciled) shipments
+      where.reconciliationStatus = 'pending'
+    } else if (status === 'reconciled') {
+      // Show reconciled shipments (but still exclude closed)
+      where.reconciliationStatus = { in: ['reconciled', 'accepted', 'deducted'] }
+    } else {
       where.reconciliationStatus = status
     }
 
@@ -44,8 +58,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: [
-        { reconciliationStatus: 'asc' }, // pending first
-        { createdDate: 'desc' },
+        { createdDate: 'desc' }, // Newest first
       ],
       take: limit,
       skip: offset,
@@ -116,6 +129,7 @@ export async function GET(request: NextRequest) {
         pending: await prisma.fbaShipment.count({ where: { reconciliationStatus: 'pending' } }),
         accepted: await prisma.fbaShipment.count({ where: { reconciliationStatus: 'accepted' } }),
         deducted: await prisma.fbaShipment.count({ where: { reconciliationStatus: 'deducted' } }),
+        reconciled: await prisma.fbaShipment.count({ where: { reconciliationStatus: 'reconciled' } }),
       },
     })
   } catch (error: any) {
@@ -186,7 +200,7 @@ export async function POST(request: NextRequest) {
       const updatedShipment = await prisma.fbaShipment.update({
         where: { id: shipmentId },
         data: {
-          reconciliationStatus: 'accepted',
+          reconciliationStatus: 'reconciled',
           reconciledAt: new Date(),
           reconciledBy: reconciledBy || 'system',
           reconciliationNotes: notes || 'Accepted without inventory deduction',
@@ -304,7 +318,7 @@ export async function POST(request: NextRequest) {
       const updatedShipment = await prisma.fbaShipment.update({
         where: { id: shipmentId },
         data: {
-          reconciliationStatus: 'deducted',
+          reconciliationStatus: 'reconciled',
           reconciledAt: new Date(),
           reconciledBy: reconciledBy || 'system',
           deductedFromWarehouseId: warehouseId,
@@ -377,10 +391,13 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Shipment is already pending' }, { status: 400 })
     }
 
-    if (shipment.reconciliationStatus === 'deducted') {
-      return NextResponse.json({
-        error: 'Cannot undo deducted shipment. Inventory has already been adjusted. Please create a manual inventory adjustment to reverse.',
-      }, { status: 400 })
+    if (shipment.reconciliationStatus === 'deducted' || shipment.reconciliationStatus === 'reconciled') {
+      // Check if inventory was deducted
+      if (shipment.inventoryDeducted) {
+        return NextResponse.json({
+          error: 'Cannot undo reconciled shipment with inventory deduction. Inventory has already been adjusted. Please create a manual inventory adjustment to reverse.',
+        }, { status: 400 })
+      }
     }
 
     // Reset to pending

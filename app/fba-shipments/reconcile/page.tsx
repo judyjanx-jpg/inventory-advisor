@@ -74,14 +74,16 @@ interface ReconcileData {
     pending: number
     accepted: number
     deducted: number
+    reconciled: number
   }
 }
 
 export default function FbaReconcilePage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [cleaningUp, setCleaningUp] = useState(false)
   const [data, setData] = useState<ReconcileData | null>(null)
-  const [statusFilter, setStatusFilter] = useState<string>('pending')
+  const [statusFilter, setStatusFilter] = useState<string>('pending') // Default to 'pending' to show shipments that need reconciliation
   const [selectedWarehouse, setSelectedWarehouse] = useState<number | null>(null)
   const [expandedShipments, setExpandedShipments] = useState<Set<number>>(new Set())
   const [processingShipments, setProcessingShipments] = useState<Set<number>>(new Set())
@@ -118,14 +120,54 @@ export default function FbaReconcilePage() {
     }
   }
 
+  const cleanupOldShipments = async () => {
+    setCleaningUp(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/fba-shipments/cleanup', {
+        method: 'POST',
+      })
+      const result = await res.json()
+
+      if (!res.ok) {
+        setError(result.error || 'Failed to cleanup old shipments')
+        return
+      }
+
+      setSuccess(`Cleaned up ${result.deletedCount || 0} old shipments (older than 180 days)`)
+      setTimeout(() => {
+        setSuccess(null)
+        fetchShipments() // Refresh the list
+      }, 2000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to cleanup old shipments')
+    } finally {
+      setCleaningUp(false)
+    }
+  }
+
   const triggerSync = async () => {
     setSyncing(true)
     setError(null)
     try {
+      // First cleanup old shipments (this doesn't need Redis)
+      try {
+        const cleanupRes = await fetch('/api/fba-shipments/cleanup', {
+          method: 'POST',
+        })
+        const cleanupResult = await cleanupRes.json()
+        if (cleanupRes.ok && cleanupResult.deletedCount > 0) {
+          console.log(`Cleaned up ${cleanupResult.deletedCount} old shipments`)
+        }
+      } catch (cleanupErr) {
+        console.error('Cleanup failed (non-fatal):', cleanupErr)
+      }
+
+      // Then trigger sync
       const res = await fetch('/api/fba-shipments/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ daysBack: 90 }),
+        body: JSON.stringify({ daysBack: 180 }),
       })
       const result = await res.json()
 
@@ -135,7 +177,10 @@ export default function FbaReconcilePage() {
       }
 
       setSuccess('Sync job triggered. Refresh the page in a few minutes to see new shipments.')
-      setTimeout(() => setSuccess(null), 5000)
+      setTimeout(() => {
+        setSuccess(null)
+        fetchShipments() // Refresh after a delay
+      }, 5000)
     } catch (err: any) {
       setError(err.message || 'Failed to trigger sync')
     } finally {
@@ -143,14 +188,41 @@ export default function FbaReconcilePage() {
     }
   }
 
-  const toggleExpand = (shipmentId: number) => {
+  const [loadingItems, setLoadingItems] = useState<Set<number>>(new Set())
+
+  const toggleExpand = async (shipment: FbaShipment) => {
+    const shipmentId = shipment.id
     const newExpanded = new Set(expandedShipments)
+    
     if (newExpanded.has(shipmentId)) {
       newExpanded.delete(shipmentId)
+      setExpandedShipments(newExpanded)
     } else {
       newExpanded.add(shipmentId)
+      setExpandedShipments(newExpanded)
+      
+      // If shipment has no items, try to fetch them from Amazon
+      if (shipment.items.length === 0) {
+        setLoadingItems(prev => new Set(prev).add(shipmentId))
+        try {
+          const res = await fetch(`/api/fba-shipments/${shipment.shipmentId}/items`)
+          const data = await res.json()
+          
+          if (res.ok && data.items && data.items.length > 0) {
+            // Refresh the shipments list to show the newly loaded items
+            fetchShipments()
+          }
+        } catch (err: any) {
+          console.error('Failed to fetch items:', err)
+        } finally {
+          setLoadingItems(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(shipmentId)
+            return newSet
+          })
+        }
+      }
     }
-    setExpandedShipments(newExpanded)
   }
 
   const reconcileShipment = async (shipmentId: number, action: 'accept' | 'deduct') => {
@@ -231,9 +303,9 @@ export default function FbaReconcilePage() {
       case 'pending':
         return <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Pending</span>
       case 'accepted':
-        return <span className="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Accepted</span>
       case 'deducted':
-        return <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-400 border border-green-500/30">Deducted</span>
+      case 'reconciled':
+        return <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-400 border border-green-500/30">Reconciled</span>
       default:
         return <span className="px-2 py-1 text-xs rounded-full bg-[var(--muted)] text-[var(--foreground)]">{status}</span>
     }
@@ -267,14 +339,24 @@ export default function FbaReconcilePage() {
               Review and reconcile FBA shipments - either deduct from warehouse or accept as-is
             </p>
           </div>
-          <Button
-            onClick={triggerSync}
-            disabled={syncing}
-            variant="outline"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : 'Sync from Amazon'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={cleanupOldShipments}
+              disabled={cleaningUp}
+              variant="outline"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${cleaningUp ? 'animate-spin' : ''}`} />
+              {cleaningUp ? 'Cleaning...' : 'Cleanup Old'}
+            </Button>
+            <Button
+              onClick={triggerSync}
+              disabled={syncing}
+              variant="outline"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing...' : 'Sync from Amazon'}
+            </Button>
+          </div>
         </div>
 
         {/* Alerts */}
@@ -300,7 +382,7 @@ export default function FbaReconcilePage() {
 
         {/* Summary Cards */}
         {data?.summary && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card
               className={`cursor-pointer transition ${statusFilter === 'pending' ? 'ring-2 ring-yellow-500' : ''}`}
               onClick={() => setStatusFilter('pending')}
@@ -308,7 +390,7 @@ export default function FbaReconcilePage() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-[var(--muted-foreground)]">Pending</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">Pending Reconciliation</p>
                     <p className="text-2xl font-bold text-yellow-600">{data.summary.pending}</p>
                   </div>
                   <Clock className="w-8 h-8 text-yellow-500" />
@@ -317,31 +399,18 @@ export default function FbaReconcilePage() {
             </Card>
 
             <Card
-              className={`cursor-pointer transition ${statusFilter === 'accepted' ? 'ring-2 ring-blue-500' : ''}`}
-              onClick={() => setStatusFilter('accepted')}
+              className={`cursor-pointer transition ${statusFilter === 'reconciled' ? 'ring-2 ring-green-500' : ''}`}
+              onClick={() => setStatusFilter('reconciled')}
             >
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-[var(--muted-foreground)]">Accepted</p>
-                    <p className="text-2xl font-bold text-blue-600">{data.summary.accepted}</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">Reconciled (Hidden)</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {(data.summary.reconciled || 0) + (data.summary.accepted || 0) + (data.summary.deducted || 0)}
+                    </p>
                   </div>
-                  <Check className="w-8 h-8 text-blue-500" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card
-              className={`cursor-pointer transition ${statusFilter === 'deducted' ? 'ring-2 ring-green-500' : ''}`}
-              onClick={() => setStatusFilter('deducted')}
-            >
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-[var(--muted-foreground)]">Deducted</p>
-                    <p className="text-2xl font-bold text-green-600">{data.summary.deducted}</p>
-                  </div>
-                  <Warehouse className="w-8 h-8 text-green-500" />
+                  <CheckCircle className="w-8 h-8 text-green-500" />
                 </div>
               </CardContent>
             </Card>
@@ -378,7 +447,7 @@ export default function FbaReconcilePage() {
               <Package className="w-5 h-5" />
               FBA Shipments
               <span className="text-sm font-normal text-[var(--muted-foreground)]">
-                ({statusFilter === 'all' ? 'All' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)})
+                ({statusFilter === 'all' || statusFilter === 'pending' ? 'Pending' : statusFilter === 'reconciled' ? 'Reconciled' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)})
               </span>
             </CardTitle>
             <CardDescription>
@@ -394,8 +463,14 @@ export default function FbaReconcilePage() {
             ) : !data?.shipments || data.shipments.length === 0 ? (
               <div className="text-center py-12 text-[var(--muted-foreground)]">
                 <Package className="w-12 h-12 mx-auto text-[var(--muted-foreground)] opacity-50 mb-4" />
-                <p>No {statusFilter === 'all' ? '' : statusFilter} shipments found</p>
-                <p className="text-sm mt-2">Click "Sync from Amazon" to pull FBA shipments</p>
+                <p>No {statusFilter === 'pending' ? 'pending' : statusFilter === 'reconciled' ? 'reconciled' : statusFilter} shipments found</p>
+                <p className="text-sm mt-2">
+                  {statusFilter === 'pending' 
+                    ? 'All shipments are reconciled or closed. Click "Sync from Amazon" to pull new FBA shipments.'
+                    : statusFilter === 'reconciled'
+                    ? 'No reconciled shipments. Click "Pending Reconciliation" to view shipments that need action.'
+                    : 'Click "Sync from Amazon" to pull FBA shipments'}
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -467,57 +542,59 @@ export default function FbaReconcilePage() {
                               )}
                             </Button>
                           </div>
-                        ) : shipment.reconciliationStatus === 'accepted' ? (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => undoReconciliation(shipment.id)}
-                              disabled={processingShipments.has(shipment.id)}
-                            >
-                              Undo
-                            </Button>
-                          </div>
-                        ) : (
+                        ) : shipment.reconciliationStatus === 'accepted' || shipment.reconciliationStatus === 'deducted' || shipment.reconciliationStatus === 'reconciled' ? (
                           <div className="text-sm text-green-600 flex items-center">
                             <CheckCircle className="w-4 h-4 mr-1" />
-                            Inventory deducted
+                            Reconciled
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
 
                     {/* Expanded Items */}
                     {expandedShipments.has(shipment.id) && (
                       <div className="border-t">
-                        <table className="min-w-full divide-y divide-[var(--border)]">
-                          <thead className="bg-[var(--muted)]/50">
-                            <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-[var(--foreground)] uppercase">SKU</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-[var(--foreground)] uppercase">Product</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--foreground)] uppercase">Shipped</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--foreground)] uppercase">Received</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-[var(--foreground)] uppercase">Discrepancy</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-[var(--card)] divide-y divide-[var(--border)]">
-                            {shipment.items.map((item) => (
-                              <tr key={item.id}>
-                                <td className="px-4 py-2 text-sm font-mono text-[var(--foreground)]">{item.masterSku}</td>
-                                <td className="px-4 py-2 text-sm text-[var(--foreground)] max-w-xs truncate">{item.productName}</td>
-                                <td className="px-4 py-2 text-sm text-right text-[var(--foreground)]">{item.quantityShipped}</td>
-                                <td className="px-4 py-2 text-sm text-right text-[var(--foreground)]">{item.quantityReceived}</td>
-                                <td className="px-4 py-2 text-sm text-right">
-                                  {item.quantityDiscrepancy !== 0 && (
-                                    <span className={item.quantityDiscrepancy > 0 ? 'text-red-600' : 'text-green-600'}>
-                                      {item.quantityDiscrepancy > 0 ? '-' : '+'}{Math.abs(item.quantityDiscrepancy)}
-                                    </span>
-                                  )}
-                                </td>
+                        {loadingItems.has(shipment.id) ? (
+                          <div className="px-4 py-8 text-center text-[var(--muted-foreground)]">
+                            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                            <p>Loading items from Amazon...</p>
+                          </div>
+                        ) : shipment.items.length === 0 ? (
+                          <div className="px-4 py-8 text-center text-[var(--muted-foreground)]">
+                            <Package className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                            <p>No items found for this shipment.</p>
+                            <p className="text-sm mt-1">Items may not be available or products are not in the database.</p>
+                          </div>
+                        ) : (
+                          <table className="min-w-full divide-y divide-[var(--border)]">
+                            <thead className="bg-[var(--muted)]/50">
+                              <tr>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-[var(--foreground)] uppercase">SKU</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-[var(--foreground)] uppercase">Product</th>
+                                <th className="px-4 py-2 text-right text-xs font-medium text-[var(--foreground)] uppercase">Shipped</th>
+                                <th className="px-4 py-2 text-right text-xs font-medium text-[var(--foreground)] uppercase">Received</th>
+                                <th className="px-4 py-2 text-right text-xs font-medium text-[var(--foreground)] uppercase">Discrepancy</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="bg-[var(--card)] divide-y divide-[var(--border)]">
+                              {shipment.items.map((item) => (
+                                <tr key={item.id}>
+                                  <td className="px-4 py-2 text-sm font-mono text-[var(--foreground)]">{item.masterSku}</td>
+                                  <td className="px-4 py-2 text-sm text-[var(--foreground)] max-w-xs truncate">{item.productName}</td>
+                                  <td className="px-4 py-2 text-sm text-right text-[var(--foreground)]">{item.quantityShipped}</td>
+                                  <td className="px-4 py-2 text-sm text-right text-[var(--foreground)]">{item.quantityReceived}</td>
+                                  <td className="px-4 py-2 text-sm text-right">
+                                    {item.quantityDiscrepancy !== 0 && (
+                                      <span className={item.quantityDiscrepancy > 0 ? 'text-red-600' : 'text-green-600'}>
+                                        {item.quantityDiscrepancy > 0 ? '-' : '+'}{Math.abs(item.quantityDiscrepancy)}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
 
                         {/* Reconciliation Details */}
                         {shipment.reconciledAt && (

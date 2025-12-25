@@ -81,3 +81,69 @@ export async function GET(
     )
   }
 }
+
+/**
+ * PUT /api/products/[sku]
+ * Update product by SKU
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { sku: string } }
+) {
+  try {
+    const sku = params.sku
+    const body = await request.json()
+
+    // Verify product exists
+    const existingProduct = await prisma.product.findUnique({
+      where: { sku },
+      select: { sku: true },
+    })
+
+    if (!existingProduct) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      )
+    }
+
+    // Build update data
+    const updateData: any = {}
+    
+    // Handle labelType update
+    if (body.labelType !== undefined) {
+      updateData.labelType = body.labelType
+    }
+
+    // Handle other fields that might be updated
+    if (body.fnsku !== undefined) updateData.fnsku = body.fnsku
+    if (body.displayName !== undefined) updateData.displayName = body.displayName
+    if (body.cost !== undefined) updateData.cost = body.cost
+    if (body.price !== undefined) updateData.price = body.price
+    if (body.warehouseLocation !== undefined) updateData.warehouseLocation = body.warehouseLocation
+    if (body.prepOwner !== undefined) updateData.prepOwner = body.prepOwner
+    if (body.labelOwner !== undefined) updateData.labelOwner = body.labelOwner
+    if (body.transparencyEnabled !== undefined) updateData.transparencyEnabled = body.transparencyEnabled
+
+    // Update the product
+    const product = await prisma.product.update({
+      where: { sku },
+      data: updateData,
+    })
+
+    // Return updated fields for confirmation
+    const updatedFields: any = { sku: product.sku }
+    if (updateData.labelType !== undefined) updatedFields.labelType = product.labelType
+    if (updateData.prepOwner !== undefined) updatedFields.prepOwner = product.prepOwner
+    if (updateData.labelOwner !== undefined) updatedFields.labelOwner = product.labelOwner
+    if (updateData.transparencyEnabled !== undefined) updatedFields.transparencyEnabled = product.transparencyEnabled
+
+    return NextResponse.json({ success: true, product: updatedFields })
+  } catch (error: any) {
+    console.error('Error updating product:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to update product' },
+      { status: 500 }
+    )
+  }
+}
