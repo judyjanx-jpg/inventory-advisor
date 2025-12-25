@@ -415,12 +415,29 @@ export default function AuditSessionPage() {
             onNotesChange={(note) => setNotes(prev => ({ ...prev, [currentSku.sku]: note }))}
             onSave={() => saveEntry(currentSku.sku, currentQty[currentSku.sku] ?? currentSku.available, notes[currentSku.sku])}
           />
-        ) : (
+        ) : totalItems === 0 && session ? (
+          // Still loading SKUs - show loading state
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto mb-4"></div>
+            <p className="text-slate-400">Loading SKUs to audit...</p>
+          </div>
+        ) : currentIndex >= totalItems && totalItems > 0 ? (
+          // Actually complete - went through all items
           <div className="text-center py-16">
             <CheckCircle className="w-24 h-24 text-emerald-400 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-white mb-2">Audit Complete!</h2>
             <Button onClick={goToSummary} className="mt-4">
               View Summary
+            </Button>
+          </div>
+        ) : (
+          // No SKUs to audit
+          <div className="text-center py-16">
+            <CheckCircle className="w-24 h-24 text-emerald-400 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">No SKUs to Audit</h2>
+            <p className="text-slate-400 mb-4">There are no items to audit in this session.</p>
+            <Button onClick={() => router.push('/audit')} className="mt-4">
+              Back to Audit Setup
             </Button>
           </div>
         )}
