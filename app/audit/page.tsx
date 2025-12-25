@@ -92,7 +92,7 @@ export default function AuditSetupPage() {
     fetchPendingAuditItems()
   }, [])
 
-  const startAudit = async () => {
+  const startAudit = async (skusToAudit?: string[]) => {
     if (!selectedWarehouse) {
       alert('Please select a warehouse')
       return
@@ -107,6 +107,7 @@ export default function AuditSetupPage() {
           warehouseId: selectedWarehouse,
           auditMode,
           sortOrder,
+          skusToAudit, // Pass specific SKUs if provided
         }),
       })
 
@@ -496,10 +497,11 @@ export default function AuditSetupPage() {
             {pendingAuditCount > 0 && (
               <Button onClick={() => {
                 setShowPendingAuditModal(false)
-                // Start the audit
-                startAudit()
+                // Start audit with only the pending SKUs
+                const pendingSkus = pendingAuditItems.map(item => item.masterSku)
+                startAudit(pendingSkus)
               }}>
-                Start Audit
+                Start Audit ({pendingAuditCount} SKUs)
               </Button>
             )}
           </ModalFooter>

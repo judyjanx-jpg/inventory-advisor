@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { warehouseId, auditMode, sortOrder } = body
+    const { warehouseId, auditMode, sortOrder, skusToAudit } = body
 
     if (!warehouseId || !auditMode || !sortOrder) {
       return NextResponse.json(
@@ -25,13 +25,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get SKUs for this warehouse
-    const warehouseInventory = await prisma.warehouseInventory.findMany({
-      where: { warehouseId: parseInt(warehouseId) },
-      select: { masterSku: true },
-    })
-
-    const skus = warehouseInventory.map((inv: { masterSku: string }) => inv.masterSku)
+    let skus: string[]
+    
+    // If specific SKUs provided (e.g., from pending audit), use those
+    if (skusToAudit && Array.isArray(skusToAudit) && skusToAudit.length > 0) {
+      skus = skusToAudit
+    } else {
+      // Get all SKUs for this warehouse
+      const warehouseInventory = await prisma.warehouseInventory.findMany({
+        where: { warehouseId: parseInt(warehouseId) },
+        select: { masterSku: true },
+      })
+      skus = warehouseInventory.map((inv: { masterSku: string }) => inv.masterSku)
+    }
 
     let totalSkus = skus.length
     if (auditMode === 'parent') {
@@ -46,12 +52,12 @@ export async function POST(request: NextRequest) {
       totalSkus = parentSkus.size
     }
 
-    // Create audit session
+    // Create audit session with optional filter
     const session = await prisma.auditSession.create({
       data: {
         warehouseId: parseInt(warehouseId),
         auditMode,
-        sortOrder,
+        sortOrder: skusToAudit ? 'custom' : sortOrder, // Use custom if specific SKUs
         totalSkus,
         status: 'in_progress',
       },
@@ -60,7 +66,32 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(session)
+    // If specific SKUs provided, store them in custom order for this session
+    if (skusToAudit && skusToAudit.length > 0) {
+      // Store the SKUs to audit in the session context (via custom order)
+      await prisma.$transaction(
+        skus.map((sku, index) =>
+          prisma.auditCustomOrder.upsert({
+            where: {
+              warehouseId_sku: {
+                warehouseId: parseInt(warehouseId),
+                sku,
+              },
+            },
+            update: {
+              sortPosition: index,
+            },
+            create: {
+              warehouseId: parseInt(warehouseId),
+              sku,
+              sortPosition: index,
+            },
+          })
+        )
+      )
+    }
+
+    return NextResponse.json({ ...session, skusToAudit: skusToAudit || null })
   } catch (error: any) {
     console.error('Error starting audit session:', error)
     return NextResponse.json(
