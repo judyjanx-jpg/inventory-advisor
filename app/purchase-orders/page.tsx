@@ -227,25 +227,34 @@ export default function PurchaseOrdersPage() {
    */
   const fetchData = async () => {
     try {
-      const [posRes, suppliersRes, productsRes, backordersRes, pendingAuditRes] = await Promise.all([
+      const [posRes, suppliersRes, productsRes, backordersRes] = await Promise.all([
         fetch('/api/purchase-orders'),
         fetch('/api/suppliers'),
         fetch('/api/products?flat=true'), // Fetch all products including child SKUs
         fetch('/api/backorders'),
-        fetch('/api/audit/pending'),
       ])
       
       const posData = await posRes.json()
       const suppliersData = await suppliersRes.json()
       const productsData = await productsRes.json()
       const backordersData = await backordersRes.json().catch(() => [])
-      const pendingAuditData = await pendingAuditRes.json().catch(() => ({ count: 0 }))
       
       setPurchaseOrders(Array.isArray(posData) ? posData : [])
       setSuppliers(Array.isArray(suppliersData) ? suppliersData : [])
       setProducts(Array.isArray(productsData) ? productsData : [])
       setBackorders(Array.isArray(backordersData) ? backordersData : [])
-      setPendingAuditCount(pendingAuditData.count || 0)
+      
+      // Fetch pending audit count separately (non-blocking)
+      try {
+        const pendingAuditRes = await fetch('/api/audit/pending')
+        if (pendingAuditRes.ok) {
+          const pendingAuditData = await pendingAuditRes.json()
+          setPendingAuditCount(pendingAuditData.count || 0)
+        }
+      } catch (auditError) {
+        console.log('Could not fetch pending audit count:', auditError)
+        // Don't fail - just leave count at 0
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
