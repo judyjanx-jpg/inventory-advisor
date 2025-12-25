@@ -496,7 +496,8 @@ export default function AuditSetupPage() {
             {pendingAuditCount > 0 && (
               <Button onClick={() => {
                 setShowPendingAuditModal(false)
-                // Focus on starting audit
+                // Start the audit
+                startAudit()
               }}>
                 Start Audit
               </Button>
