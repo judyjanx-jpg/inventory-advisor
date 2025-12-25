@@ -207,7 +207,7 @@ function getAlertDetails(insight: Insight): { title: string; details: string[]; 
           'Check listing quality and competitor pricing.',
         ],
         actions: [
-          { label: 'View Listing', icon: ExternalLink, action: 'view_listing', primary: true },
+          { label: 'Open Listing', icon: ExternalLink, action: 'open_listing', primary: true },
           { label: 'View Analytics', icon: TrendingDown, action: 'view_analytics' },
           { label: 'Check Competitors', icon: Users, action: 'check_competitors' },
         ],
@@ -420,10 +420,10 @@ export default function InsightsPage() {
       case 'view_analytics':
         if (insight.sku) router.push(`/inventory?sku=${insight.sku}`)
         break
-      case 'view_listing':
+      case 'open_listing':
         if (insight.sku) {
-          // Open Amazon listing in new tab
-          window.open(`https://www.amazon.com/dp/${insight.sku}`, '_blank')
+          // Open Amazon listing in new tab - use ASIN search since SKU might not be ASIN
+          window.open(`https://www.amazon.com/s?k=${encodeURIComponent(insight.sku)}`, '_blank')
         }
         break
       case 'view_returns':
