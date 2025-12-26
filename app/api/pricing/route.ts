@@ -263,25 +263,30 @@ export async function GET() {
 
       // Process recent orders
       const skuOrders = ordersBySku.get(product.sku) || []
-      const recentOrdersProcessed = skuOrders.map(order => {
-        const pricePerUnit = Number(order.item_price) / order.quantity
-        const feesPerUnit = (Number(order.fba_fee) + Number(order.referral_fee) + Number(order.other_fees)) / order.quantity
-        const orderProfit = pricePerUnit - totalCost - feesPerUnit - (pricePerUnit * refundPercent / 100) - (pricePerUnit * adsPercent / 100)
-        
-        return {
-          date: order.purchase_date.toISOString().split('T')[0],
-          price: pricePerUnit,
-          profit: orderProfit,
-          profitPercent: pricePerUnit > 0 ? (orderProfit / pricePerUnit) * 100 : 0
-        }
-      })
+      const recentOrdersProcessed = skuOrders
+        .filter(order => order.item_price && order.item_price > 0) // Filter out orders with no price
+        .map(order => {
+          const pricePerUnit = Number(order.item_price) / order.quantity
+          const feesPerUnit = (Number(order.fba_fee || 0) + Number(order.referral_fee || 0) + Number(order.other_fees || 0)) / order.quantity
+          const orderProfit = pricePerUnit - totalCost - feesPerUnit - (pricePerUnit * refundPercent / 100) - (pricePerUnit * adsPercent / 100)
+          
+          return {
+            date: order.purchase_date.toISOString().split('T')[0],
+            price: pricePerUnit,
+            profit: orderProfit,
+            profitPercent: pricePerUnit > 0 ? (orderProfit / pricePerUnit) * 100 : 0
+          }
+        })
 
-      const avgRecentProfit = recentOrdersProcessed.length > 0
-        ? recentOrdersProcessed.reduce((sum, o) => sum + o.profit, 0) / recentOrdersProcessed.length
+      // Filter out any NaN values and calculate averages
+      const validProfits = recentOrdersProcessed.filter(o => !isNaN(o.profit) && o.profit !== null)
+      const avgRecentProfit = validProfits.length > 0
+        ? validProfits.reduce((sum, o) => sum + o.profit, 0) / validProfits.length
         : currentProfit
 
-      const avgRecentProfitPercent = recentOrdersProcessed.length > 0
-        ? recentOrdersProcessed.reduce((sum, o) => sum + o.profitPercent, 0) / recentOrdersProcessed.length
+      const validProfitPercents = recentOrdersProcessed.filter(o => !isNaN(o.profitPercent) && o.profitPercent !== null)
+      const avgRecentProfitPercent = validProfitPercents.length > 0
+        ? validProfitPercents.reduce((sum, o) => sum + o.profitPercent, 0) / validProfitPercents.length
         : currentProfitPercent
 
       // Determine status based on target
