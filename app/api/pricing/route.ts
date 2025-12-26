@@ -317,6 +317,12 @@ export async function GET() {
         status: s.status
       })) || null
 
+      // Calculate all fee breakdowns based on current price
+      const referralFeeAmount = currentPrice * referralFeePercent / 100
+      const refundCostAmount = currentPrice * refundPercent / 100
+      const adsCostAmount = currentPrice * adsPercent / 100
+      const tariffAmount = cost * tariffPercent / 100
+
       return {
         sku: product.sku,
         title: product.title,
@@ -325,7 +331,7 @@ export async function GET() {
         cost,
         totalCost,
         fbaFee,
-        referralFee: currentPrice * referralFeePercent / 100,
+        referralFee: referralFeeAmount,
         refundPercent,
         adsPercent,
         recentOrders: recentOrdersProcessed,
@@ -340,7 +346,27 @@ export async function GET() {
           targetType: override.targetType,
           targetValue: override.targetValue ? Number(override.targetValue) : null,
           maxRaisePercent: override.maxRaisePercent ? Number(override.maxRaisePercent) : null
-        } : null
+        } : null,
+        // Detailed breakdown for collapsible view
+        breakdown: {
+          revenue: currentPrice,
+          productCost: cost,
+          packagingCost: packagingCost,
+          tariffPercent: tariffPercent,
+          tariffAmount: tariffAmount,
+          totalCOGS: totalCost,
+          fbaFee: fbaFee,
+          referralFeePercent: referralFeePercent,
+          referralFeeAmount: referralFeeAmount,
+          refundPercent: refundPercent,
+          refundCostAmount: refundCostAmount,
+          adsPercent: adsPercent,
+          adsCostAmount: adsCostAmount,
+          totalFees: fbaFee + referralFeeAmount + refundCostAmount + adsCostAmount,
+          grossProfit: currentPrice - totalCost,
+          netProfit: currentPrice - totalCost - fbaFee - referralFeeAmount - refundCostAmount - adsCostAmount,
+          netMargin: currentPrice > 0 ? ((currentPrice - totalCost - fbaFee - referralFeeAmount - refundCostAmount - adsCostAmount) / currentPrice) * 100 : 0
+        }
       }
     })
 

@@ -20,7 +20,13 @@ import {
   History,
   AlertCircle,
   CheckCircle2,
-  MinusCircle
+  MinusCircle,
+  Calculator,
+  Package,
+  Truck,
+  Tag,
+  RotateCcw,
+  Megaphone
 } from 'lucide-react'
 
 interface PricingItem {
@@ -57,6 +63,25 @@ interface PricingItem {
     targetValue: number | null
     maxRaisePercent: number | null
   } | null
+  breakdown?: {
+    revenue: number
+    productCost: number
+    packagingCost: number
+    tariffPercent: number
+    tariffAmount: number
+    totalCOGS: number
+    fbaFee: number
+    referralFeePercent: number
+    referralFeeAmount: number
+    refundPercent: number
+    refundCostAmount: number
+    adsPercent: number
+    adsCostAmount: number
+    totalFees: number
+    grossProfit: number
+    netProfit: number
+    netMargin: number
+  }
 }
 
 interface HistoryEntry {
@@ -649,11 +674,140 @@ export default function PricingPage() {
                       </td>
                     </tr>
                     
-                    {/* Expanded History Row */}
+                    {/* Expanded Details Row */}
                     {expandedRows.has(item.sku) && (
                       <tr key={`${item.sku}-history`}>
                         <td colSpan={11} className="p-0">
                           <div className="bg-[var(--muted)]/20 p-4 border-t border-[var(--border-color)]">
+                            
+                            {/* Profit Breakdown Section */}
+                            {item.breakdown && (
+                              <div className="mb-6">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Calculator className="w-4 h-4 text-emerald-400" />
+                                  <span className="text-sm font-medium text-[var(--foreground)]">Profit Breakdown</span>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  {/* Revenue & COGS */}
+                                  <div className="bg-[var(--card-bg)] rounded-lg p-4 border border-[var(--border-color)]">
+                                    <h4 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-3">Revenue & Cost of Goods</h4>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm text-[var(--foreground)] flex items-center gap-2">
+                                          <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                                          Sale Price
+                                        </span>
+                                        <span className="font-mono text-sm text-emerald-400">{formatCurrency(item.breakdown.revenue)}</span>
+                                      </div>
+                                      <div className="border-t border-[var(--border-color)] pt-2 mt-2">
+                                        <div className="flex justify-between items-center text-[var(--muted-foreground)]">
+                                          <span className="text-xs flex items-center gap-2">
+                                            <Package className="w-3 h-3" />
+                                            Product Cost
+                                          </span>
+                                          <span className="font-mono text-xs">-{formatCurrency(item.breakdown.productCost)}</span>
+                                        </div>
+                                        {item.breakdown.packagingCost > 0 && (
+                                          <div className="flex justify-between items-center text-[var(--muted-foreground)] mt-1">
+                                            <span className="text-xs pl-5">Packaging</span>
+                                            <span className="font-mono text-xs">-{formatCurrency(item.breakdown.packagingCost)}</span>
+                                          </div>
+                                        )}
+                                        {item.breakdown.tariffAmount > 0 && (
+                                          <div className="flex justify-between items-center text-[var(--muted-foreground)] mt-1">
+                                            <span className="text-xs pl-5">Tariff ({item.breakdown.tariffPercent}%)</span>
+                                            <span className="font-mono text-xs">-{formatCurrency(item.breakdown.tariffAmount)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex justify-between items-center pt-2 border-t border-[var(--border-color)]">
+                                        <span className="text-sm font-medium text-[var(--foreground)]">Gross Profit</span>
+                                        <span className={`font-mono text-sm font-medium ${item.breakdown.grossProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                          {formatCurrency(item.breakdown.grossProfit)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Amazon Fees */}
+                                  <div className="bg-[var(--card-bg)] rounded-lg p-4 border border-[var(--border-color)]">
+                                    <h4 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-3">Amazon & Selling Fees</h4>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between items-center text-[var(--muted-foreground)]">
+                                        <span className="text-xs flex items-center gap-2">
+                                          <Truck className="w-3 h-3" />
+                                          FBA Fee
+                                        </span>
+                                        <span className="font-mono text-xs">-{formatCurrency(item.breakdown.fbaFee)}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-[var(--muted-foreground)]">
+                                        <span className="text-xs flex items-center gap-2">
+                                          <Tag className="w-3 h-3" />
+                                          Referral ({item.breakdown.referralFeePercent}%)
+                                        </span>
+                                        <span className="font-mono text-xs">-{formatCurrency(item.breakdown.referralFeeAmount)}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-[var(--muted-foreground)]">
+                                        <span className="text-xs flex items-center gap-2">
+                                          <RotateCcw className="w-3 h-3" />
+                                          Returns ({item.breakdown.refundPercent}%)
+                                        </span>
+                                        <span className="font-mono text-xs">-{formatCurrency(item.breakdown.refundCostAmount)}</span>
+                                      </div>
+                                      {item.breakdown.adsPercent > 0 && (
+                                        <div className="flex justify-between items-center text-[var(--muted-foreground)]">
+                                          <span className="text-xs flex items-center gap-2">
+                                            <Megaphone className="w-3 h-3" />
+                                            Ads ({item.breakdown.adsPercent}%)
+                                          </span>
+                                          <span className="font-mono text-xs">-{formatCurrency(item.breakdown.adsCostAmount)}</span>
+                                        </div>
+                                      )}
+                                      <div className="flex justify-between items-center pt-2 border-t border-[var(--border-color)]">
+                                        <span className="text-sm font-medium text-[var(--foreground)]">Total Fees</span>
+                                        <span className="font-mono text-sm font-medium text-red-400">-{formatCurrency(item.breakdown.totalFees)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Net Profit Summary */}
+                                  <div className="bg-[var(--card-bg)] rounded-lg p-4 border border-[var(--border-color)]">
+                                    <h4 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-3">Net Profit</h4>
+                                    <div className="space-y-3">
+                                      <div className="text-center py-3">
+                                        <div className={`text-3xl font-bold font-mono ${item.breakdown.netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                          {formatCurrency(item.breakdown.netProfit)}
+                                        </div>
+                                        <div className={`text-sm font-mono ${item.breakdown.netMargin >= 0 ? 'text-emerald-400/70' : 'text-red-400/70'}`}>
+                                          {formatPercent(item.breakdown.netMargin)} margin
+                                        </div>
+                                      </div>
+                                      <div className="text-xs text-[var(--muted-foreground)] space-y-1 pt-2 border-t border-[var(--border-color)]">
+                                        <div className="flex justify-between">
+                                          <span>Revenue</span>
+                                          <span className="font-mono">{formatCurrency(item.breakdown.revenue)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span>- COGS</span>
+                                          <span className="font-mono">{formatCurrency(item.breakdown.totalCOGS)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span>- Fees</span>
+                                          <span className="font-mono">{formatCurrency(item.breakdown.totalFees)}</span>
+                                        </div>
+                                        <div className="flex justify-between font-medium text-[var(--foreground)] pt-1 border-t border-[var(--border-color)]">
+                                          <span>= Net Profit</span>
+                                          <span className="font-mono">{formatCurrency(item.breakdown.netProfit)}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Price History Section */}
                             <div className="flex items-center gap-2 mb-3">
                               <History className="w-4 h-4 text-cyan-400" />
                               <span className="text-sm font-medium text-[var(--foreground)]">Price History (Last 30 Days)</span>
