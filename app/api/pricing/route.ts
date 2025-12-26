@@ -136,11 +136,11 @@ export async function GET() {
       console.log('PricingSettings not available, using defaults')
     }
 
-    // Get all products with their costs
+    // Get all products with their costs (excluding hidden and discontinued)
     const products = await prisma.product.findMany({
       where: {
         isHidden: false,
-        status: { not: 'discontinued' }
+        status: { notIn: ['discontinued', 'hidden'] }
       },
       select: {
         sku: true,
