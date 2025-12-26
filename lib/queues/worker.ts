@@ -1483,9 +1483,15 @@ async function processAdsReportsSync(job: any) {
                 totalSpend += spend
                 totalImpressions += campaign.impressions || 0
                 totalClicks += campaign.clicks || 0
-                totalSales14d += parseFloat(campaign.sales14d) || 0
-                totalOrders14d += campaign.purchases14d || 0
-                totalUnits14d += campaign.unitsSoldClicks14d || 0
+                
+                // Handle different column names: SP uses "14d" suffix, SB/SD don't
+                const salesValue = parseFloat(campaign.sales14d || campaign.sales) || 0
+                const ordersValue = campaign.purchases14d || campaign.purchases || 0
+                const unitsValue = campaign.unitsSoldClicks14d || campaign.unitsSoldClicks || 0
+                
+                totalSales14d += salesValue
+                totalOrders14d += ordersValue
+                totalUnits14d += unitsValue
 
                 await prisma.adCampaign.upsert({
                   where: { campaignId },
@@ -1498,9 +1504,9 @@ async function processAdsReportsSync(job: any) {
                     impressions: campaign.impressions || 0,
                     clicks: campaign.clicks || 0,
                     spend,
-                    sales14d: parseFloat(campaign.sales14d) || 0,
-                    orders14d: campaign.purchases14d || 0,
-                    units14d: campaign.unitsSoldClicks14d || 0,
+                    sales14d: salesValue,
+                    orders14d: ordersValue,
+                    units14d: unitsValue,
                     lastSyncedAt: new Date(),
                     updatedAt: new Date(),
                   },
@@ -1514,9 +1520,9 @@ async function processAdsReportsSync(job: any) {
                     impressions: campaign.impressions || 0,
                     clicks: campaign.clicks || 0,
                     spend,
-                    sales14d: parseFloat(campaign.sales14d) || 0,
-                    orders14d: campaign.purchases14d || 0,
-                    units14d: campaign.unitsSoldClicks14d || 0,
+                    sales14d: salesValue,
+                    orders14d: ordersValue,
+                    units14d: unitsValue,
                     lastSyncedAt: new Date(),
                   },
                 })
@@ -1826,6 +1832,7 @@ async function processAdsReportsSync(job: any) {
           }
 
           // ===== SPONSORED BRANDS (SB) =====
+          // Note: SB uses different column names than SP (no "14d" suffix)
           const sbCampaignReportConfig = {
             name: `Worker_SB_Campaign_${dateStr}_${Date.now()}`,
             startDate: dateStr,
@@ -1837,14 +1844,12 @@ async function processAdsReportsSync(job: any) {
                 'campaignName',
                 'campaignId',
                 'campaignStatus',
-                'campaignBudgetAmount',
-                'campaignBudgetType',
                 'impressions',
                 'clicks',
                 'cost',
-                'purchases14d',
-                'sales14d',
-                'unitsSoldClicks14d',
+                'purchases',        // SB uses 'purchases' not 'purchases14d'
+                'sales',            // SB uses 'sales' not 'sales14d'
+                'unitsSoldClicks',  // SB uses 'unitsSoldClicks' not 'unitsSoldClicks14d'
               ],
               reportTypeId: 'sbCampaigns',
               timeUnit: 'SUMMARY',
@@ -1897,6 +1902,7 @@ async function processAdsReportsSync(job: any) {
           }
 
           // ===== SPONSORED DISPLAY (SD) =====
+          // Note: SD uses different column names than SP (no "14d" suffix, no budgetType)
           const sdCampaignReportConfig = {
             name: `Worker_SD_Campaign_${dateStr}_${Date.now()}`,
             startDate: dateStr,
@@ -1909,13 +1915,12 @@ async function processAdsReportsSync(job: any) {
                 'campaignId',
                 'campaignStatus',
                 'campaignBudgetAmount',
-                'campaignBudgetType',
                 'impressions',
                 'clicks',
                 'cost',
-                'purchases14d',
-                'sales14d',
-                'unitsSoldClicks14d',
+                'purchases',        // SD uses 'purchases' not 'purchases14d'
+                'sales',            // SD uses 'sales' not 'sales14d'
+                'unitsSoldClicks',  // SD uses 'unitsSoldClicks' not 'unitsSoldClicks14d'
               ],
               reportTypeId: 'sdCampaigns',
               timeUnit: 'SUMMARY',
