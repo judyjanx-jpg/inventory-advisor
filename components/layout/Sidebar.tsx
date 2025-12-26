@@ -141,29 +141,48 @@ export default function Sidebar() {
   const [loggingOut, setLoggingOut] = useState(false)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   
-  // Track expanded menu categories
+  // Track expanded menu categories with localStorage persistence
   const [expandedMenus, setExpandedMenus] = useState<string[]>(() => {
-    // Auto-expand menu containing current path on load
-    const expanded: string[] = []
+    // First, try to load from localStorage
+    let savedExpanded: string[] = []
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebar-expanded-menus')
+      if (saved) {
+        try {
+          savedExpanded = JSON.parse(saved)
+        } catch {
+          savedExpanded = []
+        }
+      }
+    }
+    
+    // Also auto-expand menu containing current path (merge with saved)
     navigation.forEach(item => {
       if (item.children) {
         const hasActiveChild = item.children.some(
           child => pathname === child.href || pathname?.startsWith(child.href + '/')
         )
-        if (hasActiveChild) {
-          expanded.push(item.name)
+        if (hasActiveChild && !savedExpanded.includes(item.name)) {
+          savedExpanded.push(item.name)
         }
       }
     })
-    return expanded
+    return savedExpanded
   })
 
   const toggleMenu = (menuName: string) => {
-    setExpandedMenus(prev => 
-      prev.includes(menuName) 
+    setExpandedMenus(prev => {
+      const newExpanded = prev.includes(menuName) 
         ? prev.filter(name => name !== menuName)
         : [...prev, menuName]
-    )
+      
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sidebar-expanded-menus', JSON.stringify(newExpanded))
+      }
+      
+      return newExpanded
+    })
   }
 
   const handleLogout = async () => {
