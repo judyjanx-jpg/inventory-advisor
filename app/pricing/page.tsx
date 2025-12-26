@@ -100,13 +100,34 @@ const StatusIcon = ({ status }: { status: 'green' | 'yellow' | 'red' }) => {
 export default function PricingPage() {
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<PricingItem[]>([])
-  const [settings, setSettings] = useState({
-    targetType: 'dollar' as 'dollar' | 'margin',
-    targetValue: 5,
-    maxRaisePercent: 8
+  
+  // Settings state - initialize from localStorage if available
+  const [settings, setSettings] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pricingSettings')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+    }
+    return {
+      targetType: 'dollar' as 'dollar' | 'margin',
+      targetValue: 5,
+      maxRaisePercent: 8
+    }
   })
   const [settingsChanged, setSettingsChanged] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
+  
+  // Save settings to localStorage when they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pricingSettings', JSON.stringify(settings))
+    }
+  }, [settings])
   
   // Filters & Selection
   const [statusFilter, setStatusFilter] = useState<'all' | 'red' | 'yellow' | 'green'>('all')
@@ -124,13 +145,22 @@ export default function PricingPage() {
   // Average price from recent orders
   const [avgRecentPrices, setAvgRecentPrices] = useState<Map<string, number>>(new Map())
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (customSettings?: typeof settings) => {
     try {
-      const res = await fetch('/api/pricing')
+      // Always pass settings to the API (either custom or current)
+      const settingsToUse = customSettings || settings
+      const params = new URLSearchParams({
+        targetType: settingsToUse.targetType,
+        targetValue: settingsToUse.targetValue.toString(),
+        maxRaisePercent: settingsToUse.maxRaisePercent.toString()
+      })
+      const url = `/api/pricing?${params.toString()}`
+      
+      const res = await fetch(url)
       const data = await res.json()
       if (data.success) {
         setItems(data.items)
-        setSettings(data.settings)
+        // Don't override settings from server - use localStorage
 
         // Calculate average recent prices
         const avgPrices = new Map<string, number>()
@@ -147,7 +177,7 @@ export default function PricingPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [settings])
 
   useEffect(() => {
     fetchData()
@@ -163,7 +193,8 @@ export default function PricingPage() {
       })
       if (res.ok) {
         setSettingsChanged(false)
-        fetchData() // Refresh data with new targets
+        // Refresh data with the new settings
+        fetchData(settings)
       }
     } catch (error) {
       console.error('Failed to save settings:', error)
@@ -245,6 +276,53 @@ export default function PricingPage() {
     }
   }
 
+  // Individual item update
+  const [updatingItem, setUpdatingItem] = useState<string | null>(null)
+  
+  const updateSingleItem = async (sku: string) => {
+    const item = items.find(i => i.sku === sku)
+    const editedPrice = editedPrices.get(sku)
+    
+    // If there's an edited price, use that
+    // Otherwise, if there's a schedule, use the first step price
+    // Otherwise, use the target price
+    let newPrice = editedPrice
+    if (!newPrice && item?.schedule && item.schedule.length > 0) {
+      newPrice = item.schedule[0].price
+    }
+    if (!newPrice) {
+      newPrice = item?.targetPrice || 0
+    }
+    
+    setUpdatingItem(sku)
+    
+    try {
+      const res = await fetch('/api/pricing/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          updates: [{ sku, newPrice, createSchedule: true }] 
+        })
+      })
+      const data = await res.json()
+      
+      if (data.successful > 0) {
+        // Clear the edited price for this item
+        const newEdited = new Map(editedPrices)
+        newEdited.delete(sku)
+        setEditedPrices(newEdited)
+        // Refresh data
+        fetchData(settings)
+      } else if (data.failedItems?.length > 0) {
+        console.error('Update failed:', data.failedItems[0].error)
+      }
+    } catch (error) {
+      console.error('Update failed:', error)
+    } finally {
+      setUpdatingItem(null)
+    }
+  }
+
   const bulkUpdate = async () => {
     if (selectedItems.size === 0) return
     
@@ -276,7 +354,7 @@ export default function PricingPage() {
       })
       
       if (data.successful > 0) {
-        fetchData()
+        fetchData(settings)
         setSelectedItems(new Set())
         setEditedPrices(new Map())
       }
@@ -628,37 +706,50 @@ export default function PricingPage() {
                       </td>
                       <td className="p-3">
                         {item.schedule && item.schedule.length > 0 ? (
-                          <div className="flex items-center gap-2 text-xs">
-                            {item.schedule.map((step, idx) => (
-                              <div key={step.step} className="flex items-center">
-                                {idx > 0 && <span className="text-[var(--muted-foreground)] mx-1">→</span>}
-                                <span className={`font-mono ${step.status === 'applied' ? 'text-emerald-400' : 'text-[var(--foreground)]'}`}>
-                                  {formatCurrency(step.price)}
-                                </span>
-                                {step.status === 'pending' && idx === 0 && (
-                                  <button
-                                    onClick={() => applyScheduleStep(item.sku)}
-                                    className="ml-1 px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded text-[10px] hover:bg-cyan-500/30 transition-colors"
-                                  >
-                                    Update
-                                  </button>
-                                )}
-                              </div>
-                            ))}
+                          <div className="flex flex-col gap-1">
+                            {/* Clean schedule display: First step → Final (X steps) */}
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="font-mono text-[var(--foreground)]">
+                                {formatCurrency(item.schedule[0].price)}
+                              </span>
+                              {item.schedule.length > 1 && (
+                                <>
+                                  <span className="text-[var(--muted-foreground)]">→</span>
+                                  <span className="font-mono text-cyan-400">
+                                    {formatCurrency(item.schedule[item.schedule.length - 1].price)}
+                                  </span>
+                                  <span className="px-1.5 py-0.5 bg-[var(--muted)]/50 text-[var(--muted-foreground)] rounded text-[10px]">
+                                    {item.schedule.length} wks
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         ) : (
-                          <span className="text-[var(--muted-foreground)]">—</span>
+                          <span className="text-[var(--muted-foreground)] text-xs">Direct</span>
                         )}
                       </td>
                       <td className="p-3">
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder={item.targetPrice.toFixed(2)}
-                          value={editedPrices.get(item.sku) || ''}
-                          onChange={(e) => handlePriceEdit(item.sku, e.target.value)}
-                          className="w-20 px-2 py-1 text-right font-mono text-sm bg-[var(--input-bg)] border border-[var(--border-color)] rounded focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editedPrices.has(item.sku) 
+                              ? editedPrices.get(item.sku) 
+                              : (item.schedule && item.schedule.length > 0 
+                                  ? item.schedule[0].price.toFixed(2) 
+                                  : item.targetPrice.toFixed(2))}
+                            onChange={(e) => handlePriceEdit(item.sku, e.target.value)}
+                            className="w-20 px-2 py-1 text-right font-mono text-sm bg-[var(--input-bg)] border border-[var(--border-color)] rounded focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                          />
+                          <button
+                            onClick={() => updateSingleItem(item.sku)}
+                            disabled={updatingItem === item.sku}
+                            className="px-2 py-1 text-xs font-medium bg-cyan-500/20 text-cyan-400 rounded hover:bg-cyan-500/30 transition-colors disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {updatingItem === item.sku ? '...' : 'Update'}
+                          </button>
+                        </div>
                       </td>
                       <td className="p-3">
                         <button

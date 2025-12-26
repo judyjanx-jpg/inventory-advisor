@@ -83,6 +83,57 @@ function roundToNinetyNine(price: number): number {
   }
 }
 
+// Calculate multi-step schedule if target exceeds max raise %
+function calculateMultiStepSchedule(
+  currentPrice: number,
+  targetPrice: number,
+  maxRaisePercent: number
+): { step: number; price: number; scheduledFor: string }[] | null {
+  if (currentPrice <= 0 || targetPrice <= currentPrice) return null
+  
+  // Calculate max allowed price increase per step
+  const maxIncrease = currentPrice * maxRaisePercent / 100
+  const totalIncrease = targetPrice - currentPrice
+  
+  // If total increase is within max raise %, no schedule needed
+  if (totalIncrease <= maxIncrease) return null
+  
+  // Calculate number of steps needed
+  const steps: { step: number; price: number; scheduledFor: string }[] = []
+  let price = currentPrice
+  let stepNum = 1
+  const today = new Date()
+  
+  while (price < targetPrice) {
+    // Calculate next step price
+    const nextPrice = price * (1 + maxRaisePercent / 100)
+    const roundedPrice = roundToNinetyNine(nextPrice)
+    
+    // If this step would exceed target, use target price for final step
+    const finalPrice = roundedPrice >= targetPrice ? roundToNinetyNine(targetPrice) : roundedPrice
+    
+    // Calculate date (stepNum weeks from now)
+    const stepDate = new Date(today)
+    stepDate.setDate(stepDate.getDate() + (stepNum - 1) * 7)
+    
+    steps.push({
+      step: stepNum,
+      price: finalPrice,
+      scheduledFor: stepDate.toISOString().split('T')[0]
+    })
+    
+    if (finalPrice >= targetPrice) break
+    
+    price = roundedPrice
+    stepNum++
+    
+    // Safety limit to prevent infinite loops
+    if (stepNum > 20) break
+  }
+  
+  return steps.length > 0 ? steps : null
+}
+
 // Calculate target price to achieve desired profit
 function calculateTargetPrice(
   cost: number,
@@ -120,8 +171,15 @@ function calculateTargetPrice(
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url)
+    
+    // Check for query params (override from frontend)
+    const queryTargetType = searchParams.get('targetType')
+    const queryTargetValue = searchParams.get('targetValue')
+    const queryMaxRaise = searchParams.get('maxRaisePercent')
+    
     // Get global settings (with fallback if table doesn't exist)
     let settings = {
       targetType: 'dollar' as string,
@@ -129,18 +187,28 @@ export async function GET() {
       maxRaisePercent: 8
     }
     
-    try {
-      const globalSettings = await prisma.pricingSettings.findFirst()
-      if (globalSettings) {
-        settings = {
-          targetType: globalSettings.targetType || 'dollar',
-          targetValue: Number(globalSettings.targetValue || 5),
-          maxRaisePercent: Number(globalSettings.maxRaisePercent || 8)
-        }
+    // If query params provided, use those (allows immediate application of changes)
+    if (queryTargetType || queryTargetValue || queryMaxRaise) {
+      settings = {
+        targetType: queryTargetType || 'dollar',
+        targetValue: queryTargetValue ? parseFloat(queryTargetValue) : 5,
+        maxRaisePercent: queryMaxRaise ? parseFloat(queryMaxRaise) : 8
       }
-    } catch (e) {
-      // Table might not exist yet, use defaults
-      console.log('PricingSettings not available, using defaults')
+    } else {
+      // Try to read from database
+      try {
+        const globalSettings = await prisma.pricingSettings.findFirst()
+        if (globalSettings) {
+          settings = {
+            targetType: globalSettings.targetType || 'dollar',
+            targetValue: Number(globalSettings.targetValue || 5),
+            maxRaisePercent: Number(globalSettings.maxRaisePercent || 8)
+          }
+        }
+      } catch (e) {
+        // Table might not exist yet, use defaults
+        console.log('PricingSettings not available, using defaults')
+      }
     }
 
     // Get all products with their costs (excluding hidden, discontinued, and parent items)
@@ -170,6 +238,18 @@ export async function GET() {
         adsPercent: true,
       }
     })
+
+    // Get latest PO unit costs as fallback for products with $0 cost
+    const poCosts = await prisma.$queryRaw<{ master_sku: string, unit_cost: number }[]>`
+      SELECT DISTINCT ON (poi.master_sku) 
+        poi.master_sku, 
+        poi.unit_cost::numeric
+      FROM purchase_order_items poi
+      JOIN purchase_orders po ON po.id = poi.po_id
+      WHERE po.status NOT IN ('cancelled')
+      ORDER BY poi.master_sku, po.created_at DESC
+    `
+    const poCostMap = new Map(poCosts.map(p => [p.master_sku, Number(p.unit_cost)]))
 
     // Get per-SKU overrides (with fallback)
     let overrideMap = new Map<string, any>()
@@ -241,7 +321,11 @@ export async function GET() {
       const effectiveTargetValue = override?.targetValue ? Number(override.targetValue) : settings.targetValue
       const effectiveMaxRaise = override?.maxRaisePercent ? Number(override.maxRaisePercent) : settings.maxRaisePercent
 
-      const cost = Number(product.cost || 0)
+      // Use product cost, fallback to latest PO unit cost if $0
+      let cost = Number(product.cost || 0)
+      if (cost === 0) {
+        cost = poCostMap.get(product.sku) || 0
+      }
       const packagingCost = Number(product.packagingCost || 0)
       const tariffPercent = Number(product.tariffPercent || 0)
       const fbaFee = Number(product.fbaFeeEstimate || 0)
@@ -308,14 +392,22 @@ export async function GET() {
         else status = 'red'
       }
 
-      // Get schedule
+      // Get schedule - first check for existing saved schedule, then calculate proposed schedule
       const skuSchedule = scheduleMap.get(product.sku)
-      const schedule = skuSchedule?.map(s => ({
-        step: s.stepNumber,
-        price: Number(s.targetPrice),
-        scheduledFor: s.scheduledFor.toISOString().split('T')[0],
-        status: s.status
-      })) || null
+      let schedule: { step: number; price: number; scheduledFor: string; status?: string }[] | null = null
+      
+      if (skuSchedule && skuSchedule.length > 0) {
+        // Use saved schedule from database
+        schedule = skuSchedule.map(s => ({
+          step: s.stepNumber,
+          price: Number(s.targetPrice),
+          scheduledFor: s.scheduledFor.toISOString().split('T')[0],
+          status: s.status
+        }))
+      } else if (targetPrice > currentPrice) {
+        // Calculate proposed multi-step schedule if needed
+        schedule = calculateMultiStepSchedule(currentPrice, targetPrice, effectiveMaxRaise)
+      }
 
       // Calculate all fee breakdowns based on current price
       const referralFeeAmount = currentPrice * referralFeePercent / 100
