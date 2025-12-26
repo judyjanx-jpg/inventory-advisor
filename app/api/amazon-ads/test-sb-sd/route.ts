@@ -36,7 +36,7 @@ export async function GET() {
       tests: []
     }
 
-    // Test 1: Sponsored Brands Campaign Report
+    // Test 1: Sponsored Brands Campaign Report (with FIXED column names)
     const sbConfig = {
       name: `Debug_SB_Campaign_${Date.now()}`,
       startDate: dateStr,
@@ -48,14 +48,12 @@ export async function GET() {
           'campaignName',
           'campaignId',
           'campaignStatus',
-          'campaignBudgetAmount',
-          'campaignBudgetType',
           'impressions',
           'clicks',
           'cost',
-          'purchases14d',
-          'sales14d',
-          'unitsSoldClicks14d',
+          'purchases',        // SB uses 'purchases' not 'purchases14d'
+          'sales',            // SB uses 'sales' not 'sales14d'
+          'unitsSoldClicks',  // SB uses 'unitsSoldClicks' not 'unitsSoldClicks14d'
         ],
         reportTypeId: 'sbCampaigns',
         timeUnit: 'SUMMARY',
@@ -85,7 +83,7 @@ export async function GET() {
       })
     }
 
-    // Test 2: Sponsored Display Campaign Report
+    // Test 2: Sponsored Display Campaign Report (with FIXED column names)
     const sdConfig = {
       name: `Debug_SD_Campaign_${Date.now()}`,
       startDate: dateStr,
@@ -98,13 +96,12 @@ export async function GET() {
           'campaignId',
           'campaignStatus',
           'campaignBudgetAmount',
-          'campaignBudgetType',
           'impressions',
           'clicks',
           'cost',
-          'purchases14d',
-          'sales14d',
-          'unitsSoldClicks14d',
+          'purchases',        // SD uses 'purchases' not 'purchases14d'
+          'sales',            // SD uses 'sales' not 'sales14d'
+          'unitsSoldClicks',  // SD uses 'unitsSoldClicks' not 'unitsSoldClicks14d'
         ],
         reportTypeId: 'sdCampaigns',
         timeUnit: 'SUMMARY',
