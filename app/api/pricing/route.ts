@@ -64,12 +64,19 @@ function calculateProfit(
   return { profit, profitPercent }
 }
 
-// Round up to nearest .99 or .49
+// Round UP to nearest .99 or .49 - ensures price meets or exceeds target
 function roundToNinetyNine(price: number): number {
   const base = Math.floor(price)
   const decimal = price - base
-  
-  if (decimal <= 0.49) {
+
+  // Use small epsilon for floating point comparison
+  const EPSILON = 0.001
+
+  // If decimal is at or below .49 (with epsilon), round up to .49
+  // If decimal is above .49, round up to .99
+  if (decimal <= 0.49 + EPSILON) {
+    // But if decimal is almost exactly .49, just return .49
+    // If decimal is tiny (like 0.001), we still need .49 to exceed target
     return base + 0.49
   } else {
     return base + 0.99
@@ -338,13 +345,17 @@ export async function GET() {
     })
 
     // Sort by furthest below target (red items first)
+    // Calculate gap from target for proper sorting
     pricingItems.sort((a, b) => {
       const statusOrder = { red: 0, yellow: 1, green: 2 }
       if (statusOrder[a.status] !== statusOrder[b.status]) {
         return statusOrder[a.status] - statusOrder[b.status]
       }
-      // Within same status, sort by profit gap
-      return a.avgRecentProfit - b.avgRecentProfit
+      // Within same status, sort by gap from target (largest gap first)
+      // Gap = target - actual (positive means below target)
+      const aGap = a.profitAtTarget - a.avgRecentProfit
+      const bGap = b.profitAtTarget - b.avgRecentProfit
+      return bGap - aGap // Larger gaps first
     })
 
     return NextResponse.json({

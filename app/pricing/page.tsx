@@ -96,6 +96,9 @@ export default function PricingPage() {
   const [updating, setUpdating] = useState(false)
   const [updateResult, setUpdateResult] = useState<{ total: number, successful: number, failed: { sku: string, error: string }[] } | null>(null)
 
+  // Average price from recent orders
+  const [avgRecentPrices, setAvgRecentPrices] = useState<Map<string, number>>(new Map())
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/api/pricing')
@@ -103,6 +106,16 @@ export default function PricingPage() {
       if (data.success) {
         setItems(data.items)
         setSettings(data.settings)
+
+        // Calculate average recent prices
+        const avgPrices = new Map<string, number>()
+        data.items.forEach((item: PricingItem) => {
+          if (item.recentOrders.length > 0) {
+            const avg = item.recentOrders.reduce((sum, o) => sum + o.price, 0) / item.recentOrders.length
+            avgPrices.set(item.sku, avg)
+          }
+        })
+        setAvgRecentPrices(avgPrices)
       }
     } catch (error) {
       console.error('Failed to fetch pricing data:', error)
@@ -244,6 +257,45 @@ export default function PricingPage() {
       }
     } catch (error) {
       console.error('Bulk update failed:', error)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const retryFailed = async () => {
+    if (!updateResult || updateResult.failed.length === 0) return
+
+    setUpdating(true)
+
+    const updates = updateResult.failed.map(f => {
+      const item = items.find(i => i.sku === f.sku)
+      const editedPrice = editedPrices.get(f.sku)
+      return {
+        sku: f.sku,
+        newPrice: editedPrice || item?.targetPrice || 0,
+        createSchedule: true
+      }
+    })
+
+    try {
+      const res = await fetch('/api/pricing/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates })
+      })
+      const data = await res.json()
+
+      setUpdateResult({
+        total: data.total,
+        successful: data.successful,
+        failed: data.failedItems || []
+      })
+
+      if (data.successful > 0) {
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Retry failed:', error)
     } finally {
       setUpdating(false)
     }
@@ -459,8 +511,8 @@ export default function PricingPage() {
                 </span>
               </div>
               {updateResult.failed.length > 0 && (
-                <Button variant="secondary" size="sm" onClick={bulkUpdate}>
-                  Retry Failed
+                <Button variant="secondary" size="sm" onClick={retryFailed} disabled={updating}>
+                  {updating ? 'Retrying...' : 'Retry Failed'}
                 </Button>
               )}
             </div>
@@ -521,8 +573,8 @@ export default function PricingPage() {
                       </td>
                       <td className="p-3 text-right">
                         {item.recentOrders.length > 0 ? (
-                          <span className="font-mono text-[var(--foreground)]">
-                            {formatCurrency(item.recentOrders[0].price)}
+                          <span className="font-mono text-[var(--foreground)]" title={`Last ${item.recentOrders.length} orders`}>
+                            {formatCurrency(avgRecentPrices.get(item.sku) || item.recentOrders[0].price)}
                           </span>
                         ) : (
                           <span className="text-[var(--muted-foreground)]">—</span>

@@ -4,12 +4,17 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// Round up to nearest .99 or .49
+// Round UP to nearest .99 or .49 - ensures price meets or exceeds target
 function roundToNinetyNine(price: number): number {
   const base = Math.floor(price)
   const decimal = price - base
-  
-  if (decimal <= 0.49) {
+
+  // Use small epsilon for floating point comparison
+  const EPSILON = 0.001
+
+  // If decimal is at or below .49 (with epsilon), round up to .49
+  // If decimal is above .49, round up to .99
+  if (decimal <= 0.49 + EPSILON) {
     return base + 0.49
   } else {
     return base + 0.99
@@ -59,31 +64,44 @@ export async function POST(request: Request) {
 
     // Get global settings for schedule calculation
     const settings = await prisma.pricingSettings.findFirst()
-    const maxRaisePercent = Number(settings?.maxRaisePercent || 8)
+    const globalMaxRaisePercent = Number(settings?.maxRaisePercent || 8)
+
+    // Pre-fetch all overrides for the SKUs we're updating
+    const skus = updates.map((u: { sku: string }) => u.sku)
+    const overrides = await prisma.pricingOverride.findMany({
+      where: { sku: { in: skus } }
+    })
+    const overrideMap = new Map(overrides.map(o => [o.sku, o]))
 
     for (const update of updates) {
       try {
         const { sku, newPrice, createSchedule } = update
-        
+
         // Get current product
         const product = await prisma.product.findUnique({
           where: { sku }
         })
-        
+
         if (!product) {
           failed.push({ sku, error: 'Product not found' })
           continue
         }
+
+        // Use per-SKU override if available, otherwise use global settings
+        const override = overrideMap.get(sku)
+        const effectiveMaxRaise = override?.maxRaisePercent
+          ? Number(override.maxRaisePercent)
+          : globalMaxRaisePercent
 
         const oldPrice = Number(product.price)
         const roundedNewPrice = roundToNinetyNine(newPrice)
 
         // Check if we need to create a multi-step schedule
         const priceIncrease = ((roundedNewPrice - oldPrice) / oldPrice) * 100
-        
-        if (createSchedule && priceIncrease > maxRaisePercent) {
+
+        if (createSchedule && priceIncrease > effectiveMaxRaise) {
           // Create multi-step schedule
-          const steps = calculateSchedule(oldPrice, roundedNewPrice, maxRaisePercent)
+          const steps = calculateSchedule(oldPrice, roundedNewPrice, effectiveMaxRaise)
           
           // Clear existing schedule for this SKU
           await prisma.priceSchedule.deleteMany({
