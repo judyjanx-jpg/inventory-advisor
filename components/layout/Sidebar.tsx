@@ -9,7 +9,6 @@ import {
   Package,
   Warehouse,
   Building2,
-  ShoppingCart,
   FileText,
   Truck,
   Users,
@@ -26,9 +25,13 @@ import {
   Headphones,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   X,
   UserCheck,
   LogOut,
+  DollarSign,
+  Store,
+  LucideIcon,
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -85,22 +88,47 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 // Public routes where sidebar should not appear
 const PUBLIC_ROUTES = ['/support', '/portal', '/warranty', '/faq', '/track', '/time-clock']
 
-const navigation = [
+// Navigation structure with categories and submenus
+interface NavItem {
+  name: string
+  href?: string
+  icon: LucideIcon
+  children?: { name: string; href: string; icon: LucideIcon }[]
+}
+
+const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Products', href: '/products', icon: Package },
-  { name: 'Inventory', href: '/inventory', icon: Warehouse },
-  { name: 'Forecasting', href: '/forecasting', icon: LineChart },
-  { name: 'Warehouses', href: '/warehouses', icon: Building2 },
-  { name: 'Orders', href: '/orders', icon: ShoppingCart },
-  { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText },
-  { name: 'FBA Shipments', href: '/fba-shipments', icon: Truck },
-  { name: 'Suppliers', href: '/suppliers', icon: Users },
+  { 
+    name: 'Products', 
+    icon: Package,
+    children: [
+      { name: 'All Products', href: '/products', icon: Package },
+      { name: 'Pricing', href: '/pricing', icon: DollarSign },
+      { name: 'Listings', href: '/listings', icon: Store },
+    ]
+  },
+  { 
+    name: 'Inventory', 
+    icon: Warehouse,
+    children: [
+      { name: 'Forecasting', href: '/forecasting', icon: LineChart },
+      { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText },
+      { name: 'FBA Shipments', href: '/fba-shipments', icon: Truck },
+      { name: 'Audit', href: '/audit', icon: ClipboardCheck },
+    ]
+  },
   { name: 'Profit', href: '/profit', icon: TrendingUp },
-  { name: 'Audit', href: '/audit', icon: ClipboardCheck },
-  { name: 'Employees', href: '/employees', icon: UserCheck },
-  { name: 'Reports', href: '/reports', icon: BarChart3 },
-  { name: 'Customer Support', href: '/admin/support', icon: Headphones },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { 
+    name: 'Settings', 
+    icon: Settings,
+    children: [
+      { name: 'Warehouses', href: '/warehouses', icon: Building2 },
+      { name: 'Suppliers', href: '/suppliers', icon: Users },
+      { name: 'Customer Support', href: '/admin/support', icon: Headphones },
+      { name: 'Employees', href: '/employees', icon: UserCheck },
+      { name: 'Reports', href: '/reports', icon: BarChart3 },
+    ]
+  },
 ]
 
 export default function Sidebar() {
@@ -112,6 +140,31 @@ export default function Sidebar() {
   const [syncing, setSyncing] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Track expanded menu categories
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(() => {
+    // Auto-expand menu containing current path on load
+    const expanded: string[] = []
+    navigation.forEach(item => {
+      if (item.children) {
+        const hasActiveChild = item.children.some(
+          child => pathname === child.href || pathname?.startsWith(child.href + '/')
+        )
+        if (hasActiveChild) {
+          expanded.push(item.name)
+        }
+      }
+    })
+    return expanded
+  })
+
+  const toggleMenu = (menuName: string) => {
+    setExpandedMenus(prev => 
+      prev.includes(menuName) 
+        ? prev.filter(name => name !== menuName)
+        : [...prev, menuName]
+    )
+  }
 
   const handleLogout = async () => {
     if (loggingOut) return
@@ -309,13 +362,83 @@ export default function Sidebar() {
         <div className={cn("space-y-1", collapsed && !mobileOpen ? "px-2" : "px-3")}>
           {navigation.map((item) => {
             const Icon = item.icon
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
             const showExpanded = !collapsed || mobileOpen
+            const hasChildren = item.children && item.children.length > 0
+            const isMenuExpanded = expandedMenus.includes(item.name)
+            
+            // Check if this item or any of its children is active
+            const isActive = item.href 
+              ? (pathname === item.href || pathname?.startsWith(item.href + '/'))
+              : item.children?.some(child => pathname === child.href || pathname?.startsWith(child.href + '/'))
 
+            // For items with children (category headers)
+            if (hasChildren) {
+              return (
+                <div key={item.name}>
+                  <button
+                    onClick={() => toggleMenu(item.name)}
+                    className={cn(
+                      'flex items-center w-full rounded-lg transition-all duration-200 group',
+                      showExpanded ? 'px-3 py-2.5' : 'justify-center px-2 py-2.5',
+                      isActive
+                        ? 'text-[var(--primary)]'
+                        : 'text-[var(--muted-foreground)] hover:bg-[var(--hover-bg)] hover:text-[var(--foreground)]'
+                    )}
+                    title={!showExpanded ? item.name : undefined}
+                  >
+                    <Icon className={cn(
+                      "h-5 w-5 flex-shrink-0",
+                      showExpanded ? "mr-3" : "",
+                      isActive ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"
+                    )} />
+                    {showExpanded && (
+                      <>
+                        <span className="text-sm font-medium truncate flex-1 text-left">{item.name}</span>
+                        <ChevronDown className={cn(
+                          "h-4 w-4 transition-transform duration-200",
+                          isMenuExpanded ? "rotate-180" : ""
+                        )} />
+                      </>
+                    )}
+                  </button>
+                  
+                  {/* Submenu items */}
+                  {showExpanded && isMenuExpanded && (
+                    <div className="mt-1 ml-4 space-y-1 border-l border-[var(--sidebar-border)] pl-3">
+                      {item.children!.map((child) => {
+                        const ChildIcon = child.icon
+                        const isChildActive = pathname === child.href || pathname?.startsWith(child.href + '/')
+                        
+                        return (
+                          <Link
+                            key={child.name}
+                            href={child.href}
+                            className={cn(
+                              'flex items-center px-3 py-2 rounded-lg transition-all duration-200 group text-sm',
+                              isChildActive
+                                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-[var(--primary)] border border-cyan-500/30'
+                                : 'text-[var(--muted-foreground)] hover:bg-[var(--hover-bg)] hover:text-[var(--foreground)]'
+                            )}
+                          >
+                            <ChildIcon className={cn(
+                              "h-4 w-4 mr-2.5 flex-shrink-0",
+                              isChildActive ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"
+                            )} />
+                            <span className="truncate">{child.name}</span>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            // For standalone items (no children)
             return (
               <Link
                 key={item.name}
-                href={item.href}
+                href={item.href!}
                 className={cn(
                   'flex items-center rounded-lg transition-all duration-200 group',
                   showExpanded ? 'px-3 py-2.5' : 'justify-center px-2 py-2.5',
