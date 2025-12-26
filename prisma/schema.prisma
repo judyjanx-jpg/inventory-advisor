@@ -2763,3 +2763,70 @@ model TimeEntry {
   @@index([date])
   @@map("time_entries")
 }
+
+// ============================================
+// PRICING TOOL
+// ============================================
+
+// Global pricing settings
+model PricingSettings {
+  id              Int      @id @default(autoincrement())
+  targetType      String   @default("margin") @map("target_type") // 'dollar' or 'margin'
+  targetValue     Decimal  @default(5) @map("target_value") @db.Decimal(10, 2) // $5 or 25%
+  maxRaisePercent Decimal  @default(8) @map("max_raise_percent") @db.Decimal(5, 2)
+  
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("pricing_settings")
+}
+
+// Per-SKU pricing overrides
+model PricingOverride {
+  id              Int      @id @default(autoincrement())
+  sku             String   @unique
+  
+  targetType      String?  @map("target_type") // null = use global
+  targetValue     Decimal? @map("target_value") @db.Decimal(10, 2)
+  maxRaisePercent Decimal? @map("max_raise_percent") @db.Decimal(5, 2)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("pricing_overrides")
+}
+
+// Price schedule for multi-step price increases
+model PriceSchedule {
+  id           Int      @id @default(autoincrement())
+  sku          String
+  
+  stepNumber   Int      @map("step_number") // 1, 2, 3...
+  targetPrice  Decimal  @map("target_price") @db.Decimal(10, 2)
+  scheduledFor DateTime @map("scheduled_for") // When this step should be applied
+  
+  status       String   @default("pending") // 'pending', 'applied', 'cancelled'
+  appliedAt    DateTime? @map("applied_at")
+  
+  createdAt    DateTime @default(now()) @map("created_at")
+  
+  @@unique([sku, stepNumber])
+  @@index([sku])
+  @@index([scheduledFor, status])
+  @@map("price_schedules")
+}
+
+// Price history log
+model PriceHistory {
+  id          Int      @id @default(autoincrement())
+  sku         String
+  
+  oldPrice    Decimal  @map("old_price") @db.Decimal(10, 2)
+  newPrice    Decimal  @map("new_price") @db.Decimal(10, 2)
+  triggeredBy String   @map("triggered_by") // 'manual', 'scheduled', 'bulk'
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  @@index([sku])
+  @@index([createdAt])
+  @@map("price_history")
+}
