@@ -136,15 +136,16 @@ export async function GET() {
       console.log('PricingSettings not available, using defaults')
     }
 
-    // Get all products with their costs (excluding hidden and discontinued)
-    // Also exclude children of hidden parents
+    // Get all products with their costs (excluding hidden, discontinued, and parent items)
+    // Only show child SKUs, not parent products
     const products = await prisma.product.findMany({
       where: {
         isHidden: false,
+        isParent: false, // Only show child SKUs, not parents
         status: { notIn: ['discontinued', 'hidden'] },
         // Exclude products whose parent is hidden
         OR: [
-          { parentSku: null }, // No parent
+          { parentSku: null }, // No parent (standalone products)
           { parent: { isHidden: false } } // Parent is not hidden
         ]
       },
